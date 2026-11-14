@@ -16,6 +16,21 @@ A product is draft, live or paused. Only a live product takes new investments. A
 
 There is no wallet, so an investment is paid for in one payment and that payment must meet the minimum by itself.
 
+### Changing a product
+
+Staff never change a product directly. Each change is proposed by one member of staff with a reason and approved, or sent back with a note, by a different one, exactly as a rate is. The proposer can withdraw it while it waits. One change waits per product at a time. A change is one of four:
+
+| Change | What it does | Rules |
+| --- | --- | --- |
+| New product | Creates the product as a draft, with its first rate starting the day it is approved. | The code is new. A draft is never shown to clients or on the website. |
+| New terms | Changes the name, term, minimum, and for a draft its kind and when interest is paid. | The code and currency never change, because investments, goals, plans and the ledger refer to them. Once a product has left draft, its kind and when interest is paid stay as clients were told. The rate changes on its own, under [Rates](#rates). |
+| Pause | Stops new investments. Running ones carry on to maturity. | Only a live product pauses. |
+| Open | Lets clients start new investments. | The product needs a rate in force, and its currency must be one Finvest can take payments in and pay out in. Today that is shillings only (`CURRENCIES_THAT_CAN_OPEN` in `domain/product_changes.py`), so the dollar product stays paused. When paying in and out in dollars exists, adding USD there is all it takes to open it, still with two people. |
+
+New terms affect new investments only: an investment keeps the term and rate it started with, and one waiting for payment keeps the terms it was quoted. A proposal names the whole product as it will be and the version of the product it was made against, and the approval is refused if anything moved in between. Proposing, approving, sending back and withdrawing are each recorded in the audit trail with the reason and the product's values. Changes waiting for a second person appear in the console's approvals inbox as `product_change`.
+
+Before deciding a change, staff can see who it reaches: `GET /staff/products/{code}/reach` counts the running investments and investments waiting for payment that keep their terms, the clients holding them, and the open goals and automatic investing plans whose new money takes the change. Counts only, no personal data.
+
 ## Rates
 
 A product does not hold a rate. Each product has dated rate versions: the yearly rate before tax, the tax on interest, and the day the version starts.
@@ -50,7 +65,9 @@ One change waits for approval per product at a time. Proposing, approving, sendi
 | An approved proposal has its rate | A constraint checked at commit refuses an approval that wrote no rate. |
 | Nobody acts in another's name | A trigger requires the proposer, and later the decider, to be the member of staff the transaction acts for. |
 | A decision is final | A decided proposal never changes, and a proposal's product, rate, date and reason never change at all. |
-| Products are read-only | The application roles hold only SELECT on `investment_products`. Editing a product arrives with its own approval flow. |
+| A product changes only by an approved change | Migration 0360: the application can write a product only with `change_id` naming an approved change, decided by the member of staff the transaction acts for, that holds exactly the values written. An existing product moves on one version at a time, only by a change made against the version it is at, so an approved change can never be replayed. Its code, currency and creation time never change, and nothing removes a product. |
+| An approved change is in the catalogue | A constraint checked at commit refuses an approval that wrote no product, or a new product without its first rate. |
+| A new product's first rate is its own | The rates trigger accepts a rate with `product_change_id` only when its product was created by that approved new product, with the change's own rate and tax. Every other rate still needs an approved rate proposal. |
 | Proposals are staff business | A row policy shows proposals to staff transactions only. |
 
 Products and rates are readable by any API transaction, including one with nobody signed in, because the public website shows rates. The rows hold the tax rate, so the fence for clients is in the service: see below.
@@ -105,7 +122,7 @@ Because the amount is "earned so far minus posted so far", the awkward cases nee
 
 A run is refused for a day that has not come.
 
-Each run leaves a row per currency in `investment_interest_runs`: how many investments it paid, interest before tax, tax, and how many investments were still behind when it ended. Behind should always be zero. Anything else is logged as an error and needs a person to look. `investments.service.interest_runs` reads it for the console, staff only. Only the worker writes the table, its totals only grow, and nobody can delete from it. `investments.service.accrue_investment` pays one investment up to a day, for putting right one that a run left behind.
+Each run leaves a row per currency in `investment_interest_runs`: how many investments it paid, interest before tax, tax, and how many investments were still behind when it ended. Behind should always be zero. Anything else is logged as an error, and `/health/operations` raises `interest_behind` (migration 0271) until each investment is paid, so the uptime alert reaches a person. A run stops when 25 investments in a row cannot be paid (`MAX_FAILURES_IN_A_ROW`): that many has a common cause, such as a closed ledger day, so going on would only fail the rest. The batch it was in rolls back, the job fails with `interest_run_failing`, and every investment stays due for the next run. `investments.service.interest_runs` reads it for the console, staff only. Only the worker writes the table, its totals only grow, and nobody can delete from it. `investments.service.accrue_investment` pays one investment up to a day, for putting right one that a run left behind.
 
 Not decided yet: nothing here pays interest out. Accrued interest sits in `client.interest_accrued` until maturity, and the monthly payment for the open term dollar product is not built.
 
@@ -141,6 +158,9 @@ The days are limited (`domain/runs.py`). Interest may be asked for any day from 
 
 Audit events on resource `investment_run_request`: `investments.run_request.proposed`, `.approved`, `.declined` and `.withdrawn`, with the run, the day and the job.
 
+### Reminders before maturity
+
+Every morning at 08:30 Kampala time the worker runs `investments.remind_maturing` (`investments/reminders.py`). It reads how many days before maturity to remind from Settings (7 days and 1 day unless staff changed it, [platform-settings.md](platform-settings.md)) and raises `investment_maturing` for every active investment maturing on one of those days, naming the product and the date, never an amount. Each reminder is keyed by the investment, its maturity date and the number of days, so a second run tells nobody twice. A morning the run missed is not made up: the next reminder day sends its own.
 ## Booking for a client
 
 When a client asks Finvest to set up an investment for them, by phone, in the help chat or at the office, staff book it (`investments/bookings.py`, table `investment_bookings`, migration 0334). The owner decided this on 2026-11-14: staff book it and the client pays as usual. One member of staff books the client, the product, the amount and the choice at maturity with a reason. A different one approves it, or sends it back with a note. Only the one who booked it withdraws it. Booking and withdrawing need `investment_corrections.change`; approving and sending back need the same and a second step from the last few minutes. Each waiting booking shows in the approvals inbox as `investment_booking`.
@@ -175,6 +195,9 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `GET /staff/investment-transfers?status=&limit=`, `GET /staff/investment-transfers/held` | `review_queue.view` | Transfers and their state, and those held for two people. |
 | `POST /staff/investment-transfers/{id}/release`, `/approve`, `/withdraw`, `/decline` | `investment_transfers.change` | Proposing, approving or withdrawing the release of a held transfer, with a second person enforced in the database, or declining it. |
 | `GET /staff/products`, `GET /staff/products/{code}/rates` | `products.view`, `rates.view` | Products with the rate and tax in force and the next approved one, and each product's rate history. |
+| `GET /staff/products/{code}/reach` | `products.view` | Who a change to the product reaches: running and unpaid investments, the clients holding them, open goals and automatic investing plans. |
+| `GET /staff/product-changes?status=` | `products.view` | New products, new terms, pauses and openings, and their state. |
+| `POST /staff/product-changes/new-product`, `/new-terms`, `/status`, `POST /staff/product-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding product changes, with the second person enforced in the database. Approving asks the person to confirm it is them. |
 | `GET /staff/rate-proposals?status=` | `rates.view` | Rate changes and their state. |
 | `POST /staff/rate-proposals`, `POST /staff/rate-proposals/{id}/approve`, `/send-back`, `/withdraw` | `rates.change` | Proposing and deciding rate changes, with the second person enforced in the database. |
 | `GET /staff/investments?status=&limit=`, `GET /staff/investments/{id}`, `GET /staff/interest-runs` | `investments.view` | Every investment with its tax, and the record of daily runs. |
@@ -186,7 +209,7 @@ The code is `backend/app/modules/investments/api.py`. Amounts are integers in th
 | `POST /staff/investment-bookings`, `POST /staff/investment-bookings/{id}/approve`, `/send-back`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | `{client_id, product_code, amount_minor, currency, at_maturity, reason}`: booking an investment for a client, and deciding it. See [Booking for a client](#booking-for-a-client). |
 | `POST /staff/investment-run-requests`, `POST /staff/investment-run-requests/{id}/approve`, `/decline`, `/withdraw` | `investment_corrections.change`, `Idempotency-Key` | `{kind, run_date, reason}`: asking for the interest run (`interest`) or the maturity run (`maturity`) again, and deciding it. See [Running a day again](#running-a-day-again). |
 
-Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. A rate still never takes effect without a second person.
+Seeing rates needs `rates.view`. Proposing, approving, sending back and withdrawing a rate change need `rates.change`, held by admin and finance for now. Product changes need `products.change`, held by the same two roles. A rate still never takes effect without a second person.
 
 ## What clients see
 
@@ -268,6 +291,7 @@ Agreed with the payments and payouts threads on 13 November 2026.
 - **Dealing desk.** It reads the book through `owed_by_product(session, on)`, `running_investments(session, product_code, started_after=None)` and `maturing(session, date_from, date_to)` in `investments.service`, and follows the outbox topics `investments.started`, `investments.matured` and `investments.rolled_over`. Interest in these reads is net of tax, as posted so far.
 - **Saving sources.** An investment the client did not make themselves, from an automatic investing run or a goal's saving rule, carries `source_type` (`autoinvest_run` or `goal_saving`) and `source_id`. The columns and their checks are on main (migration 0063): only the worker creates such an investment, at most one per source. The function that creates one, `request_system_investment`, is planned and arrives with the automatic investing work.
 - **Carried over from Finvest 1.0.** At the switch the migration module's job calls `investments.service.open_existing_investment` for each running investment, with the old system's start date, rate and tax, its legacy reference, the trial's "as of" day as `interest_through`, and its own opening balances account (an asset `AccountSpec`, so investing never imports migration). One entry debits that account with the principal plus the interest before tax and credits the holding, the interest after tax and the tax payable. The interest is worked out here with `posting_due`, the daily run's own function, and the investment's running totals are set to match, so the daily run carries on from the next day. The migration switch checks the figures against its own `Opening.interest` and stops if they differ. Only the worker opens one (migration 0065), only while it is still running and for days already passed, and the legacy reference is unique, so it is the command's idempotency key: a second call returns the same investment, and the same reference with other terms is refused with `conflict`. It sends no notice and publishes nothing: the client hears from the claim, and the bills behind it are already on the desk's books.
+- **Withdrawal started by staff.** Two members of staff may ask for an early withdrawal for a client who asked for it in writing in their help chat, as the owner decided (2026-11-14). The request is checked and paid exactly as the client's own. See [client-accounts.md](client-accounts.md#acting-for-a-client).
 - **Unwinding and refunds.** For a deposit credited by mistake, staff propose an unwind and a second person approves it. See [Undoing a mistake](#undoing-a-mistake).
 
 ## Early withdrawal
@@ -298,9 +322,9 @@ A client sends part or all of a running investment to another approved client, f
 
 **The hold.** A transfer is held for two members of staff when it, with everything else the client sent that day, is above the size at which a payout is held for review (`review_above` in payouts), or when its currency has no such size set. Splitting one large transfer into small ones does not avoid the review. One person proposes letting it through with a reason, and a different person approves; the proposer may withdraw the proposal. One person may decline, with a reason, and the sender may cancel it while it is held. Proposing, approving and declining need `investment_transfers.change`, held by admin, operations and compliance. Held transfers with a proposal show in the approvals inbox as `investment_transfer`.
 
-**Screening.** A sender on a screening hold (a screen under way, an open screening case, or a confirmed sanctions match; see [screening.md](screening.md)) has every transfer held for two members of staff, whatever its size. The column `held_for` says `screening` or `size`, and staff see it; the sender hears exactly what they would for a large transfer. A held transfer cannot be let through while the sender or the recipient is on a hold, so staff decline it or wait for compliance. Just before the money moves, the worker checks both clients again: if either is on a hold, the transfer fails with `not_possible` and nothing moves, and the sender is told only that it could not be made. Migration `0241` enforces the same rule with `screening_payout_clearance`. A client with no screen in the last 24 hours is not held, as a payout would be, because the value never leaves Finvest and every client is screened at approval and every 30 days. For transaction monitoring, `transfers.for_monitoring` gives screening a transfer that was made: both clients, the amount the recipient got and when. Screening adds the call and the rules.
+**Screening.** A sender on a screening hold (a screen under way, an open screening case, or a confirmed sanctions match; see [screening.md](screening.md)) has every transfer held for two members of staff, whatever its size. The column `held_for` says `screening` or `size`, and staff see it; the sender hears exactly what they would for a large transfer. A held transfer cannot be let through while the sender or the recipient is on a hold, so staff decline it or wait for compliance. Just before the money moves, the worker checks both clients again: if either is on a hold, the transfer fails with `not_possible` and nothing moves, and the sender is told only that it could not be made. Migration `0241` enforces the same rule with `screening_payout_clearance`. A client with no screen in the last 24 hours is not held, as a payout would be, because the value never leaves Finvest and every client is screened at approval and every 30 days. For transaction monitoring, the worker transaction that makes a transfer calls `screening.contract.watch_transfer`, and `transfers.for_monitoring` gives screening the transfer that was made: both clients, the amount the recipient got and when. Screening records it as money out for the sender and money in for the recipient ([screening.md](screening.md#transaction-monitoring)).
 
-**The move.** A transfer that is not held, or is released, queues `investments.carry_out_transfer`, keyed by the transfer. The worker checks the investment again (still running, no withdrawal asked, before the maturity date, enough value) and otherwise marks the transfer `failed` with the refusal code and tells the sender, and nothing moves. It posts the interest due up to today first, then posts `investment.transferred` (key `investment-transfer:<id>`) in one entry:
+**The move.** A transfer that is not held, or is released, queues `investments.carry_out_transfer`, keyed by the transfer. The worker checks the investment again (still running, no withdrawal asked, before the maturity date, enough value) and both clients (still active, not on a screening hold, and neither with a request to close their account waiting or approved), and otherwise marks the transfer `failed` with the refusal code and tells the sender, and nothing moves. It posts the interest due up to today first, then posts `investment.transferred` (key `investment-transfer:<id>`) in one entry:
 
 | Line | Account | Amount |
 | --- | --- | --- |
@@ -314,6 +338,10 @@ The old investment closes as `transferred`. Two new investments start today in t
 The move publishes `investments.transferred` with `{investment_id, new_investment_id}` to the goals rollover consumer when the sender kept something, so a goal follows the sender's new investment. The recipient's investment belongs to no goal.
 
 **Notices.** The sender gets `investment_sent` and the recipient `investment_received`, both naming the other person by their shown name. A held transfer tells the sender (`investment_transfer_held`), as does a decline (`investment_transfer_declined`) and a failure (`investment_transfer_failed`). No notice names the amount. Statements show the old investment as "Sent to another client", with "Investment sent" and "Investment received" lines.
+
+**Why it is sent.** The sender picks a `purpose`: `family_support`, `gift`, `loan_repayment`, `business` or `other`, and with `other` a `purpose_note` of their own words (required, at most 140 characters; refused with any other purpose as `only_for_other`). It is kept for anti money laundering, shown to staff on `GET /staff/investment-transfers` and never to the recipient. Migration 0243 refuses a new transfer without one and any change to it; transfers saved before it have none.
+
+**Closing an account.** While a client's request to close waits for staff, they cannot send (`conflict`, field problem `account` / `closing`, as for anything else new; see [client-profile.md](client-profile.md)), and nobody can send to them: the sender is told `to` / `no_such_client`, so a stranger learns nothing about their account. Both checks use `closures/pending.py`.
 
 **What each person sees.** `GET /client/transfers` lists what the client sent and, once done, what they received, with the other person's shown name. The recipient sees a transfer only once it is done, so a held or declined transfer is never shown to them. Staff list transfers with `GET /staff/investment-transfers` and the held ones with `/held`.
 
@@ -348,4 +376,4 @@ Audit events on resource `investment_correction`: `investments.correction.propos
 
 ## Not built yet
 
-Editing a product, the monthly coupon for open terms, and the early withdrawal screen in the client app. The client app's Send screens and the console's held transfers follow the transfers backend in their own pull requests. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).
+The monthly coupon for open terms, and the early withdrawal screen in the client app. The client app's Send screens and the console's held transfers follow the transfers backend in their own pull requests. The dealing desk is its own module: see [dealing-desk.md](dealing-desk.md).

@@ -85,6 +85,13 @@ DEFAULTS: dict[str, Wording] = {
         "the app.",
         "Finvest: your payment from {method} did not go through. No money was taken.",
     ),
+    "payment_reversed": Wording(
+        "Payment taken back",
+        "A payment from {method} was matched to your account by mistake, so we have taken it "
+        "back. If you think this is wrong, message us in the app.",
+        "Finvest: a payment from {method} was matched to your account by mistake and has been "
+        "taken back.",
+    ),
     "payout_processing": Wording(
         "Withdrawal is being processed",
         "Your withdrawal to {destination} is being processed. We will confirm when it is sent.",
@@ -189,11 +196,38 @@ DEFAULTS: dict[str, Wording] = {
         "the app.",
         "Finvest: your monthly saving towards {goal} is due on {date}. Pay in the app.",
     ),
+    "goal_payday": Wording(
+        "It's payday",
+        "Today is the payday you chose for {goal}. Put something towards it while the money is "
+        "in. See how much to save in the app.",
+        "Finvest: it's payday. Put something towards {goal} today. Save in the app.",
+    ),
     "goal_reached": Wording(
         "You reached your goal",
         "Well done. {goal} has reached its target. It keeps earning until its investments "
         "mature, and you choose what happens then in the app.",
         "Finvest: well done, {goal} has reached its target. See it in the app.",
+    ),
+    "autoinvest_run_retrying": Wording(
+        "Automatic investment not paid yet",
+        "We could not collect your automatic investment due on {date}. We will send the "
+        "mobile money prompt again tomorrow.",
+        "Finvest: we could not collect your automatic investment due on {date}. We will "
+        "prompt your phone again tomorrow.",
+    ),
+    "autoinvest_run_failed": Wording(
+        "Automatic investment not made",
+        "We could not collect your automatic investment due on {date}, so nothing was "
+        "invested this time. See why in the app.",
+        "Finvest: we could not collect your automatic investment due on {date}. Nothing was "
+        "invested. See why in the app.",
+    ),
+    "autoinvest_run_missed": Wording(
+        "Automatic investment missed",
+        "Your automatic investment due on {date} was missed and nothing was taken. Your plan "
+        "carries on from its next date.",
+        "Finvest: your automatic investment due on {date} was missed and nothing was taken. "
+        "Your plan carries on.",
     ),
     "kyc_approved": Wording(
         "Identity check approved",
@@ -238,13 +272,13 @@ DEFAULTS: dict[str, Wording] = {
     ),
     "payout_destination_approved": Wording(
         "Payout account approved",
-        "{destination} is approved. You can withdraw to it after the 24 hour wait.",
-        "Finvest: {destination} is approved for withdrawals after the 24 hour wait.",
+        "We approved {destination}. You can withdraw to it after the 24 hour wait.",
+        "Finvest: we approved {destination} for withdrawals after the 24 hour wait.",
     ),
     "payout_destination_refused": Wording(
         "Payout account not approved",
-        "We could not approve {destination}. A payout account must be in your own name.",
-        "Finvest: we could not approve {destination}. A payout account must be in your own name.",
+        "We could not approve {destination}. See why in the app.",
+        "Finvest: we could not approve {destination} for withdrawals. See why in the app.",
     ),
     "statement_ready": Wording(
         "{period} statement is ready",

@@ -281,3 +281,33 @@ test("a client who cannot take the live check hands in a camera selfie instead",
 
   await expect(page.getByText("Thanks, Peter. We are checking now.")).toBeVisible();
 });
+
+test("a client sends part of an investment to another client after checking the details", async ({ page }) => {
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  // Portfolio opens from Profile; the app's router keeps the sample session.
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/portfolio");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
+  await id(page, "send-investment").click();
+
+  await id(page, "send-to").fill("0772 555 170");
+  await id(page, "find-recipient").click();
+  await expect(id(page, "recipient")).toContainText("Brian K.");
+  await expect(id(page, "recipient")).toContainText("Finvest account 1001005170");
+  await id(page, "send-amount").fill("1000000");
+  await id(page, "send-purpose-gift").click();
+  await id(page, "review-send").click();
+  await expect(id(page, "send-confirm")).toContainText("You are sending UGX 1,000,000 to Brian K.");
+  await id(page, "confirm-send").click();
+
+  await expect(page.getByText("To Brian K.")).toBeVisible();
+  await expect(id(page, "transfer-amount")).toHaveText("UGX 1,000,000");
+  await id(page, "open-kept").click();
+  // The new investment holds what was kept. Screens left behind in the stack stay hidden.
+  await expect(page.locator("text=You invested >> visible=true")).toBeVisible();
+});

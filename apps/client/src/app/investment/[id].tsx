@@ -40,13 +40,24 @@ export default function InvestmentDetail() {
             onPress={() => router.push(`/investment/pay-out/${investment.id}`)}
             testID="choose-pay-out"
           />
-        ) : investment?.canWithdraw ? (
-          <Button
-            label="Withdraw early"
-            variant="secondary"
-            onPress={() => router.push(`/investment/withdraw/${investment.id}`)}
-            testID="withdraw-early"
-          />
+        ) : investment?.canSend || investment?.canWithdraw ? (
+          <View style={{ gap: 10 }}>
+            {investment.canSend ? (
+              <Button
+                label="Send to someone"
+                onPress={() => router.push(`/investment/send/${investment.id}`)}
+                testID="send-investment"
+              />
+            ) : null}
+            {investment.canWithdraw ? (
+              <Button
+                label="Withdraw early"
+                variant="secondary"
+                onPress={() => router.push(`/investment/withdraw/${investment.id}`)}
+                testID="withdraw-early"
+              />
+            ) : null}
+          </View>
         ) : null
       }
     >
@@ -95,6 +106,10 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
   if (investment.atMaturity && toMaturity) {
     rows.push({ label: "When the term ends", value: atMaturityLabel[investment.atMaturity] });
   }
+  if (investment.lockedUntil) {
+    // Locked through its goal: not taken out early or sent to anyone before then.
+    rows.push({ label: "Locked by your goal until", value: formatDay(investment.lockedUntil) });
+  }
 
   return (
     <View style={{ marginTop: 20, gap: 16 }}>
@@ -124,6 +139,11 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
         </Txt>
       </View>
       <DetailList rows={rows} />
+      {investment.status === "transferred" ? (
+        <Notice tone="neutral">
+          You sent this to another Finvest client. What you kept, if any, is in a new investment on the same terms.
+        </Notice>
+      ) : null}
       {investment.withdrawalRequestedAt ? (
         <Notice tone="neutral">
           {`You asked to withdraw this early, so interest stopped then. ${formatAmount(investment.value)} goes to your account, and we tell you when it is sent.`}

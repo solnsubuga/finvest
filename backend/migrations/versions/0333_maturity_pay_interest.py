@@ -1,7 +1,7 @@
 """Pay the interest at maturity, and keep the principal invested for another term.
 
 Revision ID: 0333_maturity_pay_interest
-Revises: 0332_support_staff_opens_chat
+Revises: 0303_goal_locks
 
 A client may now choose `pay_interest` for what happens when a fixed term ends: the principal
 rolls over into a new term in the same product, and the interest after tax is paid to the
@@ -29,7 +29,7 @@ from alembic import op
 from sqlalchemy import text
 
 revision: str = "0333_maturity_pay_interest"
-down_revision: str | None = "0332_support_staff_opens_chat"
+down_revision: str | None = "0303_goal_locks"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

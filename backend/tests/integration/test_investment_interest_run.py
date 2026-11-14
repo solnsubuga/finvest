@@ -14,6 +14,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
+from app.infrastructure.operations import operations_signals
 from app.modules.investments import accrual
 from app.modules.investments import service as investments
 from app.modules.investments.domain.interest import Accrual, accrued
@@ -292,6 +293,72 @@ async def test_one_investment_that_cannot_be_paid_does_not_stop_the_rest(
             text("UPDATE investments SET accrued_through = :through WHERE id = :id"),
             {"through": day(4000), "id": broken.id},
         )
+
+
+async def test_a_run_of_failures_in_a_row_stops_the_run_and_pays_nothing_of_the_batch(
+    app_database: Database, worker_database: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(accrual, "MAX_FAILURES_IN_A_ROW", 2)
+    fine = await started(app_database, worker_database, NOW)
+    broken = [await started(app_database, worker_database, NOW) for _ in range(2)]
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        for investment in broken:
+            await session.execute(
+                text(
+                    "UPDATE investments SET accrued_through = :through, "
+                    "accrued_gross_minor = 90000 WHERE id = :id"
+                ),
+                {"through": day(1), "id": investment.id},
+            )
+    with pytest.raises(accrual.RunFailing):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await accrual.accrue_batch(session, day(2), at(day(2)), after=fine.id[:-1])
+    # The whole batch rolled back, so the good one is still due too.
+    assert (await reload(worker_database, fine.id)).accrued_through is None
+    assert await entries_for(worker_database, fine.id) == 0
+
+    # A failure carried in from the batch before counts towards the run.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        first = await accrual.accrue_batch(session, day(2), at(day(2)), after=fine.id[:-1], limit=2)
+    assert (first.posted, first.failed, first.failing) == (1, 1, 1)
+    with pytest.raises(accrual.RunFailing):
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            await accrual.accrue_batch(
+                session, day(2), at(day(2)), after=first.last_id or "", failing=first.failing
+            )
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        for investment in broken:
+            await session.execute(
+                text("UPDATE investments SET accrued_through = :through WHERE id = :id"),
+                {"through": day(4000), "id": investment.id},
+            )
+
+
+async def test_an_investment_left_behind_is_raised_until_it_is_paid(
+    app_database: Database, worker_database: Database
+) -> None:
+    broken = await started(app_database, worker_database, NOW)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await session.execute(
+            text(
+                "UPDATE investments SET accrued_through = :through, accrued_gross_minor = 90000 "
+                "WHERE id = :id"
+            ),
+            {"through": day(1), "id": broken.id},
+        )
+    later = at(day(2)).now() + timedelta(days=1)
+    await whole_run(worker_database, day(2))
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await accrual.finish_run(session, day(2), at(day(2)))
+    during = (await operations_signals(app_database, later))["interest_behind"]
+    assert during >= 1
+    # Put right: the count drops at once, without waiting for the next run.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await session.execute(
+            text("UPDATE investments SET accrued_through = :through WHERE id = :id"),
+            {"through": day(4000), "id": broken.id},
+        )
+    assert (await operations_signals(app_database, later))["interest_behind"] == during - 1
 
 
 # The scheduled job ------------------------------------------------------------------------------

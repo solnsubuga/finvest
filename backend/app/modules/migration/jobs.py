@@ -12,15 +12,24 @@ sends them back to the identity step. Any other client's decision changes nothin
 """
 
 from collections.abc import Mapping
+from datetime import timedelta
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
-from app.infrastructure.jobs import ClaimedJob, Handler, JobContext, JobHandler, PermanentJobError
+from app.infrastructure.jobs import (
+    ClaimedJob,
+    Handler,
+    JobContext,
+    JobHandler,
+    JobRequest,
+    PermanentJobError,
+    enqueue,
+)
 from app.infrastructure.jobs import queue as job_queue
 from app.infrastructure.sealing import Sealer
-from app.modules.migration import carry_over, claims, switch
+from app.modules.migration import carry_over, claims, reminders, switch
 from app.modules.migration.domain.claim import ClaimStatus
 from app.shared.actors import SYSTEM
 from app.shared.clock import Clock
@@ -30,6 +39,9 @@ logger = structlog.get_logger()
 # The consumers the identity checks module names for its two decisions (app/modules/kyc).
 CLAIM_CHECK_DECIDED = "migration.claim_check_decided"
 IDENTITY_CHECK_DECIDED = "migration.identity_check_decided"
+# The weekly fresh link for clients who have not claimed yet. The scheduler queues it daily.
+CLAIM_REMINDERS_KIND = "migration.claim_reminders"
+CLAIM_REMINDERS_MAX_AGE = timedelta(hours=10)
 
 
 class MigrationJobs:
@@ -47,7 +59,38 @@ class MigrationJobs:
             switch.CARRY_OVER: self.carry_over,
             CLAIM_CHECK_DECIDED: self.claim_check_decided,
             IDENTITY_CHECK_DECIDED: self.identity_check_decided,
+            CLAIM_REMINDERS_KIND: self.claim_reminders,
         }
+
+    async def claim_reminders(self, job: ClaimedJob, context: JobContext) -> None:
+        """A fresh link for each client whose last one is a week old and unused. One page per
+        job, in one transaction. The scheduler's job starts at the first claim; a full page
+        queues the next, after its last claim, in the same transaction."""
+        if not self._client_app:
+            raise PermanentJobError("No client app origin is set", code="no_client_app")
+        client_app = self._client_app
+        after = job.payload.get("after", "")
+        if not isinstance(after, str):
+            raise PermanentJobError("The page starts nowhere", code="invalid_payload")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            page = await reminders.send_page(
+                session, self._clock, client_app=client_app, after=after
+            )
+            if page.last_id is not None:
+                await enqueue(
+                    session,
+                    JobRequest(
+                        kind=CLAIM_REMINDERS_KIND,
+                        idempotency_key=f"after:{job.id}",
+                        payload={"after": page.last_id},
+                        max_age=CLAIM_REMINDERS_MAX_AGE,
+                    ),
+                    now=self._clock.now(),
+                )
+            return {"sent": page.sent, "skipped": page.skipped, "more": page.last_id is not None}
+
+        await context.apply(effect)
 
     async def claim_check_decided(self, job: ClaimedJob, context: JobContext) -> None:
         """The selfie and ID photo were compared with the identity carried over."""

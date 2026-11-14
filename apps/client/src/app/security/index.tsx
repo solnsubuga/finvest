@@ -61,13 +61,35 @@ function rowsFor(maskedPhone: string): Row[] {
   ];
 }
 
+type ChangeRow = { key: string; icon: IconName; title: string; detail: string; action: string; href: Href };
+
+/** How the client signs in and is reached. Each change asks for a passkey or the app first. */
+function changeRows(phone: string, email: string | null, pinApplies: boolean): ChangeRow[] {
+  const rows: (ChangeRow | null)[] = [
+    { key: "password", icon: "lock", title: "Password", detail: "The first step of every log in.", action: "Change", href: "/security/password" },
+    pinApplies
+      ? { key: "pin", icon: "key", title: "App PIN", detail: "Opens the app on this phone.", action: "Change", href: "/setup/pin?change=1" }
+      : null,
+    { key: "phone", icon: "phone", title: "Mobile number", detail: maskE164(phone), action: "Change", href: "/security/phone" },
+    {
+      key: "email",
+      icon: "mail",
+      title: "Email",
+      detail: email ?? "None yet. Add one for statements and receipts.",
+      action: email ? "Change" : "Add",
+      href: "/security/email",
+    },
+  ];
+  return rows.filter((row): row is ChangeRow => row !== null);
+}
+
 /**
  * Profile, Sign in and security: the ways this client can confirm a log in
  * after the password, and where to add the ones they do not have yet.
  */
 export default function Security() {
   const router = useRouter();
-  const { session } = useAuth();
+  const { session, pinApplies } = useAuth();
   const steps = useSecondSteps();
 
   if (!session) {
@@ -102,6 +124,37 @@ export default function Security() {
           <Button label="Try again" onPress={steps.reload} height={52} />
         </View>
       ) : null}
+
+      <View style={{ marginTop: 22 }}>
+        <Card padded={false}>
+          {changeRows(session.phone, session.email, pinApplies).map((row, index) => (
+            <Pressable
+              key={row.key}
+              accessibilityRole="button"
+              accessibilityLabel={`Change ${row.title.toLowerCase()}`}
+              onPress={() => router.push(row.href)}
+              style={({ pressed }) => [styles.row, index > 0 && styles.rowDivider, pressed && { opacity: 0.7 }]}
+              testID={`change-${row.key}`}
+            >
+              <View style={styles.rowIcon}>
+                <Icon name={row.icon} size={18} color={colors.black} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt weight="bold">{row.title}</Txt>
+                <Txt size={fontSizes.sm} color={colors.muted}>
+                  {row.detail}
+                </Txt>
+              </View>
+              <View style={styles.add}>
+                <Txt size={fontSizes.sm} weight="bold">
+                  {row.action}
+                </Txt>
+                <Icon name="chevron" size={16} strokeWidth={2.2} />
+              </View>
+            </Pressable>
+          ))}
+        </Card>
+      </View>
 
       {steps.status === "ready" ? (
         <View style={{ marginTop: 22, gap: 14 }}>

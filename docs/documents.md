@@ -2,9 +2,9 @@
 
 What Finvest sends a client in writing about their money: a statement after every month, a statement for any dates the client picks in the app, and a receipt for every payment received. Each one is a PDF, sent by email through Resend and kept in the app under Documents.
 
-The code is `backend/app/modules/documents`. It also draws and sends the yearly withholding tax certificate, from figures the tax module gives it ([tax.md](tax.md)). Transaction notes will join this module later.
+The code is `backend/app/modules/documents`. It also draws and sends the yearly withholding tax certificate, from figures the tax module gives it ([tax.md](tax.md)). It also issues the note that confirms an investment started.
 
-**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`, and `0142_tax_certificates` lets `documents` hold a certificate.
+**Status:** statements are asked for, built from the ledger, stored, downloadable and emailed with the PDF attached, and the monthly run asks for every client's. Every confirmed payment gets a receipt, built and emailed the same way. The app's Documents screen arrives in its own pull request. The tables are migrations `0140_documents` and `0141_document_emails`, `0142_tax_certificates` lets `documents` hold a certificate, `0143_investment_notes` an investment note, and `0144_ended_investment_notes` the note that confirms an investment ended.
 
 The designs are in `/mnt/project-files/screenshots/statements/` in the project folder: the statement PDF, the receipt PDF, the three emails at phone and wide sizes, and the app's Documents screen in every state.
 
@@ -47,6 +47,20 @@ The figures come from `tax.service.certificate_figures`, read from the ledger. I
 
 **The TIN.** The certificate prints the TIN, which only the identity data key opens. A worker started without `FINVEST_IDENTITY_DATA_KEY` leaves certificates pending and retries them with `identity_key_missing`, logged as an error, instead of drawing one without the TIN.
 
+## An investment note
+
+The note that confirms an investment started, one for each investment. When an investment starts, `investments.started` names the consumer `documents.note_from_investment`, which asks for a document of kind `investment_note` keyed `started:<investment id>` with the investment as its source. The database holds each note to its investment, so an investment gets one note however often the event is delivered. It is built, kept in the app under Investment notes and emailed like a receipt, with no figure in the email.
+
+| Part | What it shows |
+| --- | --- |
+| Heading | The client's name, account number, the product, the investment number, the start and maturity dates (or "Open term"), the issue date and the note number (`IN-<document id>`) |
+| Figures | The amount invested, the yearly rate after tax and, for a fixed term, the term, the interest at maturity after tax and what the client gets back |
+| At maturity | What the client chose: roll over or pay out. Rolling over is the default |
+
+The figures are the client's own view of the investment (`investments.client_investment`), so like every client figure they are after tax and the note never shows a tax rate or a tax amount. The note says the interest at maturity assumes the investment is held to maturity. A note for an investment that was never started fails with `source_conflict`. An investment that staff undid because it started by mistake (an investment correction) gets no note: its note is recorded as `empty` and never shown or sent, even when the job runs or retries after the undo. Investments carried over from Finvest 1.0 do not publish `investments.started`, so they get no note. Nor does the new investment a rollover opens at maturity: it publishes `investments.rolled_over`, not `investments.started`, so a note is issued only when a client's own payment starts an investment.
+
+**When it ends.** An investment gets a second note when it ends, keyed `ended:<investment id>`: when it matures and is paid out, when it matures into a new investment (`investments.rolled_over`), when it matures with nowhere yet to send the money, and when it is withdrawn early (`investments.withdrawn_early`). Each of those events names the consumer `documents.note_from_ended_investment`. An investment ends once, so it has at most these two notes, and the database allows no other key (`0144_ended_investment_notes`). The end note shows the amount invested, the interest earned after tax and what it came to, the day it ended (the maturity date, or the day the client asked to withdraw, when interest stopped) and what happened to the money: paid out, rolled over into the new investment it names, waiting for the client to choose where to send it, or paid out once the withdrawal is funded. Its file is `Finvest investment end note IN-<document id>.pdf`, which is how the app tells the two apart. A note asked for before an investment has ended fails with `source_conflict`.
+
 ## The PDFs
 
 `app/modules/documents/pdf.py` draws A4 pages with fpdf2, in black and lime with Plus Jakarta Sans embedded (SIL Open Font License, in `fonts/OFL.txt`). It is data in and bytes out: no network, no clock and no database. The same statement always gives the same bytes, because the creation date written into the file is the issue date. Long statements run onto more pages, with the table heading repeated, and every page carries the reference, the account number and the page count.
@@ -74,6 +88,7 @@ A document is asked for first and built later, so no request waits on the ledger
 | Who asks | Kind | Key, unique per client and kind |
 | --- | --- | --- |
 | The client, in the app | `requested_statement` | The client's `Idempotency-Key` |
+| Two members of staff, from the client's page ([client-accounts.md](client-accounts.md#acting-for-a-client)) | `requested_statement` | `staff:` and the approved action's ID |
 | The monthly run, for every client with a ledger account | `monthly_statement` | The month, `2026-10` |
 | The monthly run for June, for every client with a ledger account | `tax_certificate` | The tax year, `2026-27` |
 | A confirmed payment, through the `documents.receipt_from_deposit` consumer of `payments.deposit_confirmed` | `receipt` | The deposit ID, also unique on its own |
@@ -122,6 +137,8 @@ The PDF is kept in the row. A statement is a few tens of kilobytes, and keeping 
 | Route | Who | What |
 | --- | --- | --- |
 | `POST /client/statements` | Client, with `Idempotency-Key` | Ask for a statement from `date_from` to `date_to`. Answers 202 with the document, `pending`. A refused period is 422 with the reason on the field. |
-| `GET /client/documents` | Client | Their statements and receipts, newest first |
+| `GET /client/documents` | Client | Their statements, receipts, tax certificates and investment notes, newest first. An investment note carries `investment_id` and a receipt carries `deposit_id`, so the app can offer each beside the investment or payment it is about. Both are null on every other kind. |
 | `GET /client/documents/{id}` | Client | One document, to poll until it is `ready`. `not_final_from` is the first day whose figures may still change, or null. |
+| `GET /client/documents` | Client | Their statements and receipts, newest first |
+| `GET /client/documents/{id}` | Client | One document, to poll until it is `ready`. `not_final_from` is the first day whose figures may still change, or null. `reference` is what the PDF and its email call the document (`ST-`, `RC-`, `TC-` or `IN-` and its ID), and `note` says whether an investment note confirms the investment `started` or `ended` (null for other kinds), so the app never reads either from the file name. |
 | `GET /client/documents/{id}/file` | Client | The PDF, as a download, never cached |

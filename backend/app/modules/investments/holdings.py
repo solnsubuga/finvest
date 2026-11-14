@@ -23,6 +23,7 @@ from app.infrastructure.jobs import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.closures.pending import refuse_if_closing
+from app.modules.documents.events import NOTE_ON_START
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import (
     ClientReturns,
@@ -45,6 +46,7 @@ from app.modules.investments.domain.investments import (
 )
 from app.modules.investments.domain.products import check_new_investment
 from app.modules.investments.domain.rates import RateVersion, rate_in_force
+from app.modules.investments.locks import is_locked
 from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
@@ -105,6 +107,8 @@ class Investment:
     withdrawal_destination_id: str | None = None
     withdrawn_at: datetime | None = None
     withdrawal_payout_id: str | None = None
+    # The first day it may be withdrawn early or sent on again, if the client locked it.
+    withdrawal_locked_until: date | None = None
 
     @property
     def amount(self) -> Money:
@@ -158,6 +162,9 @@ class ClientInvestment:
     interest_so_far: Money
     # What was added by the latest daily run, if that run was for today.
     interest_today: Money
+    # What its next day of interest adds, after tax: the "a day" figure on Home. Zero once it
+    # stops earning: not started, matured, withdrawn, or asked to be withdrawn.
+    earning_per_day: Money
     value: Money
     # Interest and total at maturity. None for an open term.
     at_maturity_returns: ClientReturns | None
@@ -177,6 +184,9 @@ class ClientInvestment:
     withdrawal_requested_at: datetime | None = None
     # Whether the client may send part or all of it to another client now.
     can_send: bool = False
+    # Locked through a goal: the first day it may be withdrawn early or sent on again. None
+    # when it is not locked, or its lock has lapsed.
+    withdrawal_locked_until: date | None = None
 
 
 _COLUMNS = (
@@ -186,9 +196,12 @@ _COLUMNS = (
     "i.accrued_gross_minor, i.accrued_tax_minor, i.payout_destination_id, i.matured_at, "
     "i.rolled_into_id, i.rolled_from_id, i.payout_id, i.payout_refusal, "
     "i.withdrawal_requested_at, i.withdrawal_destination_id, i.withdrawn_at, "
-    "i.withdrawal_payout_id"
+    "i.withdrawal_payout_id, l.locked_until AS withdrawal_locked_until"
 )
-_FROM = "FROM investments i JOIN investment_products p ON p.id = i.product_id"
+_FROM = (
+    "FROM investments i JOIN investment_products p ON p.id = i.product_id "
+    "LEFT JOIN investment_withdrawal_locks l ON l.investment_id = i.id"
+)
 
 
 def select_investments(tail: str) -> TextClause:
@@ -223,6 +236,9 @@ _INSERT = text(
     "source_type, source_id) VALUES "
     "(:id, :client_id, :product_id, :currency, :principal_minor, :annual_rate_bps, :tax_bps, "
     ":term_days, :at_maturity, :now, :pay_by, :now, :source_type, :source_id)"
+)
+_BY_SOURCE = text(
+    f"SELECT {_COLUMNS} {_FROM} WHERE i.source_type = :source_type AND i.source_id = :source_id"
 )
 # What `source_type` says of an investment two members of staff booked for a client.
 BOOKING_SOURCE = "investment_booking"
@@ -266,15 +282,7 @@ async def request_investment(
     client_id = client.id
 
     async def command() -> Receipt:
-        investment_id = await _create(
-            session,
-            client_id,
-            product_code,
-            amount,
-            at_maturity,
-            clock,
-            actor=AuditActor.client(client_id),
-        )
+        investment_id = await _create(session, client_id, product_code, amount, at_maturity, clock)
         return Receipt(201, {"investment_id": investment_id})
 
     outcome = await run_once(
@@ -292,6 +300,40 @@ async def request_investment(
         command=command,
     )
     return await get_investment(session, str(outcome.receipt.response["investment_id"]))
+
+
+async def request_system_investment(
+    session: AsyncSession,
+    *,
+    client_id: str,
+    source_type: str,
+    source_id: str,
+    product_code: str,
+    amount: Money,
+    at_maturity: AtMaturity | None,
+    clock: Clock,
+) -> Investment:
+    """Save an investment a client set going ahead of time, such as an automatic investing run.
+
+    Worker only, as the system acting for the client, with the same checks as one the client
+    confirms by hand: an approved identity check, an account not closing, the product's terms
+    today and the cap on investments waiting for payment. `source_type` is `autoinvest_run` or
+    `goal_saving`, and `source_id` that module's own ID. Asking again for the same source
+    returns the investment already saved, whatever its status, and saves nothing.
+    """
+    found = await _by_source(session, source_type, source_id)
+    if found is not None:
+        return found
+    investment_id = await _create(
+        session,
+        client_id,
+        product_code,
+        amount,
+        at_maturity,
+        clock,
+        source=(source_type, source_id),
+    )
+    return await get_investment(session, investment_id)
 
 
 async def create_booked(
@@ -315,9 +357,15 @@ async def create_booked(
         amount,
         at_maturity,
         clock,
-        actor=AuditActor.system(),
-        source_id=booking_id,
+        source=(BOOKING_SOURCE, booking_id),
     )
+
+
+async def _by_source(session: AsyncSession, source_type: str, source_id: str) -> Investment | None:
+    row = (
+        await session.execute(_BY_SOURCE, {"source_type": source_type, "source_id": source_id})
+    ).one_or_none()
+    return None if row is None else investment_from_row(row)
 
 
 async def _create(
@@ -328,8 +376,7 @@ async def _create(
     at_maturity: AtMaturity | None,
     clock: Clock,
     *,
-    actor: AuditActor,
-    source_id: str | None = None,
+    source: tuple[str, str] | None = None,
 ) -> str:
     if await kyc.verified_name(session, client_id) is None:
         # Nobody invests before their identity check is approved.
@@ -370,8 +417,8 @@ async def _create(
             "at_maturity": at_maturity.value if at_maturity else None,
             "now": now,
             "pay_by": pay_by(now),
-            "source_type": BOOKING_SOURCE if source_id else None,
-            "source_id": source_id,
+            "source_type": source[0] if source else None,
+            "source_id": source[1] if source else None,
         },
     )
     await audit.record(
@@ -381,11 +428,11 @@ async def _create(
             action="investments.requested",
             resource_type=INVESTMENT_RESOURCE,
             resource_id=investment_id,
-            actor=actor,
+            actor=AuditActor.system() if source else AuditActor.client(client_id),
             details={
                 "product": product.code,
                 "at_maturity": at_maturity.value if at_maturity else None,
-                **({"booking_id": source_id} if source_id else {}),
+                **({"source": source[0]} if source else {}),
             },
         ),
         clock,
@@ -500,7 +547,8 @@ async def start_investment(
             "principal_minor": investment.amount.minor,
             "currency": currency.value,
         },
-        consumers=[],
+        # Documents issues the note that confirms the investment started.
+        consumers=[NOTE_ON_START],
         now=now,
     )
     await audit.record(
@@ -568,6 +616,21 @@ async def cancel_unpaid(session: AsyncSession, clock: Clock, *, limit: int = SWE
 
 
 # Queries ----------------------------------------------------------------------------------------
+
+
+async def lock_investment(session: AsyncSession, investment_id: str) -> Investment:
+    """The investment, with its row locked for the rest of the transaction. Worker only.
+
+    Returns the Investment, or raises `not_found`.
+
+    The same lock the start of an investment takes before it reads the money waiting. Payments
+    takes it before reversing a mistaken deposit, so the money cannot start the investment
+    halfway through. It changes nothing.
+    """
+    row = (await session.execute(_BY_ID_LOCKED, {"id": investment_id})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    return investment_from_row(row)
 
 
 async def get_investment(session: AsyncSession, investment_id: str) -> Investment:
@@ -685,6 +748,7 @@ def investment_from_row(row: Row[Any]) -> Investment:
         withdrawal_destination_id=row.withdrawal_destination_id,
         withdrawn_at=row.withdrawn_at,
         withdrawal_payout_id=row.withdrawal_payout_id,
+        withdrawal_locked_until=row.withdrawal_locked_until,
     )
 
 
@@ -696,6 +760,7 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         else days_earned(investment.start_date, investment.accrued_through, investment.term_days)
     )
     added_today = investment.accrued_through == today and earned > 0
+    locked = is_locked(investment.withdrawal_locked_until, today)
     return ClientInvestment(
         id=investment.id,
         product_code=investment.product_code,
@@ -715,6 +780,12 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         interest_today=day_accrual(terms, earned).net
         if added_today
         else Money.zero(terms.principal.currency),
+        earning_per_day=day_accrual(terms, earned + 1).net
+        if investment.status is InvestmentStatus.ACTIVE
+        and investment.start_date is not None
+        and investment.withdrawal_requested_at is None
+        and (investment.term_days is None or earned < investment.term_days)
+        else Money.zero(terms.principal.currency),
         value=terms.principal + investment.accrued_net,
         at_maturity_returns=None
         if investment.term_days is None
@@ -733,11 +804,14 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
             investment.maturity_date,
             today,
             requested=investment.withdrawal_requested_at is not None,
-        ),
+        )
+        and not locked,
         withdrawal_requested_at=investment.withdrawal_requested_at,
         can_send=investment.status is InvestmentStatus.ACTIVE
         and investment.withdrawal_requested_at is None
-        and (investment.maturity_date is None or today < investment.maturity_date),
+        and (investment.maturity_date is None or today < investment.maturity_date)
+        and not locked,
+        withdrawal_locked_until=investment.withdrawal_locked_until if locked else None,
     )
 
 
@@ -750,3 +824,22 @@ _RUNNING_FOR_CLIENT = text(
 async def running_count(session: AsyncSession, client_id: str) -> int:
     """How many of the client's investments are waiting for payment or still running."""
     return int(await session.scalar(_RUNNING_FOR_CLIENT, {"client_id": client_id}) or 0)
+
+
+async def withdrawable_for_client(
+    session: AsyncSession, client_id: str, today: date
+) -> list[Investment]:
+    """The client's investments that could be withdrawn early today, newest first. For staff
+    preparing a withdrawal the client asked for in writing."""
+    rows = await session.execute(_FOR_CLIENT, {"client_id": client_id, "limit": MAX_PAGE_SIZE})
+    found = [investment_from_row(row) for row in rows.all()]
+    return [
+        investment
+        for investment in found
+        if can_withdraw_early(
+            investment.status,
+            investment.maturity_date,
+            today,
+            requested=investment.withdrawal_requested_at is not None,
+        )
+    ]

@@ -110,6 +110,11 @@ jobs:
             echo "The demo identity check was bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo claim, which confirms moved clients nobody checked, and its made-up links.
+          if grep -rIl -e "demo-claim-check" -e "not-a-real-token" -e "Your selfie is too dark to compare" dist; then
+            echo "The demo claim was bundled into a production build" >&2
+            exit 1
+          fi
           # Nor the demo Activity history.
           if grep -rIl -e "demo-activity-" dist; then
             echo "The demo activity was bundled into a production build" >&2

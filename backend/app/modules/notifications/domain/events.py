@@ -48,6 +48,8 @@ _SPECS = (
     # Money in.
     _event("payment_confirmed", Category.MONEY, "payments", "amount", "method"),
     _event("payment_failed", Category.MONEY, "payments", "amount", "method"),
+    # A payment credited by mistake was taken back by two staff. Never the amount in the words.
+    _event("payment_reversed", Category.MONEY, "payments", "amount", "method"),
     # Money out.
     _event("payout_processing", Category.MONEY, "payouts", "amount", "destination"),
     _event("payout_sent", Category.MONEY, "payouts", "amount", "destination"),
@@ -84,6 +86,11 @@ _SPECS = (
     # Goals. The goal's name is the client's own words. Never an amount.
     _event("goal_top_up_due", Category.INVESTMENTS, "goals", "goal", "date"),
     _event("goal_reached", Category.INVESTMENTS, "goals", "goal"),
+    _event("goal_payday", Category.INVESTMENTS, "goals", "goal"),
+    # Automatic investing. Named by the run's due day, never the amount.
+    _event("autoinvest_run_retrying", Category.INVESTMENTS, "autoinvest", "date"),
+    _event("autoinvest_run_failed", Category.INVESTMENTS, "autoinvest", "date"),
+    _event("autoinvest_run_missed", Category.INVESTMENTS, "autoinvest", "date"),
     # The account.
     _event("kyc_approved", Category.ACCOUNT, "kyc"),
     _event("kyc_retake_requested", Category.ACCOUNT, "kyc"),

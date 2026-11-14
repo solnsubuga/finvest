@@ -43,6 +43,7 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.service import Deposit, DepositRequest
+from app.modules.platform_settings import service as platform_settings
 from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -235,6 +236,13 @@ def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
                 raise ApplicationError("conflict")
             holder = await kyc.account_holder(session, client.client_id)
             account = await bank_accounts.account_in_use(session, payable.amount.currency)
+            channels = await platform_settings.payment_channels(session, clock.now())
+        if not channels.is_open("bank_pay_in"):
+            # Paused on Settings: the app offers mobile money instead. A transfer already made
+            # can still have its receipt handed in.
+            raise ApplicationError(
+                "unavailable", fields=[FieldProblem(field_path=["method"], code="channel_paused")]
+            )
         if account is None or holder is None:
             raise ApplicationError("unavailable")
         return BankTransferDetails(

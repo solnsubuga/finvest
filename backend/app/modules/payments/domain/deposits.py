@@ -156,17 +156,21 @@ class Move:
 
     `post` is set only with `confirmed`: the ledger entry must be posted in the same
     transaction. `code` says why for `failed` and `uncertain`. `provider_reference` is set when
-    the provider gave one we did not have.
+    the provider gave one we did not have. `charge` is what the provider took from Finvest's
+    wallet for a confirmed deposit, posted as Finvest's cost beside the deposit's entry.
     """
 
     status: DepositStatus
     code: str | None = None
     provider_reference: str | None = None
     post: Money | None = None
+    charge: Money | None = None
 
     def __post_init__(self) -> None:
         if (self.post is not None) != (self.status is DepositStatus.CONFIRMED):
             raise ValueError("A deposit is confirmed exactly when its entry is posted")
+        if self.charge is not None and (self.post is None or not self.charge.is_positive):
+            raise ValueError("Only a confirmed deposit carries a charge, and it is positive")
         if (self.code is not None) != (
             self.status in (DepositStatus.FAILED, DepositStatus.UNCERTAIN)
         ):
@@ -250,7 +254,7 @@ def after_status(
         return None
     overdue = sent_at is not None and now - sent_at >= APPROVAL_WINDOW
     match reading:
-        case Confirmed(provider_reference=reference, amount=amount):
+        case Confirmed(provider_reference=reference, amount=amount, charge=charge):
             if amount.currency is not expected.currency or amount != expected:
                 if current is DepositStatus.UNCERTAIN:
                     return None
@@ -259,7 +263,12 @@ def after_status(
                     code=Code.AMOUNT_MISMATCH.value,
                     provider_reference=reference,
                 )
-            return Move(DepositStatus.CONFIRMED, provider_reference=reference, post=expected)
+            return Move(
+                DepositStatus.CONFIRMED,
+                provider_reference=reference,
+                post=expected,
+                charge=charge if charge is not None and charge.is_positive else None,
+            )
         case Rejected(code=code, provider_reference=reference):
             return Move(DepositStatus.FAILED, code=code.value, provider_reference=reference)
         case Pending(provider_reference=reference):

@@ -15,6 +15,20 @@ describe("hrefFor", () => {
     });
   });
 
+  it("opens the plan an automatic investing notification names", () => {
+    expect(hrefFor({ kind: "autoinvest_plan", id: "P1" })).toEqual({
+      pathname: "/autoinvest/[planId]",
+      params: { planId: "P1" },
+    });
+  });
+
+  it("opens the payout account an approval or refusal names", () => {
+    expect(hrefFor({ kind: "payout_destination", id: "D1" })).toEqual({
+      pathname: "/payouts/[id]",
+      params: { id: "D1" },
+    });
+  });
+
   it("opens nothing for a notification with no link", () => {
     expect(hrefFor(null)).toBeNull();
   });

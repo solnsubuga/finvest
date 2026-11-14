@@ -19,17 +19,26 @@ from app.infrastructure.jobs.worker import default_worker_id
 from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
+from app.modules.autoinvest.jobs import OPEN_DUE_KIND as AUTOINVEST_OPEN_KIND
+from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
-from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
+from app.modules.investments.jobs import (
+    ACCRUE_KIND,
+    CANCEL_UNPAID_KIND,
+    MATURE_KIND,
+    REMIND_MATURING_KIND,
+)
 from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.migration.jobs import CLAIM_REMINDERS_KIND, CLAIM_REMINDERS_MAX_AGE
 from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
 from app.modules.payouts import payouts
+from app.modules.reports.jobs import QUEUE_KIND as REPORT_SCHEDULES_KIND
 from app.modules.screening.service import RESCREEN_KIND
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
@@ -111,6 +120,22 @@ def schedules() -> list[Schedule]:
             kind=SEND_REMINDERS_KIND,
             max_age=timedelta(hours=10),
         ),
+        # Investments maturing in as many days as Settings says (7 and 1 unless changed), in
+        # the morning so no text arrives at night. Each reminder is sent once.
+        Schedule(
+            name="investments.remind_maturing",
+            trigger=CronTrigger(hour=8, minute=30, timezone=KAMPALA),
+            kind=REMIND_MATURING_KIND,
+            max_age=timedelta(hours=10),
+        ),
+        # A fresh claim link for migrated clients whose last one is a week old and unused, in
+        # the morning so no text arrives at night. One run covers every client due.
+        Schedule(
+            name="migration.claim_reminders",
+            trigger=CronTrigger(hour=9, minute=0, timezone=KAMPALA),
+            kind=CLAIM_REMINDERS_KIND,
+            max_age=CLAIM_REMINDERS_MAX_AGE,
+        ),
         # Last month's statement for every client. It runs every morning and asks for a month
         # only once the ledger is closed through its last day; each client is asked once.
         Schedule(
@@ -118,6 +143,14 @@ def schedules() -> list[Schedule]:
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
             max_age=timedelta(hours=20),
+        ),
+        # Scheduled reports due today: an email to each recipient with a link to download it.
+        # A missed morning is not caught up; the next sends the next period.
+        Schedule(
+            name="reports.send_scheduled",
+            trigger=CronTrigger(hour=7, minute=0, timezone=KAMPALA),
+            kind=REPORT_SCHEDULES_KIND,
+            max_age=timedelta(hours=10),
         ),
         # Closes document emails still queued a week after their document was ready, whose
         # job expired or failed, so the record says they were never sent.
@@ -146,6 +179,27 @@ def schedules() -> list[Schedule]:
                 trigger=IntervalTrigger(minutes=1),
                 kind=payments.SWEEP_KIND,
                 max_age=timedelta(minutes=5),
+            )
+        )
+        # Opens automatic investing runs on their due day and asks for each one's investment
+        # and payment. It sends prompts only between 08:00 and 20:00 in Kampala, and a missed
+        # fire time needs no run of its own: the next one collects a day that is at most a day
+        # late, and records an older one as missed.
+        runs.append(
+            Schedule(
+                name="autoinvest.open_due_runs",
+                trigger=IntervalTrigger(minutes=15),
+                kind=AUTOINVEST_OPEN_KIND,
+                max_age=timedelta(minutes=30),
+            )
+        )
+        # Records which automatic investing runs were paid and which failed.
+        runs.append(
+            Schedule(
+                name="autoinvest.settle_runs",
+                trigger=IntervalTrigger(minutes=5),
+                kind=AUTOINVEST_SETTLE_KIND,
+                max_age=timedelta(minutes=10),
             )
         )
         # Settles payout sends that were interrupted, and queues sends and reads that were lost.

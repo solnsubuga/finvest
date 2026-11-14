@@ -1,6 +1,6 @@
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
-import { Card } from "@/components/Blocks";
+import { Card, Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
 import { colors, fontSizes, radii } from "@/theme";
@@ -96,6 +96,18 @@ export function Timeline({ steps }: { steps: Step[] }) {
         ))}
       </View>
     </Card>
+  );
+}
+
+/** What happened after Share: the sheet opened, or there was none so the text was copied. */
+export function ShareNote({ outcome }: { outcome: "shared" | "copied" | "failed" | null }) {
+  if (outcome === null || outcome === "shared") return null;
+  return (
+    <View style={{ marginTop: 12 }} accessibilityLiveRegion="polite">
+      <Notice tone={outcome === "copied" ? "neutral" : "danger"}>
+        {outcome === "copied" ? "Copied. Paste it wherever you want to send it." : "We could not share this. Try again."}
+      </Notice>
+    </View>
   );
 }
 

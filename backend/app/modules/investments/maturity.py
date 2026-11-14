@@ -32,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.jobs import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.documents.events import NOTE_ON_END
 from app.modules.goals.events import FOLLOW_ROLLOVER
 from app.modules.investments import accrual
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
@@ -57,6 +58,7 @@ from app.modules.investments.holdings import (
     investment_from_row,
     select_investments,
 )
+from app.modules.investments.locks import inherit_lock
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import EntryDraft, Line, credit, debit
 from app.modules.notifications import contract as notifications
@@ -414,6 +416,10 @@ async def _roll_over(
             "now": now,
         },
     )
+    # A saving locked through a goal stays locked in its next term, until the same day.
+    await inherit_lock(
+        session, old_id=investment.id, new_id=new_id, today=business_date(now), now=now
+    )
     await session.execute(
         _MATURE,
         {
@@ -437,7 +443,8 @@ async def _roll_over(
             "principal_minor": proceeds.minor,
             "currency": proceeds.currency.value,
         },
-        consumers=[FOLLOW_ROLLOVER],
+        # Goals follows the rollover; documents issues the note that confirms the end.
+        consumers=[FOLLOW_ROLLOVER, NOTE_ON_END],
         now=now,
     )
     logger.info(
@@ -506,7 +513,8 @@ async def _hand_over(
             "principal_minor": investment.amount.minor,
             "currency": proceeds.currency.value,
         },
-        consumers=[],
+        # Documents issues the note that confirms the investment ended.
+        consumers=[NOTE_ON_END],
         now=now,
     )
     logger.info(

@@ -18,7 +18,7 @@ live deposit, whichever way it is paid.
 """
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 import structlog
@@ -69,6 +69,10 @@ BANK_ACCOUNT_CODE = "bank.trust"
 SUBMIT_OPERATION = "payments.submit_bank_receipt"
 REVIEW_OPERATION = "payments.review_bank_transfer"
 SETTLE_KIND = "payments.settle_bank_transfer"
+# How many receipts one client may store in a day. Each is a file of up to 10 MiB kept for good,
+# and a goal takes any number of payments, so without this one client could fill the store.
+MAX_RECEIPTS_PER_DAY = 10
+RECEIPT_WINDOW = timedelta(hours=24)
 
 logger = structlog.get_logger()
 
@@ -135,6 +139,12 @@ _INSERT_RECEIPT = text(
     "(:deposit_id, :client_id, :storage_key, :content_type, :byte_size, :sha256, :sent_on, "
     ":bank_name, :transaction_number, :now)"
 )
+_RECENT_RECEIPTS = text(
+    "SELECT count(*) FROM payment_bank_receipts WHERE client_id = :client_id "
+    "AND created_at > :since"
+)
+# One client's receipts are counted and saved one at a time, so the limit cannot be raced.
+_CLIENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
 _SELECT_RECEIPT = text(
     "SELECT deposit_id, storage_key, content_type, byte_size, sha256, sent_on, bank_name, "
     "transaction_number, created_at FROM payment_bank_receipts WHERE deposit_id = :id"
@@ -261,6 +271,12 @@ async def submit_bank_receipt(
 
     async def command() -> Receipt:
         deposit_id = chosen_id
+        await session.execute(_CLIENT_LOCK, {"lock": f"finvest.payments.receipts:{client_id}"})
+        recent = await session.scalar(
+            _RECENT_RECEIPTS, {"client_id": client_id, "since": now - RECEIPT_WINDOW}
+        )
+        if int(recent or 0) >= MAX_RECEIPTS_PER_DAY:
+            raise ApplicationError("rate_limited")
         await service.insert_deposit(
             session,
             {

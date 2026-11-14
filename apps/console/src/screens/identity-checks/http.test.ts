@@ -22,6 +22,7 @@ const CHECK = {
     { id: "-NphotoSelfie0000001", kind: "selfie", live: true },
   ],
   automatic_checks: [{ check: "selfie_match", verdict: "unsure", score: 62 }],
+  phone_name: { status: "partly_matches", registered_name: "MUGISHA David Okello", answered_at: "2026-11-13T07:41:00Z" },
   retake_photos: [],
   client_message: null,
   account_number: null,
@@ -72,6 +73,7 @@ describe("identity checks over HTTP", () => {
       { kind: "selfie", url: null, live: true },
     ]);
     expect(check).toMatchObject({ documentNumberMasked: "CM90••••••••4PL", givenNames: "David", automaticChecks: [{ score: 62 }] });
+    expect(check.phoneName).toEqual({ status: "partly_matches", registeredName: "MUGISHA David Okello" });
   });
 
   it("reuses the links while they are good, so one look is one audit event", async () => {

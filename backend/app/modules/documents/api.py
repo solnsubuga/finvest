@@ -10,7 +10,7 @@ from pydantic import Field
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.modules.documents import service
-from app.modules.documents.service import DocumentStatus, DocumentView
+from app.modules.documents.service import DocumentKind, DocumentStatus, DocumentView
 from app.modules.identity.api import CurrentClient
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -53,7 +53,9 @@ class StatementRequest(Contract):
 
 class DocumentItem(Contract):
     id: PushId
-    kind: Literal["monthly_statement", "requested_statement", "receipt", "tax_certificate"]
+    kind: Literal[
+        "monthly_statement", "requested_statement", "receipt", "tax_certificate", "investment_note"
+    ]
     # `pending` while the worker builds it, then `ready` to download, or `failed`.
     status: Literal["pending", "ready", "failed"]
     date_from: date | None
@@ -65,6 +67,15 @@ class DocumentItem(Contract):
     # A statement for dates the ledger has not all closed yet: the first day whose figures
     # may still change. Null when every figure is final.
     not_final_from: date | None
+    # What the document is about, so the app can offer it where that thing is shown: the
+    # investment an investment note confirms, or the payment a receipt is for. Null otherwise.
+    investment_id: str | None
+    deposit_id: str | None
+    # What the PDF and its email call the document: "ST-", "RC-", "TC-" or "IN-" and its ID.
+    reference: str
+    # For an investment note, whether it confirms the investment started or ended. Null for
+    # every other kind.
+    note: Literal["started", "ended"] | None
 
 
 class DocumentList(Contract):
@@ -85,6 +96,10 @@ def _item(view: DocumentView) -> DocumentItem:
         file_name=view.file_name,
         byte_size=view.byte_size,
         not_final_from=view.not_final_from,
+        investment_id=view.source_id if view.kind is DocumentKind.INVESTMENT_NOTE else None,
+        deposit_id=view.source_id if view.kind is DocumentKind.RECEIPT else None,
+        reference=view.reference,
+        note=view.note.value if view.note else None,
     )
 
 

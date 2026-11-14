@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 import structlog
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from pydantic import Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer
@@ -19,6 +20,7 @@ from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, Storag
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import liveness, service
+from app.modules.kyc import phone_names as phone_lookups
 from app.modules.kyc.domain.checks import (
     CheckStatus,
     DocumentType,
@@ -29,7 +31,10 @@ from app.modules.kyc.domain.checks import (
     staff_moves,
 )
 from app.modules.kyc.domain.liveness import LivenessProvider, LivenessStatus
+from app.modules.kyc.domain.phone_names import PhoneName
 from app.modules.kyc.domain.provider import AutomaticCheck, IdentityProvider, Verdict
+from app.modules.screening import contract as screening
+from app.modules.screening.contract import Outcome as ScreeningOutcome
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
@@ -165,6 +170,17 @@ class LivenessState(Contract):
     latest: LivenessAttempt | None
 
 
+class PhoneNameOut(Contract):
+    status: PhoneName
+    # The network's name, once it gave one.
+    registered_name: str | None
+    answered_at: datetime | None
+    # False once the client's number has changed since: the result is about an earlier number.
+    current_number: bool
+    # True when this result stops the check being approved.
+    blocks_approval: bool
+
+
 class StaffCheck(QueueEntry):
     client_id: PushId
     document_country: str
@@ -183,6 +199,13 @@ class StaffCheck(QueueEntry):
     carried_over: bool
     # What staff may do to the check in this state. The database enforces the same table.
     allowed: list[Decision]
+    # Where the client stands with sanctions and PEP screening, or null if never screened.
+    # Anything but `clear` is a reason to look before approving.
+    screening: ScreeningOutcome | None
+    # The name the mobile network holds for the client's phone number, and how it compares
+    # with the name on the ID, or null if it was not looked up. A different name on the
+    # client's current number blocks approval, so `approve` is left out of `allowed`.
+    phone_name: PhoneNameOut | None
 
 
 class DocumentNumber(Contract):
@@ -250,7 +273,31 @@ def _name(surname: str | None, given_names: str | None) -> str | None:
     return f"{given_names} {surname.title()}" if surname and given_names else None
 
 
-def _staff_check(view: service.CheckView) -> StaffCheck:
+async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> StaffCheck:
+    """The staff view with the client's screening standing and phone name, read in the same
+    transaction."""
+    standing = await screening.latest_outcome(session, view.client_id)
+    phone = await phone_lookups.phone_name_for_check(session, view.id)
+    return _staff_check(
+        view,
+        None if standing is None else standing.outcome,
+        None
+        if phone is None
+        else PhoneNameOut(
+            status=phone.status,
+            registered_name=phone.registered_name,
+            answered_at=phone.answered_at,
+            current_number=phone.current_number,
+            blocks_approval=phone.blocks_approval,
+        ),
+    )
+
+
+def _staff_check(
+    view: service.CheckView,
+    screening_outcome: ScreeningOutcome | None,
+    phone_name: PhoneNameOut | None,
+) -> StaffCheck:
     details = view.details
     return StaffCheck(
         id=view.id,
@@ -279,7 +326,12 @@ def _staff_check(view: service.CheckView) -> StaffCheck:
             decision
             for status, decision in _DECISIONS.items()
             if status in staff_moves(view.status)
+            and not (
+                decision == "approve" and phone_name is not None and phone_name.blocks_approval
+            )
         ],
+        screening=screening_outcome,
+        phone_name=phone_name,
     )
 
 
@@ -464,7 +516,14 @@ def create_routers(
     async def submit(client: CurrentClient, request: Request) -> ClientCheck:
         """Hand the check in. Answers which photos or details are missing if it is not ready."""
         async with database(request).actor_transaction(client.actor) as session:
-            view = await service.submit(session, seal(), client.actor, provider, clock(request))
+            view = await service.submit(
+                session,
+                seal(),
+                client.actor,
+                provider,
+                clock(request),
+                phone_names=request.app.state.payout_names_on,
+            )
         return _client_check(view)
 
     # Staff -----------------------------------------------------------------------------------
@@ -491,7 +550,8 @@ def create_routers(
     @staff_router.get("/{check_id}")
     async def one_check(check_id: PushId, staff: Viewer, request: Request) -> StaffCheck:
         async with database(request).actor_transaction(staff.actor) as session:
-            return _staff_check(await service.check_for_staff(session, seal(), check_id))
+            view = await service.check_for_staff(session, seal(), check_id)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/document-number")
     async def show_document_number(
@@ -538,7 +598,7 @@ def create_routers(
             view = await service.approve(
                 session, seal(), staff.actor, check_id, body.reason, clock(request)
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/reject")
     async def reject(
@@ -555,7 +615,7 @@ def create_routers(
                 clock(request),
                 client_message=body.client_message,
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/ask-for-photos")
     async def ask_for_photos(
@@ -572,7 +632,7 @@ def create_routers(
                 body.client_message,
                 clock(request),
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     @staff_router.post("/{check_id}/escalate")
     async def escalate(
@@ -583,7 +643,7 @@ def create_routers(
             view = await service.escalate(
                 session, seal(), staff.actor, check_id, body.reason, clock(request)
             )
-        return _staff_check(view)
+            return await _staff_check_now(session, view)
 
     return [client_router, staff_router]
 

@@ -34,6 +34,7 @@ PRODUCTION_LIST = [
     "dealing.order",
     "ledger.correction",
     "payment.reassignment",
+    "payment.receivable",
     "payout",
     "pot_transfer",
     "tax.remittance",

@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
+import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { emptyDirectory, type ClientCard, type Directory } from "@/directory/api.ts";
 import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
+import { createHttpClientsApi } from "../clients/http.ts";
 import type { Investment } from "../investments/api.ts";
+import type { Correction } from "../investments/corrections/api.ts";
+import { createHttpCorrectionsApi } from "../investments/corrections/http.ts";
+import { createStubCorrectionsApi } from "../investments/corrections/stub.ts";
+import { RunAgainPanel } from "../investments/runs/index.tsx";
+import { createHttpHeldActionsApi, createStubHeldActionsApi, type HeldActionsApi } from "./actions.ts";
+import { HeldActions, PayOutNote, type HeldMode } from "./HeldActions.tsx";
 import { formatDay, formatExact } from "../products/format.ts";
 import type { Amount, Currency } from "../products/api.ts";
 import { maturitiesErrorMessage, notConnectedMaturitiesApi, type Maturities, type MaturitiesApi, type MaturityDay } from "./api.ts";
@@ -61,15 +70,34 @@ function totals(investments: readonly Investment[], amount: (i: Investment) => A
 const count = (value: number) => value.toLocaleString("en-GB");
 const terms = (value: number) => `${count(value)} ${value === 1 ? "term" : "terms"}`;
 
+/** What staff may do about held money. Without it, the held list only reads. */
+export interface HeldTools {
+  api: HeldActionsApi;
+  /** `investment_corrections.change`: propose sending it to another account. */
+  canSend: boolean;
+  /** `support.reply`: write to the client. */
+  canMessage: boolean;
+  newKey?: () => string;
+}
+
 interface MaturitiesScreenProps {
   api: MaturitiesApi;
   /** Names each client. Without it, a client shows as their ID. */
   directory?: Directory;
+  held?: HeldTools | undefined;
 }
 
-export function MaturitiesScreen({ api, directory = emptyDirectory }: MaturitiesScreenProps) {
+export function MaturitiesScreen({ api, directory = emptyDirectory, held: tools }: MaturitiesScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [cards, setCards] = useState<Record<string, ClientCard | null>>({});
+  const [payOuts, setPayOuts] = useState<readonly Correction[]>([]);
+
+  const readPayOuts = useCallback(() => {
+    if (!tools) return;
+    // Only a note under each row: when it cannot be read, the row simply has none.
+    void tools.api.payOuts().then(setPayOuts, () => setPayOuts([]));
+  }, [tools]);
+  useEffect(readPayOuts, [readPayOuts]);
 
   const fetchAll = useCallback(
     (): Promise<Load> =>
@@ -138,7 +166,7 @@ export function MaturitiesScreen({ api, directory = emptyDirectory }: Maturities
         <HeldCard held={held} />
       </div>
       {notClosed.length > 0 ? <NotClosed investments={notClosed} cards={cards} today={today} /> : null}
-      {held.length > 0 ? <Held investments={held} cards={cards} /> : null}
+      {held.length > 0 ? <Held investments={held} cards={cards} tools={tools} payOuts={payOuts} onProposed={readPayOuts} /> : null}
       <DayByDay days={days} today={today} />
     </>
   );
@@ -263,32 +291,137 @@ function NotClosed({ investments, cards, today }: { investments: readonly Invest
   );
 }
 
-function Held({ investments, cards }: { investments: readonly Investment[]; cards: Readonly<Record<string, ClientCard | null>> }) {
+interface HeldProps {
+  investments: readonly Investment[];
+  cards: Readonly<Record<string, ClientCard | null>>;
+  tools: HeldTools | undefined;
+  /** Pay outs proposed for held terms, newest first. */
+  payOuts: readonly Correction[];
+  onProposed: () => void;
+}
+
+function Held({ investments, cards, tools, payOuts, onProposed }: HeldProps) {
+  const [open, setOpen] = useState<{ id: string; mode: HeldMode } | null>(null);
+  const newKey = tools?.newKey ?? (() => crypto.randomUUID());
+  const chosen = open ? investments.find((investment) => investment.id === open.id) : undefined;
+  const nameOf = (investment: Investment) => cards[investment.clientId]?.name ?? investment.clientId;
   return (
-    <Table id="held" title="Money held for the client" caption="Matured terms whose money waits for the client" headings={["Client", "Product", "Waiting", "Ended", "Why it waits"]}>
-      {investments.map((investment) => {
-        const reason = heldReason(investment.payoutRefusal);
-        return (
-          <tr key={investment.id} className="border-t border-divider align-top tabular-nums">
-            <th scope="row" className={cn(CELL, "text-left font-normal")}>
-              <ClientName clientId={investment.clientId} card={cards[investment.clientId]} />
-            </th>
-            <td className={cn(CELL, "font-bold whitespace-nowrap")}>{investment.productName}</td>
-            <td className={cn(CELL, "whitespace-nowrap")}>
-              <div className="font-bold">{formatExact(proceeds(investment))}</div>
-              <div className="text-xs text-muted">
-                {formatExact(investment.amount)} and {formatExact(investment.interestNet)} interest
-              </div>
-            </td>
-            <td className={cn(CELL, "whitespace-nowrap")}>{investment.maturityDate ? formatDay(investment.maturityDate) : ""}</td>
-            <td className={cn(CELL, "min-w-[260px]")}>
-              <div className="font-bold">{reason.label}</div>
-              <div className="text-sm leading-normal text-muted">{reason.action}</div>
-            </td>
-          </tr>
-        );
-      })}
-    </Table>
+    <>
+      <Table id="held" title="Money held for the client" caption="Matured terms whose money waits for the client" headings={["Client", "Product", "Waiting", "Ended", "Why it waits"]}>
+        {investments.map((investment) => {
+          const reason = heldReason(investment.payoutRefusal);
+          const latest = payOuts.find((correction) => correction.investmentId === investment.id);
+          const waiting = latest?.status === "proposed" || latest?.status === "approved";
+          const canSend = tools?.canSend === true && !waiting;
+          const canMessage = tools?.canMessage === true;
+          return (
+            <tr key={investment.id} className="border-t border-divider align-top tabular-nums">
+              <th scope="row" className={cn(CELL, "text-left font-normal")}>
+                <ClientName clientId={investment.clientId} card={cards[investment.clientId]} />
+              </th>
+              <td className={cn(CELL, "font-bold whitespace-nowrap")}>{investment.productName}</td>
+              <td className={cn(CELL, "whitespace-nowrap")}>
+                <div className="font-bold">{formatExact(proceeds(investment))}</div>
+                <div className="text-xs text-muted">
+                  {formatExact(investment.amount)} and {formatExact(investment.interestNet)} interest
+                </div>
+              </td>
+              <td className={cn(CELL, "whitespace-nowrap")}>{investment.maturityDate ? formatDay(investment.maturityDate) : ""}</td>
+              <td className={cn(CELL, "min-w-[260px]")}>
+                <div className="font-bold">{reason.label}</div>
+                <div className="text-sm leading-normal text-muted">{reason.action}</div>
+                <PayOutNote latest={latest} />
+                <HeldButtons
+                  className="mt-2.5 hidden md:flex"
+                  name={nameOf(investment)}
+                  canMessage={canMessage}
+                  canSend={canSend}
+                  hidden={open?.id === investment.id}
+                  onOpen={(mode) => setOpen({ id: investment.id, mode })}
+                />
+              </td>
+            </tr>
+          );
+        })}
+      </Table>
+      {/* On a phone the table scrolls sideways, so what can be done about each term is listed
+          under it instead, where it is on screen. */}
+      {tools && (tools.canMessage || tools.canSend) ? (
+        <ul aria-label="Follow up on held money" className="m-0 flex list-none flex-col gap-2 p-0 md:hidden">
+          {investments.map((investment) => {
+            const latest = payOuts.find((correction) => correction.investmentId === investment.id);
+            const waiting = latest?.status === "proposed" || latest?.status === "approved";
+            return (
+              <li key={investment.id} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+                <p className="m-0 text-md">
+                  <span className="font-bold">{nameOf(investment)}</span>,{" "}
+                  <span className="tabular-nums">{formatExact(proceeds(investment))}</span> waiting
+                </p>
+                <PayOutNote latest={latest} />
+                <HeldButtons
+                  className="flex"
+                  name={nameOf(investment)}
+                  canMessage={tools.canMessage}
+                  canSend={tools.canSend && !waiting}
+                  hidden={open?.id === investment.id}
+                  onOpen={(mode) => setOpen({ id: investment.id, mode })}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {/* Below the table, not inside it, so the form never scrolls sideways on a phone. */}
+      {tools && open && chosen ? (
+        <section aria-label={`For ${nameOf(chosen)}`} className="flex max-w-[720px] flex-col gap-3 rounded-xl border-2 border-ink bg-surface p-[19px]">
+          <p className="m-0 text-sm text-muted">
+            For <span className="font-bold text-ink">{nameOf(chosen)}</span>, {chosen.productName}, ended {chosen.maturityDate ? formatDay(chosen.maturityDate) : ""}.
+          </p>
+          <HeldActions
+            key={`${open.id}:${open.mode}`}
+            api={tools.api}
+            investment={chosen}
+            proceeds={proceeds(chosen)}
+            latest={payOuts.find((correction) => correction.investmentId === chosen.id)}
+            mode={open.mode}
+            newKey={newKey}
+            onClose={() => setOpen(null)}
+            onProposed={() => {
+              setOpen(null);
+              onProposed();
+            }}
+          />
+        </section>
+      ) : null}
+    </>
+  );
+}
+
+interface HeldButtonsProps {
+  className: string;
+  name: string;
+  canMessage: boolean;
+  canSend: boolean;
+  /** While this term's form is open. */
+  hidden: boolean;
+  onOpen: (mode: HeldMode) => void;
+}
+
+function HeldButtons({ className, name, canMessage, canSend, hidden, onOpen }: HeldButtonsProps) {
+  if (hidden || !(canMessage || canSend)) return null;
+  return (
+    <div className={cn("flex-wrap gap-2", className)}>
+      {canMessage ? (
+        <Button variant="secondary" aria-label={`Message ${name}`} onClick={() => onOpen("message")}>
+          Message the client
+        </Button>
+      ) : null}
+      {canSend ? (
+        <Button variant="secondary" aria-label={`Send ${name}'s money to another account`} onClick={() => onOpen("send")}>
+          Send to another account
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
@@ -390,14 +523,30 @@ function stubCase(): StubCase {
 }
 
 export default function MaturitiesPage() {
+  const { session } = useAuth();
   // Sample maturities under `pnpm dev` or a preview build, otherwise the real API.
   // `?sample=empty` shows a new system and `?sample=error` a failed read.
-  const [{ api, directory }] = useState<{ api: MaturitiesApi; directory: Directory }>(() => {
-    if (isStubAuth()) return { api: createStubMaturitiesApi(stubCase()), directory: createStubDirectory() };
+  const [{ api, directory, actions }] = useState<{ api: MaturitiesApi; directory: Directory; actions: HeldActionsApi | null }>(() => {
+    if (isStubAuth()) {
+      const corrections = createStubCorrectionsApi(session?.staffId ?? "sample-staff-me");
+      return { api: createStubMaturitiesApi(stubCase()), directory: createStubDirectory(), actions: createStubHeldActionsApi(corrections) };
+    }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedMaturitiesApi, directory: emptyDirectory };
+    if (!base) return { api: notConnectedMaturitiesApi, directory: emptyDirectory, actions: null };
     const http = createHttp(base);
-    return { api: createHttpMaturitiesApi(http), directory: createHttpDirectory(http) };
+    return {
+      api: createHttpMaturitiesApi(http),
+      directory: createHttpDirectory(http),
+      actions: createHttpHeldActionsApi(http, createHttpClientsApi(http), createHttpCorrectionsApi(http)),
+    };
   });
-  return <MaturitiesScreen api={api} directory={directory} />;
+  const [tools] = useState<HeldTools | undefined>(() =>
+    actions && session ? { api: actions, canSend: can(session, "investment_corrections.change"), canMessage: can(session, "support.reply") } : undefined,
+  );
+  return (
+    <>
+      <MaturitiesScreen api={api} directory={directory} held={tools} />
+      <RunAgainPanel kind="maturity" />
+    </>
+  );
 }

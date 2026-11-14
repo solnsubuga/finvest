@@ -43,6 +43,8 @@ from app.infrastructure.sealing import Sealer
 from app.modules.documents import building, locking, pdf, service
 from app.modules.documents.domain.emails import (
     Rendered,
+    ended_note_email,
+    investment_note_email,
     receipt_email,
     statement_email,
     tax_certificate_email,
@@ -55,8 +57,14 @@ from app.modules.documents.domain.statements import (
     not_final_from,
     previous_month,
 )
-from app.modules.documents.events import RECEIPT_KIND
-from app.modules.documents.service import DocumentFile, DocumentKind, DocumentStatus, DocumentView
+from app.modules.documents.events import ENDED_NOTE_KIND, INVESTMENT_NOTE_KIND, RECEIPT_KIND
+from app.modules.documents.service import (
+    DocumentFile,
+    DocumentKind,
+    DocumentStatus,
+    DocumentView,
+    NoteStage,
+)
 from app.modules.identity import service as identity
 from app.modules.kyc import service as kyc
 from app.modules.ledger import closing
@@ -105,18 +113,6 @@ _STALE_EMAILS = text(
 )
 
 
-def statement_reference(document_id: str) -> str:
-    return f"ST-{document_id}"
-
-
-def receipt_reference(document_id: str) -> str:
-    return f"RC-{document_id}"
-
-
-def certificate_reference(document_id: str) -> str:
-    return f"TC-{document_id}"
-
-
 def _tax_year(view: DocumentView) -> tax.TaxYear:
     assert view.period is not None
     return tax.tax_year_of(view.period.start)
@@ -124,9 +120,12 @@ def _tax_year(view: DocumentView) -> tax.TaxYear:
 
 def file_name(view: DocumentView) -> str:
     if view.kind is DocumentKind.RECEIPT:
-        return f"Finvest receipt {receipt_reference(view.id)}.pdf"
+        return f"Finvest receipt {view.reference}.pdf"
     if view.kind is DocumentKind.TAX_CERTIFICATE:
         return f"Finvest tax certificate {_tax_year(view).label}.pdf"
+    if view.kind is DocumentKind.INVESTMENT_NOTE:
+        stage = "end note" if view.note is NoteStage.ENDED else "note"
+        return f"Finvest investment {stage} {view.reference}.pdf"
     assert view.period is not None
     return f"Finvest statement {view.period.label}.pdf"
 
@@ -167,6 +166,8 @@ class DocumentJobs:
             service.MONTHLY_KIND: self.monthly_run,
             service.EXPIRE_EMAILS_KIND: self.expire_emails,
             RECEIPT_KIND: self.receipt_from_deposit,
+            INVESTMENT_NOTE_KIND: self.note_from_investment,
+            ENDED_NOTE_KIND: self.note_from_ended_investment,
             # Sending reaches Resend. Its idempotency key makes a lost answer safe to repeat,
             # and a crash mid-send stops the job instead of sending blind.
             service.EMAIL_KIND: external_effect(self.send_email),
@@ -232,9 +233,20 @@ class DocumentJobs:
             if view.kind is DocumentKind.RECEIPT:
                 assert view.source_id is not None
                 receipt, _ = await building.receipt(
-                    session, deposit_id=view.source_id, reference=receipt_reference(view.id)
+                    session, deposit_id=view.source_id, reference=view.reference
                 )
                 return DocumentStatus.READY, None, pdf.receipt_pdf(receipt), None
+            if view.kind is DocumentKind.INVESTMENT_NOTE:
+                assert view.source_id is not None
+                try:
+                    drawn_note = await _draw_note(session, view, self._clock)
+                except ApplicationError as error:
+                    if error.code != "not_found":
+                        raise
+                    # Staff undid it: it started by mistake and was never really the
+                    # client's. Nothing to confirm, show or send.
+                    return DocumentStatus.EMPTY, None, None, None
+                return DocumentStatus.READY, None, drawn_note, None
             assert view.period is not None
             drawn = await building.statement(
                 session,
@@ -243,7 +255,7 @@ class DocumentJobs:
                 if view.kind is DocumentKind.MONTHLY_STATEMENT
                 else StatementKind.REQUESTED,
                 period=view.period,
-                reference=statement_reference(view.id),
+                reference=view.reference,
                 issued_on=business_date(self._clock.now()),
                 not_final_from=open_from,
             )
@@ -287,7 +299,7 @@ class DocumentJobs:
             return DocumentStatus.EMPTY, None, None, None
         drawn = pdf.tax_certificate_pdf(
             certificate,
-            reference=certificate_reference(view.id),
+            reference=view.reference,
             issued_on=business_date(self._clock.now()),
         )
         return DocumentStatus.READY, None, drawn, None
@@ -466,6 +478,35 @@ class DocumentJobs:
         result = await context.apply(effect)
         logger.info("receipt_asked", document_id=result.get("document_id"))
 
+    async def note_from_investment(self, job: ClaimedJob, context: JobContext) -> None:
+        """An investment started: ask for the note that confirms it, built and emailed next."""
+        await self._ask_note(job, context, "started")
+
+    async def note_from_ended_investment(self, job: ClaimedJob, context: JobContext) -> None:
+        """An investment matured, rolled over or was withdrawn early: ask for its last note."""
+        await self._ask_note(job, context, "ended")
+
+    async def _ask_note(self, job: ClaimedJob, context: JobContext, stage: str) -> None:
+        data = job.payload.get("data")
+        data = data if isinstance(data, Mapping) else {}
+        investment_id, client_id = data.get("investment_id"), data.get("client_id")
+        if not isinstance(investment_id, str) or not isinstance(client_id, str):
+            raise PermanentJobError(code="investment_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            view = await service.ask(
+                session,
+                client_id=client_id,
+                kind=DocumentKind.INVESTMENT_NOTE,
+                key=f"{stage}:{investment_id}",
+                source_id=investment_id,
+                now=self._clock.now(),
+            )
+            return {"document_id": view.id}
+
+        result = await context.apply(effect)
+        logger.info("investment_note_asked", document_id=result.get("document_id"), stage=stage)
+
     async def send_email(self, job: ClaimedJob, context: JobContext) -> None:
         """Email a ready document to its client, with the PDF attached.
 
@@ -508,7 +549,11 @@ class DocumentJobs:
                     password = await self._password(session, view)
                     if password is None:
                         address, skip = None, "no_date_of_birth"
-                rendered = await _render(session, view, file, self._links) if address else None
+                rendered = (
+                    await _render(session, view, file, self._links, self._clock)
+                    if address
+                    else None
+                )
 
         if status != "queued":
             # Finished by an earlier attempt whose result was saved.
@@ -585,6 +630,28 @@ class DocumentJobs:
         return effect
 
 
+async def _draw_note(session: AsyncSession, view: DocumentView, clock: Clock) -> bytes:
+    assert view.source_id is not None
+    reference, issued_on = view.reference, business_date(clock.now())
+    if view.note is NoteStage.ENDED:
+        ended, _ = await building.ended_note(
+            session,
+            client_id=view.client_id,
+            investment_id=view.source_id,
+            reference=reference,
+            clock=clock,
+        )
+        return pdf.ended_note_pdf(ended, issued_on=issued_on)
+    note, _ = await building.investment_note(
+        session,
+        client_id=view.client_id,
+        investment_id=view.source_id,
+        reference=reference,
+        clock=clock,
+    )
+    return pdf.investment_note_pdf(note, issued_on=issued_on)
+
+
 async def _queue_email(session: AsyncSession, view: DocumentView, now: datetime) -> None:
     await session.execute(_QUEUE_EMAIL, {"id": view.id, "client_id": view.client_id, "now": now})
     await enqueue(
@@ -601,16 +668,40 @@ async def _queue_email(session: AsyncSession, view: DocumentView, now: datetime)
 
 
 async def _render(
-    session: AsyncSession, view: DocumentView, file: DocumentFile, links: Links
+    session: AsyncSession, view: DocumentView, file: DocumentFile, links: Links, clock: Clock
 ) -> Rendered:
     holder = await building.holder(session, view.client_id)
     if view.kind is DocumentKind.RECEIPT:
         assert view.source_id is not None
         receipt, _ = await building.receipt(
-            session, deposit_id=view.source_id, reference=receipt_reference(view.id)
+            session, deposit_id=view.source_id, reference=view.reference
         )
         return receipt_email(
             first_name=holder.first_name, receipt=receipt, file_name=file.file_name, links=links
+        )
+    if view.kind is DocumentKind.INVESTMENT_NOTE:
+        assert view.source_id is not None
+        reference = view.reference
+        if view.note is NoteStage.ENDED:
+            ended, _ = await building.ended_note(
+                session,
+                client_id=view.client_id,
+                investment_id=view.source_id,
+                reference=reference,
+                clock=clock,
+            )
+            return ended_note_email(
+                first_name=holder.first_name, note=ended, file_name=file.file_name, links=links
+            )
+        note, _ = await building.investment_note(
+            session,
+            client_id=view.client_id,
+            investment_id=view.source_id,
+            reference=reference,
+            clock=clock,
+        )
+        return investment_note_email(
+            first_name=holder.first_name, note=note, file_name=file.file_name, links=links
         )
     assert view.period is not None
     if view.kind is DocumentKind.TAX_CERTIFICATE:

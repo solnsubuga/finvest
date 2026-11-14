@@ -7,6 +7,8 @@ import {
   RECENT_SIGN_IN_MS,
   SETUP_LIFETIME_MS,
 } from "../stubAuthClient";
+import { DEMO_CLAIM_SELFIE } from "@/claim/demo";
+
 import { AuthError, describeAuthError } from "../types";
 
 const NEW_PHONE = "+256701555012";
@@ -278,5 +280,67 @@ describe("setting up a second step", () => {
     expect(describeAuthError(new AuthError("cancelled"))).toBe(
       "Nothing was added. You can try again when you are ready.",
     );
+  });
+});
+
+describe("claiming an account moved from Finvest 1.0", () => {
+  it("opens the account with the code and a new password, once", async () => {
+    const auth = client();
+    const { challengeId } = await auth.startClaim(DEMO_CLAIM_SELFIE.token);
+    expect(await codeOf(auth.completeClaim(DEMO_CLAIM_SELFIE.token, challengeId, "000000", DEMO_PASSWORD))).toBe(
+      "invalid_code",
+    );
+    const session = await auth.completeClaim(DEMO_CLAIM_SELFIE.token, challengeId, DEMO_CODE, DEMO_PASSWORD);
+    expect(session).toMatchObject({ phone: DEMO_CLAIM_SELFIE.phone, restricted: false });
+    // The link works once, and the new password logs in.
+    expect(await codeOf(auth.startClaim(DEMO_CLAIM_SELFIE.token))).toBe("not_found");
+    await auth.signOut();
+    const login = await auth.startLogin({ phone: DEMO_CLAIM_SELFIE.phone }, DEMO_PASSWORD);
+    expect(login.methods).toEqual(["code"]);
+  });
+
+  it("refuses a link it never sent, and an older code once a new one is sent", async () => {
+    const auth = client();
+    expect(await codeOf(auth.startClaim("not-a-link-we-sent"))).toBe("not_found");
+    const first = await auth.startClaim(DEMO_CLAIM_SELFIE.token);
+    await auth.startClaim(DEMO_CLAIM_SELFIE.token);
+    expect(await codeOf(auth.completeClaim(DEMO_CLAIM_SELFIE.token, first.challengeId, DEMO_CODE, DEMO_PASSWORD))).toBe(
+      "expired",
+    );
+  });
+});
+
+describe("changing how the client signs in", () => {
+  async function signedIn(step: "passkey" | "code", now: () => number = Date.now) {
+    const auth = createStubAuthClient({ delayMs: 0, now });
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
+    if (step === "passkey") await auth.verifyWithPasskey(challenge.loginId);
+    else await auth.verifyWithCode(challenge.loginId, DEMO_CODE);
+    return auth;
+  }
+
+  it("asks for a passkey or app after a log in by SMS code, then lets the change through", async () => {
+    const auth = await signedIn("code");
+    expect(await codeOf(auth.changeEmail("nakato@example.com"))).toBe("confirm_it_is_you");
+    await auth.confirmWithAuthenticator(DEMO_CODE);
+    expect(await auth.changeEmail("Nakato@Example.com")).toBe("nakato@example.com");
+    expect(await codeOf(auth.changeEmail("nakato@example.com"))).toBe("same_as_now");
+  });
+
+  it("needs the current password, and a strong one, to change it", async () => {
+    const auth = await signedIn("passkey");
+    expect(await codeOf(auth.changePassword("wrong one", "lantern meadow quartz"))).toBe("invalid_credentials");
+    expect(await codeOf(auth.changePassword(DEMO_PASSWORD, "password123"))).toBe("leaked_password");
+    await auth.changePassword(DEMO_PASSWORD, "lantern meadow quartz");
+  });
+
+  it("moves to a new number only with the code sent to it", async () => {
+    let clock = 0;
+    const auth = await signedIn("passkey", () => clock);
+    const id = await auth.startPhoneChange("701 555 013");
+    expect(await codeOf(auth.confirmPhoneChange(id, "000000"))).toBe("invalid_code");
+    expect(await auth.confirmPhoneChange(id, DEMO_CODE)).toBe(NEW_PHONE.replace("012", "013"));
+    clock += RECENT_SIGN_IN_MS + 1;
+    expect(await codeOf(auth.startPhoneChange("701 555 014"))).toBe("confirm_it_is_you");
   });
 });

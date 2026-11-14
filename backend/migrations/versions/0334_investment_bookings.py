@@ -1,7 +1,7 @@
 """Book an investment for a client, by two members of staff. The client pays for it as usual.
 
 Revision ID: 0334_investment_bookings
-Revises: 0333_maturity_pay_interest
+Revises: 0236_client_own_changes
 
 The owner decided (2026-11-14, "Book it, client pays as usual"): when a client asks Finvest to
 set up an investment for them, one member of staff books it with a reason, a different one
@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0334_investment_bookings"
-down_revision: str | None = "0333_maturity_pay_interest"
+down_revision: str | None = "0236_client_own_changes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

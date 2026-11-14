@@ -58,7 +58,7 @@ How a lookup is sent, by the rules for provider calls:
 
 The lookup's ID is the `referenceId` ioTec is sent and, once decided, the number's `proof_document_id`. Nothing is logged with the number or the name. Refusals from the network's answer are written to the audit trail as approvals made by the system, with the reason.
 
-Set `FINVEST_PAYOUT_NAME_PROVIDER=iotec` for the worker to read names, with the identity checks' ioTec Verify credentials (`FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY`, optional `FINVEST_IOTEC_VERIFY_BASE_URL`). With the default, `none`, the API asks for no lookups, because no worker would send them. A number waits at `awaiting_proof` with `name_check` `checking`, asking again is refused with `name_check_in_progress`, and none of its three lookups are used up. Once a provider is set, a waiting number with no lookup shows `not_answered`, so the client can ask for its first one. The API reads the same `FINVEST_PAYOUT_NAME_PROVIDER` at start-up, so set it for both processes.
+Set `FINVEST_PAYOUT_NAME_PROVIDER=iotec` for the worker to read names, with the identity checks' ioTec Verify credentials (`FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY`, optional `FINVEST_IOTEC_VERIFY_BASE_URL`). With the default, `none`, the API asks for no lookups, because no worker would send them. A number waits at `awaiting_proof` with `name_check` `checking`, asking again is refused with `name_check_in_progress`, and none of its three lookups are used up. Once a provider is set, a waiting number with no lookup shows `not_answered`, so the client can ask for its first one. The API reads the same `FINVEST_PAYOUT_NAME_PROVIDER` at start-up, so set it for both processes. The same setting turns on the lookup of a client's own phone number when they hand in their identity check ([identity-checks.md](identity-checks.md#phone-number-name)).
 
 ### What the database enforces
 
@@ -102,7 +102,24 @@ Limits are versioned by effective date. The version in force on the business day
 | Bank, one payout and per day | Not set |
 | Held for staff review above | UGX 10,000,000. A working default until the owner confirms it. |
 
-A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031. The console screen for proposing and approving a change arrives with Settings.
+A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031.
+
+### Changing the limits
+
+Staff change the limits on Settings, by two people (`payouts/limit_changes.py`, migration 0341):
+
+1. A member of staff with `withdrawal_limits.change` (admin, finance) proposes a whole new version and the day it starts, with a reason. The start is a later day than today, Kampala time, never today: a client's daily allowance is counted against one version for the whole day, and payouts already held or queued were judged by the version in force.
+2. A different member of staff with the same permission approves or rejects it, with a reason and a passkey or app code from the last ten minutes. The proposer may withdraw it instead. Approving inserts the version in `withdrawal_limits` in the approver's name and records it on the proposal, in one transaction.
+3. Only one change waits at a time, so an approver always approves the limits they read. Approving a change whose start day has already come is refused (409 `not_a_later_day`): propose it again for a later day.
+
+| Rule | How |
+| --- | --- |
+| Two people | A check constraint on `withdrawal_limit_changes`, and a trigger that both are the acting member of staff |
+| The approval and the version agree | The insert policy on `withdrawal_limits` admits a version only while a matching change waits, and the trigger refuses an approval unless it names a `withdrawal_limits` row with exactly the proposed limits, proposer and approver |
+| Decided once, nothing deleted | A decided change never changes. No role may delete. A downgrade refuses to drop the table while it holds rows |
+| Staff only | Clients never see proposals. The worker reads them |
+
+**A client's own limits.** Two members of staff can set stricter limits for one client from their page ([client-accounts.md](client-accounts.md#acting-for-a-client)), in `payout_client_limits` (migration 0352). They only ever lower the shared ones: each payout is checked against the lower of the two for each sort (`domain/limits.for_client`), and `GET /client/withdrawal-limits` shows the client what applies to them.
 
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
@@ -154,7 +171,7 @@ Migration 0031 adds `withdrawal_limits` and `payouts`. The commands are in `back
 4. Checks the limits in force on the business day against what already went that day.
 5. Finds the client's handover account for `source_reference`, inserts the payout and posts the reserve entry.
 
-A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_allowed` and `insufficient_funds`.
+A refusal leaves nothing behind. The codes are `destination_not_approved`, `destination_in_safety_wait`, `destination_not_known_yet`, `amount_not_positive`, `currency_not_supported`, `over_mobile_money_limit`, `over_bank_limit`, `over_daily_limit`, `source_not_allowed`, `insufficient_funds` and, for a client's own request only, `channel_paused` while staff have paused that network or bank payouts on Settings ([platform-settings.md](platform-settings.md)). A payout the system asks for when an investment matures is still made while a channel is paused, and waits in the queue as always.
 
 A payout is funded from one place only: the client's own `client.payout_pending` account for the `source_reference` the caller names, which is the investment whose money was handed over. The caller never names a ledger account, so a payout cannot be funded from another payout's in-flight money, from the money parked after a failed payout, or from another client. `source_not_allowed` is the refusal for an empty reference.
 
@@ -185,7 +202,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 | A large payout starts held | A new payout above the review threshold in force cannot be inserted as queued |
 | A review is signed by who made it | `reviewed_by` must be the staff member of the transaction |
 | Mobile money carries at most UGX 5,000,000 | A CHECK on `payouts` and on `withdrawal_limits` |
-| A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it |
+| A limits version takes two people | CHECK that proposer and approver differ, and a policy that the approver is the staff member inserting it, approving a waiting change in `withdrawal_limit_changes` someone else proposed with exactly these limits (migration 0341) |
 | Clients are fenced | Row policies show a client only their own payouts |
 
 ## Client routes
@@ -205,8 +222,16 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
 | `GET /client/payouts/{id}` | One payout. `returned_at` is set when a paid payout came back, and `resent_as` names the payout it was sent again as once the client sent it |
 | `POST /client/payouts/{id}/resend` | `{destination_id}`. Send a payout that came back again, to an approved account: a new payout for the same amount from the same handover, 201. Asking again is the same payout. 409 `payout_not_returned`; 422 on `destination_id` with a new payout's refusal codes; 422 `idempotency_key_reused` once it was sent again to another account |
-| `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
+| `GET /client/withdrawal-limits` | The limits in force today, without the review threshold, and `bank_payout_day`: the day a bank payout asked for now is paid, today before the cut-off on a working day, otherwise the next working day, from the calendar on Settings ([platform-settings.md](platform-settings.md)) |
 | `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
+
+The staff routes for the limits are in `backend/app/modules/payouts/limits_api.py`:
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/withdrawal-limits` | The limits in force today, versions approved for later days (`upcoming`), any change waiting, and `can_change`. Needs `settings.view` |
+| `POST /staff/withdrawal-limits/changes` | `{effective_from, mobile_money_per_payout_minor, mobile_money_per_day_minor, bank_per_payout_minor, bank_per_day_minor, review_above_minor, reason}`; a limit left out is not set. 201. 422 `limits_invalid` or `not_a_later_day`, 409 if a change is waiting or `day_taken` |
+| `POST /staff/withdrawal-limits/changes/{id}/decision` | `{decision: approved, rejected or withdrawn, reason}`. 403 for your own approval or someone else's withdrawal, `confirm_it_is_you` without a recent second step, 404 once decided, 409 `not_a_later_day` or `day_taken` |
 
 An account shows only its last digits. A payout's status is `in_review` (held for staff), `processing` (queued, sent or uncertain), `paid`, `failed` or `cancelled`. The client is never shown whether we are still finding out what the provider did.
 
@@ -461,7 +486,7 @@ Seeing returns needs `money_movement.view`. Proposing and deciding need `bank_pa
 | --- | --- |
 | `GET /staff/payout-returns/returnable?amount_minor=&currency=UGX` | Paid payouts from the last 120 days that no open or approved return names, newest paid first, at most 100, each with when it was paid and where it went (bank or network, holder, masked account). With `amount_minor`, only payouts of that amount, to find the one a line coming in is |
 | `GET /staff/payouts/{id}/return-lines` | Statement lines that could be this payout coming back: on the pot it was paid from, coming in, for its amount and currency, within 120 days of the day it was paid, and named by no open or approved return. 409 `payout_not_paid` |
-| `GET /staff/payout-returns` | Returns waiting for a second person, oldest first, at most 100 |
+| `GET /staff/payout-returns` | Returns waiting for a second person, oldest first, at most 100. Every return carries what the second person checks: the payout's amount and where it went (bank or network, holder, masked account), and the statement line itself (date, amount, reference, narrative) |
 | `GET /staff/payout-returns/{id}` | One return, with the entry its approval posted |
 | `POST /staff/payouts/{id}/returns` | `{statement_line_id, reason}`. 201. 409 `payout_not_paid`, `return_already_recorded`, `statement_line_in_use` or `statement_line_not_this_payout` |
 | `POST /staff/payout-returns/{id}/approve` | `{reason}`. Posts the return and tells the client. 403 `proposed_by_you`; 409 `return_already_decided` |

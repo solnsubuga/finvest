@@ -9,6 +9,11 @@ jest.mock("@/auth/stubAuthClient", () => {
   return { ...actual, createStubAuthClient: () => actual.createStubAuthClient({ delayMs: 0 }) };
 });
 
+jest.mock("@/claim/stubClaimClient", () => {
+  const actual = jest.requireActual("@/claim/stubClaimClient");
+  return { ...actual, createStubClaimClient: (options: object) => actual.createStubClaimClient({ ...options, delayMs: 0 }) };
+});
+
 jest.mock("@/identity/stubIdentityClient", () => {
   const actual = jest.requireActual("@/identity/stubIdentityClient");
   return {

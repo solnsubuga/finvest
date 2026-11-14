@@ -80,6 +80,20 @@ describe("clients", () => {
     expect(within(card).getByRole("button", { name: "Withdraw" })).toBeInTheDocument();
   });
 
+  it("shows that the client froze their own account, and offers the two-person unlock", async () => {
+    renderClients(undefined, "/clients?client=-NstubClient00000058");
+    const card = await screen.findByRole("article", { name: "Frozen by the client" });
+    expect(within(card).getByText("“Lost my phone on a boda this morning”")).toBeInTheDocument();
+    expect(within(card).getByText(/check it is really them/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Propose an unlock" })).toBeInTheDocument();
+  });
+
+  it("does not call a lock by staff a freeze", async () => {
+    renderClients(undefined, "/clients?client=-NstubClient00000017");
+    expect(await screen.findByRole("button", { name: "Propose an unlock" })).toBeInTheDocument();
+    expect(screen.queryByRole("article", { name: "Frozen by the client" })).not.toBeInTheDocument();
+  });
+
   it("offers no lock for an account that has not signed up yet", async () => {
     renderClients(undefined, "/clients?client=-NstubClient00000099");
     expect(await screen.findByRole("heading", { name: "Name not verified yet" })).toBeInTheDocument();

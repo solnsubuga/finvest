@@ -12,7 +12,7 @@ from tests.support.database import TestDatabase
 
 pytestmark = pytest.mark.integration
 
-BEFORE, PAY_INTEREST = "0332_support_staff_opens_chat", "0333_maturity_pay_interest"
+BEFORE, PAY_INTEREST = "0303_goal_locks", "0333_maturity_pay_interest"
 MARK = "a rule a later migration added"
 
 # Stands in for a later change to the guard, such as the staff withdrawal clause.

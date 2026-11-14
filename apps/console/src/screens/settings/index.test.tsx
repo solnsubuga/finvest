@@ -7,6 +7,7 @@ import { SettingsScreen } from "./index.tsx";
 import { checkWording, fillSample, outsideLinks } from "./rules.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
 import { createStubBankAccountsApi } from "./bankAccountsStub.ts";
+import { createStubLimitsApi, createStubPlatformSettingsApi } from "./platformStub.ts";
 import { createStubWordingsApi } from "./stub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
@@ -18,6 +19,8 @@ function renderSettings({ api = createStubWordingsApi(ME, () => NOW), canChange 
       api={api}
       announcements={createStubAnnouncementsApi(ME, () => NOW)}
       bankAccounts={createStubBankAccountsApi(ME, () => NOW, "empty")}
+      platform={createStubPlatformSettingsApi({ id: ME.id, permissions: [] }, () => NOW, "empty")}
+      limits={createStubLimitsApi({ id: ME.id, permissions: [] }, () => NOW, "empty")}
       directory={createStubDirectory(ME)}
       canChange={canChange}
       canSend={canSend}
@@ -146,7 +149,9 @@ describe("settings: client messages", () => {
 
   it("says when client messages are not connected", async () => {
     renderSettings({ api: notConnectedWordingsApi });
-    expect(await screen.findByRole("alert")).toHaveTextContent("Client messages are not connected to the Finvest service yet.");
+    // Each section says so for itself: the accounting system codes are not connected here either.
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.map((alert) => alert.textContent)).toContainEqual(expect.stringContaining("Client messages are not connected to the Finvest service yet."));
   });
 });
 

@@ -135,3 +135,29 @@ class BodyLimitMiddleware:
             if started:
                 raise
             await envelope("payload_too_large")(scope, receive, send)
+
+
+# The routes a client's app or the public website call. Staff, webhooks and health stay up.
+MAINTENANCE_PREFIXES = ("/client/", "/public/")
+# How long the app waits before it asks again, in seconds.
+MAINTENANCE_RETRY_AFTER = 120
+
+
+class MaintenanceMiddleware:
+    """Answers every client and public route with `maintenance` (503) while it is on."""
+
+    def __init__(self, app: ASGIApp, *, on: bool) -> None:
+        self.app = app
+        self.on = on
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if (
+            self.on
+            and scope["type"] == "http"
+            and scope["method"] != "OPTIONS"
+            and scope["path"].startswith(MAINTENANCE_PREFIXES)
+        ):
+            response = envelope("maintenance", retry_after_seconds=MAINTENANCE_RETRY_AFTER)
+            await response(scope, receive, send)
+            return
+        await self.app(scope, receive, send)

@@ -21,6 +21,7 @@ Kind = Literal[
     "buffer_rules",
     "buffer_capital",
     "rate_change",
+    "product_change",
     "migration_totals",
     "migration_sign_off",
     "phone_change",
@@ -42,6 +43,20 @@ Kind = Literal[
     "account_closure",
     "compliance_case",
     "bank_account_change",
+    "account_code_map",
+    "deposit_reversal",
+    "deposit_receivable",
+    "client_pin_reset",
+    "client_limits",
+    "client_statement",
+    "client_withdrawal",
+    "payment_channels_change",
+    "calendar_change",
+    "staff_security_change",
+    "statement_layout_change",
+    "withdrawal_limits_change",
+    "report_schedule",
+    "month_close",
 ]
 
 
@@ -67,6 +82,7 @@ SOURCES: dict[Kind, Source] = {
     "buffer_rules": Source("dealing_desk.view", "dealing_orders.change"),
     "buffer_capital": Source("dealing_desk.view", "dealing_orders.change"),
     "rate_change": Source("rates.view", "rates.view"),
+    "product_change": Source("products.view", "products.change"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
     "migration_sign_off": Source("migration.view", "migration.sign_off"),
     "phone_change": Source("client_phones.change", "client_phones.change"),
@@ -97,6 +113,29 @@ SOURCES: dict[Kind, Source] = {
     "compliance_case": Source("compliance.view", "compliance_cases.change"),
     # The bank account clients pay into by transfer, on Settings.
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
+    # Which accounting system account each ledger code is posted to, changed in Settings.
+    "account_code_map": Source("settings.view", "account_codes.change"),
+    # Taking back a payment credited by mistake, decided as reassignments are.
+    "deposit_reversal": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Recording, recovering or writing off what a client owes for a mistaken payment.
+    "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Acting for a client from their page (console `actions`), one kind per permission.
+    "client_pin_reset": Source("clients.view", "client_pins.reset"),
+    "client_limits": Source("clients.view", "client_limits.change"),
+    "client_statement": Source("clients.view", "client_statements.send"),
+    "client_withdrawal": Source("clients.view", "client_withdrawals.start"),
+    # The platform's other settings, on Settings, one kind per section of the screen.
+    "payment_channels_change": Source("settings.view", "payment_channels.change"),
+    "calendar_change": Source("settings.view", "calendar.change"),
+    "staff_security_change": Source("settings.view", "staff_security.change"),
+    "statement_layout_change": Source("settings.view", "statement_layouts.change"),
+    # The withdrawal limits and the review threshold, on Settings.
+    "withdrawal_limits_change": Source("settings.view", "withdrawal_limits.change"),
+    # A report emailed on a schedule, on Reports. Only shown for a report the reader may
+    # download, and approving needs that too.
+    "report_schedule": Source("reports.view", "reports.view"),
+    # Finance signing a month off, on the Finance screen.
+    "month_close": Source("finance.view", "finance.view"),
 }
 
 

@@ -227,6 +227,26 @@ class PrepareRelease(unittest.TestCase):
             [name for name in files["migrate"] if any(k in name for k in ("IOTEC", "PROVIDER", "SIGMA360"))]
         )
 
+    def test_cloudflare_staff_list_settings_reach_the_worker_only(self):
+        values = {
+            "FINVEST_CLOUDFLARE_ACCOUNT_ID": "account",
+            "FINVEST_CLOUDFLARE_STAFF_LIST_ID": "list",
+            "FINVEST_CLOUDFLARE_ACCESS_TOKEN": "t" * 40,
+        }
+        pr.prepare(self.out, settings(**values))
+        worker = read_env(self.out / "runtime" / "worker.env")
+        for name, value in values.items():
+            self.assertEqual(worker[name], value)
+        for service in ("api", "scheduler", "migrate"):
+            found = read_env(self.out / "runtime" / f"{service}.env")
+            self.assertFalse([name for name in found if name.startswith("FINVEST_CLOUDFLARE_")])
+
+    def test_cloudflare_staff_list_settings_are_left_out_when_unset(self):
+        pr.prepare(self.out, settings())
+        self.assertFalse(
+            [name for name in read_env(self.out / "runtime" / "worker.env") if name.startswith("FINVEST_CLOUDFLARE_")]
+        )
+
     def test_iotec_settings_are_left_out_when_unset(self):
         pr.prepare(self.out, settings())
         for service in ("api", "worker", "scheduler"):

@@ -477,3 +477,34 @@ def _message(row: Row[Any]) -> MessageView:
         body=row.body,
         created_at=row.created_at,
     )
+
+
+_CLIENT_MESSAGE = text(
+    "SELECT m.id, m.conversation_id, m.author_kind, m.author_name, m.body, m.created_at "
+    "FROM support_messages m JOIN support_conversations c ON c.id = m.conversation_id "
+    "WHERE m.id = :id AND c.client_id = :client_id AND m.author_kind = 'client' "
+    "AND m.author_id = :client_id"
+)
+
+
+async def client_message(
+    session: AsyncSession, client_id: str, message_id: str
+) -> MessageView | None:
+    """One message the client wrote in their own help chat, or None.
+
+    Staff cite it as the client's written request when they act for the client, such as
+    starting a withdrawal.
+    """
+    row = (
+        await session.execute(_CLIENT_MESSAGE, {"id": message_id, "client_id": client_id})
+    ).one_or_none()
+    if row is None:
+        return None
+    return MessageView(
+        id=row.id,
+        conversation_id=row.conversation_id,
+        author_kind=row.author_kind,
+        author_name=row.author_name,
+        body=row.body,
+        created_at=row.created_at,
+    )

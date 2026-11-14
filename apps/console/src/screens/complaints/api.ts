@@ -67,11 +67,24 @@ export interface PendingOutcome {
   proposedAt: string;
 }
 
+/** The outcome a second person rejected last, so the next proposal can start from it. */
+export interface RejectedOutcome {
+  outcome: Outcome;
+  resolution: string;
+  clientAccepted: boolean;
+  decidedBy: string;
+  decidedAt: string;
+  /** What the second person asked to change. */
+  reason: string;
+}
+
 export interface ComplaintDetail {
   complaint: Complaint;
   history: readonly HistoryItem[];
   /** At most one waits at a time. */
   pendingOutcome: PendingOutcome | null;
+  /** Only while the latest proposal is the rejected one. */
+  lastRejected: RejectedOutcome | null;
 }
 
 export interface Summary {

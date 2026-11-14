@@ -47,20 +47,20 @@ describe("the profile client for the real API", () => {
     const seen = serve({
       "PUT /client/next-of-kin": json({
         people: [
-          { id: "P".repeat(20), full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900", share_bps: 10_000 },
+          { id: "P".repeat(20), full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900" },
         ],
         updated_at: "2026-11-14T08:00:00Z",
       }),
     });
     const saved = await createApiProfileClient().saveNextOfKin([
-      { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", idNumber: "CM900", shareBps: 10_000 },
+      { fullName: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", idNumber: "CM900" },
     ]);
     expect(seen[0]?.body).toEqual({
       people: [
-        { full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900", share_bps: 10_000 },
+        { full_name: "Joseph Nakato", relationship: "spouse", phone: "+256772000111", id_number: "CM900" },
       ],
     });
-    expect(saved.people[0]?.shareBps).toBe(10_000);
+    expect(saved.people[0]?.fullName).toBe("Joseph Nakato");
   });
 
   it("names each refused field without the body prefix", async () => {
@@ -112,5 +112,16 @@ describe("the profile client for the real API", () => {
     serve({ "POST /client/account-closure": refused("sign_in_again", 403) });
     const error = await createApiProfileClient().askToClose("Moving abroad").catch((e: unknown) => e);
     expect((error as ProfileError).code).toBe("sign_in_again");
+  });
+
+  it("freezes with the client's reason and gives back when", async () => {
+    const seen = serve({ "POST /client/account-freeze": json({ frozen_at: "2026-11-14T09:30:00Z" }, 201) });
+    const frozen = await createApiProfileClient().freezeAccount("Lost my phone");
+    expect(frozen).toEqual({ frozenAt: "2026-11-14T09:30:00Z" });
+    expect(seen[0]).toMatchObject({ method: "POST", url: "/client/account-freeze", body: { reason: "Lost my phone" } });
+
+    serve({ "POST /client/account-freeze": refused("conflict", 409) });
+    const again = await createApiProfileClient().freezeAccount(null).catch((e: unknown) => e);
+    expect((again as ProfileError).code).toBe("conflict");
   });
 });

@@ -43,7 +43,7 @@ A complaint is a regulated record. It gets a reference such as `C-1001`, a deadl
 | `GET /client/complaints/{id}` | Client | One complaint with its status, deadline and outcome. |
 | `GET /staff/complaints` | `complaints.view` | The register and its figures. `show` is `open`, `closed` or `all`. |
 | `POST /staff/complaints` | `complaints.manage` | Log a complaint that came by chat, phone, email, letter or in person, with a `client_key`. |
-| `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history and any outcome waiting to be confirmed (`pending_outcome`). |
+| `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history and any outcome waiting to be confirmed (`pending_outcome`), and the last rejected outcome while it is the latest (`last_rejected`). |
 | `PUT /staff/complaints/{id}/owner` | `complaints.manage` | Give it to a member of staff. |
 | `POST /staff/complaints/{id}/status` | `complaints.manage` | Move it to `investigating`, `waiting_for_client` or `escalated`, with a note. |
 | `POST /staff/complaints/{id}/notes` | `complaints.manage` | Record what was found or done. |
@@ -56,6 +56,7 @@ Rules:
 - **Statuses.** `new`, `investigating`, `waiting_for_client`, `escalated`, `closed`. Any open status can move to any other open status or to closed. Closed is final.
 - **Closing needs an outcome.** `upheld`, `partly_upheld` or `not_upheld`, what was done about it, and whether the client accepted it. The client reads the outcome and what was done.
 - **Closing takes two people.** One member of staff proposes the outcome. A different one confirms it, which closes the complaint, or rejects it with a reason. Whoever logged the complaint never confirms its outcome. One proposal waits at a time, and the proposer may withdraw it. A decided proposal never changes. PostgreSQL holds all of this, and refuses a close that does not match an outcome the closer confirmed (migration 0101).
+- **A rejected outcome is the starting point for the next one.** The complaint detail carries `last_rejected` while the latest proposal is a rejected one: its outcome, resolution, whether the client accepted, who rejected it, when, and the reason. The console fills the propose form from it and shows the reason above, so staff change only what was asked. It is empty once a newer proposal waits or is withdrawn.
 - **Logged once.** The app and the console send a `client_key` with each new complaint. The same key from the same person returns the complaint it logged the first time, so a request repeated after a lost answer never enters a complaint twice. The same key with other details (client, category, how it came, summary, details or amount) is refused with `idempotency_key_reused`, as other keyed commands are.
 - **What the client said never changes.** The category, summary, details, amount, how it arrived, when it arrived and the deadline are fixed once logged. The database refuses a change, and the API role is not granted one.
 - **Closed by the person acting.** The database refuses a close that names another member of staff, and the person closing is the one who confirmed the outcome.

@@ -50,6 +50,7 @@ describe("clients over HTTP", () => {
             ],
             destinations: [],
             locks: [LOCK],
+            freezes: [{ id: "-NFreeze000000000001", frozen_at: "2026-11-14T06:00:00Z", reason: null }],
             conversation: null,
             complaints: null,
             can_lock: true,
@@ -61,6 +62,7 @@ describe("clients over HTTP", () => {
     const page = await api.client(ACCOUNT.id);
     expect(page.owed).toEqual([{ accountCode: "client.holding", accountReference: "TB-1", minor: 2500000, currency: "UGX" }]);
     expect(page.locks[0]).toMatchObject({ proposedByName: "Grace Auma", yours: false });
+    expect(page.freezes).toEqual([{ id: "-NFreeze000000000001", frozenAt: "2026-11-14T06:00:00Z", reason: null }]);
     expect(page.complaints).toBeNull();
   });
 

@@ -1,11 +1,11 @@
-import type { ClientInvestmentOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
+import type { ClientInvestmentOut, ClientTransferOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
 
 import { api, ApiError, isAccountClosing } from "@/api/http";
 import { banksOrNone, nameOf } from "@/payouts/banks";
 import { accountLabel } from "@/payouts/format";
 import type { Bank } from "@/payouts/types";
 
-import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Product, Quote } from "./types";
+import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Product, Quote, Transfer } from "./types";
 
 /**
  * The investing screens' contract, answered by the real API (`/client/products`,
@@ -72,6 +72,25 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     waiting: view.waiting_minor == null ? null : money(view.waiting_minor, currency),
     canWithdraw: view.can_withdraw,
     withdrawalRequestedAt: view.withdrawal_requested_at,
+    canSend: view.can_send ?? false,
+    lockedUntil: view.withdrawal_locked_until ?? null,
+  };
+}
+
+export function toTransfer(view: ClientTransferOut): Transfer {
+  return {
+    id: view.id,
+    direction: view.direction === "received" ? "received" : "sent",
+    otherName: view.other_name,
+    status: view.status,
+    amount: money(view.amount_minor, view.currency),
+    whole: view.whole,
+    message: view.message,
+    requestedAt: view.requested_at,
+    finishedAt: view.finished_at,
+    investmentId: view.investment_id,
+    keptInvestmentId: view.kept_investment_id,
+    failureCode: view.failure_code,
   };
 }
 
@@ -103,13 +122,28 @@ const pinOf = (request: { pinConfirmation?: string | null }) =>
   request.pinConfirmation ? { pin_confirmation: request.pinConfirmation } : {};
 
 /** Which call failed, where the same refusal means different things. */
-type Call = "withdraw" | "maturity" | "pay_out" | "other";
+type Call = "withdraw" | "maturity" | "pay_out" | "send" | "cancel" | "lookup" | "other";
 
 const CONFLICT: Record<Call, InvestingError["code"]> = {
   withdraw: "cannot_withdraw",
   maturity: "cannot_change_maturity",
   pay_out: "already_sent",
+  send: "cannot_send",
+  cancel: "cannot_cancel",
+  lookup: "unavailable",
   other: "too_many_unpaid",
+};
+
+/** The refusals of a send or a look-up, by the code the API puts on the field. */
+const SEND_REFUSALS: Record<string, InvestingError["code"]> = {
+  no_such_client: "no_such_client",
+  not_an_account_number: "not_an_account_number",
+  to_yourself: "to_yourself",
+  below_product_minimum: "below_product_minimum",
+  more_than_investment_value: "more_than_value",
+  remainder_below_product_minimum: "remainder_below_minimum",
+  currency_not_the_investments: "invalid",
+  matures_today: "cannot_send",
 };
 
 export function toInvestingError(error: unknown, call: Call = "other"): InvestingError {
@@ -117,12 +151,18 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
   if (!(error instanceof ApiError) || error.uncertain) return new InvestingError("unavailable");
   switch (error.code) {
     case "not_found":
-      return new InvestingError("not_found");
+      // A look-up that found nobody approved with that number.
+      return new InvestingError(call === "lookup" ? "no_such_client" : "not_found");
     case "pin_required":
       return new InvestingError("pin_required");
     case "idempotency_key_reused":
       return new InvestingError("key_reused");
+    case "rate_limited":
+      return new InvestingError(call === "lookup" ? "too_many_lookups" : "unavailable");
     case "forbidden":
+      if (error.fields.some((field) => field.code === "restricted_after_code_sign_in")) {
+        return new InvestingError("restricted");
+      }
       // Nobody invests before their ID check is approved, and that is the only refusal a
       // signed-in client gets here.
       return new InvestingError("not_verified");
@@ -134,6 +174,8 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
       return new InvestingError(CONFLICT[call]);
     case "validation_failed": {
       const codes = error.fields.map((field) => field.code);
+      const refusal = codes.map((code) => SEND_REFUSALS[code]).find((found) => found !== undefined);
+      if ((call === "send" || call === "lookup") && refusal) return new InvestingError(refusal);
       if (
         codes.includes("not_usable") ||
         codes.includes("destination_in_safety_wait") ||
@@ -244,6 +286,45 @@ export function createApiInvestingClient(): InvestingClient {
             }),
           ),
         "pay_out",
+      ),
+
+    findRecipient: (to) =>
+      wrap(async () => {
+        const view = await api("GET /client/transfer-recipients", { query: { to } });
+        return { accountNumber: view.account_number, name: view.name };
+      }, "lookup"),
+
+    sendInvestment: (request) =>
+      wrap(
+        async () =>
+          toTransfer(
+            await api("POST /client/investments/{investment_id}/send", {
+              params: { investment_id: request.investmentId },
+              body: {
+                to_account_number: request.toAccountNumber,
+                amount_minor: request.amount.minor,
+                currency: request.amount.currency,
+                message: request.message,
+                purpose: request.purpose,
+                purpose_note: request.purposeNote,
+                whole: request.whole,
+              },
+              idempotencyKey: request.idempotencyKey,
+            }),
+          ),
+        "send",
+      ),
+
+    listTransfers: () => wrap(async () => (await api("GET /client/transfers", {})).map(toTransfer)),
+
+    getTransfer: (transferId) =>
+      wrap(async () => toTransfer(await api("GET /client/transfers/{transfer_id}", { params: { transfer_id: transferId } }))),
+
+    cancelTransfer: (transferId) =>
+      wrap(
+        async () =>
+          toTransfer(await api("POST /client/transfers/{transfer_id}/cancel", { params: { transfer_id: transferId } })),
+        "cancel",
       ),
   };
 }

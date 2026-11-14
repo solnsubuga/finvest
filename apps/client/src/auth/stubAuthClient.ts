@@ -2,6 +2,7 @@ import {
   AuthClient,
   AuthError,
   AuthenticatorSetup,
+  ClaimChallenge,
   Device,
   LoginChallenge,
   Passkey,
@@ -14,7 +15,10 @@ import {
   SignupStart,
   SignupTicket,
 } from "./types";
+import { DEMO_CLAIMS } from "@/claim/demo";
+
 import { MAX_WRONG_PINS, pinProblem } from "./pin";
+import { toE164 } from "./phone";
 
 /**
  * An in-memory stand-in for the sign-in API, so the screens can be built and
@@ -175,10 +179,19 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const emailLinks = new Map<string, string>();
   /** Reset challenges and the number each was for. A number with no account gets one too. */
   const resets = new Map<string, string>();
+  /** Claim links not used yet, by token, and the open claim challenges with their token. */
+  const claimLinks = new Map<string, { phone: string; displayName: string }>(
+    DEMO_CLAIMS.map((demo) => [demo.token, { phone: demo.phone, displayName: demo.displayName }]),
+  );
+  const claimChallenges = new Map<string, string>();
   const recoveryAsks = new Map<string, number>();
+  /** Started moves to a new number, by challenge, with the number. */
+  const phoneChanges = new Map<string, string>();
   /** A set-up that was started and not yet confirmed, for this session only. */
   let pendingAuthenticatorAt: number | null = null;
   let signedInAt = 0;
+  /** When a passkey or authenticator app was last used on this session. */
+  let reconfirmedAt = 0;
   let signedInRestricted = false;
   /** How this device's session was confirmed, for its row in the device list. */
   let confirmedWith: Device["confirmedWith"] = "signup";
@@ -213,6 +226,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     signedInRestricted = restricted;
     signedIn = phone;
     signedInAt = now();
+    reconfirmedAt = 0;
     pendingAuthenticatorAt = null;
     // A PIN belongs to one session, so a new log in starts without one.
     pin = null;
@@ -233,6 +247,19 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
     const account = signedIn ? accounts.get(signedIn) : undefined;
     if (!account) {
       throw new AuthError("expired");
+    }
+    return account;
+  };
+
+  /** A change to how the account signs in needs a passkey or app in the last ten minutes. */
+  const confirmedAccount = (): Account => {
+    const account = currentAccount();
+    const strongAt = Math.max(
+      reconfirmedAt,
+      confirmedWith === "passkey" || confirmedWith === "authenticator" ? signedInAt : 0,
+    );
+    if (now() - strongAt > RECENT_SIGN_IN_MS) {
+      throw new AuthError("confirm_it_is_you");
     }
     return account;
   };
@@ -317,6 +344,52 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(signup.phone, false);
     },
 
+    async startClaim(token): Promise<ClaimChallenge> {
+      await wait();
+      if (!claimLinks.has(token)) {
+        throw new AuthError("not_found");
+      }
+      // A new code replaces any older one for the same link.
+      for (const [id, held] of claimChallenges) {
+        if (held === token) claimChallenges.delete(id);
+      }
+      const challengeId = nextId("claim");
+      claimChallenges.set(challengeId, token);
+      return { challengeId };
+    },
+
+    async completeClaim(token, challengeId, code, password): Promise<Session> {
+      await wait();
+      const link = claimLinks.get(token);
+      if (!link) {
+        throw new AuthError("not_found");
+      }
+      if (claimChallenges.get(challengeId) !== token) {
+        throw new AuthError("expired");
+      }
+      if (code !== DEMO_CODE) {
+        throw new AuthError("invalid_code");
+      }
+      if (LEAKED.has(password.toLowerCase())) {
+        throw new AuthError("leaked_password");
+      }
+      claimChallenges.delete(challengeId);
+      // A link works once.
+      claimLinks.delete(token);
+      accounts.set(link.phone, {
+        password,
+        displayName: link.displayName,
+        hasPasskey: false,
+        hasAuthenticator: false,
+        passkeys: [],
+        otherDevices: [],
+        email: null,
+        emailVerified: false,
+      });
+      confirmedWith = "signup";
+      return sessionFor(link.phone, false);
+    },
+
     async startLogin(identifier, password): Promise<LoginChallenge> {
       await wait();
       const byEmail = "email" in identifier;
@@ -361,7 +434,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
 
     async setPin(next): Promise<void> {
       await wait();
-      recentAccount();
+      if (now() - reconfirmedAt > RECENT_SIGN_IN_MS) recentAccount();
       if (pinProblem(next)) throw new AuthError("pin_too_simple");
       pin = next;
       wrongPins = 0;
@@ -574,6 +647,65 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       }
       emailLinks.delete(token);
       account.emailVerified = true;
+    },
+
+    async confirmWithPasskey(): Promise<void> {
+      await wait();
+      if (!currentAccount().hasPasskey) throw new AuthError("passkey_failed");
+      reconfirmedAt = now();
+    },
+
+    async confirmWithAuthenticator(code): Promise<void> {
+      await wait();
+      if (!currentAccount().hasAuthenticator) throw new AuthError("expired");
+      if (code !== DEMO_CODE) throw new AuthError("invalid_code");
+      reconfirmedAt = now();
+    },
+
+    async changePassword(current, next): Promise<void> {
+      await wait();
+      const account = confirmedAccount();
+      if (current !== account.password) throw new AuthError("invalid_credentials");
+      if (next.length < 10) throw new AuthError("not_accepted");
+      if (LEAKED.has(next.toLowerCase())) throw new AuthError("leaked_password");
+      account.password = next;
+      account.otherDevices = [];
+    },
+
+    async startPhoneChange(phone): Promise<string> {
+      await wait();
+      confirmedAccount();
+      const normalized = toE164(phone);
+      if (!normalized) throw new AuthError("not_accepted");
+      if (normalized === signedIn) throw new AuthError("same_as_now");
+      const challengeId = nextId("phone");
+      phoneChanges.set(challengeId, normalized);
+      return challengeId;
+    },
+
+    async confirmPhoneChange(challengeId, code): Promise<string> {
+      await wait();
+      const account = confirmedAccount();
+      const phone = phoneChanges.get(challengeId);
+      if (!phone || !signedIn) throw new AuthError("expired");
+      if (code !== DEMO_CODE) throw new AuthError("invalid_code");
+      if (accounts.has(phone)) throw new AuthError("phone_taken");
+      phoneChanges.delete(challengeId);
+      accounts.delete(signedIn);
+      accounts.set(phone, { ...account, otherDevices: [] });
+      signedIn = phone;
+      return phone;
+    },
+
+    async changeEmail(email): Promise<string> {
+      await wait();
+      const account = confirmedAccount();
+      const address = email.trim().toLowerCase();
+      if (!/^[^@\s]+@[^@\s]+$/.test(address)) throw new AuthError("not_accepted");
+      if (address === account.email) throw new AuthError("same_as_now");
+      account.email = address;
+      account.emailVerified = false;
+      return address;
     },
 
     async signOut(): Promise<void> {
