@@ -264,6 +264,7 @@ def test_the_claim_invitation_links_once_by_email_and_by_text() -> None:
 
     sms = render_sms("claim_invitation", variables, link_origins=client_app)
     assert link in sms and "72 hours" in sms
+    assert "never ask for this link" in sms
     # Two message parts at most, in plain GSM characters.
     assert len(sms) <= 306 and sms.isascii()
 
