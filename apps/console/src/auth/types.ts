@@ -85,6 +85,8 @@ export const ACTION_PERMISSIONS = [
   "bank_payouts.change",
   // Proposing a rate change, approving or sending back someone else's, and withdrawing your own.
   "rates.change",
+  // Proposing a new product, new terms, or pausing or opening one, approving or sending back someone else's, and withdrawing your own.
+  "products.change",
   // Proposing an unwind or a refund of an investment, approving or sending back someone else's, and withdrawing your own.
   "investment_corrections.change",
   // Proposing to let a large investment sent to another client through, approving someone else's proposal, or declining it.

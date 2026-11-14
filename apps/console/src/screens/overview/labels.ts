@@ -33,6 +33,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   buffer_rules: { label: "Buffer rules change", path: at("/dealing-desk") },
   buffer_capital: { label: "Finvest's money in the buffer", path: at("/dealing-desk") },
   rate_change: { label: "Rate change", path: at("/rates") },
+  // The subject is the product code, or a new product's code. Every change waits on Products.
+  product_change: { label: "Product change", path: at("/products") },
   migration_totals: { label: "Migration totals", path: at("/migration") },
   migration_sign_off: { label: "Migration sign-off", path: at("/migration") },
   phone_change: { label: "Client's mobile number", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
