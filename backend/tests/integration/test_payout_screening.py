@@ -12,7 +12,12 @@ from app.modules.payouts import payouts
 from app.modules.payouts.domain.payouts import PayoutEvent, PayoutStatus
 from app.modules.payouts.jobs import release_screened
 from app.modules.screening import service as screening
-from app.modules.screening.domain.provider import Match, MatchCategory, ScreeningResult
+from app.modules.screening.domain.provider import (
+    Match,
+    MatchCategory,
+    ProviderRefused,
+    ScreeningResult,
+)
 from app.modules.screening.domain.standing import Reason, RunStatus
 from app.modules.screening.jobs import ScreeningJobs
 from app.shared.actors import SYSTEM, Actor
@@ -225,6 +230,43 @@ async def test_a_sanctioned_client_is_never_paid_and_staff_may_decline_the_payou
     assert await client.balance(client.holding) == 5_000
     assert staff == Actor("staff", staff.id)
     await client.no_drift()
+
+
+@pytest.mark.usefixtures("screening_on")
+async def test_a_payout_whose_screen_could_not_run_is_screened_again_a_day_later(
+    api: Api, worker_database: Database
+) -> None:
+    setup = Setup()
+    client = await world(api, worker_database, setup)
+    setup.provider.answers[client.client_id] = [ProviderRefused("subject_rejected")]
+    payout = await client.request(1_000)
+    await work(worker_database, api.clock, setup)
+    [run] = await runs_for(worker_database, client.client_id)
+    assert run.status is RunStatus.UNAVAILABLE
+    assert await status_of(worker_database, payout.id) is PayoutStatus.SCREENING
+
+    # Within the day the screen that could not run still speaks: nothing new is asked for.
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        found = await payouts.retry_screening(session, api.clock)
+    # Other tests' clients may be waiting too: the database is shared.
+    assert payout.id not in found.still_waiting_long
+    assert len(await runs_for(worker_database, client.client_id)) == 1
+
+    # A day later the hourly pass asks for a fresh screen, the provider answers, and the
+    # payout moves on with no person involved.
+    api.clock.advance(hours=25)
+    setup.provider.answers[client.client_id] = [ScreeningResult(())]
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        found = await payouts.retry_screening(session, api.clock)
+    assert payout.id in found.still_waiting_long
+    assert len(await runs_for(worker_database, client.client_id)) == 2
+    await work(worker_database, api.clock, setup)
+    assert await status_of(worker_database, payout.id) is PayoutStatus.QUEUED
+    await client.no_drift()
+
+
+async def test_the_retry_pass_is_a_worker_job(worker_database: Database) -> None:
+    assert payouts.RETRY_SCREENING_KIND in release_screened(worker_database, FakeClock())
 
 
 async def test_a_client_asks_about_no_one_else(app_database: Database) -> None:
