@@ -580,7 +580,6 @@ async def test_browsers_are_told_which_origins_may_call(api: Api) -> None:
 
 async def test_the_worker_cannot_touch_sign_in_tables(worker_database: Database) -> None:
     for table in (
-        "identity_staff",
         "identity_login_challenges",
         "identity_sessions",
         "identity_throttles",
@@ -588,6 +587,21 @@ async def test_the_worker_cannot_touch_sign_in_tables(worker_database: Database)
         with pytest.raises(DBAPIError, match="permission denied"):
             async with worker_database.transaction() as session:
                 await session.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))  # noqa: S608
+
+
+async def test_the_worker_reads_only_a_staff_address_and_status(
+    worker_database: Database,
+) -> None:
+    # The Cloudflare Access sync needs these three (migration 0390), and nothing else.
+    async with worker_database.transaction() as session:
+        await session.execute(text("SELECT id, email, status FROM identity_staff LIMIT 1"))
+    for column in ("password_hash", "name", "role", "created_at"):
+        with pytest.raises(DBAPIError, match="permission denied"):
+            async with worker_database.transaction() as session:
+                await session.execute(text(f"SELECT {column} FROM identity_staff"))  # noqa: S608
+    with pytest.raises(DBAPIError, match="permission denied"):
+        async with worker_database.transaction() as session:
+            await session.execute(text("UPDATE identity_staff SET status = status"))
 
 
 async def test_the_worker_can_read_how_to_reach_a_client_and_nothing_more(
