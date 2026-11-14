@@ -10,6 +10,7 @@ from app.infrastructure.sealing import Sealer, key_from_text
 from app.infrastructure.storage import FileStorage
 from app.modules.kyc.domain.face_confirmations import FaceMatcher
 from app.modules.kyc.domain.liveness import LivenessProvider
+from app.modules.kyc.domain.poses import FaceQuality
 from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.kyc.iotec import BASE_URL, IotecVerifyProvider
 from app.modules.kyc.iotec_face_match import IotecFaceMatcher
@@ -21,6 +22,7 @@ from app.modules.kyc.providers import (
     ManualProvider,
 )
 from app.modules.kyc.regula import RegulaProvider, is_demo, private_or_https
+from app.modules.kyc.regula_quality import RegulaFaceQuality
 
 
 class KycSettings(BaseSettings):
@@ -121,6 +123,17 @@ class KycSettings(BaseSettings):
         if self.identity_provider == "development-stub":
             return DevelopmentStubProvider()
         return ManualProvider()
+
+    def face_quality(self) -> FaceQuality | None:
+        """The face quality service for the guided selfie, or None for a plain selfie.
+
+        With Regula the selfie is the guided one: a straight-on selfie and four pose frames,
+        each kept only if Regula's face quality check passed it (the owner, 2026-11-14).
+        """
+        if self.identity_provider == "regula":
+            assert self.regula_face_url  # checked above
+            return RegulaFaceQuality(face_url=self.regula_face_url)
+        return None
 
     def liveness(self) -> LivenessProvider | None:
         """The liveness provider, or None when clients can only send a camera selfie."""
