@@ -3743,6 +3743,31 @@
         "title": "ComplaintNote",
         "type": "object"
       },
+      "ConfirmBody": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "enum": [
+              "withdrawal",
+              "payout_account"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "pin": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin",
+          "action"
+        ],
+        "title": "ConfirmBody",
+        "type": "object"
+      },
       "ConfirmCode": {
         "additionalProperties": false,
         "properties": {
@@ -5360,6 +5385,7 @@
               "second_step_missing",
               "sign_in_again",
               "app_locked",
+              "pin_required",
               "confirm_it_is_you",
               "expired",
               "phone_taken",
@@ -8539,6 +8565,18 @@
               }
             ],
             "title": "Phone"
+          },
+          "pin_confirmation": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Confirmation"
           }
         },
         "required": [
@@ -9962,6 +10000,38 @@
           "tries_left"
         ],
         "title": "PinChecked",
+        "type": "object"
+      },
+      "PinConfirmed": {
+        "additionalProperties": false,
+        "description": "A right PIN gives `confirmation`: send it with the action, once, within three minutes.\nOtherwise `tries_left` before this device signs out.",
+        "properties": {
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirmed",
+          "tries_left",
+          "confirmation"
+        ],
+        "title": "PinConfirmed",
         "type": "object"
       },
       "PlanCountsView": {
@@ -11610,6 +11680,10 @@
             "title": "Account Phone",
             "type": "string"
           },
+          "asks": {
+            "title": "Asks",
+            "type": "integer"
+          },
           "client_id": {
             "maxLength": 20,
             "minLength": 20,
@@ -11633,6 +11707,11 @@
             "title": "Id",
             "type": "string"
           },
+          "last_asked_at": {
+            "format": "date-time",
+            "title": "Last Asked At",
+            "type": "string"
+          },
           "reason": {
             "enum": [
               "lost_phone",
@@ -11650,7 +11729,9 @@
           "account_phone",
           "contact_phone",
           "reason",
-          "created_at"
+          "created_at",
+          "asks",
+          "last_asked_at"
         ],
         "title": "RecoveryView",
         "type": "object"
@@ -26648,7 +26729,7 @@
         ]
       },
       "post": {
-        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved.",
+        "description": "Add a mobile money number or bank account. It starts awaiting the SMS code.\n\n409 `conflict` if the client already has the same account saved. On the phone app with a\nPIN, 428 `pin_required` without a confirmation for `payout_account`; the confirmation is\nused up only when the account is saved.",
         "operationId": "add_destination_client_payout_destinations_post",
         "requestBody": {
           "content": {
@@ -26720,6 +26801,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "summary": "Add Destination",
@@ -27572,6 +27663,16 @@
             },
             "description": "Locked"
           },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -27584,6 +27685,108 @@
           }
         },
         "summary": "Set Pin",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/confirm": {
+      "post": {
+        "description": "Confirm one action with the PIN. The fifth wrong PIN in a row signs this device out.",
+        "operationId": "confirm_client_pin_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinConfirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Confirm",
         "tags": [
           "client sign-in"
         ]
@@ -27663,6 +27866,16 @@
               }
             },
             "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           },
           "429": {
             "content": {

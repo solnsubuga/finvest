@@ -1883,10 +1883,12 @@ export type RecoveryClose = z.infer<typeof RecoveryClose>;
 
 export const RecoveryView = z.object({
   account_phone: z.string(),
+  asks: z.number().int(),
   client_id: z.string(),
   contact_phone: z.string(),
   created_at: z.string(),
   id: z.string(),
+  last_asked_at: z.string(),
   reason: z.enum(["lost_phone", "new_number", "no_codes", "other"]),
 });
 export type RecoveryView = z.infer<typeof RecoveryView>;
