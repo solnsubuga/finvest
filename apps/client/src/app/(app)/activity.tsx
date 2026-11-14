@@ -4,17 +4,22 @@ import { useFocusEffect, useRouter } from "expo-router";
 
 import { byMonth, longDay, shortDay } from "@/activity/build";
 import { useActivity } from "@/activity/ActivityProvider";
+import { saveCsv } from "@/activity/saveCsv";
+import { toCsv } from "@/activity/table";
+import { shownRows, WideActivity, WideFilter } from "@/activity/WideActivity";
 import { ActivityItem, ActivityKind } from "@/activity/types";
 import { AppPage } from "@/components/AppPage";
 import { Card, Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { Icon, IconName } from "@/components/Icon";
+import { PillButton } from "@/components/PillButton";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { colors, COLUMN_WIDTH, fontSizes, radii } from "@/theme";
+import { useIsWide } from "@/theme/useIsWide";
 
-type State = { status: "loading" } | { status: "error" } | { status: "ready"; items: ActivityItem[]; since: string | null };
+type State = { status: "loading" } | { status: "error" } | { status: "ready"; items: ActivityItem[]; since: string | null; /** When it was read, for "Last 30 days". */ readAt: number };
 
 type Filter = "all" | ActivityKind;
 
@@ -41,12 +46,18 @@ export default function Activity() {
   const [state, setState] = useState<State>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
+  const wide = useIsWide();
+  // The wide table's own filters, so the CSV holds exactly the rows it shows.
+  const [wideFilter, setWideFilter] = useState<WideFilter>("all");
+  const [recent, setRecent] = useState(false);
+  const [query, setQuery] = useState("");
+  const [saving, setSaving] = useState<"idle" | "saving" | "failed">("idle");
 
   useFocusEffect(
     useCallback(() => {
       let live = true;
       client.list().then(
-        ({ items, since }) => live && setState({ status: "ready", items, since }),
+        ({ items, since }) => live && setState({ status: "ready", items, since, readAt: Date.now() }),
         () => live && setState({ status: "error" }),
       );
       return () => {
@@ -58,10 +69,40 @@ export default function Activity() {
   );
 
   const shown = state.status === "ready" ? state.items.filter((item) => filter === "all" || item.kind === filter) : [];
+  const wideShown = state.status === "ready" ? shownRows(state.items, wideFilter, recent, query, state.readAt) : [];
+
+  const download = async () => {
+    setSaving("saving");
+    try {
+      await saveCsv(`finvest-activity-${new Date().toISOString().slice(0, 10)}.csv`, toCsv(wideShown));
+      setSaving("idle");
+    } catch {
+      setSaving("failed");
+    }
+  };
 
   return (
-    <AppPage title="Activity" subtitle="Payments, interest and payouts">
-      <View style={{ maxWidth: COLUMN_WIDTH, gap: 16 }}>
+    <AppPage
+      title="Activity"
+      subtitle={wide ? "Everything that has happened on your account. Choose a row to see its details." : "Payments, interest and payouts"}
+      roomy={wide}
+      action={
+        wide ? (
+          <View style={styles.actions}>
+            <PillButton
+              label="Download as CSV"
+              primary
+              loading={saving === "saving"}
+              disabled={state.status !== "ready" || wideShown.length === 0}
+              onPress={download}
+              testID="activity-csv"
+            />
+            <PillButton label="Get statement" onPress={() => router.navigate("/documents")} testID="activity-statement" />
+          </View>
+        ) : undefined
+      }
+    >
+      <View style={wide ? { gap: 16 } : { maxWidth: COLUMN_WIDTH, gap: 16 }}>
         {state.status === "loading" ? <Loading label="Loading your activity" /> : null}
         {state.status === "error" ? (
           <View style={{ gap: 12 }}>
@@ -77,7 +118,27 @@ export default function Activity() {
             />
           </View>
         ) : null}
-        {state.status === "ready" ? (
+        {saving === "failed" ? <Notice tone="danger">We could not save the file. Try again.</Notice> : null}
+        {state.status === "ready" && wide ? (
+          <>
+            <WideActivity
+              items={state.items}
+              filter={wideFilter}
+              onFilter={setWideFilter}
+              recent={recent}
+              onRecent={setRecent}
+              query={query}
+              onQuery={setQuery}
+              shown={wideShown}
+            />
+            {state.since ? (
+              <Txt size={fontSizes.sm} color={colors.muted} testID="activity-since">
+                {`This list goes back to ${longDay(state.since)}. For anything older, get a statement.`}
+              </Txt>
+            ) : null}
+          </>
+        ) : null}
+        {state.status === "ready" && !wide ? (
           <>
             <View style={styles.filters} accessibilityRole="tablist">
               {FILTERS.map((option) => {
@@ -185,6 +246,7 @@ function Row({ item, first, onPress }: { item: ActivityItem; first: boolean; onP
 }
 
 const styles = StyleSheet.create({
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     borderRadius: radii.pill,

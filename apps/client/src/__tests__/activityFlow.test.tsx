@@ -32,7 +32,7 @@ async function signUp(local: string) {
   await fireEvent.changeText(await screen.findByTestId("password-input"), "green matooke sunday");
   await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "green matooke sunday");
   await fireEvent.press(screen.getByTestId("password-submit"));
-  await screen.findByText("Welcome to Finvest");
+  await screen.findByTestId("home");
 }
 
 beforeAll(warmRouter, WARM_ROUTER_MS);
@@ -46,7 +46,7 @@ describe("Activity", () => {
     await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
     await fireEvent.press(screen.getByTestId("login-submit"));
     await fireEvent.press(await screen.findByTestId("use-passkey"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     await fireEvent.press(screen.getByLabelText("Activity"));
 
     expect(await screen.findByText("Payment for 182 day Treasury bill")).toBeTruthy();

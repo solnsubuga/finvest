@@ -37,7 +37,7 @@ async function openSecurity() {
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
   await fireEvent.press(screen.getByLabelText("Profile"));
   await fireEvent.press(await screen.findByTestId("open-security"));
   await screen.findByTestId("on-passkey");

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -11,15 +11,11 @@ import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { formatAmount, formatDay, groupDigits, kindLabel, parseWholeAmount, termLabel, wholeUnits } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
-import { describeInvestingError, Product, Quote } from "@/investing/types";
+import { Product } from "@/investing/types";
 import { useLoaded } from "@/investing/useLoaded";
+import { Calc, useQuote } from "@/investing/useQuote";
 import { DetailList, Loading } from "@/payments/Parts";
 import { colors, fontSizes } from "@/theme";
-
-/** How long typing must pause before the quote is asked for. */
-const QUOTE_DELAY_MS = 400;
-
-type Calc = { state: "idle" } | { state: "working" } | { state: "failed"; message: string } | { state: "ready"; quote: Quote };
 
 /**
  * A product, with a calculator: type an amount and see what it earns after tax
@@ -33,30 +29,8 @@ export default function ProductDetail() {
   const product = products.state === "ready" ? products.value.find((p) => p.code === code) : undefined;
 
   const [text, setText] = useState("");
-  // The last answer, kept with the request it answers, so a stale quote is never shown.
-  const [answer, setAnswer] = useState<{ key: string; calc: Calc } | null>(null);
   const amount = product ? parseWholeAmount(text, product.currency) : null;
-  const key = product && amount ? `${product.code}:${amount.currency}:${amount.minor}` : null;
-  const calc: Calc = !key ? { state: "idle" } : answer?.key === key ? answer.calc : { state: "working" };
-
-  useEffect(() => {
-    if (!key || !product || !amount) {
-      return;
-    }
-    let live = true;
-    const timer = setTimeout(() => {
-      client.quote(product.code, amount).then(
-        (quote) => live && setAnswer({ key, calc: { state: "ready", quote } }),
-        (error: unknown) => live && setAnswer({ key, calc: { state: "failed", message: describeInvestingError(error) } }),
-      );
-    }, QUOTE_DELAY_MS);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-    // The key holds the product and the amount by value, so the same figure is not quoted twice.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, key]);
+  const calc = useQuote(client, product, amount);
 
   const ready = calc.state === "ready" && product?.status === "live";
 

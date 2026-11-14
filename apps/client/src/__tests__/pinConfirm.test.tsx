@@ -96,7 +96,7 @@ async function logIn(withPin: boolean) {
     await typePin("48151");
     await typePin("48151");
   }
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
 }
 
 async function fillNewAccount() {
