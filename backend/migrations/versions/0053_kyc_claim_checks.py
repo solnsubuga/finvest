@@ -1,7 +1,7 @@
 """The photos a client carried over from Finvest 1.0 takes when they claim their account.
 
 Revision ID: 0053_kyc_claim_checks
-Revises: 0052_kyc_carried_over
+Revises: 0038_payout_releases
 
 A carried-over identity check has no photos, so at the claim the client takes a selfie and a
 photo of the front of the identity document on file. One member of staff compares them with
@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0053_kyc_claim_checks"
-down_revision: str | None = "0052_kyc_carried_over"
+down_revision: str | None = "0038_payout_releases"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 # New tables only.

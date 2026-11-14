@@ -29,6 +29,7 @@ from app.modules.kyc.domain.claims import (
 from app.modules.kyc.service import (
     DEFAULT_PAGE_SIZE,
     MAX_PHOTO_BYTES,
+    MAX_PHOTOS_PER_CHECK,
     PHOTO_CONTENT_TYPES,
     PhotoView,
     _audit,
@@ -110,6 +111,7 @@ _PHOTOS = text(
     "SELECT id, kind, storage_key, content_type, byte_size, created_at FROM kyc_claim_photos "
     "WHERE claim_check_id = :id AND replaced_at IS NULL ORDER BY kind"
 )
+_PHOTO_COUNT = text("SELECT count(*) FROM kyc_claim_photos WHERE claim_check_id = :id")
 _REPLACE_PHOTO = text(
     "UPDATE kyc_claim_photos SET replaced_at = :now "
     "WHERE claim_check_id = :id AND kind = :kind AND replaced_at IS NULL"
@@ -171,6 +173,7 @@ async def photo_slot(
     file is stored, so a refused photo never leaves a file behind."""
     row = await _editable(session, client)
     _check_photo(row, kind, content_type, byte_size)
+    await _require_room_for_photo(session, row.id)
     return str(row.id)
 
 
@@ -188,6 +191,7 @@ async def add_photo(
     """Record a photo the client uploaded, replacing the current one of the same kind."""
     row = await _editable(session, client)
     _check_photo(row, kind, content_type, byte_size)
+    await _require_room_for_photo(session, row.id)
     now = clock.now()
     photo_id = photo_id or push_id()
     storage_key = photo_key(row.id, photo_id)
@@ -358,6 +362,13 @@ async def _for_decision(
 def _require_move(actor: ActorKind, current: ClaimCheckStatus, target: ClaimCheckStatus) -> None:
     if current in DECIDED or not can_move(actor, current, target):
         raise ApplicationError("conflict")
+
+
+async def _require_room_for_photo(session: AsyncSession, claim_check_id: str) -> None:
+    # Every photo is kept, replaced ones too, so the same limit as an identity check applies.
+    taken = (await session.execute(_PHOTO_COUNT, {"id": claim_check_id})).scalar_one()
+    if taken >= MAX_PHOTOS_PER_CHECK:
+        raise _invalid("photo", "too_many_photos")
 
 
 def _check_photo(row: Row[Any], kind: PhotoKind, content_type: str, byte_size: int) -> None:

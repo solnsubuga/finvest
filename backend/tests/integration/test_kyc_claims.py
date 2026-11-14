@@ -282,3 +282,18 @@ async def test_the_worker_only_reads_claim_checks(
                 text("UPDATE kyc_claim_checks SET status = 'matched' WHERE id = :id"),
                 {"id": view.id},
             )
+
+
+async def test_a_claim_check_holds_a_limited_number_of_photos(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    client, _ = await carried_over(worker_database, fake_clock)
+    async with app_database.actor_transaction(client) as session:
+        await claims.start(session, client, fake_clock)
+    await take(app_database, client, fake_clock, *[PhotoKind.SELFIE] * kyc.MAX_PHOTOS_PER_CHECK)
+    with pytest.raises(ApplicationError) as error:
+        async with app_database.actor_transaction(client) as session:
+            await claims.photo_slot(
+                session, client, PhotoKind.FRONT, content_type="image/jpeg", byte_size=2048
+            )
+    assert [(p.field_path[0], p.code) for p in error.value.fields] == [("photo", "too_many_photos")]
