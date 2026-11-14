@@ -114,6 +114,10 @@ export function toReassignmentError(error: unknown): ReassignmentError {
     return new ReassignmentError("invalid", field === "reason" ? "reason" : null);
   }
   switch (error.code) {
+    // The key was spent on a different request: treated as someone having acted, so the move is
+    // reloaded and the next try gets a key of its own.
+    case "idempotency_key_reused":
+      return new ReassignmentError("conflict");
     case "not_found":
     case "conflict":
     case "forbidden":

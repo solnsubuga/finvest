@@ -180,6 +180,8 @@ describe("the reassignments HTTP client", () => {
     expect(refused("same_client", "to_investment_id")).toMatchObject({ code: "same_client", field: "toInvestmentId" });
     expect(refused("not_found", "to_investment_id")).toMatchObject({ code: "investment_not_found", field: "toInvestmentId" });
     expect(toReassignmentError(new ApiError("confirm_it_is_you", 403)).code).toBe("confirm_it_is_you");
+    // A key spent on another request is a definite refusal, so the next try gets a new key.
+    expect(toReassignmentError(new ApiError("idempotency_key_reused", 422)).code).toBe("conflict");
     expect(toReassignmentError(new ApiError("internal_error", 500)).code).toBe("unavailable");
     expect(toReassignmentError(new TypeError("offline")).code).toBe("unavailable");
   });
