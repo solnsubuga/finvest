@@ -40,6 +40,7 @@ export function formatSize(bytes: number): string {
 }
 
 export const STAGE_LABELS: Record<Stage, string> = {
+  in_review: "Waiting for a check",
   to_match: "Needs matching",
   to_approve: "Needs a second person",
   confirming: "Approved, confirming",

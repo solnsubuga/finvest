@@ -163,7 +163,7 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | Route | What it does |
 | --- | --- |
 | `GET /client/payout-destinations` | The client's payout accounts that are not removed, newest first |
-| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code |
+| `POST /client/payout-destinations` | Add one: `{kind: "mobile_money", phone, holder_name}` or `{kind: "bank", bank_code, account_number, holder_name}`. 201, awaiting the SMS code. 409 if it is already saved, or `too_many_unconfirmed_accounts` when the client already has five awaiting their code. 422 `bank_unknown` on `bank_code` for a bank not in the list |
 | `GET /client/payout-destinations/{id}` | One account |
 | `POST /client/payout-destinations/{id}/code` | Text the code for an account that is `awaiting_code`. 204. A new code replaces the one before. 429 past three in 15 minutes for the account, five for the client, three to the number texted, or ten for the client in a day |
 | `POST /client/payout-destinations/{id}/code/verify` | `{code}`. Moves the account to `awaiting_proof`. 401 `invalid_code` for a wrong code, 410 `expired` when none is left |
@@ -172,6 +172,7 @@ In `backend/app/modules/payouts/api.py`. Every route needs a signed-in client an
 | `GET /client/payouts` | The client's payouts, newest first, at most 50 |
 | `GET /client/payouts/{id}` | One payout |
 | `GET /client/withdrawal-limits` | The limits in force today, without the review threshold |
+| `GET /client/banks` | The banks a client may be paid to, as `{code, name}`, from `domain/banks.py`: 22 banks licensed by the Bank of Uganda, taken from the client app's list. The app and the console name banks from this list |
 
 An account shows only its last digits. A payout's status is `in_review` (held for staff), `processing` (queued, sent or uncertain), `paid`, `failed` or `cancelled`. The client is never shown whether we are still finding out what the provider did.
 
@@ -180,6 +181,22 @@ A proof file is checked by its first bytes, stored under `payouts/<destination i
 No route creates a payout. The module whose money is paid out creates it: an investment that matures, or an early withdrawal.
 
 A new account moves from `awaiting_code` to `awaiting_proof` when the client enters a code texted for it: to the mobile money number itself, or for a bank account to the client's own number. The identity module issues and spends the code (purpose `payout_account`, migration 0034), and the account moves on in the same transaction that spends it. A wrong code still counts as one of the five tries. A mobile money account then waits at `awaiting_proof` until Finvest can read the name the network holds for the number, which is not built yet.
+
+## Client screens
+
+In `apps/client`: the data layer in `src/payouts` (`apiPayoutsClient.ts` for the routes above, `stubPayoutsClient.ts` for the demo build and tests), the screens in `src/app/payouts`, and the investment screens that pay out in `src/app/investment`. They are reached from Profile, "Payout accounts", and from any screen that needs an approved account and has none.
+
+| Screen | What it does |
+| --- | --- |
+| Payout accounts (`/payouts`) | Every account not removed, with where it is: enter the code, send proof, checking, ready soon (approved, inside the 24 hour wait), ready, or not approved. Links to Payouts |
+| Add a payout account (`/payouts/add`) | Mobile money (the client's own number filled in) or a bank account from the list in `src/payouts/format.ts`, and the name on the account. Saving texts the code at once |
+| One account (`/payouts/{id}`) | The four steps, then the next one: the texted code, the proof for a bank account (statement, bank letter or card photo, PDF, JPG or PNG up to 10 MB), or what we are doing. A refusal says why; new proof is offered unless the name differs or fraud is suspected, which are final. Remove asks once on the page, never in a dialog |
+| Payouts (`/payouts/history`) | The client's payouts, newest first, and today's withdrawal limits. Never the review threshold |
+| One payout (`/payouts/payout/{id}`) | Amount, account and status. `in_review` reads "Checking", `processing` "On its way" (never "paid" until the provider confirms), `failed` "Not sent" with the money safe with us |
+| When the term ends (`/investment/maturity/{id}`) | Roll over or pay out, and to which approved account. An account in its first day can be chosen, because it will be payable by maturity. Up to the day before maturity |
+| Choose where to be paid (`/investment/pay-out/{id}`) | A matured investment waiting for an account: choose one past its first day and send it. The same account asked twice is the same payout, so a lost answer is tried again as it was, with the account locked |
+
+The backend checks only the shape of a bank code, so the app's bank list is where the codes are set. Adding an account takes no idempotency key: a second try after a lost answer gets 409 for the same account, which the screen explains as already saved. A mobile money number stays at "Checking" after its code until Finvest can read the name the network holds for it (ioTec Verify, not built).
 
 ## Staff routes
 
@@ -197,6 +214,18 @@ In `backend/app/modules/payouts/staff_api.py`. Seeing the queue and opening an a
 A checked account also waits in the approvals inbox (`GET /staff/approvals`) as `payout_account`, for staff who can see the review queue. Its subject is the kind of account, `mobile_money` or `bank`, never the number or the holder's name. Staff without `payout_accounts.change`, such as finance, see it but cannot decide it.
 
 The database guard runs with its search path pinned to `pg_catalog, pg_temp` and names the functions it calls in full (migration 0036).
+
+### Held payouts
+
+A payout above the review threshold starts held, with its money already reserved (`backend/app/modules/payouts/reviews.py`, routes in `staff_held_api.py`). The client asked for it, so one member of staff with `payout_accounts.change` is the second person who decides it, as for payout accounts. Deciding needs the second step in the last ten minutes (403 `confirm_it_is_you`), a reason and an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
+
+| Route | What it does |
+| --- | --- |
+| `GET /staff/payouts/held` | Held payouts, oldest first, at most 100. Needs `review_queue.view`. The amount, kind, client and destination, never the account number |
+| `POST /staff/payouts/{id}/approve` | `{reason}`. The payout is queued; a mobile money payout is sent, a bank payout waits for staff to pay it. 409 `payout_not_held` |
+| `POST /staff/payouts/{id}/decline` | `{reason}`. The payout is cancelled and its money goes back where it came from. 409 `payout_not_held` |
+
+Both are written to the audit trail as approvals, with the reason, and the database still checks that `reviewed_by` is the member of staff of the transaction.
 
 ## Sending a payout
 

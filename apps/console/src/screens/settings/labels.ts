@@ -19,6 +19,7 @@ const EVENT_LABELS: Record<string, string> = {
   payout_processing: "Withdrawal being processed",
   payout_sent: "Withdrawal sent",
   payout_failed: "Withdrawal could not be sent",
+  payout_declined: "Withdrawal declined after review",
   investment_started: "Investment started",
   investment_maturing: "Investment matures soon",
   investment_matured: "Investment matured",

@@ -8,6 +8,7 @@ import { LoadFailed, Loading } from "@/components/Loading";
 import { Screen } from "@/components/Screen";
 import { StackHeader } from "@/components/StackHeader";
 import { Txt } from "@/components/Txt";
+import { PushOnThisPhone } from "@/push/PushOnThisPhone";
 import { categories, channelNames, channels } from "@/support/labels";
 import { useSupport } from "@/support/SupportProvider";
 import { Category, CategoryChannels, Channel, describeSupportError } from "@/support/types";
@@ -81,6 +82,7 @@ export default function NotificationSettings() {
         <Txt size={14} color={colors.muted}>
           Every alert is kept in the app. Choose which ones also reach you by push, SMS or email.
         </Txt>
+        <PushOnThisPhone />
         {loaded.status === "loading" ? <Loading label="Loading your settings" /> : null}
         {loaded.status === "failed" ? (
           <LoadFailed

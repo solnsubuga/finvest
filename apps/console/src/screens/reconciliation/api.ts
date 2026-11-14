@@ -22,9 +22,11 @@ export interface Amount {
 
 /**
  * Where a transfer is. `confirming` is approved and waiting the moment it
- * takes the service to post it; `refused` failed with a reason.
+ * takes the service to post it; `refused` failed with a reason. `in_review`
+ * is only for the queue, while its list does not say which check a transfer
+ * waits for: opening it tells.
  */
-export type Stage = "to_match" | "to_approve" | "confirming" | "confirmed" | "refused";
+export type Stage = "in_review" | "to_match" | "to_approve" | "confirming" | "confirmed" | "refused";
 
 export type RefuseReason = "amount_differs" | "not_on_statement" | "unreadable" | "name_differs" | "other";
 
@@ -100,6 +102,7 @@ export type BankTransferErrorCode =
   | "line_already_used"
   | "line_not_found"
   | "forbidden"
+  | "not_confirmed"
   | "not_connected"
   | "unavailable";
 
@@ -120,6 +123,7 @@ const MESSAGES: Record<BankTransferErrorCode, string> = {
   line_already_used: "That statement line already confirms another payment. Choose another line or refuse the transfer.",
   line_not_found: "That statement line no longer fits this transfer. It has been reloaded.",
   forbidden: "You are not allowed to decide bank transfers.",
+  not_confirmed: "Nothing was done, because you did not confirm it is you.",
   not_connected: "Bank transfers are not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

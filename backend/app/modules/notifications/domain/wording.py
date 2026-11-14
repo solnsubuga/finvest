@@ -102,6 +102,12 @@ DEFAULTS: dict[str, Wording] = {
         "Finvest: we could not send your withdrawal to {destination}. Your money is safe and our "
         "team is on it.",
     ),
+    "payout_declined": Wording(
+        "Withdrawal not sent",
+        "We did not send your withdrawal to {destination}. Our team declined it after review. "
+        "See the details in the app, or message us there if you have a question.",
+        "Finvest: we did not send your withdrawal to {destination}. See the app for details.",
+    ),
     "investment_started": Wording(
         "Investment started",
         "Your money is now in a {product}.",

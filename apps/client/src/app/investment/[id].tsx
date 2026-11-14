@@ -1,10 +1,10 @@
 import { useCallback } from "react";
 import { View } from "react-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Href, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
-import { Button } from "@/components/Button";
+import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { atMaturityLabel, formatAmount, formatDay, investmentLabel } from "@/investing/format";
@@ -34,6 +34,12 @@ export default function InvestmentDetail() {
             onPress={() => router.push(`/pay/${investment.id}`)}
             testID="pay-now"
           />
+        ) : investment?.waitingForDestination ? (
+          <Button
+            label="Choose where to be paid"
+            onPress={() => router.push(`/investment/pay-out/${investment.id}`)}
+            testID="choose-pay-out"
+          />
         ) : investment?.canWithdraw ? (
           <Button
             label="Withdraw early"
@@ -53,13 +59,13 @@ export default function InvestmentDetail() {
           <Failed message={loaded.message} onRetry={retry} />
         </View>
       ) : (
-        <Body investment={loaded.value} />
+        <Body investment={loaded.value} onOpen={(href) => router.push(href)} />
       )}
     </Screen>
   );
 }
 
-function Body({ investment }: { investment: Investment }) {
+function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: Href) => void }) {
   const rows: Detail[] = [
     { label: "You invested", value: formatAmount(investment.amount) },
     { label: "Rate after tax", value: `${investment.ratePercent}% a year` },
@@ -120,11 +126,27 @@ function Body({ investment }: { investment: Investment }) {
       {investment.waitingForDestination ? (
         <Notice tone="warning">Your money is ready. Choose where to be paid and we will send it.</Notice>
       ) : null}
-      {investment.status === "active" && investment.atMaturity && !investment.withdrawalRequestedAt ? (
+      {investment.payoutId ? (
+        <TextLink
+          label="Follow the payout"
+          onPress={() => onOpen(`/payouts/payout/${investment.payoutId}`)}
+          testID="open-investment-payout"
+        />
+      ) : null}
+      {investment.atMaturity && investment.canChangeMaturity && !investment.withdrawalRequestedAt ? (
+        <View style={{ gap: 6, alignItems: "flex-start" }}>
+          <TextLink
+            label="Change what happens at the end"
+            onPress={() => onOpen(`/investment/maturity/${investment.id}`)}
+            testID="change-maturity"
+          />
+          <Txt size={fontSizes.xs} color={colors.muted}>
+            You can change it until the day before it matures.
+          </Txt>
+        </View>
+      ) : investment.status === "active" && investment.atMaturity && !investment.withdrawalRequestedAt ? (
         <Txt size={fontSizes.xs} color={colors.muted}>
-          {investment.canChangeMaturity
-            ? "You can change what happens at the end until the day before it matures."
-            : "It matures soon, so what happens at the end is fixed."}
+          It matures soon, so what happens at the end is fixed.
         </Txt>
       ) : null}
       {investment.withdrawalRequestedAt ? null : (

@@ -20,6 +20,12 @@ export const AuthenticatorState = z.object({
 });
 export type AuthenticatorState = z.infer<typeof AuthenticatorState>;
 
+export const BankOut = z.object({
+  code: z.string(),
+  name: z.string(),
+});
+export type BankOut = z.infer<typeof BankOut>;
+
 export const MoneyView = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -124,6 +130,16 @@ export const ClientChat = z.object({
 });
 export type ClientChat = z.infer<typeof ClientChat>;
 
+export const ClientDetails = z.object({
+  date_of_birth: z.string(),
+  document_expires_on: z.string().nullable(),
+  document_number: z.string(),
+  given_names: z.string(),
+  surname: z.string(),
+  tin: z.string().nullable(),
+});
+export type ClientDetails = z.infer<typeof ClientDetails>;
+
 export const PhotoKind = z.enum(["front", "back", "selfie"]);
 export type PhotoKind = z.infer<typeof PhotoKind>;
 
@@ -134,23 +150,13 @@ export const ClientPhoto = z.object({
 });
 export type ClientPhoto = z.infer<typeof ClientPhoto>;
 
-export const DetailsBody = z.object({
-  date_of_birth: z.string(),
-  document_expires_on: z.string(),
-  document_number: z.string(),
-  given_names: z.string(),
-  surname: z.string(),
-  tin: z.string().nullable().optional(),
-});
-export type DetailsBody = z.infer<typeof DetailsBody>;
-
 export const DocumentType = z.enum(["national_id", "passport", "driving_permit", "refugee_id"]);
 export type DocumentType = z.infer<typeof DocumentType>;
 
 export const ClientCheck = z.object({
   account_number: z.string().nullable(),
   client_message: z.string().nullable(),
-  details: DetailsBody.nullable(),
+  details: ClientDetails.nullable(),
   details_confirmed: z.boolean(),
   document_country: z.string(),
   document_type: DocumentType,
@@ -158,6 +164,7 @@ export const ClientCheck = z.object({
   missing: z.array(z.string()),
   photos: z.array(ClientPhoto),
   retake_photos: z.array(PhotoKind),
+  retaken: z.array(PhotoKind),
   status: CheckStatus,
   submitted_at: z.string().nullable(),
 });
@@ -271,6 +278,16 @@ export const DestinationOut = z.object({
   status: z.enum(["awaiting_code", "awaiting_proof", "in_review", "approved", "rejected"]),
 });
 export type DestinationOut = z.infer<typeof DestinationOut>;
+
+export const DetailsBody = z.object({
+  date_of_birth: z.string(),
+  document_expires_on: z.string(),
+  document_number: z.string(),
+  given_names: z.string(),
+  surname: z.string(),
+  tin: z.string().nullable().optional(),
+});
+export type DetailsBody = z.infer<typeof DetailsBody>;
 
 export const DeviceSessionView = z.object({
   current: z.boolean(),
@@ -680,6 +697,12 @@ export const PaymentView = z.object({
 });
 export type PaymentView = z.infer<typeof PaymentView>;
 
+export const PaymentPage = z.object({
+  items: z.array(PaymentView),
+  next_before: z.string().nullable(),
+});
+export type PaymentPage = z.infer<typeof PaymentPage>;
+
 export const PayoutOut = z.object({
   amount: MoneyView,
   business_date: z.string(),
@@ -1032,6 +1055,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: AutoinvestApiPlanView,
+  },
+  "GET /client/banks": {
+    method: "GET",
+    path: "/client/banks",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BankOut),
   },
   "GET /client/claim": {
     method: "GET",
@@ -1788,6 +1822,19 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ResetStarted,
+  },
+  "GET /client/payments": {
+    method: "GET",
+    path: "/client/payments",
+    params: z.object({}),
+    query: z.object({
+    before: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PaymentPage,
   },
   "GET /client/payments/{payment_id}": {
     method: "GET",

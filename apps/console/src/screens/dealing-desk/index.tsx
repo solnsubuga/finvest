@@ -11,6 +11,10 @@ import { PageHeader } from "@/pages/PageHeader.tsx";
 import { DealingError, dealingErrorMessage, notConnectedDealingApi, type DealingApi, type Desk, type NewOrder } from "./api.ts";
 import { OrderCard, PrepareForm, type OrderCommand } from "./Orders.tsx";
 import { BufferRules, Figures, PositionTable } from "./Position.tsx";
+import { AllocationSection } from "./Allocations.tsx";
+import { notConnectedAllocationsApi, type AllocationsApi } from "./allocations.ts";
+import { createHttpAllocationsApi } from "./allocationsHttp.ts";
+import { createStubAllocationsApi } from "./allocationsStub.ts";
 import { BufferSection } from "./Buffer.tsx";
 import { notConnectedBufferApi, type BufferApi } from "./buffer.ts";
 import { createHttpBufferApi } from "./bufferHttp.ts";
@@ -227,6 +231,16 @@ export default function DealingDeskPage() {
     const http = createHttp(base);
     return { api: createHttpBufferApi(http), directory: createHttpDirectory(http) };
   });
+  // The allocation report is on the real API too, with the same samples under the stub.
+  const [allocations] = useState<AllocationsApi>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") return notConnectedAllocationsApi;
+      return createStubAllocationsApi(sample === "empty" ? "empty" : "sample");
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpAllocationsApi(createHttp(base)) : notConnectedAllocationsApi;
+  });
   return (
     <>
       <DealingDeskScreen api={api} />
@@ -239,6 +253,7 @@ export default function DealingDeskPage() {
           today={kampalaToday}
         />
       ) : null}
+      {session ? <AllocationSection api={allocations} /> : null}
     </>
   );
 }

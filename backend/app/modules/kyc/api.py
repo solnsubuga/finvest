@@ -64,6 +64,18 @@ class DetailsBody(Contract):
     tin: str | None = Field(default=None, max_length=20)
 
 
+class ClientDetails(Contract):
+    """The details as the client confirmed them, or as Finvest 1.0 held them."""
+
+    surname: str
+    given_names: str
+    document_number: str
+    date_of_birth: IsoDate
+    # Unknown only on a check carried over from Finvest 1.0.
+    document_expires_on: IsoDate | None
+    tin: str | None
+
+
 class DocumentBody(Contract):
     document_type: Document
     document_country: str = Field(min_length=2, max_length=2)
@@ -82,12 +94,14 @@ class ClientCheck(Contract):
     status: CheckStatus
     document_type: DocumentType
     document_country: str
-    details: DetailsBody | None
+    details: ClientDetails | None
     details_confirmed: bool
     photos: list[ClientPhoto]
     # What is still needed before it can be handed in: photo kinds and "details".
     missing: list[str]
     retake_photos: list[PhotoKind]
+    # Of the photos asked for again, those the client has already taken again.
+    retaken: list[PhotoKind]
     client_message: str | None
     submitted_at: datetime | None
     account_number: str | None
@@ -135,6 +149,8 @@ class StaffCheck(QueueEntry):
     client_message: str | None
     account_number: str | None
     decided_at: datetime | None
+    # True when the check was carried over from Finvest 1.0: approved there, with no photos here.
+    carried_over: bool
     # What staff may do to the check in this state. The database enforces the same table.
     allowed: list[Decision]
 
@@ -176,7 +192,7 @@ def _client_check(view: service.CheckView) -> ClientCheck:
         document_country=view.document_country,
         details=None
         if details is None
-        else DetailsBody(
+        else ClientDetails(
             surname=details.surname,
             given_names=details.given_names,
             document_number=details.document_number,
@@ -191,6 +207,7 @@ def _client_check(view: service.CheckView) -> ClientCheck:
         ],
         missing=view.missing,
         retake_photos=sorted(view.retake_photos),
+        retaken=sorted(view.retaken),
         client_message=view.client_message,
         submitted_at=view.submitted_at,
         account_number=view.account_number,
@@ -225,6 +242,7 @@ def _staff_check(view: service.CheckView) -> StaffCheck:
         client_message=view.client_message,
         account_number=view.account_number,
         decided_at=view.decided_at,
+        carried_over=view.source == "finvest1",
         allowed=[
             decision
             for status, decision in _DECISIONS.items()

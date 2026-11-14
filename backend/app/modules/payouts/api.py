@@ -29,6 +29,7 @@ from app.modules.payments.domain.bank_transfers import (
 )
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.destinations import DestinationView
+from app.modules.payouts.domain.banks import BANKS
 from app.modules.payouts.domain.destinations import (
     BankAccount,
     DestinationError,
@@ -246,6 +247,17 @@ def _account(body: NewDestination) -> MobileMoneyNumber | BankAccount:
         if error.code == "bank_invalid":
             field = "bank_code"
         raise _problem(field, error.code) from None
+
+
+class BankOut(Contract):
+    code: str
+    name: str
+
+
+@client_router.get("/banks")
+async def banks(client: CurrentClient) -> list[BankOut]:
+    """The banks a client may be paid to, by name. A payout account names one by its code."""
+    return [BankOut(code=bank.code, name=bank.name) for bank in BANKS]
 
 
 @client_router.get("/payout-destinations")

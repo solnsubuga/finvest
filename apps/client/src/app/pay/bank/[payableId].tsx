@@ -11,7 +11,9 @@ import { Title, Txt } from "@/components/Txt";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { usePayments } from "@/payments/PaymentsProvider";
-import { BankInstructions, describePaymentError, openPaymentHref } from "@/payments/types";
+import { BankInstructions, describePaymentError, openPaymentHref, PaymentError } from "@/payments/types";
+import { useIdentity } from "@/identity/IdentityProvider";
+import { IdCheckPrompt } from "@/identity/Parts";
 import { colors, fontSizes } from "@/theme";
 
 /** One bank detail with its own Copy button, because these get typed into a banking app. */
@@ -53,6 +55,8 @@ export default function BankDetails() {
   const { client } = usePayments();
   const [instructions, setInstructions] = useState<BankInstructions | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [needsId, setNeedsId] = useState(false);
+  const identity = useIdentity().client;
 
   useEffect(() => {
     let live = true;
@@ -66,13 +70,25 @@ export default function BankDetails() {
           router.replace(open);
           return;
         }
+        if (caught instanceof PaymentError && caught.code === "bank_details_missing") {
+          // The reference is the client's account number, which only an approved ID check has.
+          identity.getCheck().then(
+            (check) => {
+              if (!live) return;
+              if (check?.status !== "approved") setNeedsId(true);
+              setLoadError(describePaymentError(caught));
+            },
+            () => live && setLoadError(describePaymentError(caught)),
+          );
+          return;
+        }
         setLoadError(describePaymentError(caught));
       },
     );
     return () => {
       live = false;
     };
-  }, [client, payableId, router]);
+  }, [client, identity, payableId, router]);
 
   const rows = instructions
     ? [
@@ -110,7 +126,11 @@ export default function BankDetails() {
 
       {loadError ? (
         <View style={{ marginTop: 20 }}>
-          <Notice tone="danger">{loadError}</Notice>
+          {needsId ? (
+            <IdCheckPrompt message="Your Finvest account number is the reference for a bank transfer, and you get it when your ID check is approved. Finish your ID check first, or pay by mobile money." />
+          ) : (
+            <Notice tone="danger">{loadError}</Notice>
+          )}
         </View>
       ) : !instructions ? (
         <Loading label="Loading the bank details" />

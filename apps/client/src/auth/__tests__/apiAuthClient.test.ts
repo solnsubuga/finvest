@@ -2,6 +2,8 @@ import { API_URL } from "@/api/config";
 import { ApiError, setFetch } from "@/api/http";
 import { readToken, saveToken } from "@/api/token";
 
+import { registerPush, setPushDevice } from "@/push/registration";
+
 import { createApiAuthClient, toAuthError, toSession } from "../apiAuthClient";
 import { AuthError } from "../types";
 
@@ -66,7 +68,7 @@ describe("the sign-in client for the real API", () => {
     expect(seen[0]!.body).toEqual({ phone: "+256772123456", email: null });
     const ticket = await client.confirmSignupCode(challenge.challengeId, "123456");
     const session = await client.completeSignup(ticket.ticket, "a-long-unusual-phrase");
-    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false });
+    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false });
     expect(await readToken()).toBe("phone-token");
     await expect(client.restoreSession()).resolves.toEqual(session);
     expect(seen.at(-1)!.auth).toBe("Bearer phone-token");
@@ -102,6 +104,98 @@ describe("the sign-in client for the real API", () => {
       new AuthError("invalid_code"),
     );
     await expect(readToken()).resolves.toBe("old-token");
+  });
+
+  it("reads the devices and passkeys in the screens' shape", async () => {
+    serve({
+      "GET /client/sessions": {
+        status: 200,
+        body: {
+          items: [
+            { id: ID, device: "Chrome on Android", transport: "cookie", second_step: "code", signed_in_at: "2026-11-13T10:00:00Z", last_seen_at: "2026-11-13T11:00:00Z", current: true },
+            { id: "B".repeat(20), device: "Finvest app on iPhone", transport: "token", second_step: "passkey", signed_in_at: "2026-11-10T10:00:00Z", last_seen_at: "2026-11-12T11:00:00Z", current: false },
+          ],
+        },
+      },
+      "GET /client/passkeys": {
+        status: 200,
+        body: [{ id: ID, name: "iPhone", created_at: "2026-11-01T10:00:00Z", last_used_at: null }],
+      },
+    });
+    const client = createApiAuthClient();
+    const devices = await client.listDevices();
+    expect(devices.map((d) => [d.label, d.kind, d.confirmedWith, d.current])).toEqual([
+      ["Chrome on Android", "browser", "code", true],
+      ["Finvest app on iPhone", "app", "passkey", false],
+    ]);
+    await expect(client.listPasskeys()).resolves.toEqual([
+      { id: ID, name: "iPhone", createdAt: "2026-11-01T10:00:00Z", lastUsedAt: null },
+    ]);
+  });
+
+  it("signs out devices and removes sign-in methods on the right routes", async () => {
+    const seen = serve({
+      [`DELETE /client/sessions/${ID}`]: { status: 204 },
+      "POST /client/sessions/sign-out-others": { status: 200, body: { ended: 2 } },
+      [`DELETE /client/passkeys/${ID}`]: { status: 204 },
+      "DELETE /client/authenticator": { status: 204 },
+    });
+    const client = createApiAuthClient();
+    await client.signOutDevice(ID);
+    await expect(client.signOutOtherDevices()).resolves.toBe(2);
+    await client.removePasskey(ID);
+    await client.turnOffAuthenticator();
+    expect(seen.map((s) => s.key)).toEqual([
+      `DELETE /client/sessions/${ID}`,
+      "POST /client/sessions/sign-out-others",
+      `DELETE /client/passkeys/${ID}`,
+      "DELETE /client/authenticator",
+    ]);
+  });
+
+  it("passes on a stale session and a device already gone", async () => {
+    serve({
+      [`DELETE /client/passkeys/${ID}`]: refused(403, "sign_in_again"),
+      [`DELETE /client/sessions/${ID}`]: refused(404, "not_found"),
+    });
+    const client = createApiAuthClient();
+    await expect(client.removePasskey(ID)).rejects.toEqual(new AuthError("sign_in_again"));
+    await expect(client.signOutDevice(ID)).rejects.toEqual(new AuthError("not_found"));
+  });
+
+  it("reads the email and whether it is proved, and never calls an absent address proved", () => {
+    expect(toSession({ phone: "+256772123456", restricted_until: null, email: "a@example.com", email_verified: true })).toMatchObject({
+      email: "a@example.com",
+      emailVerified: true,
+    });
+    expect(toSession({ phone: "+256772123456", restricted_until: null, email: null, email_verified: true })).toMatchObject({
+      email: null,
+      emailVerified: false,
+    });
+  });
+
+  it("asks for an email link and spends one", async () => {
+    const seen = serve({
+      "POST /client/email/verification": { status: 200, body: { sent: false } },
+      "POST /client/email/verification/confirm": refused(410, "expired"),
+    });
+    const client = createApiAuthClient();
+    await expect(client.sendEmailProof()).resolves.toBe("proved");
+    await expect(client.confirmEmail("t".repeat(43))).rejects.toEqual(new AuthError("expired"));
+    expect(seen[1]?.body).toEqual({ token: "t".repeat(43) });
+  });
+
+  it("gives up this phone's push token before signing out", async () => {
+    setPushDevice({ platform: "ios", permission: async () => "granted", ask: async () => "granted", token: async () => "ExponentPushToken[x]" });
+    const seen = serve({
+      "PUT /client/push-devices": { status: 204 },
+      "POST /client/push-devices/remove": { status: 204 },
+      "POST /client/sign-out": { status: 204 },
+    });
+    await registerPush({ ask: false });
+    await createApiAuthClient().signOut();
+    setPushDevice(null);
+    expect(seen.map((s) => s.key)).toEqual(["PUT /client/push-devices", "POST /client/push-devices/remove", "POST /client/sign-out"]);
   });
 
   it("adds nothing the API did not list", async () => {

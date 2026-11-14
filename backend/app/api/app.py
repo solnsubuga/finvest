@@ -21,6 +21,7 @@ from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
 from app.modules.console import api as console_api
+from app.modules.dealing import allocations_api as dealing_allocations_api
 from app.modules.dealing import api as dealing_api
 from app.modules.dealing import buffer_api as dealing_buffer_api
 from app.modules.documents import api as documents_api
@@ -65,7 +66,8 @@ from app.modules.payments.settings import (
 from app.modules.payments.wiring import collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.payouts import staff_api as payouts_staff_api
-from app.modules.payouts import staff_payouts_api
+from app.modules.payouts import staff_held_api, staff_payouts_api
+from app.modules.reconciliation import api as reconciliation_api
 from app.modules.support import api as support_api
 from app.modules.tax import api as tax_api
 from app.shared.clock import Clock, SystemClock
@@ -182,6 +184,8 @@ def create_app(
         *approvals_api.routers,
         *payouts_staff_api.routers,
         *staff_payouts_api.routers,
+        *staff_held_api.routers,
+        *reconciliation_api.routers,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))
@@ -199,5 +203,6 @@ def create_app(
         app.include_router(router)
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)
+    app.include_router(dealing_allocations_api.router)
     app.include_router(tax_api.create_router(identity_sealer))
     return app
