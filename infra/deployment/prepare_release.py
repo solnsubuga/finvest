@@ -281,6 +281,16 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
             ),
             (api, worker),
         ),
+        # The worker keeps the back office's Cloudflare Access list in step with console Team
+        # changes. The list and account come from Terraform; the token is the owner's.
+        (
+            (
+                "FINVEST_CLOUDFLARE_ACCOUNT_ID",
+                "FINVEST_CLOUDFLARE_STAFF_LIST_ID",
+                "FINVEST_CLOUDFLARE_ACCESS_TOKEN",
+            ),
+            (worker,),
+        ),
         # Checks ioTec's collection callbacks, which only the API receives.
         (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
     ):
