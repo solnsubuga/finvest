@@ -79,7 +79,7 @@ async function signedInWithPin() {
   await screen.findByText("Create a 5 digit PIN");
   await typePin("48151");
   await typePin("48151");
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
 }
 
 async function openFingerprint() {
@@ -124,7 +124,7 @@ describe("unlocking with a fingerprint or face", () => {
 
     await lock();
     // The prompt comes up as the lock screen opens, and the right finger opens the app.
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     expect(screen.queryByText("Enter your PIN to open the app on this phone")).toBeNull();
     expect(mockPhone.asked).toBe(2);
   });
@@ -138,7 +138,7 @@ describe("unlocking with a fingerprint or face", () => {
     expect(await screen.findByTestId("unlock-biometric")).toBeTruthy();
     mockPhone.answers = true;
     await fireEvent.press(screen.getByTestId("unlock-biometric"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("goes back to the PIN once the server has forgotten the key", async () => {
@@ -150,7 +150,7 @@ describe("unlocking with a fingerprint or face", () => {
     expect(screen.queryByTestId("unlock-biometric")).toBeNull();
     expect(mockPhone.kept).toBeNull();
     await typePin("48151");
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("stays off when the phone does not confirm the fingerprint", async () => {

@@ -174,7 +174,7 @@ test("a client turns on fingerprint or face unlock, and the locked app opens wit
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   // In the app, so the demo keeps its session: a fresh page load would start it again.
   await page.evaluate(() => {
