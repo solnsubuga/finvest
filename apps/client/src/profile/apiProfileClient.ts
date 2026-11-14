@@ -123,5 +123,10 @@ export function createApiProfileClient(): ProfileClient {
         const day = new Date().toISOString().slice(0, 10);
         await saveMyData(`finvest-my-data-${day}.json`);
       }),
+    freezeAccount: (reason) =>
+      wrap(async () => {
+        const view = await api("POST /client/account-freeze", { body: { reason } });
+        return { frozenAt: view.frozen_at };
+      }),
   };
 }

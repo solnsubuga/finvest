@@ -36,6 +36,7 @@ function fake(people: Person[]): ProfileClient & { saved: Person[][] } {
     getClosure: fail,
     askToClose: fail,
     cancelClosure: fail,
+    freezeAccount: fail,
   };
 }
 

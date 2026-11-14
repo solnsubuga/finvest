@@ -905,6 +905,14 @@ ROWS = {
         "now())",
         "refusing to drop staff re-confirmations",
     ),
+    "0235_client_freezes": (
+        "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
+        "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "
+        "now()); "
+        "INSERT INTO identity_client_freezes (id, client_id, frozen_at, frozen_in) VALUES "
+        "('-Nabc0000000000000A1', '-Nabc0000000000000B1', now(), pg_current_xact_id())",
+        "refusing to drop the record of clients who froze their accounts",
+    ),
     "0230_kyc_next_of_kin": (
         "INSERT INTO kyc_next_of_kin_lists (client_id, people, updated_at) "
         "VALUES ('-Nabc0000000000000B1', 0, now())",
