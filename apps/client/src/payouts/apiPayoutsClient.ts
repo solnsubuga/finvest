@@ -59,6 +59,8 @@ const FIELD_CODES: Record<string, PayoutsError["code"]> = {
   phone_invalid: "phone_invalid",
   phone_network_unsupported: "phone_network_unsupported",
   bank_invalid: "bank_invalid",
+  // A code the backend's list of banks does not hold (payouts PR #298).
+  bank_unknown: "bank_invalid",
   bank_account_number_invalid: "account_number_invalid",
 };
 

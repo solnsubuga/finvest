@@ -104,7 +104,7 @@ export const payoutStatusCopy: Record<PayoutStatus, { label: string; tone: Tone;
   failed: {
     label: "Not sent",
     tone: "danger",
-    detail: "The money could not be sent, so it is safe with us. We will be in touch to send it again.",
+    detail: "The money could not be sent, so it is safe with us. We will be in touch about it.",
   },
   cancelled: { label: "Cancelled", tone: "neutral", detail: "This payout was stopped before it was sent." },
 };

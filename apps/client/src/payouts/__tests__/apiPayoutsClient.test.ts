@@ -117,6 +117,8 @@ describe("the payouts client for the real API", () => {
     await expect(add()).rejects.toEqual(new PayoutsError("phone_network_unsupported"));
     serve(422, refusal("validation_failed", [{ field_path: ["body", "account_number"], code: "bank_account_number_invalid" }]));
     await expect(add()).rejects.toEqual(new PayoutsError("account_number_invalid"));
+    serve(422, refusal("validation_failed", [{ field_path: ["body", "bank_code"], code: "bank_unknown" }]));
+    await expect(add()).rejects.toEqual(new PayoutsError("bank_invalid"));
     serve(422, refusal("validation_failed", [{ field_path: ["body", "holder_name"], code: "string_too_short" }]));
     await expect(add()).rejects.toEqual(new PayoutsError("holder_name_invalid"));
     setFetch(async () => {
