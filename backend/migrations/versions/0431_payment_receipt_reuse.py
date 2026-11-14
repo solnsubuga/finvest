@@ -1,7 +1,7 @@
 """Index bank receipts by file and by transaction number, to find a receipt used twice.
 
 Revision ID: 0431_payment_receipt_reuse
-Revises: 0372_kyc_liveness_transactions
+Revises: 0430_identity_terms_acceptances
 
 Staff checking a bank transfer are told when the same file, or the same bank transaction
 number, was handed in on another deposit, by this client or anyone else. That is a sign of
@@ -17,7 +17,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0431_payment_receipt_reuse"
-down_revision: str | None = "0372_kyc_liveness_transactions"
+down_revision: str | None = "0430_identity_terms_acceptances"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
