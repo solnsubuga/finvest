@@ -47,6 +47,7 @@ Kind = Literal[
     "client_pin_reset",
     "client_limits",
     "client_statement",
+    "client_withdrawal",
 ]
 
 
@@ -110,6 +111,7 @@ SOURCES: dict[Kind, Source] = {
     "client_pin_reset": Source("clients.view", "client_pins.reset"),
     "client_limits": Source("clients.view", "client_limits.change"),
     "client_statement": Source("clients.view", "client_statements.send"),
+    "client_withdrawal": Source("clients.view", "client_withdrawals.start"),
 }
 
 
