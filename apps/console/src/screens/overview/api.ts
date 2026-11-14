@@ -30,6 +30,8 @@ export const KINDS = [
   "account_code_map",
   "payout_account",
   "deposit_reassignment",
+  "deposit_reversal",
+  "deposit_receivable",
   "tax_remittance",
   "payout_resolution",
   "payout_release",

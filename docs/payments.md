@@ -182,6 +182,8 @@ The client is not told by message yet, and a start job queued by the original co
 
 Every entry has source `payment.receivable` and the step's ID, key `deposit-receivable:<ID>`, and is for the deposit's whole amount. Opening is refused with `unwind_first` while the investment runs and with `reverse_instead` while the whole amount still waits for it. A receivable is opened once and cleared once, and one step waits for a second person at a time. If the wallet or bank account no longer holds the amount, opening is refused with `insufficient_funds`, a matter for finance first. The database holds each person to their part and checks each applied step's entry line by line. `GET /staff/payments/receivables/outstanding` lists every receivable not yet cleared, and `receivables.outstanding` is there for the daily close to report them until they are zero.
 
+On the console, reversals and receivable steps are proposed and decided under "Payments credited by mistake" on the Reconciliation screen, which also lists what is still owed with a way to start recovering or writing each one off. The approvals inbox links `deposit_reversal` and `deposit_receivable` items there.
+
 Clearing a receivable by unwinding the investment, as first sketched, is not built. A running investment is never put to a receivable: it is unwound and the deposit reversed instead.
 
 ### A transfer credited to the wrong client

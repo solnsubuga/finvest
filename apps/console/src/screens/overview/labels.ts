@@ -37,6 +37,10 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   payout_account: { label: "Payout account check", path: at("/review-queue") },
   // The subject is the payment's ID; the reassignment opens by its own.
   deposit_reassignment: { label: "Payment to move to another client", path: (item) => `/reconciliation?reassignment=${encodeURIComponent(item.id)}` },
+  // The subject is the payment's ID; the reversal opens by its own.
+  deposit_reversal: { label: "Mistaken payment to take back", path: (item) => `/reconciliation?reversal=${encodeURIComponent(item.id)}` },
+  // The subject is the step and the payment's ID, such as "open -N…"; the step opens by its own.
+  deposit_receivable: { label: "Money a client owes for a mistaken payment", path: (item) => `/reconciliation?receivable=${encodeURIComponent(item.id)}` },
   tax_remittance: { label: "Payment to URA", path: at("/finance") },
   // The subject is the outcome proposed: "paid" or "failed".
   payout_resolution: { label: "Stranded payout to settle", path: at("/money-movement") },
@@ -51,6 +55,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     path: (item) => `/review-queue?tab=organisations&organisation=${encodeURIComponent(item.id)}`,
   },
 };
+
+const RECEIVABLE_STEPS: Record<string, string> = { open: "Record what is owed", recover: "Money arrived", write_off: "Write off" };
 
 const SUBJECT_WORDS: Record<string, string> = {
   invite: "Invite",
@@ -72,6 +78,11 @@ export function describeSubject(item: ApprovalItem): string {
   }
   if (item.kind === "suppression_lift") return `Address ${item.subject}…`;
   if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
+  if (item.kind === "deposit_reversal") return `Payment ${item.subject}`;
+  if (item.kind === "deposit_receivable") {
+    const [step, deposit] = item.subject.split(" ");
+    return `${RECEIVABLE_STEPS[step ?? ""] ?? "Step"} for payment ${deposit ?? ""}`.trim();
+  }
   return SUBJECT_WORDS[item.subject] ?? item.subject;
 }
 
