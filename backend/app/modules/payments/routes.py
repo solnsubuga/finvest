@@ -198,8 +198,8 @@ def _view(deposit: Deposit, receipt: bank.BankReceipt | None = None) -> PaymentV
 
 async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     if deposit.method is Method.BANK_TRANSFER:
-        transfer = await bank.get_bank_transfer(session, deposit.id)
-        return _view(transfer.deposit, transfer.receipt)
+        # A transfer moved here from another client's payment has no receipt of its own.
+        return _view(deposit, await bank.find_receipt(session, deposit.id))
     return _view(deposit)
 
 

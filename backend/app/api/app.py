@@ -56,6 +56,7 @@ from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
 from app.modules.notifications.settings import EmailHashSettings
 from app.modules.payments import api as payments_api
+from app.modules.payments import reassignment_routes
 from app.modules.payments import routes as payment_routes
 from app.modules.payments.domain.provider import CollectionsProvider
 from app.modules.payments.settings import (
@@ -194,6 +195,8 @@ def create_app(
     app.include_router(notification_hooks.create_router(email_hooks))
     app.include_router(payment_routes.create_client_router(collections, bank_accounts))
     app.include_router(payment_routes.staff_router)
+    for router in reassignment_routes.routers:
+        app.include_router(router)
     app.include_router(migration_api.router)
     app.include_router(migration_claims_api.router)
     app.include_router(insights_api.router)

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
@@ -14,6 +15,10 @@ import {
   type TransferDetail,
 } from "./api.ts";
 import { Queue } from "./Queue.tsx";
+import { notConnectedReassignmentsApi, type ReassignmentsApi } from "./reassignments/api.ts";
+import { createHttpReassignmentsApi } from "./reassignments/http.ts";
+import { Reassignments } from "./reassignments/Reassignments.tsx";
+import { createStubReassignmentsApi } from "./reassignments/stub.ts";
 import { createStubBankTransfersApi, type StubCase } from "./stub.ts";
 import { Transfer, type TransferCommand } from "./Transfer.tsx";
 
@@ -216,5 +221,17 @@ export default function ReconciliationPage() {
   const [api] = useState<BankTransfersApi>(() =>
     isStubAuth() && session ? createStubBankTransfersApi(session.staffId, 150, stubCase()) : notConnectedBankTransfersApi,
   );
-  return <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />;
+  // Moving a payment credited to the wrong client: sample moves under the stub, like the
+  // transfers above, and the real API otherwise.
+  const [moves] = useState<ReassignmentsApi>(() => {
+    if (isStubAuth() && session) return createStubReassignmentsApi(session.staffId, 150, stubCase());
+    const base = apiBaseUrl();
+    return base ? createHttpReassignmentsApi(createHttp(base)) : notConnectedReassignmentsApi;
+  });
+  return (
+    <>
+      <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
+      <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
+    </>
+  );
 }
