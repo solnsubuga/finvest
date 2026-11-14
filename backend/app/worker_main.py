@@ -47,6 +47,7 @@ from app.modules.payments.wiring import collections_provider
 from app.modules.payouts.jobs import PayoutJobs, release_screened
 from app.modules.payouts.name_lookup_jobs import NameLookupJobs
 from app.modules.payouts.wiring import PayoutNameSettings, disbursements_provider
+from app.modules.reports.jobs import ReportJobs
 from app.modules.screening.domain.provider import ScreeningSubject
 from app.modules.screening.jobs import ScreeningJobs
 from app.modules.screening.monitor_jobs import MonitoringJobs
@@ -78,6 +79,15 @@ def handlers(
             email=EmailSettings().transport(),
             # Tax certificates print the TIN a client gave, which only this key opens.
             sealer=identity.sealer() if identity.identity_data_key is not None else None,
+            links=settings.email_links(),
+        ).handlers()
+    )
+    kinds.update(
+        ReportJobs(
+            database,
+            clock,
+            email=EmailSettings().transport(),
+            console=settings.staff_console(),
             links=settings.email_links(),
         ).handlers()
     )

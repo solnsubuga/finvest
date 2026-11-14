@@ -53,6 +53,10 @@ Permission = Literal[
     # Approving posts it to the ledger. Seeing the tax screen is `finance.view`. Not a screen.
     "tax_remittances.change",
     "products.view",
+    # Proposing a new product, new terms, or pausing or opening one, approving or sending back
+    # someone else's change, and withdrawing your own. Seeing products is `products.view`. A
+    # change still takes effect only with a second person. Not a screen.
+    "products.change",
     "rates.view",
     # Proposing a rate change, approving or sending back someone else's, and withdrawing your
     # own. Seeing rates is `rates.view`. A rate still takes effect only with a second person.
@@ -228,6 +232,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "finance.view",
             "tax_remittances.change",
             "products.view",
+            "products.change",
             "rates.view",
             "rates.change",
             "reports.view",

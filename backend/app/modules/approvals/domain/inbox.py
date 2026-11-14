@@ -21,6 +21,7 @@ Kind = Literal[
     "buffer_rules",
     "buffer_capital",
     "rate_change",
+    "product_change",
     "migration_totals",
     "migration_sign_off",
     "phone_change",
@@ -32,6 +33,7 @@ Kind = Literal[
     "payout_account",
     "investment_correction",
     "investment_run",
+    "investment_booking",
     "payout_resolution",
     "tax_remittance",
     "deposit_reassignment",
@@ -53,6 +55,8 @@ Kind = Literal[
     "staff_security_change",
     "statement_layout_change",
     "withdrawal_limits_change",
+    "report_schedule",
+    "month_close",
 ]
 
 
@@ -78,6 +82,7 @@ SOURCES: dict[Kind, Source] = {
     "buffer_rules": Source("dealing_desk.view", "dealing_orders.change"),
     "buffer_capital": Source("dealing_desk.view", "dealing_orders.change"),
     "rate_change": Source("rates.view", "rates.view"),
+    "product_change": Source("products.view", "products.change"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
     "migration_sign_off": Source("migration.view", "migration.sign_off"),
     "phone_change": Source("client_phones.change", "client_phones.change"),
@@ -92,6 +97,8 @@ SOURCES: dict[Kind, Source] = {
     "investment_correction": Source("investments.view", "investment_corrections.change"),
     # Running a day's interest again, or today's maturities, decided as corrections are.
     "investment_run": Source("investments.view", "investment_corrections.change"),
+    # An investment booked for a client who asked, decided as corrections are.
+    "investment_booking": Source("investments.view", "investment_corrections.change"),
     "tax_remittance": Source("finance.view", "tax_remittances.change"),
     "deposit_reassignment": Source("reconciliation.view", "deposit_reassignments.change"),
     # Releasing a payout held because it is large, decided where it is held: the review queue.
@@ -124,6 +131,11 @@ SOURCES: dict[Kind, Source] = {
     "statement_layout_change": Source("settings.view", "statement_layouts.change"),
     # The withdrawal limits and the review threshold, on Settings.
     "withdrawal_limits_change": Source("settings.view", "withdrawal_limits.change"),
+    # A report emailed on a schedule, on Reports. Only shown for a report the reader may
+    # download, and approving needs that too.
+    "report_schedule": Source("reports.view", "reports.view"),
+    # Finance signing a month off, on the Finance screen.
+    "month_close": Source("finance.view", "finance.view"),
 }
 
 

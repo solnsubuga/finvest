@@ -50,6 +50,8 @@ function seed(today: string, now: Date): DocumentItem[] {
       fileName: `Finvest statement ${label}.pdf`,
       byteSize: 48_000,
       notFinalFrom: null,
+      reference: `ST-demo-monthly-${back}`,
+      note: null,
       investmentId: null,
       depositId: null,
     };
@@ -66,6 +68,8 @@ function seed(today: string, now: Date): DocumentItem[] {
     fileName: "Finvest statement requested.pdf",
     byteSize: 61_000,
     notFinalFrom: today,
+    reference: "ST-demo-requested-1",
+    note: null,
     investmentId: null,
     depositId: null,
   };
@@ -85,6 +89,8 @@ function seed(today: string, now: Date): DocumentItem[] {
       fileName: `Finvest receipt ${reference}.pdf`,
       byteSize: 22_000,
       notFinalFrom: null,
+      reference,
+      note: null,
       investmentId: null,
       depositId,
     }),
@@ -103,6 +109,8 @@ function seed(today: string, now: Date): DocumentItem[] {
     fileName: `Finvest tax certificate ${taxYearLabel(`${starts}-07-01`)}.pdf`,
     byteSize: 41_000,
     notFinalFrom: null,
+    reference: "TC-demo-tax-certificate-1",
+    note: null,
     investmentId: null,
     depositId: null,
   };
@@ -117,6 +125,8 @@ function seed(today: string, now: Date): DocumentItem[] {
     fileName: "Finvest investment note IN-Pq31wXb7.pdf",
     byteSize: 24_000,
     notFinalFrom: null,
+    reference: "IN-Pq31wXb7",
+    note: "started",
     // The demo's first investment, the 91 day bill.
     investmentId: "demo-investment-seed-1",
     depositId: null,
@@ -127,6 +137,8 @@ function seed(today: string, now: Date): DocumentItem[] {
     requestedAt: morning(shiftMonth(today, -2, 3)),
     finishedAt: morning(shiftMonth(today, -2, 3)),
     fileName: "Finvest investment end note IN-Pq2mKc84.pdf",
+    reference: "IN-Pq2mKc84",
+    note: "ended",
   };
   return [requested, ...monthly, certificate, note, endNote, ...receipts];
 }
@@ -221,6 +233,8 @@ export function createStubDocumentsClient(phone: string | null, options: Options
         fileName: null,
         byteSize: null,
         notFinalFrom: null,
+        reference: `ST-demo-asked-${asked.length + 1}`,
+        note: null,
         investmentId: null,
         depositId: null,
       };

@@ -47,6 +47,8 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `staff_security_change` | the same, for `staff_idle_minutes` or `office_networks` | `settings.view` | `staff_security.change` |
 | `statement_layout_change` | the same, for `statement_layouts` | `settings.view` | `statement_layouts.change` |
 | `withdrawal_limits_change` | payouts `limit_changes.waiting`. The subject is the start day, never the amounts | `settings.view` | `withdrawal_limits.change` |
+| `report_schedule` | reports `schedules.waiting`, a schedule proposed, shown only for a report the reader may download. The subject is the report key and how often, never who it goes to. | `reports.view` | `reports.view` |
+| `month_close` | finance `month_close.waiting`, a month proposed for closing. The subject is the month. | `finance.view` | `finance.view` |
 | `payout_resolution` | payouts `resolutions.waiting` | `reconciliation.view` | `reconciliation.change` |
 | `deposit_reassignment` | payments `reassignments.proposals_awaiting_approval`. The subject is the deposit's ID. | `reconciliation.view` | `deposit_reassignments.change` |
 | `payout_account` | payouts `destinations.checks_awaiting_approval`: a check recorded, not yet approved | `review_queue.view` | `payout_accounts.change` |
@@ -55,6 +57,7 @@ The inbox only reads. Deciding happens on the owning module's own route, which c
 | `account_code_map` | finance `code_maps.waiting`: a proposed account code map for an accounting system. The subject is the system, such as `xero`. | `settings.view` | `account_codes.change` |
 | `investment_correction` | investments `list_corrections`, proposed. The subject is `unwind`, `refund` or `pay_out`. | `investments.view` | `investment_corrections.change` |
 | `investment_run` | investments `list_runs`, proposed. The subject is the run and its day, such as `interest 2026-11-13`. | `investments.view` | `investment_corrections.change` |
+| `investment_booking` | investments `list_bookings`, proposed. The subject is the product code, such as `TREA-91`. | `investments.view` | `investment_corrections.change` |
 | `investment_transfer` | investments `held_transfers`: a proposal to let through an investment sent to another client that was held because it is large. The subject is the transfer's ID. | `review_queue.view` | `investment_transfers.change` |
 | `organisation` | organisations `waiting`: an application for a company or group account that one member of staff checked. The subject is the kind (`company` or `group`), never a name. See [organisations.md](organisations.md). | `review_queue.view` | `organisations.review` |
 | `client_pin_reset` | console `actions.waiting`, kind `pin_reset`. The subject is the client's ID. See [client-accounts.md](client-accounts.md#acting-for-a-client). | `clients.view` | `client_pins.reset` |

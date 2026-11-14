@@ -13,6 +13,8 @@ from sqlalchemy.exc import ArgumentError
 
 from app.shared.email_layout import PRODUCTION, Links
 
+PRODUCTION_CONSOLE = "https://admin.finvestug.com"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -163,6 +165,13 @@ class Settings(BaseSettings):
         if len(self.client_allowed_origins) == 1:
             return self.client_allowed_origins[0]
         return None
+
+    def staff_console(self) -> str:
+        """Where links to the console point: the allowed staff origin when exactly one is set,
+        otherwise production's."""
+        if len(self.staff_allowed_origins) == 1:
+            return self.staff_allowed_origins[0]
+        return PRODUCTION_CONSOLE
 
     def email_links(self) -> Links:
         """Where the buttons and footer of an email point: this deployment's client app and

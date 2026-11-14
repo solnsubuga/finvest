@@ -19,6 +19,7 @@ const SIGNED_IN = [
   "/goals/new",
   "/goals/demo-goal-1",
   "/goals/edit/demo-goal-1",
+  "/goals/payday/demo-goal-1",
   "/insights",
   "/documents",
   "/help",
@@ -36,6 +37,9 @@ const SIGNED_IN = [
   "/security",
   "/security/devices",
   "/security/passkeys",
+  "/security/password",
+  "/security/phone",
+  "/security/email",
   "/payouts",
   "/payouts/add",
   "/payouts/history",
@@ -165,6 +169,25 @@ test("freezing the account and the frozen screen meet WCAG 2.1 AA", async ({ pag
   await page.getByTestId("freeze-confirm").click();
   await expect(page.getByTestId("account-frozen")).toBeVisible();
   expect(await violations(page), "your account is frozen").toEqual([]);
+});
+
+test("confirming it is you before a sign-in change meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  // A texted code is not enough for a sign-in change, so the card asks for more.
+  await page.getByTestId("use-code").click();
+  await page.getByTestId("code-input").fill("123456");
+  await page.getByTestId("code-submit").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/security/email");
+  await page.getByTestId("email-input").fill("nakato@example.com");
+  await page.getByTestId("email-change").click();
+  await expect(page.getByTestId("confirm-it-is-you")).toBeVisible();
+  expect(await violations(page), "confirm it is you").toEqual([]);
 });
 
 test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ page }) => {

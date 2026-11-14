@@ -107,6 +107,12 @@ REPORTS: dict[ReportKey, Report] = {
 }
 
 
+# The reports whose figures are in one currency, so the screen asks which.
+BY_CURRENCY: frozenset[ReportKey] = frozenset(
+    {"daily_position", "deposits_and_withdrawals", "interest_and_tax", "maturity_ladder"}
+)
+
+
 def may_download(report: Report, permissions: Iterable[Permission]) -> bool:
     held = set(permissions)
     return "reports.view" in held and report.permission in held

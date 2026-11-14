@@ -928,3 +928,15 @@ _OPEN_FOR_CLIENT = text(
 async def open_goal_count(session: AsyncSession, client_id: str) -> int:
     """How many of the client's goals are still open."""
     return int(await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id}) or 0)
+
+
+_OPEN_FOR_PRODUCT = text(
+    "SELECT count(*) FROM goals WHERE product_code = :product_code AND status = 'active'"
+)
+
+
+async def open_goals_in_product(session: AsyncSession, staff: Actor, product_code: str) -> int:
+    """How many open goals save into a product. For staff weighing a change to it."""
+    if staff.kind != "staff":
+        raise ApplicationError("forbidden")
+    return int(await session.scalar(_OPEN_FOR_PRODUCT, {"product_code": product_code}) or 0)
