@@ -4,6 +4,7 @@ import { Linking } from "react-native";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
 import { DEMO_LIVENESS_PAGE } from "@/identity/stubIdentityClient";
+import { IdentityClient } from "@/identity/types";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 jest.mock("@/auth/stubAuthClient", () => {
@@ -11,17 +12,23 @@ jest.mock("@/auth/stubAuthClient", () => {
   return { ...actual, createStubAuthClient: () => actual.createStubAuthClient({ delayMs: 0 }) };
 });
 
+/** The demo identity clients the app made, so a test can make one of their reads fail. */
+const made: IdentityClient[] = [];
+
 jest.mock("@/identity/stubIdentityClient", () => {
   const actual = jest.requireActual("@/identity/stubIdentityClient");
   return {
     ...actual,
-    createStubIdentityClient: (options: object) =>
-      actual.createStubIdentityClient({
+    createStubIdentityClient: (options: object) => {
+      const client = actual.createStubIdentityClient({
         ...options,
         delayMs: 0,
         liveness: true,
         now: () => Date.parse("2026-11-13T09:00:00Z"),
-      }),
+      });
+      made.push(client);
+      return client;
+    },
   };
 });
 
@@ -113,12 +120,25 @@ describe("the live selfie", () => {
     expect(await screen.findByText("Thanks, Peter. We are checking now.")).toBeTruthy();
   });
 
+  it("keeps waiting for the result when one read fails", async () => {
+    await toSelfie("CF94012345");
+    await fireEvent.press(await top("live-start"));
+    await fireEvent.press(await top("live-open"));
+    expect(await screen.findByText("Finish the check, then come back")).toBeTruthy();
+
+    // A weak connection drops the next read. The screen still moves on by itself after it.
+    const client = made[made.length - 1]!;
+    jest.spyOn(client, "getLiveness").mockRejectedValueOnce(new TypeError("Network request failed"));
+    expect(await screen.findByText("Live selfie done", {}, { timeout: 20_000 })).toBeTruthy();
+    expect(client.getLiveness).toHaveBeenCalledTimes(4);
+  }, 30_000);
+
   it("offers another try or a camera photo when no live person was seen", async () => {
     // The demo's live check does not see a live person when the number ends in 4.
     await toSelfie("CF94012344");
     await fireEvent.press(await top("live-start"));
     await fireEvent.press(await top("live-open"));
-    await waitForAnswer("We could not confirm it was you");
+    await waitForAnswer("We could not finish the live check");
     expect(screen.getByText("9 tries left.")).toBeTruthy();
     expect(screen.getByText("Try again")).toBeTruthy();
 
