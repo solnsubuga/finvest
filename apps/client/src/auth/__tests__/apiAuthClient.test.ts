@@ -68,7 +68,7 @@ describe("the sign-in client for the real API", () => {
     expect(seen[0]!.body).toEqual({ phone: "+256772123456", email: null });
     const ticket = await client.confirmSignupCode(challenge.challengeId, "123456");
     const session = await client.completeSignup(ticket.ticket, "a-long-unusual-phrase");
-    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false });
+    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false, pinSet: false, locked: false });
     expect(await readToken()).toBe("phone-token");
     await expect(client.restoreSession()).resolves.toEqual(session);
     expect(seen.at(-1)!.auth).toBe("Bearer phone-token");

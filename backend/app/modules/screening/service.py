@@ -155,6 +155,8 @@ class Summary:
     not_run_recently: int
     pending: int
     last_screened_at: datetime | None
+    # Cases closed with a report owed to the Financial Intelligence Authority since `year_start`.
+    reported_this_year: int
 
 
 _RUN_COLUMNS = (
@@ -264,7 +266,9 @@ _SUMMARY = text(
     "AND finished_at >= :since) AS not_run, "
     "(SELECT count(*) FROM screening_runs WHERE status = 'pending') AS pending, "
     "(SELECT max(finished_at) FROM screening_runs WHERE status IN ('clear', 'possible_match')) "
-    "AS last_screened_at"
+    "AS last_screened_at, "
+    "(SELECT count(*) FROM compliance_cases WHERE outcome = 'report_to_fia' "
+    "AND closed_at >= :year_start) AS reported"
 )
 
 
@@ -708,8 +712,10 @@ async def waiting_proposals(session: AsyncSession) -> list[Proposal]:
     return [_proposal(row) for row in await session.execute(_WAITING)]
 
 
-async def summary(session: AsyncSession, now: datetime) -> Summary:
-    row = (await session.execute(_SUMMARY, {"since": now - RESCREEN_EVERY})).one()
+async def summary(session: AsyncSession, now: datetime, *, year_start: datetime) -> Summary:
+    row = (
+        await session.execute(_SUMMARY, {"since": now - RESCREEN_EVERY, "year_start": year_start})
+    ).one()
     return Summary(
         open_cases=row.open_cases,
         open_screening_cases=row.open_screening,
@@ -720,7 +726,28 @@ async def summary(session: AsyncSession, now: datetime) -> Summary:
         not_run_recently=row.not_run,
         pending=row.pending,
         last_screened_at=row.last_screened_at,
+        reported_this_year=row.reported,
     )
+
+
+REGISTER_LIMIT = 10_000
+
+
+async def register(session: AsyncSession) -> list[Case]:
+    """Every case, newest first, for the register file. Raises `too_many_cases` (422) beyond
+    REGISTER_LIMIT, which the screen would need to page."""
+    rows = (
+        await session.execute(
+            text(
+                f"SELECT {_CASE_COLUMNS} FROM compliance_cases c "  # noqa: S608 - constant column list
+                "ORDER BY c.opened_at DESC, c.id DESC LIMIT :limit"
+            ),
+            {"limit": REGISTER_LIMIT + 1},
+        )
+    ).all()
+    if len(rows) > REGISTER_LIMIT:
+        raise ApplicationError("validation_failed", fields=[_problem("cases", "too_many_cases")])
+    return [_case(row, None) for row in rows]
 
 
 async def propose(

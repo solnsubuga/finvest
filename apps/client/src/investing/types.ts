@@ -159,6 +159,8 @@ export type InvestingErrorCode =
   | "already_sent"
   | "over_mobile_money_limit"
   | "over_limit"
+  /** A request to close the account is waiting for staff, so nothing new starts. */
+  | "account_closing"
   | "unavailable";
 
 export class InvestingError extends Error {
@@ -172,6 +174,7 @@ export class InvestingError extends Error {
 }
 
 const messages: Record<InvestingErrorCode, string> = {
+  account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
   below_minimum: "That is below the smallest amount for this product.",
   product_not_open: "This product is not taking new investments right now.",
   not_verified: "You can invest once your ID check is approved.",

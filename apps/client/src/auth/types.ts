@@ -19,7 +19,19 @@ export type Session = {
   email: string | null;
   /** True once the client opened the link we emailed to that address. */
   emailVerified: boolean;
+  /** The phone app's PIN for this session. Always false in a browser. */
+  pinSet: boolean;
+  /** True when the PIN must be entered before anything else works. */
+  locked: boolean;
 };
+
+/** Why someone cannot get in. There is no free text, so nothing personal is kept. */
+export type RecoveryReason = "lost_phone" | "new_number" | "no_codes" | "other";
+
+export type RecoveryAsk = { phone: string; contactPhone: string; reason: RecoveryReason };
+
+/** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
+export type PinCheck = { unlocked: boolean; triesLeft: number };
 
 export type AuthErrorCode =
   | "invalid_credentials"
@@ -37,6 +49,9 @@ export type AuthErrorCode =
   | "not_found"
   | "not_accepted"
   | "offline"
+  /** Five wrong PINs in a row: this phone was signed out. */
+  | "signed_out"
+  | "pin_too_simple"
   | "unavailable";
 
 export class AuthError extends Error {
@@ -177,6 +192,12 @@ export interface AuthClient {
   confirmAuthenticatorSetup(code: string): Promise<void>;
 
   /**
+   * Locked out: ask Finvest to call back on `contactPhone` about the account on
+   * `phone`. It answers the same way whether or not the number has an account,
+   * and the account's own number and email are told someone asked.
+   */
+  requestRecovery(ask: RecoveryAsk): Promise<void>;
+  /**
    * Forgot password, step 1: texts a code if the number has an account. It
    * answers the same way whether or not it does, so it cannot be used to find
    * out who is a client.
@@ -216,6 +237,18 @@ export interface AuthClient {
    */
   confirmEmail(token: string): Promise<void>;
 
+  /**
+   * Sets the phone app's PIN for this session. Needs a log in from the last
+   * few minutes, else `sign_in_again`. Fails with `pin_too_simple` for
+   * repeated digits or a straight run such as 12345.
+   */
+  setPin(pin: string): Promise<void>;
+  /**
+   * Opens a locked app. A wrong PIN says how many tries are left. The fifth
+   * wrong one in a row fails with `signed_out`, and the client logs in again.
+   */
+  unlockWithPin(pin: string): Promise<PinCheck>;
+
   signOut(): Promise<void>;
 }
 
@@ -238,6 +271,10 @@ const messages: Record<AuthErrorCode, string> = {
   not_found: "That has already gone. The list below is up to date.",
   not_accepted: "Something in that was not accepted. Check what you entered and try again.",
   offline: "You seem to be offline. Check your connection and try again.",
+  signed_out:
+    "We signed you out after 5 wrong PINs. Log in with your password to choose a new PIN.",
+  pin_too_simple:
+    "That PIN is too easy to guess. Avoid repeated digits and runs like 12345.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

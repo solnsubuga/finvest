@@ -23,10 +23,21 @@ export function isPayable(account: Pick<PayoutAccount, "status" | "payableFrom">
 
 export type Tone = "lime" | "warning" | "danger" | "neutral";
 
-export function accountStatusPill(account: Pick<PayoutAccount, "status" | "payableFrom" | "kind">, nowMs: number): { label: string; tone: Tone } {
+export function accountStatusPill(
+  account: Pick<PayoutAccount, "status" | "payableFrom" | "kind"> & { nameCheck?: PayoutAccount["nameCheck"] },
+  nowMs: number,
+): { label: string; tone: Tone } {
+  const numberWaits =
+    account.nameCheck === "not_answered"
+      ? { label: "Check again", tone: "warning" as const }
+      : account.nameCheck === "waiting_for_id"
+        ? { label: "Waiting for ID", tone: "neutral" as const }
+        : account.nameCheck === "limit_reached"
+        ? { label: "Not checked", tone: "warning" as const }
+        : { label: "Checking", tone: "neutral" as const };
   const pills: Record<AccountStatus, { label: string; tone: Tone }> = {
     awaiting_code: { label: "Enter the code", tone: "warning" },
-    awaiting_proof: account.kind === "bank" ? { label: "Send proof", tone: "warning" } : { label: "Checking", tone: "neutral" },
+    awaiting_proof: account.kind === "bank" ? { label: "Send proof", tone: "warning" } : numberWaits,
     in_review: { label: "Checking", tone: "neutral" },
     approved: isPayable(account, nowMs) ? { label: "Ready", tone: "lime" } : { label: "Ready soon", tone: "neutral" },
     rejected: { label: "Not approved", tone: "danger" },

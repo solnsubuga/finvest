@@ -14,10 +14,32 @@ jest.mock("@/auth/stubAuthClient", () => {
   return { ...actual, createStubAuthClient: () => actual.createStubAuthClient({ delayMs: 0 }) };
 });
 
+const mockPayoutsSample: { nameCheck: string | undefined; askedElsewhere: boolean } = {
+  nameCheck: undefined,
+  askedElsewhere: false,
+};
 jest.mock("@/payouts/stubPayoutsClient", () => {
   const actual = jest.requireActual("@/payouts/stubPayoutsClient");
-  return { ...actual, createStubPayoutsClient: () => actual.createStubPayoutsClient({ delayMs: 0, sample: "default" }) };
+  return {
+    ...actual,
+    createStubPayoutsClient: () => {
+      const client = actual.createStubPayoutsClient({ delayMs: 0, sample: "default", nameCheck: mockPayoutsSample.nameCheck });
+      return {
+        ...client,
+        // As if the client had already asked again on another device: the number is checking,
+        // and this ask is refused for that.
+        checkNameAgain: async (accountId: string) => {
+          if (!mockPayoutsSample.askedElsewhere) return client.checkNameAgain(accountId);
+          await client.checkNameAgain(accountId);
+          const { PayoutsError } = jest.requireActual("@/payouts/types");
+          throw new PayoutsError("name_check_in_progress");
+        },
+      };
+    },
+  };
 });
+
+jest.mock("@/payouts/timing", () => ({ NAME_DECISION_READ_AGAIN_MS: 20 }));
 
 jest.mock("@/investing/stubInvestingClient", () => {
   const actual = jest.requireActual("@/investing/stubInvestingClient");
@@ -84,6 +106,8 @@ beforeEach(() => {
   mockChoose.mockClear();
   mockInvesting.maturedWaiting = false;
   mockInvesting.failPayOut = null;
+  mockPayoutsSample.nameCheck = undefined;
+  mockPayoutsSample.askedElsewhere = false;
 });
 
 describe("payout accounts", () => {
@@ -123,6 +147,27 @@ describe("payout accounts", () => {
     expect(await screen.findByText("statement.pdf")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("proof-upload"));
     expect(await screen.findByText(/Our team is checking your proof against the name on your ID/)).toBeTruthy();
+  });
+
+  it("shows the name being compared after asking again with the ID approved, then where it went", async () => {
+    mockPayoutsSample.nameCheck = "waiting_for_id";
+    await signIn();
+    await open("/payouts/demo-account-airtel");
+    expect(await screen.findByTestId("name-check-waiting-for-id")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("name-check-again"));
+    expect(await screen.findByTestId("name-check-comparing")).toBeTruthy();
+    expect(await screen.findByText(/Our team is checking your proof against the name on your ID/)).toBeTruthy();
+    expect(screen.queryByTestId("name-check-again")).toBeNull();
+  });
+
+  it("reloads the account when asking again finds the screen out of date", async () => {
+    mockPayoutsSample.nameCheck = "not_answered";
+    mockPayoutsSample.askedElsewhere = true;
+    await signIn();
+    await open("/payouts/demo-account-airtel");
+    await fireEvent.press(await screen.findByTestId("name-check-again"));
+    expect(await screen.findByText(/We are checking the name the network holds/)).toBeTruthy();
+    expect(screen.queryByTestId("name-check-again")).toBeNull();
   });
 
   it("offers new proof after a fixable refusal, and removes an account after asking", async () => {

@@ -1,3 +1,4 @@
+import { demoClosing } from "@/demo/closing";
 import { addDemoPayable, demoPaidAt } from "@/demo/payables";
 
 import {
@@ -307,6 +308,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         }
         return view(stored.get(known.id) as Stored);
       }
+      if (demoClosing()) throw new InvestingError("account_closing");
       const product = check(request.productCode, request.amount);
       const unpaid = [...stored.values()].filter((entry) => view(entry).status === "awaiting_payment");
       if (unpaid.length >= MAX_UNPAID) {

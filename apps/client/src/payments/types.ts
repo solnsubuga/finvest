@@ -162,6 +162,8 @@ export type PaymentErrorCode =
   /** The same key was sent with different details. The screens prevent it, so it means a bug. */
   | "key_reused"
   | "not_found"
+  /** A request to close the account is waiting for staff, so nothing new starts. */
+  | "account_closing"
   | "unavailable";
 
 /** The payment already under way for the same thing, so the client can be taken to it. */
@@ -210,6 +212,7 @@ export function isFinal(status: DepositStatus): boolean {
 }
 
 const messages: Record<PaymentErrorCode, string> = {
+  account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
   not_payable: "This can no longer be paid for. Go back and check your investment.",
   already_paying:
     "A payment for this is already under way. Wait for it to finish before you try again.",

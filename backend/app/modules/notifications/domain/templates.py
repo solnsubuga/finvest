@@ -137,26 +137,31 @@ def _check_link(link: str | None, link_origins: Sequence[str] | None) -> None:
 
 
 def render(
-    template: str, variables: Mapping[str, object], *, link_origins: Sequence[str] | None = None
+    template: str,
+    variables: Mapping[str, object],
+    *,
+    link_origins: Sequence[str] | None = None,
+    links: layout.Links = layout.PRODUCTION,
 ) -> Rendered:
     """The subject and bodies of an email, in the designed look every Finvest email shares.
 
     When `link_origins` is given, a link in the message must point into one of those sites.
     The worker always gives it, so a bug or a misused database role cannot send a Finvest
-    email that links anywhere else.
+    email that links anywhere else. `links` are the app and website the email's own buttons
+    and footer open; the worker gives the ones its settings name.
     """
     values = check(template, variables)
     _check_link(values.get("link"), link_origins)
     if template in ("signup_code", "claim_code", "payout_account_code"):
         raise InvalidTemplate("This template is not sent by email")
-    return _EMAILS[template](values)
+    return _EMAILS[template](values, links)
 
 
 # Each email below is built twice from the same words: as designed HTML from the parts in
 # `app.shared.email_layout`, and as plain text for a mail app that shows no HTML.
 
 
-def _sign_in_code(values: dict[str, str]) -> Rendered:
+def _sign_in_code(values: dict[str, str], links: layout.Links) -> Rendered:
     minutes = f"Works once, for {values['minutes']} minutes"
     lines = ["Use this code to finish signing in to Finvest."]
     warning = (
@@ -165,6 +170,7 @@ def _sign_in_code(values: dict[str, str]) -> Rendered:
         "ask you for this code.",
     )
     return _email(
+        links=links,
         subject="Your Finvest sign-in code",
         preheader=f"Your code works once, for {values['minutes']} minutes.",
         title="Your sign-in code",
@@ -175,7 +181,7 @@ def _sign_in_code(values: dict[str, str]) -> Rendered:
     )
 
 
-def _password_reset_code(values: dict[str, str]) -> Rendered:
+def _password_reset_code(values: dict[str, str], links: layout.Links) -> Rendered:
     minutes = f"Works once, for {values['minutes']} minutes"
     lines = ["Use this code in the app to choose a new password."]
     warning = (
@@ -184,6 +190,7 @@ def _password_reset_code(values: dict[str, str]) -> Rendered:
         "ask you for this code.",
     )
     return _email(
+        links=links,
         subject="Reset your Finvest password",
         preheader=f"Your code works once, for {values['minutes']} minutes.",
         title="Reset your password",
@@ -194,7 +201,7 @@ def _password_reset_code(values: dict[str, str]) -> Rendered:
     )
 
 
-def _new_sign_in(values: dict[str, str]) -> Rendered:
+def _new_sign_in(values: dict[str, str], links: layout.Links) -> Rendered:
     lines = ["Your account was just signed in on a new device."]
     rows = [("Device", values["device"]), ("When", values["when"])]
     after = ["If this was you, you do not need to do anything."]
@@ -204,6 +211,7 @@ def _new_sign_in(values: dict[str, str]) -> Rendered:
         "and security. Tell us through Help and we will check your account.",
     )
     return _email(
+        links=links,
         subject="A new sign-in to your Finvest account",
         preheader=f"{values['device']}, {values['when']}.",
         title="New sign-in to your account",
@@ -211,18 +219,18 @@ def _new_sign_in(values: dict[str, str]) -> Rendered:
         + layout.facts(rows)
         + layout.paragraphs(after)
         + layout.callout(*warning)
-        + layout.button("Review your devices", SECURITY_LINK),
+        + layout.button("Review your devices", links.in_app(SECURITY_PATH)),
         text=[
             *lines,
             *(f"{label}: {value}" for label, value in rows),
             *after,
             " ".join(warning),
-            f"Review your devices: {SECURITY_LINK}",
+            f"Review your devices: {links.in_app(SECURITY_PATH)}",
         ],
     )
 
 
-def _recovery_requested(values: dict[str, str]) -> Rendered:
+def _recovery_requested(values: dict[str, str], links: layout.Links) -> Rendered:
     lines = [
         f"Someone asked Finvest for help getting into your account, {values['when']}.",
         "We will call them back and check who they are against your ID before we change anything.",
@@ -233,6 +241,7 @@ def _recovery_requested(values: dict[str, str]) -> Rendered:
         "changes without that check. Finvest staff will never ask you for a code or your PIN.",
     )
     return _email(
+        links=links,
         subject="Someone asked for help getting into your Finvest account",
         preheader=f"Asked {values['when']}. Nothing changes without a check.",
         title="Someone asked for help getting in",
@@ -241,7 +250,7 @@ def _recovery_requested(values: dict[str, str]) -> Rendered:
     )
 
 
-def _phone_changed(values: dict[str, str]) -> Rendered:
+def _phone_changed(values: dict[str, str], links: layout.Links) -> Rendered:
     lines = [
         f"The mobile number on your Finvest account was changed to one ending {values['ending']}.",
         "For your safety you were signed out everywhere, and for the next 24 hours money can "
@@ -249,6 +258,7 @@ def _phone_changed(values: dict[str, str]) -> Rendered:
     ]
     warning = ("Not you?", "Contact Finvest support now, through Help in the app.")
     return _email(
+        links=links,
         subject="Your Finvest mobile number was changed",
         preheader=f"It now ends {values['ending']}.",
         title="Your mobile number was changed",
@@ -259,7 +269,7 @@ def _phone_changed(values: dict[str, str]) -> Rendered:
     )
 
 
-def _email_verification(values: dict[str, str]) -> Rendered:
+def _email_verification(values: dict[str, str], links: layout.Links) -> Rendered:
     link = values["link"]
     lines = [
         "Confirm that this email address is yours. Finvest sends your statements and receipts "
@@ -270,6 +280,7 @@ def _email_verification(values: dict[str, str]) -> Rendered:
         "can ignore this email.",
     ]
     return _email(
+        links=links,
         subject="Confirm your email address for Finvest",
         preheader=f"The link works once, for {values['hours']} hours.",
         title="Confirm your email address",
@@ -281,7 +292,7 @@ def _email_verification(values: dict[str, str]) -> Rendered:
     )
 
 
-def _claim_invitation(values: dict[str, str]) -> Rendered:
+def _claim_invitation(values: dict[str, str], links: layout.Links) -> Rendered:
     link = values["link"]
     lines = [
         "Finvest has moved to a new app, and your account and investments are already in it. "
@@ -294,6 +305,7 @@ def _claim_invitation(values: dict[str, str]) -> Rendered:
         "If you were not a Finvest client, you can ignore this email.",
     ]
     return _email(
+        links=links,
         subject="Claim your account on the new Finvest",
         preheader="Your account and investments are already in the new app.",
         title="Claim your account",
@@ -305,7 +317,7 @@ def _claim_invitation(values: dict[str, str]) -> Rendered:
     )
 
 
-def _staff_enrolment(values: dict[str, str]) -> Rendered:
+def _staff_enrolment(values: dict[str, str], links: layout.Links) -> Rendered:
     link = values["link"]
     lines = [
         f"Hello {values['name']},",
@@ -317,6 +329,7 @@ def _staff_enrolment(values: dict[str, str]) -> Rendered:
         "expecting this, tell your Finvest administrator.",
     ]
     return _email(
+        links=links,
         subject="Set up your Finvest staff account",
         preheader=f"Your link works once, for {values['hours']} hours.",
         title="Set up your staff account",
@@ -328,7 +341,7 @@ def _staff_enrolment(values: dict[str, str]) -> Rendered:
     )
 
 
-def _client_notice(values: dict[str, str]) -> Rendered:
+def _client_notice(values: dict[str, str], links: layout.Links) -> Rendered:
     """A notification by email: its title and body, and a way into the app to see the rest.
 
     The words carry no amounts, so the button opens the app, where the client sees them.
@@ -338,19 +351,20 @@ def _client_notice(values: dict[str, str]) -> Rendered:
         "reach you in the app, in Profile, under Notifications."
     )
     return _email(
+        links=links,
         subject=values["title"],
         preheader=values["body"],
         title=values["title"],
         html=layout.paragraphs([values["body"]])
-        + layout.button("Open Finvest", layout.APP)
+        + layout.button("Open Finvest", links.app)
         + layout.small(settings),
-        text=[values["body"], f"Open Finvest: {layout.APP}", settings],
+        text=[values["body"], f"Open Finvest: {links.app}", settings],
     )
 
 
-SECURITY_LINK = f"{layout.APP}/security"
+SECURITY_PATH = "/security"
 
-_EMAILS: dict[str, Callable[[dict[str, str]], Rendered]] = {
+_EMAILS: dict[str, Callable[[dict[str, str], layout.Links], Rendered]] = {
     "sign_in_code": _sign_in_code,
     "password_reset_code": _password_reset_code,
     "new_sign_in": _new_sign_in,
@@ -363,9 +377,11 @@ _EMAILS: dict[str, Callable[[dict[str, str]], Rendered]] = {
 }
 
 
-def _email(*, subject: str, preheader: str, title: str, html: str, text: list[str]) -> Rendered:
+def _email(
+    *, links: layout.Links, subject: str, preheader: str, title: str, html: str, text: list[str]
+) -> Rendered:
     return Rendered(
         subject,
         "\n\n".join([title, *text]) + "\n\n" + layout.FOOTER_TEXT,
-        layout.page(preheader=preheader, title=title, body=html),
+        layout.page(preheader=preheader, title=title, body=html, links=links),
     )
