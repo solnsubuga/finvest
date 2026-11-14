@@ -86,3 +86,14 @@ it("fails every read when offline, to show the error states", async () => {
   expect(await code(api.listAccounts())).toBe("unavailable");
   expect(await code(api.listPayouts())).toBe("unavailable");
 });
+
+describe("the demo bank list", () => {
+  it("lists the banks and names the demo accounts by them", async () => {
+    const client = createStubPayoutsClient({ delayMs: 0 });
+    const banks = await client.listBanks();
+    expect(banks.map((bank) => bank.code)).toEqual(expect.arrayContaining(["stanbic", "centenary"]));
+    const accounts = await client.listAccounts();
+    expect(accounts.find((account) => account.id === "demo-account-bank")?.bankName).toBe("Stanbic Bank");
+    expect(accounts.find((account) => account.id === "demo-account-mtn")?.bankName).toBeNull();
+  });
+});

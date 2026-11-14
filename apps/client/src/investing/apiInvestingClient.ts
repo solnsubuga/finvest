@@ -1,7 +1,9 @@
 import type { ClientInvestmentOut, DestinationOut, ProductOut, QuoteOut } from "@finvest/api-client/client";
 
 import { api, ApiError } from "@/api/http";
+import { banksOrNone, nameOf } from "@/payouts/banks";
 import { accountLabel } from "@/payouts/format";
+import type { Bank } from "@/payouts/types";
 
 import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Product, Quote } from "./types";
 
@@ -73,11 +75,16 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
 }
 
 /** An approved account, named the way the client knows it. The number arrives masked. */
-export function toPayoutAccount(view: DestinationOut, nowMs: number): PayoutAccount {
+export function toPayoutAccount(view: DestinationOut, nowMs: number, banks: Bank[] = []): PayoutAccount {
   return {
     id: view.id,
     kind: view.kind,
-    label: accountLabel({ kind: view.kind, network: view.network, bankCode: view.bank_code, account: view.account }),
+    label: accountLabel({
+      kind: view.kind,
+      network: view.network,
+      bankName: view.kind === "bank" ? nameOf(banks, view.bank_code) : null,
+      account: view.account,
+    }),
     payableFrom: view.payable_from,
     ready: view.payable_from !== null && Date.parse(view.payable_from) <= nowMs,
   };
@@ -189,9 +196,9 @@ export function createApiInvestingClient(): InvestingClient {
     // can say when it will be ready.
     listPayoutAccounts: () =>
       wrap(async () => {
-        const views = await api("GET /client/payout-destinations", {});
+        const [views, banks] = await Promise.all([api("GET /client/payout-destinations", {}), banksOrNone()]);
         const nowMs = Date.now();
-        return views.filter((view) => view.status === "approved").map((view) => toPayoutAccount(view, nowMs));
+        return views.filter((view) => view.status === "approved").map((view) => toPayoutAccount(view, nowMs, banks));
       }),
 
     withdrawEarly: (request) =>

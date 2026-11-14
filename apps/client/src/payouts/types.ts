@@ -15,6 +15,9 @@ import type { Money, Network, ReceiptFile } from "@/payments/types";
 
 export type AccountKind = "mobile_money" | "bank";
 
+/** A bank a client can be paid to, as the backend lists it. */
+export type Bank = { code: string; name: string };
+
 /**
  * Where a new account is on its way to being paid. `awaiting_code`: the client has not
  * entered the texted code yet. `awaiting_proof`: a bank account waits for its proof, a
@@ -38,8 +41,10 @@ export type PayoutAccount = {
   kind: AccountKind;
   /** Mobile money only. */
   network: Network | null;
-  /** Bank accounts only, a code from `banks.ts`. */
+  /** Bank accounts only, a code from the backend's list of banks. */
   bankCode: string | null;
+  /** The bank's name from that list. Null for mobile money, or a code the list no longer holds. */
+  bankName: string | null;
   /** Only the last digits, as the API shows them: "+256 77• ••• 456", "•••• 4821". */
   account: string;
   /** The name the client said the account is in. Staff compare the proof with the ID, never with this. */
@@ -81,6 +86,8 @@ export type Limits = {
 };
 
 export interface PayoutsClient {
+  /** The banks a client can be paid to, by name. */
+  listBanks(): Promise<Bank[]>;
   /** Every account not removed, newest first. */
   listAccounts(): Promise<PayoutAccount[]>;
   getAccount(accountId: string): Promise<PayoutAccount>;
