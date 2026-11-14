@@ -10,7 +10,7 @@ from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.modules.investments.holdings import HOLDING
 from app.modules.ledger import service as ledger
-from app.modules.payouts import payouts
+from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain.destinations import DestinationError
 from app.modules.payouts.domain.payouts import PayoutStatus
 from app.modules.payouts.domain.posting import funding_account
@@ -91,17 +91,21 @@ async def test_a_matured_investment_pays_out_to_a_number_in_the_clients_own_name
 ) -> None:
     checker, approver = await world.staff("operations"), await world.staff("operations")
     client = await onboarded(world)
-    # KYC verified the client as NAKATO Amara. A number registered to someone else is
-    # refused, whoever checks it; the client's own is approved.
-    other = await add_number(world, client, "0772" + a_phone()[-6:], "Okello Peter")
-    with pytest.raises(DestinationError) as refused:
-        await check_name(world, checker, other, proof_name="OKELLO Peter")
-    assert refused.value.code == "name_different"
-    spelt = await add_number(world, client, "0772" + a_phone()[-6:], "Nakate Amara")
-    with pytest.raises(DestinationError):
-        await check_name(world, checker, spelt, proof_name="NAKATE Amara")
-    own = await add_number(world, client, "0772" + a_phone()[-6:], "Amara Nakato")
-    checked = await check_name(world, checker, own, proof_name="Nakato  amara")
+    # KYC verified the client as NAKATO Amara. A number its network holds in someone else's
+    # name is refused at once, with no one to approve it; so is one spelt differently. The
+    # client's own goes to staff, who check it with the name the network gave.
+    other = await add_number(world, client, "0772" + a_phone()[-6:], "Okello Peter", "OKELLO Peter")
+    spelt = await add_number(world, client, "0772" + a_phone()[-6:], "Amara", "NAKATE Amara")
+    for refused_number in (other, spelt):
+        async with world.api_database.actor_transaction(checker.actor) as session:
+            refused = await destinations.get_destination(session, refused_number)
+        assert refused.status.value == "rejected"
+        assert refused.rejection_reason is not None
+        assert refused.rejection_reason.value == "name_different"
+        with pytest.raises(DestinationError):
+            await check_name(world, checker, refused_number)
+    own = await add_number(world, client, "0772" + a_phone()[-6:], "Amara Nakato", "Nakato  amara")
+    checked = await check_name(world, checker, own)
     assert checked.status.value == "in_review"
     # The person who checked it cannot approve it; a second person does.
     with pytest.raises(DestinationError) as same:

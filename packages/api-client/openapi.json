@@ -3887,6 +3887,23 @@
             "title": "Kind",
             "type": "string"
           },
+          "name_check": {
+            "anyOf": [
+              {
+                "enum": [
+                  "checking",
+                  "not_answered",
+                  "limit_reached",
+                  "waiting_for_id"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Check"
+          },
           "network": {
             "anyOf": [
               {
@@ -3940,7 +3957,8 @@
                   "proof_too_old",
                   "proof_wrong_account",
                   "proof_wrong_document",
-                  "suspected_fraud"
+                  "suspected_fraud",
+                  "network_name_unavailable"
                 ],
                 "type": "string"
               },
@@ -7208,10 +7226,17 @@
         "description": "What the first person read on the proof. The name is compared on the server.",
         "properties": {
           "proof_name": {
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Proof Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proof Name"
           },
           "reason": {
             "maxLength": 500,
@@ -7233,7 +7258,6 @@
           }
         },
         "required": [
-          "proof_name",
           "reason"
         ],
         "title": "NewCheck",
@@ -12985,6 +13009,17 @@
             ],
             "title": "Network"
           },
+          "network_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Name"
+          },
           "payable_from": {
             "anyOf": [
               {
@@ -13038,6 +13073,10 @@
                 "type": "string"
               },
               {
+                "const": "network_name_unavailable",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -13066,6 +13105,7 @@
           "holder_name",
           "status",
           "proof_kind",
+          "network_name",
           "check",
           "rejection_reason",
           "approved_by",
@@ -13180,6 +13220,17 @@
             ],
             "title": "Network"
           },
+          "network_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Network Name"
+          },
           "payable_from": {
             "anyOf": [
               {
@@ -13223,6 +13274,10 @@
                 "type": "string"
               },
               {
+                "const": "network_name_unavailable",
+                "type": "string"
+              },
+              {
                 "type": "null"
               }
             ],
@@ -13251,6 +13306,7 @@
           "holder_name",
           "status",
           "proof_kind",
+          "network_name",
           "check",
           "rejection_reason",
           "approved_by",
@@ -24011,6 +24067,92 @@
           }
         },
         "summary": "Verify Code",
+        "tags": [
+          "client payouts"
+        ]
+      }
+    },
+    "/client/payout-destinations/{destination_id}/name-check": {
+      "post": {
+        "description": "Ask again for the name the network holds for a mobile money number.\n\nFor a number whose `name_check` is `not_answered`, or `waiting_for_id` once the client's\nID is approved. The answer comes later: the number stays `awaiting_proof` with\n`name_check` `checking` until it does. 409 `name_check_in_progress`,\n`name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or\n`name_check_not_for_this_account`.",
+        "operationId": "check_name_again_client_payout_destinations__destination_id__name_check_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destination_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Destination Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DestinationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Check Name Again",
         "tags": [
           "client payouts"
         ]
@@ -37547,7 +37689,7 @@
     },
     "/staff/payout-destinations/{destination_id}/check": {
       "post": {
-        "description": "Record what you read on the proof. The account then waits for a different person.\n\n422 `name_different` when the name on the proof is not the client's; refuse the proof\ninstead. 409 `client_not_verified` when the client has no approved identity check.",
+        "description": "Record what you read on the proof. The account then waits for a different person.\n\n422 `name_different` when the name on the proof is not the client's; refuse the proof\ninstead. 422 `proof_name_required` when it is left out for a bank account, and\n`proof_name_from_network` when it is given for a mobile money number, which is checked with\n`network_name`. 409 `client_not_verified` when the client has no approved identity check.",
         "operationId": "check_destination_staff_payout_destinations__destination_id__check_post",
         "parameters": [
           {

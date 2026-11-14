@@ -27,7 +27,7 @@ from app.modules.payments.domain.bank_transfers import (
     InvalidReceipt,
     check_receipt_bytes,
 )
-from app.modules.payouts import destinations, payouts, returns
+from app.modules.payouts import destinations, name_lookups, payouts, returns
 from app.modules.payouts.destinations import DestinationView
 from app.modules.payouts.domain.banks import BANKS
 from app.modules.payouts.domain.destinations import (
@@ -38,6 +38,7 @@ from app.modules.payouts.domain.destinations import (
     MobileMoneyNumber,
     ProofKind,
 )
+from app.modules.payouts.domain.name_lookups import NameCheck
 from app.modules.payouts.domain.payouts import PayoutStatus
 from app.modules.payouts.payouts import PayoutView
 from app.shared.business_day import business_date
@@ -138,9 +139,15 @@ class DestinationOut(Contract):
             "proof_wrong_account",
             "proof_wrong_document",
             "suspected_fraud",
+            "network_name_unavailable",
         ]
         | None
     )
+    # For a mobile money number `awaiting_proof`: the lookup of the name its network holds.
+    # `checking`, `not_answered` (ask again with POST .../name-check), `limit_reached` (remove
+    # it and add it again later) or `waiting_for_id` (compared once the ID is approved; ask
+    # again then). None otherwise.
+    name_check: Literal["checking", "not_answered", "limit_reached", "waiting_for_id"] | None = None
     # When it can first be paid: approval plus the 24-hour safety wait. None until approved.
     payable_from: datetime | None
     first_paid_at: datetime | None
@@ -190,7 +197,7 @@ _CLIENT_STATUS: dict[PayoutStatus, str] = {
 }
 
 
-def _destination_out(view: DestinationView) -> DestinationOut:
+def _destination_out(view: DestinationView, name_check: NameCheck | None = None) -> DestinationOut:
     return DestinationOut.model_validate(
         {
             "id": view.id,
@@ -202,11 +209,16 @@ def _destination_out(view: DestinationView) -> DestinationOut:
             "status": view.status.value,
             "proof_kind": view.proof_kind.value if view.proof_kind else None,
             "rejection_reason": view.rejection_reason.value if view.rejection_reason else None,
+            "name_check": None if name_check is None else name_check.value,
             "payable_from": view.payable_from,
             "first_paid_at": view.first_paid_at,
             "created_at": view.created_at,
         }
     )
+
+
+async def _client_out(session: AsyncSession, view: DestinationView, clock: Clock) -> DestinationOut:
+    return _destination_out(view, await name_lookups.name_check_for(session, view, clock))
 
 
 def _payout_out(
@@ -274,11 +286,13 @@ async def banks(client: CurrentClient) -> list[BankOut]:
 
 
 @client_router.get("/payout-destinations")
-async def list_destinations(client: CurrentClient, database: Db) -> list[DestinationOut]:
+async def list_destinations(
+    client: CurrentClient, database: Db, clock: Time
+) -> list[DestinationOut]:
     """The client's payout accounts that are not removed, newest first."""
     async with database.actor_transaction(client.actor) as session:
         views = await destinations.destinations_for_client(session, client.client_id)
-    return [_destination_out(view) for view in views]
+        return [await _client_out(session, view, clock) for view in views]
 
 
 @client_router.post("/payout-destinations", status_code=201)
@@ -299,10 +313,11 @@ async def add_destination(
 
 @client_router.get("/payout-destinations/{destination_id}")
 async def get_destination(
-    destination_id: PushId, client: CurrentClient, database: Db
+    destination_id: PushId, client: CurrentClient, database: Db, clock: Time
 ) -> DestinationOut:
     async with database.actor_transaction(client.actor) as session:
-        return _destination_out(await _own_destination(session, client.client_id, destination_id))
+        view = await _own_destination(session, client.client_id, destination_id)
+        return await _client_out(session, view, clock)
 
 
 @client_router.delete("/payout-destinations/{destination_id}", status_code=204)
@@ -365,10 +380,32 @@ async def verify_code(
         )
         if right:
             view = await destinations.confirm_code(session, client.actor, destination_id, clock)
+            if view.kind is DestinationKind.MOBILE_MONEY:
+                # Saved with the code spent, so a confirmed number is always looked up.
+                await name_lookups.ask(session, client.actor, view, clock)
+            out = await _client_out(session, view, clock)
     # A wrong try is committed above, so it counts, and only then refused.
     if not right:
         raise ApplicationError("invalid_code")
-    return _destination_out(view)
+    return out
+
+
+@client_router.post("/payout-destinations/{destination_id}/name-check")
+async def check_name_again(
+    destination_id: PushId, client: CurrentClient, database: Db, clock: Time
+) -> DestinationOut:
+    """Ask again for the name the network holds for a mobile money number.
+
+    For a number whose `name_check` is `not_answered`, or `waiting_for_id` once the client's
+    ID is approved. The answer comes later: the number stays `awaiting_proof` with
+    `name_check` `checking` until it does. 409 `name_check_in_progress`,
+    `name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or
+    `name_check_not_for_this_account`.
+    """
+    async with database.actor_transaction(client.actor) as session:
+        await _own_destination(session, client.client_id, destination_id)
+        view = await name_lookups.check_again(session, client.actor, destination_id, clock)
+        return await _client_out(session, view, clock)
 
 
 @client_router.post("/payout-destinations/{destination_id}/proof")
