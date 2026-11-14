@@ -27,6 +27,7 @@ describe("custodian statement checks", () => {
   it("shows every line as read beside what was counted, and each difference", async () => {
     renderSection();
     const check = await screen.findByRole("article", { name: "Holdings at Fri, 13 Nov 2026" });
+    expect(check).toHaveTextContent("Read by Claude");
     const differences = within(check).getByRole("region", { name: "Differences" });
     expect(differences).toHaveTextContent("4 to explain, 4 without a note");
     expect(differences).toHaveTextContent("Amounts differ");

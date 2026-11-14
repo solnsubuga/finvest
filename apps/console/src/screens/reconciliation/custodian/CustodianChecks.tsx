@@ -61,6 +61,16 @@ const PROBLEM: Record<string, string> = {
 
 const REFRESH: ReadonlySet<string> = new Set(["not_found", "refused", "check_not_in_review", "check_not_waiting", "differences_unexplained"]);
 
+const PROVIDERS: Record<string, string> = { claude: "Claude", openai: "ChatGPT (OpenAI)", gemini: "Gemini" };
+
+/** Which AI read the statement, and its model, such as "Read by Gemini (gemini-x)". */
+function readBy(reader: string): string {
+  const [provider = "", model] = reader.split(":", 2);
+  const name = PROVIDERS[provider];
+  if (!name) return "Read by the sample reader";
+  return model && model !== "sample" ? `Read by ${name} (${model})` : `Read by ${name}`;
+}
+
 const money = (minor: number, currency: CheckItem["currency"]) => formatExact({ minor, currency: currency ?? "UGX" });
 
 /** The custodian's holdings statement, read by AI and checked by two people. */
@@ -329,7 +339,7 @@ function Upload({
         </div>
       </div>
       <p className="m-0 text-sm text-muted">
-        PDF, Excel (.xlsx), CSV or a photo, up to 10 MB. The statement goes to Anthropic's Claude to be read; it is kept here as uploaded.
+        PDF, Excel (.xlsx), CSV or a photo, up to 10 MB. The statement is sent to the AI service Finvest has set up to read it, and is kept here as uploaded.
       </p>
       {problem ? <ErrorNote message={problem} /> : error ? <ErrorNote message={error} /> : null}
       <Button type="submit" disabled={busy} className="h-12 self-start px-6">
@@ -368,7 +378,7 @@ function Check({ detail, canChange, busy, error, onOpenFile, onCorrect, onNote, 
             {" · "}
             {formatSize(check.fileBytes)} · uploaded {formatMoment(check.uploadedAt)}
           </p>
-          {check.reader ? <p className="m-0 text-sm text-muted">{check.reader.startsWith("claude") ? "Read by Claude" : "Read by the sample reader"}</p> : null}
+          {check.reader ? <p className="m-0 text-sm text-muted">{readBy(check.reader)}</p> : null}
         </div>
         <div className="flex items-center gap-2">
           <StatusPill status={check.status} />
