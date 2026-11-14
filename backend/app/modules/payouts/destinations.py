@@ -24,6 +24,7 @@ from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.kyc import service as kyc
 from app.modules.payouts.domain import destinations as rules
+from app.modules.payouts.domain.banks import find_bank
 from app.modules.payouts.domain.destinations import (
     BankAccount,
     Destination,
@@ -143,6 +144,11 @@ async def add_destination(
     if not name or len(name) > 120:
         raise ApplicationError("validation_failed")
     is_mobile = isinstance(account, MobileMoneyNumber)
+    if isinstance(account, BankAccount) and find_bank(account.bank_code) is None:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["body", "bank_code"], code="bank_unknown")],
+        )
     # One client's adds wait on each other, so two at once cannot both pass the cap.
     await session.execute(_LOCK_CLIENT, {"key": f"payouts.destinations:{client.id}"})
     waiting = await session.scalar(_AWAITING_CODE, {"client_id": client.id})

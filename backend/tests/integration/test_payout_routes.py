@@ -92,6 +92,12 @@ async def test_a_client_adds_a_mobile_money_number_and_only_they_see_it(api: Api
         ({}, "phone", "required"),
         ({"kind": "bank", "bank_code": "stanbic"}, "account_number", "required"),
         ({"kind": "bank", "bank_code": "x!", "account_number": "1234567890"}, "bank_code", None),
+        # The right shape, but not a bank Finvest pays to.
+        (
+            {"kind": "bank", "bank_code": "moon_bank", "account_number": "1234567890"},
+            "bank_code",
+            "bank_unknown",
+        ),
     ],
 )
 async def test_details_that_are_not_an_account_we_can_pay_are_refused(
@@ -201,6 +207,15 @@ async def test_a_client_follows_their_payouts_and_no_one_elses(
     assert (await api.http.get("/client/payouts")).json() == []
 
 
+async def test_a_client_sees_the_banks_it_may_be_paid_to(api: Api) -> None:
+    await api.client()
+    listed = await api.http.get("/client/banks")
+    assert listed.status_code == 200, listed.text
+    banks = {bank["code"]: bank["name"] for bank in listed.json()}
+    assert banks["stanbic"] == "Stanbic Bank"
+    assert len(banks) == len(listed.json())
+
+
 async def test_a_client_sees_the_withdrawal_limits_in_force(api: Api) -> None:
     await api.client()
     limits = (await api.http.get("/client/withdrawal-limits")).json()
@@ -214,6 +229,7 @@ async def test_the_payout_routes_need_a_signed_in_client(api: Api) -> None:
         ("POST", "/client/payout-destinations"),
         ("GET", "/client/payouts"),
         ("GET", "/client/withdrawal-limits"),
+        ("GET", "/client/banks"),
     ):
         response = await api.http.request(method, path)
         assert response.status_code == 401, path
