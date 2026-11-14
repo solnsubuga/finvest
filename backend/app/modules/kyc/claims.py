@@ -45,8 +45,9 @@ from app.shared.push_ids import push_id
 
 RESOURCE = "kyc_claim_check"
 DECIDED_TOPIC = "kyc.claim_check_decided"
-# Who hears that a claim check was decided. The migration module adds its consumer here.
-DECIDED_CONSUMERS: tuple[Consumer, ...] = ()
+# Who hears that a claim check was decided: the migration module moves the claim on. The kind
+# is a name, so this module imports nothing of the migration module's.
+DECIDED_CONSUMERS: tuple[Consumer, ...] = (Consumer(kind="migration.claim_check_decided"),)
 
 
 @dataclass(frozen=True, slots=True)

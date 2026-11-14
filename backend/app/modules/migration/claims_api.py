@@ -4,6 +4,11 @@ The one-time link from the invitation opens the claim. The visitor then proves t
 file with a texted code and sets a password, and is signed in. A bad link, a spent one and an
 account already claimed all get the same answer, `not_found`, so a link says nothing about
 anyone it does not belong to.
+
+Signed in, the client takes their identity step with the identity checks module's own routes:
+the selfie and ID photo of a claim check, or the full ID check. They hand it in here, so the
+check and the claim's step move in one transaction. The decision comes back to the worker as an
+event. Last, the client confirms the investments shown, or says something is wrong.
 """
 
 from typing import Annotated
@@ -13,6 +18,7 @@ from fastapi import APIRouter, Request, Response
 from pydantic import Field
 
 from app.infrastructure.database import Database
+from app.infrastructure.sealing import Sealer
 from app.modules.identity.api import (
     _REFUSALS,
     CurrentClient,
@@ -28,6 +34,9 @@ from app.modules.identity.passkeys_api import (
     client_signed_in,
     client_transport,
 )
+from app.modules.kyc import claims as claim_checks
+from app.modules.kyc import service as identity_checks
+from app.modules.kyc.domain.provider import IdentityProvider
 from app.modules.migration import claims
 from app.modules.migration.domain.claim import ClaimStatus, IdentityStep
 from app.shared.actors import Actor
@@ -159,4 +168,48 @@ async def report_problem(
         view = await claims.report_problem(
             session, client.actor, clock, description=body.description
         )
+    return _view(view)
+
+
+def _identity(request: Request) -> tuple[Sealer, IdentityProvider]:
+    sealer: Sealer | None = request.app.state.migration_sealer
+    provider: IdentityProvider | None = getattr(request.app.state, "identity_provider", None)
+    if sealer is None or provider is None:
+        # Without the identity data key no check can be read or handed in.
+        raise ApplicationError("unavailable")
+    return sealer, provider
+
+
+@router.post("/identity")
+async def hand_in_identity(request: Request, client: CurrentClient) -> ClaimStateView:
+    """Hand in the identity step: the claim check's photos, or the full ID check.
+
+    `conflict` unless the claim is waiting for it. Answers which photos or details are missing,
+    as the identity check routes do, and then nothing changes.
+    """
+    check_origin(request, "client", required=False)
+    database, clock, _ = _state(request)
+    async with database.actor_transaction(client.actor) as session:
+        claim = await claims.claim_for(session, client.client_id)
+        if claim is None:
+            raise ApplicationError("not_found")
+        if claim.status is not ClaimStatus.SIGNED_IN:
+            raise ApplicationError("conflict")
+        if claim.identity_step is IdentityStep.SELFIE:
+            await claim_checks.submit(session, client.actor, clock)
+        else:
+            sealer, provider = _identity(request)
+            await identity_checks.submit(session, sealer, client.actor, provider, clock)
+        view = await claims.submit_identity(session, client.actor, clock)
+    return _view(view)
+
+
+@router.post("/confirm")
+async def confirm_investments(request: Request, client: CurrentClient) -> ClaimStateView:
+    """The client says the investments shown are right. Final. `conflict` before the identity
+    step is confirmed, or once a problem is reported."""
+    check_origin(request, "client", required=False)
+    database, clock, _ = _state(request)
+    async with database.actor_transaction(client.actor) as session:
+        view = await claims.confirm_investments(session, client.actor, clock)
     return _view(view)

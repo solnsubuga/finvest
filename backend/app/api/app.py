@@ -144,6 +144,8 @@ def create_app(
     app.state.phone_changes = PhoneChangeService(database, clock)
     # The migration switch keeps the two sheets sealed until the carry-over is done.
     app.state.migration_sealer = identity_sealer
+    # A migrated client hands their identity step in through the claim routes, in one transaction.
+    app.state.identity_provider = identity_provider
     app.state.email_checks = EmailCheckService(
         database,
         clock,
