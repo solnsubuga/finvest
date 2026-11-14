@@ -7,6 +7,7 @@ difference before sending a check for sign-off.
 
 import asyncio
 from datetime import UTC, date, datetime, timedelta
+from itertools import count
 
 import pytest
 from httpx import Response
@@ -29,7 +30,7 @@ from app.modules.reconciliation.domain.custodian import (
 )
 from app.shared.actors import SYSTEM, Actor
 from app.shared.push_ids import push_id
-from tests.integration.test_dealing_settlement import TODAY, bought, maturity
+from tests.integration.test_dealing_settlement import TODAY, bought
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
@@ -37,6 +38,20 @@ from tests.support.jobs import run_due
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
+
+_maturities = count()
+
+
+def maturity() -> date:
+    """A maturity date after every dealing test's, inside the 182 day term.
+
+    The bills bought here are never paid or sold, so they must not mature before a date
+    that a maturity run in another test pays up to. The module is named to run after the
+    dealing tests, like the other modules that leave bills behind, so the allocation tests
+    see only their own lots.
+    """
+    return TODAY + timedelta(days=170 + next(_maturities))
+
 
 # The dealing tests settle bills on TODAY, so the statement is for that day, read the day after.
 CLOCK_AT = datetime(2026, 11, 20, 9, tzinfo=UTC)
