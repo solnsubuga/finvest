@@ -769,3 +769,22 @@ _RUNNING_FOR_CLIENT = text(
 async def running_count(session: AsyncSession, client_id: str) -> int:
     """How many of the client's investments are waiting for payment or still running."""
     return int(await session.scalar(_RUNNING_FOR_CLIENT, {"client_id": client_id}) or 0)
+
+
+async def withdrawable_for_client(
+    session: AsyncSession, client_id: str, today: date
+) -> list[Investment]:
+    """The client's investments that could be withdrawn early today, newest first. For staff
+    preparing a withdrawal the client asked for in writing."""
+    rows = await session.execute(_FOR_CLIENT, {"client_id": client_id, "limit": MAX_PAGE_SIZE})
+    found = [investment_from_row(row) for row in rows.all()]
+    return [
+        investment
+        for investment in found
+        if can_withdraw_early(
+            investment.status,
+            investment.maturity_date,
+            today,
+            requested=investment.withdrawal_requested_at is not None,
+        )
+    ]
