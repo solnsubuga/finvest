@@ -1851,6 +1851,26 @@ export const ReassignmentSendBackIn = z.object({
 });
 export type ReassignmentSendBackIn = z.infer<typeof ReassignmentSendBackIn>;
 
+export const RecoveryClose = z.object({
+  outcome: z.enum(["number_changed", "helped", "not_the_client"]),
+});
+export type RecoveryClose = z.infer<typeof RecoveryClose>;
+
+export const RecoveryView = z.object({
+  account_phone: z.string(),
+  client_id: z.string(),
+  contact_phone: z.string(),
+  created_at: z.string(),
+  id: z.string(),
+  reason: z.enum(["lost_phone", "new_number", "no_codes", "other"]),
+});
+export type RecoveryView = z.infer<typeof RecoveryView>;
+
+export const RecoveryList = z.object({
+  items: z.array(RecoveryView),
+});
+export type RecoveryList = z.infer<typeof RecoveryList>;
+
 export const Refusal = z.object({
   reason: z.string(),
   rejection_reason: z.enum(["name_different", "proof_unreadable", "proof_too_old", "proof_wrong_account", "proof_wrong_document", "suspected_fraud"]),
@@ -4924,6 +4944,30 @@ export const operations = {
     idempotent: false,
     status: 201,
     response: StatementOut,
+  },
+  "GET /staff/recovery-requests": {
+    method: "GET",
+    path: "/staff/recovery-requests",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: RecoveryList,
+  },
+  "POST /staff/recovery-requests/{request_id}/close": {
+    method: "POST",
+    path: "/staff/recovery-requests/{request_id}/close",
+    params: z.object({
+    request_id: z.string(),
+  }),
+    query: z.object({}),
+    body: RecoveryClose,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
   },
   "GET /staff/session": {
     method: "GET",

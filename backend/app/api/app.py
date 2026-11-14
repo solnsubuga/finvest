@@ -37,6 +37,7 @@ from app.modules.identity import (
     people_api,
     phone_changes_api,
     pins_api,
+    recovery_api,
     sessions_api,
     team_api,
 )
@@ -48,6 +49,7 @@ from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.phone_changes import PhoneChangeService
 from app.modules.identity.pins import PinService
+from app.modules.identity.recovery import RecoveryService
 from app.modules.identity.service import IdentityService
 from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
@@ -172,6 +174,7 @@ def create_app(
     # A migrated client hands their identity step in through the claim routes, in one transaction.
     app.state.identity_provider = identity_provider
     app.state.pins = PinService(database, clock, hasher)
+    app.state.recovery = RecoveryService(database, clock)
     app.state.email_checks = EmailCheckService(
         database,
         clock,
@@ -210,6 +213,7 @@ def create_app(
         *phone_changes_api.routers,
         *email_checks_api.routers,
         *pins_api.routers,
+        *recovery_api.routers,
         *sessions_api.routers,
         *team_api.routers,
         *people_api.routers,
