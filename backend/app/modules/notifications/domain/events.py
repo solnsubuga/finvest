@@ -52,6 +52,8 @@ _SPECS = (
     _event("payout_processing", Category.MONEY, "payouts", "amount", "destination"),
     _event("payout_sent", Category.MONEY, "payouts", "amount", "destination"),
     _event("payout_failed", Category.MONEY, "payouts", "amount", "destination"),
+    # Staff declined a withdrawal held for review because it is large.
+    _event("payout_declined", Category.MONEY, "payouts", "amount", "destination"),
     # Investments.
     _event("investment_started", Category.INVESTMENTS, "investments", "amount", "product"),
     _event("investment_maturing", Category.INVESTMENTS, "investments", "product", "date"),
