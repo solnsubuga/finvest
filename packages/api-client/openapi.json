@@ -6949,7 +6949,8 @@
           "csv",
           "quickbooks",
           "xero",
-          "sage"
+          "sage",
+          "zoho"
         ],
         "title": "Format",
         "type": "string"
@@ -19340,7 +19341,8 @@
         "enum": [
           "quickbooks",
           "xero",
-          "sage"
+          "sage",
+          "zoho"
         ],
         "title": "System",
         "type": "string"

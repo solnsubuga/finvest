@@ -2,8 +2,8 @@
 
 Finvest's generic CSV (see `journal.py`) names Finvest's own account codes and gives each code's
 debits and credits for the day. The other formats are the journal import files of QuickBooks
-Online, Xero and Sage Accounting, and they name the accounting system's accounts instead, through
-the account code map for that system (see `code_maps.py`). Each one:
+Online, Xero, Sage Accounting and Zoho Books, and they name the accounting system's accounts
+instead, through the account code map for that system (see `code_maps.py`). Each one:
 
 * holds one journal per day, with the reference `FINVEST-<currency>-<YYYYMMDD>`, so the system
   can refuse a day it was already given,
@@ -42,6 +42,7 @@ class Format(StrEnum):
     QUICKBOOKS = "quickbooks"
     XERO = "xero"
     SAGE = "sage"
+    ZOHO = "zoho"
 
 
 class System(StrEnum):
@@ -50,12 +51,14 @@ class System(StrEnum):
     QUICKBOOKS = "quickbooks"
     XERO = "xero"
     SAGE = "sage"
+    ZOHO = "zoho"
 
 
 SYSTEM_NAMES: dict[System, str] = {
     System.QUICKBOOKS: "QuickBooks Online",
     System.XERO: "Xero",
     System.SAGE: "Sage Accounting",
+    System.ZOHO: "Zoho Books",
 }
 # The one currency the accounting formats are written in.
 BOOKS_CURRENCY = Currency.UGX
@@ -242,8 +245,50 @@ def _sage(currency: Currency, lines: list[JournalLine], code_map: CodeMap) -> st
     return out.getvalue()
 
 
+ZOHO_HEADER = (
+    "Journal Date",
+    "Journal Number",
+    "Reference Number",
+    "Notes",
+    "Status",
+    "Currency",
+    "Account",
+    "Description",
+    "Debit",
+    "Credit",
+)
+
+
+def _zoho(currency: Currency, lines: list[JournalLine], code_map: CodeMap) -> str:
+    """Zoho Books' manual journal import, whose columns are matched on its Map Fields step.
+    Lines with the same Journal Number are one journal. Each journal comes in as a draft, so the
+    accountant publishes it in Zoho Books after looking it over."""
+    out = io.StringIO()
+    writer = csv.writer(out, lineterminator="\r\n")
+    writer.writerow(ZOHO_HEADER)
+    for line in lines:
+        debit, credit = _sides(currency, line)
+        reference = journal_reference(currency, line.effective_date)
+        writer.writerow(
+            (
+                _day(line.effective_date),
+                reference,
+                reference,
+                safe_cell(f"Finvest daily journal {line.effective_date.isoformat()}"),
+                "Draft",
+                currency.value,
+                safe_cell(code_map.accounts[line.code]),
+                _description(line),
+                debit.to_major() if debit.minor else "",
+                credit.to_major() if credit.minor else "",
+            )
+        )
+    return out.getvalue()
+
+
 _WRITERS: dict[Format, Callable[[Currency, list[JournalLine], CodeMap], str]] = {
     Format.QUICKBOOKS: _quickbooks,
     Format.XERO: _xero,
     Format.SAGE: _sage,
+    Format.ZOHO: _zoho,
 }
