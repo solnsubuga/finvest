@@ -33,6 +33,7 @@ from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
+from tests.support.jobs import run_due
 
 pytestmark = pytest.mark.integration
 
@@ -91,10 +92,7 @@ async def work(
         setup.page,
         clock,
     )
-    worker = Worker(database, jobs.handlers(), WorkerConfig(), clock)
-    for _ in range(50):
-        if not await worker.run_once():
-            return
+    await run_due(Worker(database, jobs.handlers(), WorkerConfig(), clock))
 
 
 async def ask(database: Database, client_id: str, clock: FakeClock, key: str | None = None) -> str:
