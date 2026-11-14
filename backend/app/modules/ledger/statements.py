@@ -1,4 +1,5 @@
-"""Reading an account's history, for reconciliation, the day close and client statements.
+"""Reading the books: an account's history for reconciliation, the day close and client
+statements, and each account code's totals for the Finance screen and the accounting export.
 
 Read-only.
 
@@ -380,3 +381,128 @@ __all__ = [
     "system_totals",
     "total_balance",
 ]
+
+
+# The books by account code, for the Finance screen and the accounting export ----------------
+
+
+@dataclass(frozen=True, slots=True)
+class CodeTotals:
+    """Every account with one code, added together, over a range of days.
+
+    A client's accounts are folded into their code, so no client is named. `opening` and
+    `closing` are in the code's normal direction; `debits` and `credits` are each zero or more.
+    """
+
+    code: str
+    kind: str
+    name: str
+    opening: Money
+    debits: Money
+    credits: Money
+    closing: Money
+
+
+@dataclass(frozen=True, slots=True)
+class DayCodeTotals:
+    """What one day's entries did to one account code: the lines of a daily journal."""
+
+    effective_date: date
+    code: str
+    kind: str
+    name: str
+    debits: Money
+    credits: Money
+    entries: int
+
+
+_SELECT_CODE_TOTALS = text(
+    "SELECT account.code, account.kind, min(account.name) AS name, "
+    "count(DISTINCT account.kind) AS kinds, "
+    "coalesce(sum(line.amount_minor) FILTER (WHERE entry.effective_date < :date_from), 0) "
+    "AS before_minor, "
+    "coalesce(sum(line.amount_minor) FILTER ("
+    "WHERE entry.effective_date >= :date_from AND line.amount_minor > 0), 0) AS debit_minor, "
+    "coalesce(-sum(line.amount_minor) FILTER ("
+    "WHERE entry.effective_date >= :date_from AND line.amount_minor < 0), 0) AS credit_minor "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "WHERE line.currency = :currency AND entry.effective_date <= :date_to "
+    "GROUP BY account.code, account.kind "
+    "ORDER BY account.code"
+)
+_SELECT_DAY_TOTALS = text(
+    "SELECT entry.effective_date, account.code, account.kind, min(account.name) AS name, "
+    "coalesce(sum(line.amount_minor) FILTER (WHERE line.amount_minor > 0), 0) AS debit_minor, "
+    "coalesce(-sum(line.amount_minor) FILTER (WHERE line.amount_minor < 0), 0) AS credit_minor, "
+    "count(DISTINCT line.entry_id) AS entries "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "WHERE line.currency = :currency "
+    "AND entry.effective_date BETWEEN :date_from AND :date_to "
+    "GROUP BY entry.effective_date, account.code, account.kind "
+    "ORDER BY entry.effective_date, account.code"
+)
+
+
+async def totals_by_code(
+    session: AsyncSession, currency: Currency, *, date_from: date, date_to: date
+) -> list[CodeTotals]:
+    """Each account code's opening balance at the start of `date_from`, what was debited and
+    credited to it from `date_from` to `date_to` inclusive, and its closing balance.
+
+    Only codes with at least one line dated up to `date_to` are listed, in code order. Once the
+    ledger is closed through `date_to`, these figures cannot change. Raises MixedAccountKinds if
+    accounts of one code have different kinds, since their balances could not be added.
+    """
+    rows = (
+        await session.execute(
+            _SELECT_CODE_TOTALS,
+            {"currency": currency.value, "date_from": date_from, "date_to": date_to},
+        )
+    ).all()
+    codes = [row.code for row in rows]
+    if len(codes) != len(set(codes)):
+        raise MixedAccountKinds("Accounts of one code have different kinds")
+    found: list[CodeTotals] = []
+    for row in rows:
+        before, debits, credits = int(row.before_minor), int(row.debit_minor), int(row.credit_minor)
+        sign = 1 if row.kind in _DEBIT_NORMAL else -1
+        found.append(
+            CodeTotals(
+                code=row.code,
+                kind=row.kind,
+                name=row.name,
+                opening=Money(sign * before, currency),
+                debits=Money(debits, currency),
+                credits=Money(credits, currency),
+                closing=Money(sign * (before + debits - credits), currency),
+            )
+        )
+    return found
+
+
+async def day_totals(
+    session: AsyncSession, currency: Currency, *, date_from: date, date_to: date
+) -> list[DayCodeTotals]:
+    """For each day from `date_from` to `date_to` inclusive, what its entries debited and
+    credited to each account code. Days without entries are left out. Each day's debits equal
+    its credits, because every entry balances."""
+    rows = await session.execute(
+        _SELECT_DAY_TOTALS,
+        {"currency": currency.value, "date_from": date_from, "date_to": date_to},
+    )
+    return [
+        DayCodeTotals(
+            effective_date=row.effective_date,
+            code=row.code,
+            kind=row.kind,
+            name=row.name,
+            debits=Money(int(row.debit_minor), currency),
+            credits=Money(int(row.credit_minor), currency),
+            entries=int(row.entries),
+        )
+        for row in rows.all()
+    ]

@@ -307,6 +307,17 @@ export const BodyImportStatementStaffReconciliationStatementsPost = z.object({
 });
 export type BodyImportStatementStaffReconciliationStatementsPost = z.infer<typeof BodyImportStatementStaffReconciliationStatementsPost>;
 
+export const BookLineOut = z.object({
+  closing: AmountOut,
+  code: z.string(),
+  credits: AmountOut,
+  debits: AmountOut,
+  kind: z.string(),
+  name: z.string(),
+  opening: AmountOut,
+});
+export type BookLineOut = z.infer<typeof BookLineOut>;
+
 export const BufferLevel = z.enum(["on_target", "under_target", "below_floor"]);
 export type BufferLevel = z.infer<typeof BufferLevel>;
 
@@ -756,6 +767,12 @@ export const DayOut = z.object({
 });
 export type DayOut = z.infer<typeof DayOut>;
 
+export const DaysOut = z.object({
+  date_from: z.string(),
+  date_to: z.string(),
+});
+export type DaysOut = z.infer<typeof DaysOut>;
+
 export const DecideAnnouncement = z.object({
   decision: z.enum(["approved", "rejected", "withdrawn"]),
   reason: z.string().nullable().optional(),
@@ -971,6 +988,18 @@ export const EventPage = z.object({
 });
 export type EventPage = z.infer<typeof EventPage>;
 
+export const ExportOut = z.object({
+  date_from: z.string(),
+  date_to: z.string(),
+  debit_total: AmountOut,
+  exported_at: z.string(),
+  exported_by: z.string(),
+  exported_by_name: z.string().nullable(),
+  id: z.string(),
+  lines: z.number().int(),
+});
+export type ExportOut = z.infer<typeof ExportOut>;
+
 export const Facets = z.object({
   actions: z.array(z.string()),
   resource_types: z.array(z.string()),
@@ -988,6 +1017,36 @@ export const FillIn = z.object({
   settled_on: z.string(),
 });
 export type FillIn = z.infer<typeof FillIn>;
+
+export const IncomeLineOut = z.object({
+  amount: AmountOut,
+  code: z.string(),
+  name: z.string(),
+});
+export type IncomeLineOut = z.infer<typeof IncomeLineOut>;
+
+export const IncomeOut = z.object({
+  cost_total: AmountOut,
+  costs: z.array(IncomeLineOut),
+  income: z.array(IncomeLineOut),
+  income_total: AmountOut,
+  net: AmountOut,
+});
+export type IncomeOut = z.infer<typeof IncomeOut>;
+
+export const FinanceScreenOut = z.object({
+  accounts: z.array(BookLineOut),
+  closed_through: z.string().nullable(),
+  currency: Currency,
+  date_from: z.string(),
+  date_to: z.string(),
+  exports: z.array(ExportOut),
+  income: IncomeOut,
+  month: z.string(),
+  next_export: DaysOut.nullable(),
+  sent_through: z.string().nullable(),
+});
+export type FinanceScreenOut = z.infer<typeof FinanceScreenOut>;
 
 export const Frequency = z.enum(["weekly", "monthly"]);
 export type Frequency = z.infer<typeof Frequency>;
@@ -3175,6 +3234,35 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffSessionView,
+  },
+  "GET /staff/finance": {
+    method: "GET",
+    path: "/staff/finance",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+    month: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: FinanceScreenOut,
+  },
+  "GET /staff/finance/journal.csv": {
+    method: "GET",
+    path: "/staff/finance/journal.csv",
+    params: z.object({}),
+    query: z.object({
+    date_from: z.string(),
+    date_to: z.string(),
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
   },
   "GET /staff/goal-groups": {
     method: "GET",

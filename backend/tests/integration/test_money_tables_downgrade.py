@@ -6,7 +6,8 @@ closes and their recorded matches, the pot transfers, the help chat, the complai
 the goals, the email delivery records, the unclaimed accounts, the complaint outcomes, the
 suppression lifts, the client locks, the announcements, the team changes, Finvest's own money in
 the buffer, the payments of tax to URA, the payments moved to the right client, next of kin, the
-answers to the investing questions or the requests to close an account."""
+answers to the investing questions, the requests to close an account or the journals sent to the
+accounting system."""
 
 import os
 from collections.abc import Iterator
@@ -225,6 +226,14 @@ ROWS = {
         "cause) VALUES ('-Nabc0000000000000E1', '-Nabc0000000000000A1', now(), NULL, "
         "'confirmed', 'reassignment')",
         "refusing to drop the record of reassigned deposits",
+    ),
+    "0250_finance_journal_exports": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO finance_journal_exports (id, currency, date_from, date_to, lines, "
+        "debit_total_minor, exported_by, exported_at) VALUES ('-Nabc0000000000000A1', 'UGX', "
+        "DATE '2026-11-12', DATE '2026-11-12', 4, 100000, '-Nabc0000000000000B1', now()); COMMIT",
+        "refusing to drop journal export records",
     ),
     "0087_dealing_buffer_capital": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
