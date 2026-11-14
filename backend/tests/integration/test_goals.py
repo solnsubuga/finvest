@@ -25,6 +25,7 @@ from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier
 from tests.support.investments import PRESENT, approved_client, at, pay, today
+from tests.support.jobs import run_due
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
 
@@ -664,8 +665,7 @@ async def test_a_saving_that_rolls_over_stays_in_its_goal(
         WorkerConfig(),
         at(old.maturity_date, hour=10),
     )
-    while await runner.run_once():
-        pass
+    await run_due(runner)
     async with worker_database.actor_transaction(SYSTEM) as session:
         status = await session.scalar(
             text(
@@ -880,8 +880,7 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
         WorkerConfig(),
         at(DAY, hour=5),
     )
-    while await runner.run_once():
-        pass
+    await run_due(runner)
     async with worker_database.actor_transaction(SYSTEM) as session:
         # Follow this run's own chain of pages: each full page queues the next under
         # "after:<its job id>". Goals that other tests make meanwhile can fall between this
