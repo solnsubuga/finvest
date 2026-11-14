@@ -343,7 +343,7 @@ describe("review queue: everything waiting", () => {
     expect(screen.getByText("Waiting for a person").nextSibling).toHaveTextContent("8");
     expect(screen.getByText("Cleared automatically today").nextSibling).toHaveTextContent("214");
     expect(screen.getByText("Oldest waiting").nextSibling).toHaveTextContent("1 day");
-    expect(screen.getByRole("tab", { name: "Everything waiting (8)" })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByRole("tab", { name: "Everything waiting (8)" })).toHaveAttribute("aria-selected", "true");
     expect(within(items[3]!).getByRole("link", { name: "Open" })).toHaveAttribute(
       "href",
       "/review-queue?tab=held&payout=sample-payout-joan",
