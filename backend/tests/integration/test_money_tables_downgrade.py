@@ -703,6 +703,14 @@ ROWS = {
         "'-Nabc0000000000000W1', '1', 1, 'close', 'Same person', '-Nabc0000000000000S1', now())",
         "refusing to drop how the switch resolved the clients it could not carry",
     ),
+    "0200_kyc_liveness": (
+        "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'national_id', "
+        "'UG', now(), now()); "
+        "INSERT INTO kyc_liveness (id, check_id, provider, created_at, updated_at) VALUES "
+        "('-Nabc0000000000000L1', '-Nabc0000000000000A1', 'iotec-faces', now(), now())",
+        "refusing to drop liveness records",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
