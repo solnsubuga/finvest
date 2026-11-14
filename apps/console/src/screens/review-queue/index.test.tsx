@@ -202,22 +202,52 @@ describe("review queue: held payouts", () => {
     expect(screen.getByRole("tab", { name: "Held payouts (3)" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("approves with a reason, after asking once more", async () => {
+  it("says where each payout stands: no proposal, someone else's, or your own", async () => {
+    renderScreen({ entry: "/review-queue?tab=held" });
+    const list = await screen.findByRole("list", { name: "Held payouts" });
+    expect(await within(list).findByText("Proposed by Grace Auma, needs a second person")).toBeInTheDocument();
+    expect(within(list).getByRole("button", { name: /\$40,000\.00/ })).toHaveTextContent("Needs a proposal");
+    expect(within(list).getByRole("button", { name: /UGX 12,500,000/ })).toHaveTextContent("Proposed by you");
+  });
+
+  it("proposes a release without moving money, and then waits for someone else", async () => {
+    const { user } = renderScreen({ entry: "/review-queue?tab=held" });
+    const review = await screen.findByRole("article", { name: "Held payout for Ivan Ssemanda" });
+    await user.click(within(review).getByRole("button", { name: "Propose release" }));
+    expect(within(review).getByText("Give the reason for your decision.")).toBeInTheDocument();
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Client confirmed by phone");
+    await user.click(within(review).getByRole("button", { name: "Propose release" }));
+    const updated = await screen.findByRole("article", { name: "Held payout for Ivan Ssemanda" });
+    expect(await within(updated).findByText(/You proposed releasing this payout/)).toBeInTheDocument();
+    expect(within(updated).getByText("Client confirmed by phone")).toBeInTheDocument();
+    expect(within(updated).queryByRole("button", { name: "Approve release" })).not.toBeInTheDocument();
+    expect(within(updated).getByRole("button", { name: "Withdraw proposal" })).toBeInTheDocument();
+  });
+
+  it("approves someone else's proposal after asking once more", async () => {
+    const { user } = renderScreen({ entry: "/review-queue?tab=held&payout=sample-payout-joan" });
+    const review = await screen.findByRole("article", { name: "Held payout for Joan Namutebi" });
+    expect(within(review).getByText(/Called the client on the number we hold/)).toBeInTheDocument();
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Agree, amount matches her request");
+    await user.click(within(review).getByRole("button", { name: "Approve release" }));
+    await user.click(within(review).getByRole("button", { name: "Yes, approve" }));
+    expect(await within(review).findByText(/queued for staff to pay from the trust account/)).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Held payouts (2)" })).toBeInTheDocument();
+  });
+
+  it("withdraws your own proposal", async () => {
     const { user } = renderScreen({ entry: "/review-queue?tab=held&payout=sample-payout-kira" });
     const review = await screen.findByRole("article", { name: "Held payout for Kira Road Savings Group" });
-    await user.click(within(review).getByRole("button", { name: "Approve" }));
-    expect(within(review).getByText("Give the reason for your decision.")).toBeInTheDocument();
-    await user.type(within(review).getByLabelText("Reason for your decision"), "Group treasurer called");
-    await user.click(within(review).getByRole("button", { name: "Approve" }));
-    await user.click(within(review).getByRole("button", { name: "Yes, approve" }));
-    expect(await within(review).findByText(/the worker sends it to the provider/)).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Held payouts (2)" })).toBeInTheDocument();
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Proposed on the wrong payout");
+    await user.click(within(review).getByRole("button", { name: "Withdraw proposal" }));
+    const updated = await screen.findByRole("article", { name: "Held payout for Kira Road Savings Group" });
+    expect(await within(updated).findByRole("button", { name: "Propose release" })).toBeInTheDocument();
   });
 
   it("keeps the key for a retried decision and makes a new one when the reason changes", async () => {
     const api = stub();
-    const decide = vi
-      .spyOn(api, "decideHeld")
+    const decline = vi
+      .spyOn(api, "decline")
       .mockRejectedValueOnce(new ReviewQueueError("unavailable"))
       .mockRejectedValueOnce(new ReviewQueueError("unavailable"));
     let keys = 0;
@@ -234,20 +264,25 @@ describe("review queue: held payouts", () => {
     await user.click(within(review).getByRole("button", { name: "Decline" }));
     await user.click(within(review).getByRole("button", { name: "Yes, decline" }));
     expect(await within(review).findByText(/money went back where it came from/)).toBeInTheDocument();
-    expect(decide.mock.calls.map((call) => call[3])).toEqual(["key-1", "key-1", "key-2"]);
+    expect(decline.mock.calls.map((call) => call[2])).toEqual(["key-1", "key-1", "key-2"]);
   });
 
-  it("reloads when someone else has already decided the payout", async () => {
+  it("reloads when the proposal was already decided", async () => {
     const api = stub();
-    vi.spyOn(api, "decideHeld").mockRejectedValueOnce(new ReviewQueueError("payout_not_held"));
+    vi.spyOn(api, "approveRelease").mockRejectedValueOnce(new ReviewQueueError("release_already_decided"));
     const list = vi.spyOn(api, "listHeld");
-    const { user } = renderScreen({ api, entry: "/review-queue?tab=held" });
-    const review = await screen.findByRole("article", { name: "Held payout for Ivan Ssemanda" });
-    await user.type(within(review).getByLabelText("Reason for your decision"), "Checked with client");
-    await user.click(within(review).getByRole("button", { name: "Approve" }));
+    const { user } = renderScreen({ api, entry: "/review-queue?tab=held&payout=sample-payout-joan" });
+    const review = await screen.findByRole("article", { name: "Held payout for Joan Namutebi" });
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Agree");
+    await user.click(within(review).getByRole("button", { name: "Approve release" }));
     await user.click(within(review).getByRole("button", { name: "Yes, approve" }));
-    expect(await within(review).findByRole("alert")).toHaveTextContent("Someone has already decided this payout");
+    expect(await within(review).findByRole("alert")).toHaveTextContent("already been decided or withdrawn");
     expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it("refuses to let you approve your own proposal in the sample, as the backend does", async () => {
+    const api = stub();
+    await expect(api.approveRelease("sample-release-kira", "Me again", "key-x")).rejects.toMatchObject({ code: "proposed_by_you" });
   });
 
   it("shows nothing held", async () => {

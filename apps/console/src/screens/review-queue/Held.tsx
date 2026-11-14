@@ -3,11 +3,12 @@ import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import type { ClientCard, Directory } from "@/directory/api.ts";
+import { cn } from "@/lib.ts";
 import {
   ReviewQueueError,
   reviewQueueErrorMessage,
   type DecidedPayout,
-  type HeldDecision,
+  type HeldAction,
   type HeldPayout,
   type ReviewQueueApi,
 } from "./api.ts";
@@ -17,26 +18,38 @@ import { Empty, ErrorNote, Failure, FIELD, FieldNote, Loading, Notice, Panel, Pi
 
 const MAX_REASON = 500;
 
+/** Refusals after which the list on screen is out of date, so it is read again. */
+const RELOAD_AFTER = new Set(["payout_not_held", "release_already_proposed", "release_already_decided", "not_found"]);
+
 interface HeldProps {
   api: ReviewQueueApi;
   directory: Directory;
+  /** The signed-in member of staff, to tell their own proposals apart. */
+  me: string;
   /** Whether this person holds `payout_accounts.change`. Without it they only look. */
   canDecide: boolean;
   now: () => Date;
-  /** Makes the idempotency key for one decision. Every try at the same decision carries the same key. */
+  /** Makes the idempotency key for one step. Every try at the same step carries the same key. */
   newKey: () => string;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onCount?: (count: number) => void;
 }
 
-export function HeldSection({ api, directory, canDecide, now, newKey, selectedId, onSelect, onCount }: HeldProps) {
+type Stage = "needs_proposal" | "needs_second" | "proposed_by_me";
+
+function stageOf(payout: HeldPayout, me: string): Stage {
+  if (!payout.release) return "needs_proposal";
+  return payout.release.proposedBy === me ? "proposed_by_me" : "needs_second";
+}
+
+export function HeldSection({ api, directory, me, canDecide, now, newKey, selectedId, onSelect, onCount }: HeldProps) {
   const [list, setList] = useState<Load<HeldPayout[]>>({ state: "loading" });
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<{ id: string; message: string } | null>(null);
-  // A payout just decided leaves the list. It stays open with what happened to it.
+  // A payout just approved or declined leaves the list. It stays open with what happened to it.
   const [decided, setDecided] = useState<{ payout: HeldPayout; result: DecidedPayout } | null>(null);
-  // The key for the decision being tried on each payout, kept until the decision or its reason changes.
+  // The key for the step being tried on each payout, kept until the step or its reason changes.
   const pending = useRef(new Map<string, { request: string; key: string }>());
 
   const fetchList = useCallback(
@@ -62,7 +75,12 @@ export function HeldSection({ api, directory, canDecide, now, newKey, selectedId
   }, [list, onCount]);
 
   const items = list.state === "ready" ? list.value : [];
-  const { clients } = useNames(directory, [...items.map((item) => item.clientId), ...(decided ? [decided.payout.clientId] : [])], []);
+  const { clients, staff } = useNames(
+    directory,
+    [...items.map((item) => item.clientId), ...(decided ? [decided.payout.clientId] : [])],
+    items.flatMap((item) => (item.release ? [item.release.proposedBy] : [])),
+  );
+  const who = (id: string) => (id === me ? "you" : (staff[id] ?? "a colleague"));
   // The payout named in the address, or the one just decided, or the one waiting longest.
   const shownId = selectedId ?? decided?.payout.id ?? items[0]?.id ?? null;
   const payout = items.find((item) => item.id === shownId) ?? (decided?.payout.id === shownId ? decided.payout : null);
@@ -75,17 +93,25 @@ export function HeldSection({ api, directory, canDecide, now, newKey, selectedId
     return key;
   }
 
-  async function decide(target: HeldPayout, decision: HeldDecision, reason: string) {
+  async function act(target: HeldPayout, action: HeldAction, reason: string) {
     setBusy(true);
     setFailed(null);
+    const key = () => keyFor(target.id, JSON.stringify({ action, release: target.release?.id ?? null, reason }));
     try {
-      const result = await api.decideHeld(target.id, decision, reason, keyFor(target.id, JSON.stringify({ decision, reason })));
+      if (action === "propose") {
+        await api.proposeRelease(target.id, reason, key());
+      } else if (action === "withdraw" && target.release) {
+        await api.withdrawRelease(target.release.id, reason);
+      } else if (action === "approve" && target.release) {
+        setDecided({ payout: target, result: await api.approveRelease(target.release.id, reason, key()) });
+      } else if (action === "decline") {
+        setDecided({ payout: target, result: await api.decline(target.id, reason, key()) });
+      }
       pending.current.delete(target.id);
-      setDecided({ payout: target, result });
       await reloadList();
     } catch (error) {
       setFailed({ id: target.id, message: reviewQueueErrorMessage(error) });
-      if (error instanceof ReviewQueueError && (error.code === "payout_not_held" || error.code === "not_found")) await reloadList();
+      if (error instanceof ReviewQueueError && RELOAD_AFTER.has(error.code)) await reloadList();
     } finally {
       setBusy(false);
     }
@@ -98,8 +124,8 @@ export function HeldSection({ api, directory, canDecide, now, newKey, selectedId
   if (items.length === 0 && !payout) {
     return (
       <Empty title="No payouts held">
-        Nothing is waiting. A withdrawal above the review limit appears here, with its money already set aside, until a
-        member of staff approves or declines it.
+        Nothing is waiting. A withdrawal above the review limit appears here, with its money already set aside, until two
+        members of staff release it or one declines it.
       </Empty>
     );
   }
@@ -111,37 +137,48 @@ export function HeldSection({ api, directory, canDecide, now, newKey, selectedId
           <p className="m-0 text-md text-muted">No other payouts are held.</p>
         ) : (
           <ul aria-label="Held payouts" className="m-0 flex list-none flex-col gap-2.5 p-0">
-            {items.map((item) => (
-              <li key={item.id}>
-                <QueueButton
-                  selected={item.id === shownId}
-                  onSelect={() => {
-                    setDecided(null);
-                    onSelect(item.id);
-                  }}
-                >
-                  <span className="text-md font-bold tabular-nums">{formatAmount(item.amount)}</span>
-                  <span className="text-xs text-muted">
-                    {clientName(clients[item.clientId])}, {KIND_LABELS[item.kind].toLowerCase()}
-                  </span>
-                  <span className="mt-1 text-xs font-bold text-warning-text">Asked for {timeAgo(item.createdAt, now())}</span>
-                </QueueButton>
-              </li>
-            ))}
+            {items.map((item) => {
+              const stage = stageOf(item, me);
+              return (
+                <li key={item.id}>
+                  <QueueButton
+                    selected={item.id === shownId}
+                    onSelect={() => {
+                      setDecided(null);
+                      onSelect(item.id);
+                    }}
+                  >
+                    <span className="text-md font-bold tabular-nums">{formatAmount(item.amount)}</span>
+                    <span className="text-xs text-muted">
+                      {clientName(clients[item.clientId])}, {KIND_LABELS[item.kind].toLowerCase()}, asked for {timeAgo(item.createdAt, now())}
+                    </span>
+                    <span className={cn("mt-1 text-xs font-bold", stage === "proposed_by_me" ? "text-muted" : "text-warning-text")}>
+                      {stage === "needs_proposal"
+                        ? "Needs a proposal"
+                        : stage === "proposed_by_me"
+                          ? "Proposed by you"
+                          : `Proposed by ${who(item.release!.proposedBy)}, needs a second person`}
+                    </span>
+                  </QueueButton>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
       <div className="min-w-0 flex-[3_1_480px]">
         {payout ? (
           <HeldReview
-            key={payout.id}
+            key={`${payout.id}:${payout.release?.id ?? ""}`}
             payout={payout}
             client={clients[payout.clientId]}
+            stage={stageOf(payout, me)}
+            who={who}
             result={decided?.payout.id === payout.id ? decided.result : null}
             busy={busy}
             error={failed?.id === payout.id ? failed.message : null}
             canDecide={canDecide}
-            onDecide={(decision, reason) => void decide(payout, decision, reason)}
+            onAct={(action, reason) => void act(payout, action, reason)}
           />
         ) : (
           <Failure title="This payout is not held" message="It may have been decided already. Choose another from the list." />
@@ -155,22 +192,36 @@ function clientName(card: ClientCard | null | undefined): string {
   return card?.name ?? "A client";
 }
 
+function capitalise(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+const STAGE_PILLS: Record<Stage, string> = {
+  needs_proposal: "Needs a proposal",
+  needs_second: "Needs a second person",
+  proposed_by_me: "Proposed by you",
+};
+
 function HeldReview({
   payout,
   client,
+  stage,
+  who,
   result,
   busy,
   error,
   canDecide,
-  onDecide,
+  onAct,
 }: {
   payout: HeldPayout;
   client: ClientCard | null | undefined;
+  stage: Stage;
+  who: (staffId: string) => string;
   result: DecidedPayout | null;
   busy: boolean;
   error: string | null;
   canDecide: boolean;
-  onDecide: (decision: HeldDecision, reason: string) => void;
+  onAct: (action: HeldAction, reason: string) => void;
 }) {
   const name = clientName(client);
   return (
@@ -184,24 +235,33 @@ function HeldReview({
           </span>
         </div>
         {result ? (
-          <Pill tone={result.decision === "approved" ? "done" : "refused"}>{result.decision === "approved" ? "Approved" : "Declined"}</Pill>
+          <Pill tone={result.decision === "approved" ? "done" : "refused"}>{result.decision === "approved" ? "Released" : "Declined"}</Pill>
         ) : (
-          <Pill tone="waiting">Held for review</Pill>
+          <Pill tone={stage === "proposed_by_me" ? "quiet" : "waiting"}>{STAGE_PILLS[stage]}</Pill>
         )}
       </div>
 
       <div className="flex flex-wrap gap-5">
-      <Section title="The withdrawal">
-        <Row name="Paid to" value={KIND_LABELS[payout.kind]} />
-        <Row name="Asked for" value={formatMoment(payout.createdAt)} />
-        <Row name="Business day" value={formatDay(payout.businessDate)} />
-        <Row name="Money" value="Set aside from the client's holding" />
-      </Section>
+        <Section title="The withdrawal">
+          <Row name="Paid to" value={KIND_LABELS[payout.kind]} />
+          <Row name="Asked for" value={formatMoment(payout.createdAt)} />
+          <Row name="Business day" value={formatDay(payout.businessDate)} />
+          <Row name="Money" value="Set aside from the client's holding" />
+        </Section>
       </div>
 
+      {payout.release && !result ? (
+        <div className="flex flex-wrap gap-5">
+          <Section title="The proposal to release it">
+            <Row name="Proposed by" value={`${capitalise(who(payout.release.proposedBy))}, ${formatMoment(payout.release.proposedAt)}`} />
+            <Row name="Reason given" value={payout.release.reason} />
+          </Section>
+        </div>
+      ) : null}
+
       <p className="m-0 text-md leading-normal text-muted">
-        It is held because it is above the review limit. The client asked for it, so you are the second person. The account
-        it goes to was already approved by two people.
+        It is held because it is above the review limit. Releasing it takes two people: one proposes, a different person
+        approves. One person may decline it.
       </p>
 
       {result ? (
@@ -209,11 +269,11 @@ function HeldReview({
           {result.decision === "declined"
             ? "Declined. The payout is cancelled and its money went back where it came from."
             : payout.kind === "mobile_money"
-              ? "Approved. It is queued and the worker sends it to the provider."
-              : "Approved. It is queued for staff to pay from the trust account."}
+              ? "Released. It is queued and the worker sends it to the provider."
+              : "Released. It is queued for staff to pay from the trust account."}
         </Notice>
       ) : canDecide ? (
-        <HeldForm busy={busy} error={error} onDecide={onDecide} />
+        <HeldForm stage={stage} busy={busy} error={error} onAct={onAct} />
       ) : (
         <p className="m-0 border-t border-divider pt-4 text-md leading-normal text-muted">
           You can look at this payout. Deciding it needs the payout accounts permission, held by Admin, Operations and
@@ -224,38 +284,63 @@ function HeldReview({
   );
 }
 
-const CONFIRMATIONS: Record<HeldDecision, { text: string; confirm: string }> = {
+const BUTTONS: Record<HeldAction, string> = {
+  propose: "Propose release",
+  approve: "Approve release",
+  withdraw: "Withdraw proposal",
+  decline: "Decline",
+};
+
+/** Approving and declining cannot be undone, so each asks once more. Proposing and withdrawing move no money. */
+const CONFIRMATIONS: Partial<Record<HeldAction, { text: string; confirm: string }>> = {
   approve: { text: "Approving releases this money to be paid to the client. It cannot be undone.", confirm: "Yes, approve" },
   decline: { text: "Declining cancels the payout and gives the money back. It cannot be undone.", confirm: "Yes, decline" },
 };
 
-function HeldForm({ busy, error, onDecide }: { busy: boolean; error: string | null; onDecide: (decision: HeldDecision, reason: string) => void }) {
+function HeldForm({
+  stage,
+  busy,
+  error,
+  onAct,
+}: {
+  stage: Stage;
+  busy: boolean;
+  error: string | null;
+  onAct: (action: HeldAction, reason: string) => void;
+}) {
   const ids = useId();
   const [reason, setReason] = useState("");
   const [problem, setProblem] = useState<string | undefined>();
-  const [confirming, setConfirming] = useState<HeldDecision | null>(null);
+  const [confirming, setConfirming] = useState<HeldAction | null>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (confirming) confirmButton.current?.focus();
   }, [confirming]);
 
-  function attempt(decision: HeldDecision, confirmed = false) {
+  const first: HeldAction = stage === "needs_proposal" ? "propose" : stage === "needs_second" ? "approve" : "withdraw";
+
+  function attempt(action: HeldAction, confirmed = false) {
     if (!reason.trim()) {
       setProblem("Give the reason for your decision.");
       setConfirming(null);
       return;
     }
     setProblem(undefined);
-    if (!confirmed) {
-      setConfirming(decision);
+    if (!confirmed && CONFIRMATIONS[action]) {
+      setConfirming(action);
       return;
     }
     setConfirming(null);
-    onDecide(decision, reason.trim());
+    onAct(action, reason.trim());
   }
+
+  const asked = confirming ? CONFIRMATIONS[confirming] : undefined;
 
   return (
     <form aria-label="Decision" className="flex flex-col gap-4 border-t border-divider pt-4" onSubmit={(event: FormEvent) => event.preventDefault()}>
+      {stage === "proposed_by_me" ? (
+        <Notice>You proposed releasing this payout, so a different person must approve it. You can withdraw your proposal or decline the payout.</Notice>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={`${ids}-reason`}>Reason for your decision</Label>
         <Input
@@ -274,12 +359,12 @@ function HeldForm({ busy, error, onDecide }: { busy: boolean; error: string | nu
 
       {error ? <ErrorNote>{error}</ErrorNote> : null}
 
-      {confirming ? (
+      {asked && confirming ? (
         <div role="alertdialog" aria-label="Confirm" className="flex flex-col gap-3 rounded-md bg-warning-surface p-3.5">
-          <p className="m-0 text-md font-semibold text-warning-text">{CONFIRMATIONS[confirming].text}</p>
+          <p className="m-0 text-md font-semibold text-warning-text">{asked.text}</p>
           <div className="flex flex-wrap gap-2.5">
             <Button ref={confirmButton} disabled={busy} onClick={() => attempt(confirming, true)}>
-              {busy ? "Saving" : CONFIRMATIONS[confirming].confirm}
+              {busy ? "Saving" : asked.confirm}
             </Button>
             <Button variant="secondary" disabled={busy} onClick={() => setConfirming(null)}>
               Go back
@@ -288,11 +373,16 @@ function HeldForm({ busy, error, onDecide }: { busy: boolean; error: string | nu
         </div>
       ) : (
         <div className="flex flex-wrap gap-2.5">
-          <Button disabled={busy} onClick={() => attempt("approve")} className="h-12 flex-[1_1_140px]">
-            {busy ? "Saving" : "Approve"}
+          <Button
+            variant={first === "withdraw" ? "secondary" : "primary"}
+            disabled={busy}
+            onClick={() => attempt(first)}
+            className="h-12 flex-[1_1_140px]"
+          >
+            {busy ? "Saving" : BUTTONS[first]}
           </Button>
           <Button variant="secondary" disabled={busy} onClick={() => attempt("decline")} className="h-12 flex-[1_1_140px]">
-            Decline
+            {BUTTONS.decline}
           </Button>
         </div>
       )}

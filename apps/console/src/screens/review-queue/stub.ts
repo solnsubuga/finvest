@@ -3,8 +3,9 @@
  *
  * It refuses what the backend refuses: a name that is not the client's, a statement with no
  * date or older than three months, a check for a client with no approved identity check,
- * approving your own check or an account approved for someone else, and deciding a payout that
- * is no longer held. A decision key reused for other details is refused as `key_reused`.
+ * approving your own check or an account approved for someone else, approving your own release
+ * proposal, withdrawing someone else's, and deciding a payout that is no longer held. A key reused
+ * for other details is refused as `key_reused`.
  */
 
 import {
@@ -156,7 +157,7 @@ function sampleAccounts(me: string, now: number): PayoutAccountDetail[] {
   ];
 }
 
-function sampleHeld(now: number): HeldPayout[] {
+function sampleHeld(me: string, now: number): HeldPayout[] {
   return [
     {
       id: "sample-payout-ivan",
@@ -166,6 +167,7 @@ function sampleHeld(now: number): HeldPayout[] {
       amount: { minor: 4_000_000, currency: "USD" },
       businessDate: day(now - DAY),
       createdAt: new Date(now - 27 * HOUR).toISOString(),
+      release: null,
     },
     {
       id: "sample-payout-joan",
@@ -175,6 +177,13 @@ function sampleHeld(now: number): HeldPayout[] {
       amount: { minor: 25_000_000, currency: "UGX" },
       businessDate: day(now),
       createdAt: new Date(now - 5 * HOUR).toISOString(),
+      release: {
+        id: "sample-release-joan",
+        payoutId: "sample-payout-joan",
+        reason: "Called the client on the number we hold; she confirmed the amount",
+        proposedBy: "sample-staff-grace",
+        proposedAt: new Date(now - 3 * HOUR).toISOString(),
+      },
     },
     {
       id: "sample-payout-kira",
@@ -184,6 +193,13 @@ function sampleHeld(now: number): HeldPayout[] {
       amount: { minor: 12_500_000, currency: "UGX" },
       businessDate: day(now),
       createdAt: new Date(now - 2 * HOUR).toISOString(),
+      release: {
+        id: "sample-release-kira",
+        payoutId: "sample-payout-kira",
+        reason: "Group treasurer and chair both confirmed by phone",
+        proposedBy: me,
+        proposedAt: new Date(now - 30 * 60_000).toISOString(),
+      },
     },
   ];
 }
@@ -220,13 +236,41 @@ export function createStubReviewQueueApi(me: string, clock: () => number = Date.
       reject: failure,
       remove: failure,
       listHeld: failure,
-      decideHeld: failure,
+      proposeRelease: failure,
+      approveRelease: failure,
+      withdrawRelease: failure,
+      decline: failure,
     };
   }
   const accounts = sample === "empty" ? [] : sampleAccounts(me, clock());
-  const held = sample === "empty" ? [] : sampleHeld(clock());
+  const held = sample === "empty" ? [] : sampleHeld(me, clock());
   // Answers already given, by key, as the backend's idempotency keys do.
-  const decided = new Map<string, { request: string; answer: DecidedPayout }>();
+  const answered = new Map<string, { request: string; answer: unknown }>();
+  let releases = 0;
+
+  function once<T>(key: string, details: object, run: () => T): T {
+    const request = JSON.stringify(details);
+    const known = answered.get(key);
+    if (known) {
+      if (known.request !== request) throw new ReviewQueueError("key_reused");
+      return structuredClone(known.answer) as T;
+    }
+    const answer = run();
+    answered.set(key, { request, answer: structuredClone(answer) });
+    return answer;
+  }
+
+  function heldPayout(id: string): HeldPayout {
+    const payout = held.find((item) => item.id === id);
+    if (!payout) throw new ReviewQueueError("payout_not_held");
+    return payout;
+  }
+
+  function withRelease(releaseId: string): HeldPayout {
+    const payout = held.find((item) => item.release?.id === releaseId);
+    if (!payout) throw new ReviewQueueError("release_already_decided");
+    return payout;
+  }
 
   function find(id: string): PayoutAccountDetail {
     const account = accounts.find((item) => item.id === id);
@@ -313,22 +357,45 @@ export function createStubReviewQueueApi(me: string, clock: () => number = Date.
         account.check = null;
         return listed(account);
       }),
-    listHeld: () => answer(() => held.map((payout) => ({ ...payout, amount: { ...payout.amount } }))),
-    decideHeld: (id, decision, reason, key) =>
+    listHeld: () =>
+      answer(() => held.map((payout) => ({ ...payout, amount: { ...payout.amount }, release: payout.release ? { ...payout.release } : null }))),
+    proposeRelease: (payoutId, reason, key) =>
+      answer(() =>
+        once(key, { step: "propose", payoutId, reason }, () => {
+          const payout = heldPayout(payoutId);
+          if (payout.release) throw new ReviewQueueError("release_already_proposed");
+          payout.release = {
+            id: `sample-release-${++releases}`,
+            payoutId,
+            reason,
+            proposedBy: me,
+            proposedAt: new Date(clock()).toISOString(),
+          };
+          return { ...payout.release };
+        }),
+      ),
+    approveRelease: (releaseId, reason, key) =>
+      answer(() =>
+        once(key, { step: "approve", releaseId, reason }, () => {
+          const payout = withRelease(releaseId);
+          if (payout.release!.proposedBy === me) throw new ReviewQueueError("proposed_by_you");
+          held.splice(held.indexOf(payout), 1);
+          return { id: payout.id, decision: "approved", status: "queued" } satisfies DecidedPayout;
+        }),
+      ),
+    withdrawRelease: (releaseId) =>
       answer(() => {
-        const request = JSON.stringify({ id, decision, reason });
-        const known = decided.get(key);
-        if (known) {
-          if (known.request !== request) throw new ReviewQueueError("key_reused");
-          return { ...known.answer };
-        }
-        const at = held.findIndex((payout) => payout.id === id);
-        if (at < 0) throw new ReviewQueueError("payout_not_held");
-        held.splice(at, 1);
-        const result: DecidedPayout =
-          decision === "approve" ? { id, decision: "approved", status: "queued" } : { id, decision: "declined", status: "cancelled" };
-        decided.set(key, { request, answer: result });
-        return { ...result };
+        const payout = withRelease(releaseId);
+        if (payout.release!.proposedBy !== me) throw new ReviewQueueError("not_proposed_by_you");
+        payout.release = null;
       }),
+    decline: (payoutId, reason, key) =>
+      answer(() =>
+        once(key, { step: "decline", payoutId, reason }, () => {
+          const payout = heldPayout(payoutId);
+          held.splice(held.indexOf(payout), 1);
+          return { id: payoutId, decision: "declined", status: "cancelled" } satisfies DecidedPayout;
+        }),
+      ),
   };
 }
