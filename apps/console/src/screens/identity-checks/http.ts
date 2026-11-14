@@ -38,7 +38,12 @@ interface CheckJson extends QueueJson {
   document_expires_on: string | null;
   photos: { id: string; kind: PhotoKind; live?: boolean }[];
   automatic_checks: AutomaticCheck[];
-  phone_name?: { status: PhoneNameStatus; registered_name: string | null } | null;
+  phone_name?: {
+    status: PhoneNameStatus;
+    registered_name: string | null;
+    current_number?: boolean;
+    blocks_approval?: boolean;
+  } | null;
   retake_photos: PhotoKind[];
   client_message: string | null;
   account_number: string | null;
@@ -79,7 +84,14 @@ export function toCheck(json: CheckJson, links: PhotoLinksJson | null): CheckDet
       live: photo.live === true,
     })),
     automaticChecks: json.automatic_checks.map((item) => ({ check: item.check, verdict: item.verdict, score: item.score })),
-    phoneName: json.phone_name ? { status: json.phone_name.status, registeredName: json.phone_name.registered_name } : null,
+    phoneName: json.phone_name
+      ? {
+          status: json.phone_name.status,
+          registeredName: json.phone_name.registered_name,
+          currentNumber: json.phone_name.current_number !== false,
+          blocksApproval: json.phone_name.blocks_approval === true,
+        }
+      : null,
     retakePhotos: json.retake_photos,
     clientMessage: json.client_message,
     accountNumber: json.account_number,

@@ -28,6 +28,10 @@ export interface PhoneName {
   status: PhoneNameStatus;
   /** The name the network holds for the number, once it gave one. */
   registeredName: string | null;
+  /** False once the client's number has changed since: the result is about an earlier number. */
+  currentNumber: boolean;
+  /** The client's own number is registered to someone else, so the check cannot be approved. */
+  blocksApproval: boolean;
 }
 
 /** What the signed-in person may do to a check in its current state. The backend decides. */
