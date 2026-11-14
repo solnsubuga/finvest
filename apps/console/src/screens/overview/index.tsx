@@ -6,6 +6,8 @@ import { isStubAuth } from "@/auth/index.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { approvalsErrorMessage, createHttpApprovalsApi, notConnectedApprovalsApi, type ApprovalItem, type ApprovalsApi } from "./api.ts";
+import { createHttpFiguresApi, createStubFiguresApi, notConnectedFiguresApi, type FiguresApi } from "./figures.ts";
+import { FiguresSection } from "./Figures.tsx";
 import { describeSubject, kindLabel, linkFor, waitingFor } from "./labels.ts";
 import { createStubApprovalsApi } from "./stub.ts";
 
@@ -61,7 +63,16 @@ function Group({ title, hint, items, now, empty }: { title: string; hint: string
   );
 }
 
-export function OverviewScreen({ api, now = () => new Date() }: { api: ApprovalsApi; now?: () => Date }) {
+export function OverviewScreen({
+  api,
+  figures,
+  now = () => new Date(),
+}: {
+  api: ApprovalsApi;
+  /** The figures above the inbox. Without one, only the inbox shows. */
+  figures?: FiguresApi;
+  now?: () => Date;
+}) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
 
   const fetchItems = useCallback(
@@ -86,6 +97,7 @@ export function OverviewScreen({ api, now = () => new Date() }: { api: Approvals
   return (
     <>
       <PageHeader title="Overview" summary={SUMMARY} />
+      {figures ? <FiguresSection api={figures} now={now} /> : null}
       <section aria-labelledby="waiting" className="flex flex-col gap-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex flex-col gap-1">
@@ -165,15 +177,21 @@ export function OverviewScreen({ api, now = () => new Date() }: { api: Approvals
 
 export default function OverviewPage() {
   const { session } = useAuth();
-  const [api] = useState<ApprovalsApi>(() => {
+  const [{ api, figures }] = useState<{ api: ApprovalsApi; figures: FiguresApi }>(() => {
     if (isStubAuth() && session) {
       // Under the stub, `?sample=empty` shows nothing waiting and `?sample=offline` as if Finvest could not be reached.
       const sample = new URLSearchParams(window.location.search).get("sample");
-      if (sample === "offline") return notConnectedApprovalsApi;
-      return createStubApprovalsApi({ id: session.staffId, name: session.name, permissions: session.permissions }, Date.now, sample === "empty" ? "empty" : "sample");
+      if (sample === "offline") return { api: notConnectedApprovalsApi, figures: createStubFiguresApi(session.permissions, Date.now, "error") };
+      const empty = sample === "empty";
+      return {
+        api: createStubApprovalsApi({ id: session.staffId, name: session.name, permissions: session.permissions }, Date.now, empty ? "empty" : "sample"),
+        figures: createStubFiguresApi(session.permissions, Date.now, empty ? "empty" : "sample"),
+      };
     }
     const base = apiBaseUrl();
-    return base ? createHttpApprovalsApi(createHttp(base)) : notConnectedApprovalsApi;
+    if (!base) return { api: notConnectedApprovalsApi, figures: notConnectedFiguresApi };
+    const http = createHttp(base);
+    return { api: createHttpApprovalsApi(http), figures: createHttpFiguresApi(http) };
   });
-  return <OverviewScreen api={api} />;
+  return <OverviewScreen api={api} figures={figures} />;
 }
