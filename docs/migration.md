@@ -109,8 +109,21 @@ The console calls these under `/staff/migration`. The code is in `backend/app/mo
 | `POST /staff/migration/control-totals/{id}/confirmation` | Confirm the totals someone else entered | `migration.sign_off` |
 | `POST /staff/migration/sign-offs` | Propose a sign-off for one difference, with a reason | `migration.sign_off` |
 | `POST /staff/migration/sign-offs/{id}/decision` | Approve or reject a sign-off someone else proposed | `migration.sign_off` |
+| `POST /staff/migration/switch` | Propose the switch with the two sheets of the latest trial | `migration.import` |
+| `POST /staff/migration/switch/{id}/decision` | Approve or reject the switch someone else proposed. An approval creates every client's account | `migration.sign_off` |
 
 Operations and admins hold `migration.import`. Finance and admins hold `migration.sign_off`, so a sign-off takes two of them. Counts and amounts travel as whole numbers in the smallest unit.
+
+### The switch
+
+The switch is proposed by one member of staff and approved by a different one, the same way as a sign-off.
+
+- **Proposing.** Operations send the two sheets of the latest trial again. They must be the same files byte for byte, checked by fingerprint, and nothing may block the switch. The trial's "as of" day must be over, because interest is opened up to that day. Every client must have a phone number, because the phone is how a client claims the account. A client without one holds the switch until staff add the number to the sheet and run the trial again. Only one proposal waits at a time.
+- **Keeping the sheets.** The sheets are kept sealed with the identity data key in `migration_switch_files`, for the approval and for the worker that carries the investments over. The worker removes them when it is done. No other migration table holds anything from a sheet.
+- **Approving.** Finance check everything again: the same trial is still the latest, nothing blocks it, and the sheets read the same with today's products and tax rates. The approval then creates every client's account, with no password, in the approver's transaction. It records each Finvest 1.0 reference with its new account in `migration_carried_clients`. Either every client gets an account or none does. A phone number that already has an account in Finvest 2.0 refuses the whole approval, names the clients sheet rows, and keeps nothing. A rejection needs a reason, and the switch can then be proposed again.
+- **What the database holds it to.** The decision is by someone other than the proposer. At most one switch is ever approved. A client is carried over only in the transaction that approved the switch, by the person who approved it. Each of these tables is insert-only, except that the worker deletes the sealed sheets.
+
+The overview shows the newest proposal under `switch`, with its state, who decided it and how many accounts it created. Orders still awaiting payment are counted by the trial and never opened: the client places the order again after claiming. The next step, the worker that carries over identities and investments and sends the claim links, comes in its own change.
 
 At the switch each investment is opened with one ledger entry: the principal to the client's holding, interest after tax to the client's accrued interest, the tax to the tax payable account, and the three together against a migration opening balances account, which finance clears against the custodian and bank position.
 

@@ -142,6 +142,8 @@ def create_app(
     app.state.authenticators = AuthenticatorService(database, clock, settings, identity, passkeys)
     app.state.codes = CodeService(database, clock, identity, passkeys, hasher)
     app.state.phone_changes = PhoneChangeService(database, clock)
+    # The migration switch keeps the two sheets sealed until the carry-over is done.
+    app.state.migration_sealer = identity_sealer
     app.state.email_checks = EmailCheckService(
         database,
         clock,
