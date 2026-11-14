@@ -25,6 +25,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   complaint_outcome: { view: "complaints.view", decide: "complaints.close" },
   announcement: { view: "settings.view", decide: "announcements.send" },
   payout_account: { view: "review_queue.view", decide: "review_queue.view" },
+  deposit_reassignment: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
 };
 
 interface Reader {

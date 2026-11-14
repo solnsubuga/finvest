@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 from app.modules.approvals.domain.inbox import SOURCES, Waiting, inbox, visible_kinds
-from app.modules.identity.domain.permissions import PERMISSIONS, permissions_for
+from app.modules.identity.domain.permissions import PERMISSIONS, Role, permissions_for
 
 T0 = datetime(2026, 11, 13, 9, tzinfo=UTC)
 
@@ -88,3 +88,15 @@ def test_oldest_first_then_by_kind_and_id() -> None:
     ]
     shown = inbox(items, "me", permissions_for("admin"))
     assert [i.id for i in shown] == ["a", "b", "c"]
+
+
+def test_a_deposit_reassignment_is_decided_by_operations_and_finance_only() -> None:
+    deciders: tuple[Role, ...] = ("operations", "finance", "admin")
+    for role in deciders:
+        [item] = inbox([waiting("deposit_reassignment")], "me", permissions_for(role))
+        assert item.can_decide is True
+    others: tuple[Role, ...] = ("compliance", "support")
+    for other in others:
+        assert inbox([waiting("deposit_reassignment")], "me", permissions_for(other)) == []
+    [mine] = inbox([waiting("deposit_reassignment", proposer="me")], "me", permissions_for("admin"))
+    assert (mine.yours, mine.can_decide) == (True, False)

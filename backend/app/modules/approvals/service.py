@@ -18,7 +18,7 @@ from app.modules.investments.domain.rates import ProposalStatus
 from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
-from app.modules.payments import bank_transfers
+from app.modules.payments import bank_transfers, reassignments
 from app.modules.payouts import destinations
 from app.modules.reconciliation import day_close, transfers
 from app.modules.support import complaints
@@ -59,6 +59,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _payout_accounts(session)
     if "investment_correction" in kinds:
         found += await _investment_corrections(session, staff)
+    if "deposit_reassignment" in kinds:
+        found += await _reassignments(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -220,4 +222,12 @@ async def _payout_accounts(session: AsyncSession) -> list[Waiting]:
         Waiting("payout_account", d.id, d.kind.value, d.checked_by, d.checked_at)
         for d in await destinations.checks_awaiting_approval(session)
         if d.checked_by is not None and d.checked_at is not None
+    ]
+
+
+async def _reassignments(session: AsyncSession) -> list[Waiting]:
+    # The subject is the deposit's ID, never a name or an amount.
+    return [
+        Waiting("deposit_reassignment", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
+        for r in await reassignments.proposals_awaiting_approval(session)
     ]
