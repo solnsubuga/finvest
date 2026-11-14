@@ -256,8 +256,9 @@ export const ClientInvestmentOut = z.object({
 export type ClientInvestmentOut = z.infer<typeof ClientInvestmentOut>;
 
 export const ClientLoginStart = z.object({
+  email: z.string().nullable().optional(),
   password: z.string(),
-  phone: z.string(),
+  phone: z.string().nullable().optional(),
 });
 export type ClientLoginStart = z.infer<typeof ClientLoginStart>;
 

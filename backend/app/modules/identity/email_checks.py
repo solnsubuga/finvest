@@ -5,10 +5,11 @@ token in its fragment, so it never reaches a server log; only the token's SHA-25
 works once, for 24 hours, and only while the account still has the address it was sent to.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import structlog
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.infrastructure.database import Database
 from app.infrastructure.throttling import reserve_attempts, throttle_key
@@ -109,8 +110,19 @@ class EmailCheckService:
     async def confirm(self, token: str) -> None:
         """Spend the link and mark the address proved. Anything wrong is `expired`."""
         now = self.clock.now()
+        try:
+            client_id = await self._spend(token, now)
+        except IntegrityError:
+            # Another account proved this address first. An address signs in one account only.
+            logger.info("email_check_refused", error_code="email_taken")
+            raise ApplicationError("email_taken") from None
+        if client_id is None:
+            raise ApplicationError("expired")
+        logger.info("email_verified", client_id=client_id)
+
+    async def _spend(self, token: str, now: datetime) -> str | None:
         async with self.database.transaction() as session:
-            client_id = await session.scalar(
+            client_id: str | None = await session.scalar(
                 text("SELECT identity_verify_email(:hash, :now)"),
                 {"hash": token_digest(token), "now": now},
             )
@@ -123,6 +135,4 @@ class EmailCheckService:
                     resource_type="client",
                     resource_id=client_id,
                 )
-        if client_id is None:
-            raise ApplicationError("expired")
-        logger.info("email_verified", client_id=client_id)
+        return client_id
