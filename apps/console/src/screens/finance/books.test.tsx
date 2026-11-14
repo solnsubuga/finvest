@@ -31,22 +31,40 @@ describe("books", () => {
     expect(screen.getByText(/ioTec’s charge on each mobile money payment in is not booked yet/)).toBeInTheDocument();
   });
 
-  it("sends the closed days not yet sent and then shows them as sent", async () => {
+  it("downloads the closed days not yet downloaded and then lists them", async () => {
     const { user, save } = renderBooks();
-    const button = await screen.findByRole("button", { name: "Send 11 Nov 2026 to 12 Nov 2026" });
+    const button = await screen.findByRole("button", { name: "Download 11 Nov 2026 to 12 Nov 2026" });
     await user.click(button);
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0]![0].filename).toBe("finvest-journal-ugx-2026-11-11-to-2026-11-12.csv");
-    await screen.findByText("Every closed day has been sent. The next one can go once it is closed on the Reconciliation screen.");
-    expect(screen.getByText("Last journal sent").parentElement).toHaveTextContent("12 Nov 2026");
+    await screen.findByText("Every closed day has been downloaded. The next one can be once it is closed on the Reconciliation screen.");
+    expect(screen.getByText("Journal downloaded through").parentElement).toHaveTextContent("12 Nov 2026");
     expect(screen.getAllByText(/by Amina/)).toHaveLength(1);
+    expect(screen.getByText(/Nothing is sent to the accounting system from here/)).toBeInTheDocument();
+  });
+
+  it("downloads a past file again, and says so when saving fails", async () => {
+    const stub = createStubBooksApi(ME, { today: TODAY });
+    const exportJournal = vi.fn(stub.exportJournal);
+    const save = vi.fn(() => {
+      throw new Error("disk full");
+    });
+    render(<BooksSection api={{ ...stub, exportJournal }} currency="UGX" today={TODAY} save={save} />);
+    const user = userEvent.setup();
+    const again = await screen.findAllByRole("button", { name: /^Download again/ });
+    await user.click(again[0]!);
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    const [, days] = exportJournal.mock.calls[0]!;
+    expect(days.dateTo >= days.dateFrom).toBe(true);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved\. Download it again from the list below\./);
+    expect(screen.getAllByRole("button", { name: /^Download again/ }).length).toBeGreaterThan(again.length);
   });
 
   it("says what to do when nothing is in the books and no day is closed", async () => {
     renderBooks(createStubBooksApi(ME, { today: TODAY, empty: true }));
     await screen.findByText(/Nothing is in the shilling books for November 2026 yet/);
     expect(screen.getByText(/Close a day on the Reconciliation screen first/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Send/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Download/ })).not.toBeInTheDocument();
   });
 
   it("offers to try again when the books cannot be loaded", async () => {
@@ -67,11 +85,11 @@ describe("books", () => {
     expect(screen.getByText("Income in October 2026")).toBeInTheDocument();
   });
 
-  it("shows a refused send without losing the screen", async () => {
+  it("shows a refused download without losing the screen", async () => {
     const stub = createStubBooksApi(ME, { today: TODAY });
     const { user } = renderBooks({ ...stub, exportJournal: () => Promise.reject(new BooksError("day_not_closed")) });
-    await user.click(await screen.findByRole("button", { name: /^Send/ }));
-    expect(await screen.findByRole("alert")).toHaveTextContent("Only days closed on the Reconciliation screen can be sent");
+    await user.click(await screen.findByRole("button", { name: /^Download 11/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Only days closed on the Reconciliation screen can be downloaded");
     expect(screen.getByRole("table", { name: "Books for November 2026" })).toBeInTheDocument();
   });
 });

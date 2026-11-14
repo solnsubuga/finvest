@@ -61,7 +61,7 @@ export interface Books {
   income: IncomeAndCosts;
   closedThrough: string | null;
   sentThrough: string | null;
-  /** Closed days not yet sent to the accounting system, or null. */
+  /** Closed days not yet downloaded for the accounting system, or null. */
   nextExport: Days | null;
   /** Newest first. */
   exports: readonly JournalExport[];
@@ -95,8 +95,8 @@ export class BooksError extends Error {
 }
 
 const MESSAGES: Record<BooksErrorCode, string> = {
-  day_not_closed: "Only days closed on the Reconciliation screen can be sent, so a journal never changes after it goes.",
-  too_many_days: "Send at most 31 days in one file.",
+  day_not_closed: "Only days closed on the Reconciliation screen can be downloaded, so a journal never changes after it is imported.",
+  too_many_days: "Download at most 31 days in one file.",
   days_backwards: "The first day comes before the last.",
   month_in_future: "That month has not started yet.",
   invalid: "Check the month and try again.",

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import type { Currency } from "./api.ts";
-import { booksErrorMessage, type Books, type BooksApi, type IncomeLine, type JournalFile } from "./books.ts";
+import { booksErrorMessage, type Books, type BooksApi, type Days, type IncomeLine, type JournalFile } from "./books.ts";
 import { Figure } from "./Figure.tsx";
 import { formatAmount, formatDay, formatMonth, formatNumber } from "./format.ts";
 
@@ -31,14 +31,14 @@ interface BooksSectionProps {
 /**
  * The books by ledger code for a month, Finvest's own income and costs, and the
  * daily journal for the accounting system. Reads only: nothing here moves money,
- * so one person sends the journal.
+ * so one person downloads the journal. The file is then imported by hand.
  */
 export function BooksSection({ api, currency, today, save }: BooksSectionProps) {
   const thisMonth = today.slice(0, 7);
   const [month, setMonth] = useState(thisMonth);
   const [load, setLoad] = useState<Load>({ state: "loading" });
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   const fetchBooks = useCallback(
     (): Promise<Load> =>
@@ -57,19 +57,27 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
     };
   }, [fetchBooks]);
 
-  async function send(books: Books) {
-    if (!books.nextExport) return;
-    setSending(true);
-    setSendError(null);
+  // The server records each download as it answers, so a file lost on the way can be
+  // downloaded again from its row. Saving is a separate step that can fail on its own.
+  async function download(days: Days, id: string) {
+    setDownloading(id);
+    setDownloadError(null);
+    let file: JournalFile;
     try {
-      save(await api.exportJournal(currency, books.nextExport));
-      const fresh = await fetchBooks();
-      if (fresh.state === "ready") setLoad(fresh);
+      file = await api.exportJournal(currency, days);
     } catch (error) {
-      setSendError(booksErrorMessage(error));
-    } finally {
-      setSending(false);
+      setDownloadError(booksErrorMessage(error));
+      setDownloading(null);
+      return;
     }
+    try {
+      save(file);
+    } catch {
+      setDownloadError(`The file for ${daysLabel(days.dateFrom, days.dateTo)} could not be saved. Download it again from the list below.`);
+    }
+    const fresh = await fetchBooks();
+    if (fresh.state === "ready") setLoad(fresh);
+    setDownloading(null);
   }
 
   const monthPicker = (
@@ -80,7 +88,7 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
         value={month}
         onChange={(event) => {
           setLoad({ state: "loading" });
-          setSendError(null);
+          setDownloadError(null);
           setMonth(event.target.value);
         }}
       >
@@ -145,8 +153,8 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
           warn={books.income.net.minor < 0}
         />
         <Figure
-          name="Last journal sent"
-          value={books.sentThrough ? formatDay(books.sentThrough) : "Nothing sent yet"}
+          name="Journal downloaded through"
+          value={books.sentThrough ? formatDay(books.sentThrough) : "Nothing downloaded yet"}
           note={books.closedThrough ? `Books closed through ${formatDay(books.closedThrough)}` : "No day closed yet"}
           warn={books.nextExport !== null}
         />
@@ -219,38 +227,52 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
 
           <div className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-surface p-5">
             <h2 className="m-0 text-[17px] font-extrabold">Accounting export</h2>
-            <Row name="Sends" value="Daily journal by account, after the day is closed" />
+            <Row name="File" value="Daily journal by account, after the day is closed" />
             <Row name="Closed through" value={books.closedThrough ? formatDay(books.closedThrough) : "No day closed yet"} />
             <Row
-              name="Last sent"
-              value={latest ? `${daysLabel(latest.dateFrom, latest.dateTo)}, ${latest.lines} line${latest.lines === 1 ? "" : "s"}` : "Nothing sent yet"}
+              name="Last downloaded"
+              value={latest ? `${daysLabel(latest.dateFrom, latest.dateTo)}, ${latest.lines} line${latest.lines === 1 ? "" : "s"}` : "Nothing downloaded yet"}
             />
+            <p className="m-0 text-sm leading-normal text-muted">
+              Nothing is sent to the accounting system from here. Download the file and import it there yourself.
+            </p>
             {books.nextExport ? (
-              <Button className="mt-1 h-12 rounded-[24px]" disabled={sending} onClick={() => void send(books)}>
-                {sending ? "Preparing the file" : `Send ${daysLabel(books.nextExport.dateFrom, books.nextExport.dateTo)}`}
+              <Button className="mt-1 h-12 rounded-[24px]" disabled={downloading !== null} onClick={() => books.nextExport && void download(books.nextExport, "next")}>
+                {downloading === "next" ? "Preparing the file" : `Download ${daysLabel(books.nextExport.dateFrom, books.nextExport.dateTo)}`}
               </Button>
             ) : (
               <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-normal text-muted">
                 {books.closedThrough
-                  ? "Every closed day has been sent. The next one can go once it is closed on the Reconciliation screen."
-                  : "Close a day on the Reconciliation screen first. Only closed days are sent, so a journal never changes after it goes."}
+                  ? "Every closed day has been downloaded. The next one can be once it is closed on the Reconciliation screen."
+                  : "Close a day on the Reconciliation screen first. Only closed days can be downloaded, so a journal never changes after it is imported."}
               </p>
             )}
-            {sendError ? (
+            {downloadError ? (
               <p role="alert" className="m-0 text-sm font-bold text-danger">
-                {sendError}
+                {downloadError}
               </p>
             ) : null}
             {books.exports.length > 0 ? (
               <>
-                <h3 className="m-0 mt-2 text-sm font-extrabold">Sent before</h3>
+                <h3 className="m-0 mt-2 text-sm font-extrabold">Downloaded before</h3>
                 <ul className="m-0 flex list-none flex-col gap-2 p-0">
-                  {books.exports.map((sent) => (
-                    <li key={sent.id} className="flex justify-between gap-3 border-t border-border-subtle pt-2 text-sm">
-                      <span className="font-bold">{daysLabel(sent.dateFrom, sent.dateTo)}</span>
-                      <span className="text-right text-muted">
-                        {sent.lines} line{sent.lines === 1 ? "" : "s"}, by {sent.exportedByName ?? "a former member of staff"}
+                  {books.exports.map((past) => (
+                    <li key={past.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border-subtle pt-2 text-sm">
+                      <span className="flex flex-col">
+                        <span className="font-bold">{daysLabel(past.dateFrom, past.dateTo)}</span>
+                        <span className="text-muted">
+                          {past.lines} line{past.lines === 1 ? "" : "s"}, by {past.exportedByName ?? "a former member of staff"}
+                        </span>
                       </span>
+                      <Button
+                        variant="secondary"
+                        className="h-9"
+                        disabled={downloading !== null}
+                        onClick={() => void download({ dateFrom: past.dateFrom, dateTo: past.dateTo }, past.id)}
+                      >
+                        {downloading === past.id ? "Preparing" : "Download again"}
+                        <span className="sr-only">, {daysLabel(past.dateFrom, past.dateTo)}</span>
+                      </Button>
                     </li>
                   ))}
                 </ul>
