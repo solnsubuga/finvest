@@ -290,7 +290,7 @@ When the reads end with no answer, the payout is **stranded**: sent or uncertain
 
 Proposing and approving take an `Idempotency-Key`: a retried request returns what the first one did, and a key reused for a different request is refused with `idempotency_key_reused`.
 
-Open proposals wait in the approvals inbox as `payout_resolution`, with the outcome as the subject. The database holds the rules too:
+Open proposals wait in the approvals inbox as `payout_resolution`, with the outcome as the subject. An open proposal to release a held payout waits there as `payout_release`, with the payout's ID as the subject, for whoever may approve it. The database holds the rules too:
 
 | Rule | How |
 | --- | --- |

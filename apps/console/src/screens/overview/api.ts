@@ -29,6 +29,8 @@ export const KINDS = [
   "payout_account",
   "deposit_reassignment",
   "tax_remittance",
+  "payout_resolution",
+  "payout_release",
 ] as const;
 
 export type Kind = (typeof KINDS)[number];
