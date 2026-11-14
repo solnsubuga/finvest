@@ -18,6 +18,14 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0182_transaction_monitoring": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
+        "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
+        "amount_minor, occurred_at, recorded_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'deposit', '-Nabc0000000000000C1', 'UGX', 1000, now(), now()); "
+        "COMMIT",
+        "refusing to drop the monitoring record",
+    ),
     "0181_payout_screening": (
         "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
         "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
