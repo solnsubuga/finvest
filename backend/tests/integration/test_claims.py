@@ -327,3 +327,18 @@ async def test_a_code_for_another_account_changes_nothing(api: Api) -> None:
     claimed = await api.codes.claim_complete(challenge, sent, PASSWORD, "token", client_id=other_id)
     assert claimed.client_id == other_id
     assert phone
+
+
+async def test_an_imported_account_arrives_with_its_email_unproved(api: Api) -> None:
+    _, client_id = await imported(api)
+    async with api.owner.transaction() as session:
+        proved = await session.scalar(
+            text("SELECT email_verified_at FROM identity_clients WHERE id = :id"),
+            {"id": client_id},
+        )
+    # Only the emailed link proves an address, so a carried-over email cannot sign anyone in.
+    assert proved is None
+    refused = await api.http.post(
+        "/client/login/start", json={"email": "ada@example.com", "password": "x" * 12}
+    )
+    assert refused.status_code == 401
