@@ -1,6 +1,6 @@
 import type { GoalView, GoalsApiPlanView as PlanView, SavingView } from "@finvest/api-client/client";
 
-import { api, ApiError } from "@/api/http";
+import { api, ApiError, isAccountClosing } from "@/api/http";
 import { Money } from "@/payments/types";
 
 import { Goal, GoalError, GoalsClient, Plan, Saving } from "./types";
@@ -85,6 +85,7 @@ export function toGoalError(error: unknown, call: Call = "other"): GoalError {
       // Anywhere else the app cannot say why, so it does not guess.
       return new GoalError(call === "save" ? "not_verified" : "not_allowed");
     case "conflict":
+      if (isAccountClosing(error)) return new GoalError("account_closing");
       // Creating: the most open goals at once. Anything else: the goal is closed.
       return new GoalError(call === "create" ? "too_many_goals" : "closed");
     case "validation_failed": {
