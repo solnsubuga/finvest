@@ -30,6 +30,7 @@ DECISIONS = {
     "POST /staff/payout-resolutions/{resolution_id}/approve",
     "POST /staff/payouts/{payout_id}/approve",
     "POST /staff/payouts/{payout_id}/decline",
+    "POST /staff/reconciliation/days/{day}/approve",
     "POST /staff/migration/control-totals/{totals_id}/confirmation",
     "POST /staff/migration/sign-offs/{sign_off_id}/decision",
     "POST /staff/rate-proposals/{proposal_id}/approve",

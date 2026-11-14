@@ -312,6 +312,17 @@ async def positions(
     return tuple(found)
 
 
+async def blockers(
+    session: AsyncSession,
+    day: date,
+    found: Sequence[PotPosition],
+    *,
+    pots: Sequence[Pot] = CASH_POTS,
+) -> tuple[str, ...]:
+    """Every reason the day cannot be prepared yet, given its `positions`. Empty means it can."""
+    return await _blockers(session, found, day, pots)
+
+
 async def prepare(
     session: AsyncSession,
     staff: Actor,
