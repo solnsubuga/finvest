@@ -30,6 +30,7 @@
 | [account-numbers.md](account-numbers.md) | Format, generation and lifetime of client account numbers |
 | [approvals.md](approvals.md) | The approvals inbox: what waits for a second member of staff, who sees it and who may decide |
 | [review-queue.md](review-queue.md) | The review queue: every piece of work waiting for a person, by kind, and the figures above it |
+| [overview.md](overview.md) | The console Overview: client money, money in and out, floats, daily balancing, maturities, holdings and what needs attention |
 | [roadmap.md](roadmap.md) | Build phases and the feature checklist for the client app and back office |
 | [migration.md](migration.md) | Moving Finvest 1.0 clients onto the new system |
 | [security.md](security.md) | The security review before launch: findings, the ASVS checklist and the penetration test scope |

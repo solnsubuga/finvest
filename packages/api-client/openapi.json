@@ -127,32 +127,6 @@
         "title": "AllocationReportOut",
         "type": "object"
       },
-      "Amount-Output": {
-        "additionalProperties": false,
-        "description": "An amount in the smallest unit of its currency: whole shillings, or cents.",
-        "properties": {
-          "currency": {
-            "enum": [
-              "UGX",
-              "USD"
-            ],
-            "title": "Currency",
-            "type": "string"
-          },
-          "minor": {
-            "exclusiveMinimum": 0.0,
-            "maximum": 9.223372036854776e+18,
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "Amount",
-        "type": "object"
-      },
       "AmountOut": {
         "additionalProperties": false,
         "properties": {
@@ -639,6 +613,70 @@
         "title": "AtMaturity",
         "type": "string"
       },
+      "AttentionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "enum": [
+              "float_low",
+              "payouts_waiting_for_float",
+              "review_queue",
+              "approvals_for_you",
+              "books_not_balanced",
+              "day_close_to_approve",
+              "interest_run_behind",
+              "interest_run_missing",
+              "maturities_not_closed"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "tone": {
+            "enum": [
+              "warning",
+              "info"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "tone",
+          "count",
+          "since",
+          "subject"
+        ],
+        "title": "AttentionOut",
+        "type": "object"
+      },
       "AuthenticatorSetupView": {
         "additionalProperties": false,
         "description": "Show `uri` as a QR code, and `secret` for typing in by hand. Neither is shown again.",
@@ -682,6 +720,46 @@
         ],
         "title": "AutomaticCheck",
         "type": "string"
+      },
+      "BalancingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "days_behind": {
+            "title": "Days Behind",
+            "type": "integer"
+          },
+          "last_closed": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed"
+          },
+          "waiting_for_approval": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting For Approval"
+          }
+        },
+        "required": [
+          "last_closed",
+          "waiting_for_approval",
+          "days_behind"
+        ],
+        "title": "BalancingOut",
+        "type": "object"
       },
       "BankAccountList": {
         "additionalProperties": false,
@@ -5067,6 +5145,29 @@
         "title": "CurrencyBankAccountView",
         "type": "object"
       },
+      "DayFlowOut": {
+        "additionalProperties": false,
+        "properties": {
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "money_in": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "money_out": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          }
+        },
+        "required": [
+          "day",
+          "money_in",
+          "money_out"
+        ],
+        "title": "DayFlowOut",
+        "type": "object"
+      },
       "DayOut": {
         "additionalProperties": false,
         "description": "One business day. While it is open, the figures are worked out now; once prepared or\nclosed, `close` holds who signed. `blockers` is every reason it cannot be prepared yet.",
@@ -6552,7 +6653,7 @@
         "additionalProperties": false,
         "properties": {
           "difference": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "kind": {
             "enum": [
@@ -6878,6 +6979,37 @@
           "exports"
         ],
         "title": "FinanceScreenOut",
+        "type": "object"
+      },
+      "FloatOut": {
+        "additionalProperties": false,
+        "properties": {
+          "balance": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "low": {
+            "title": "Low",
+            "type": "boolean"
+          },
+          "network": {
+            "enum": [
+              "mtn",
+              "airtel"
+            ],
+            "title": "Network",
+            "type": "string"
+          },
+          "warning_line": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          }
+        },
+        "required": [
+          "network",
+          "balance",
+          "warning_line",
+          "low"
+        ],
+        "title": "FloatOut",
         "type": "object"
       },
       "Frequency": {
@@ -7401,6 +7533,39 @@
         "title": "HeldUpPayoutOut",
         "type": "object"
       },
+      "HoldingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_code",
+          "product_name",
+          "investments",
+          "clients",
+          "principal"
+        ],
+        "title": "HoldingOut",
+        "type": "object"
+      },
       "IdentityCheckView": {
         "additionalProperties": false,
         "properties": {
@@ -7625,6 +7790,48 @@
           "upcoming"
         ],
         "title": "InsightsView",
+        "type": "object"
+      },
+      "InterestOut": {
+        "additionalProperties": false,
+        "properties": {
+          "behind": {
+            "title": "Behind",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "net": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "run_date": {
+            "format": "date",
+            "title": "Run Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_date",
+          "investments",
+          "net",
+          "finished_at",
+          "behind"
+        ],
+        "title": "InterestOut",
         "type": "object"
       },
       "InterestPaid": {
@@ -8127,7 +8334,7 @@
         "description": "A statement line still unpaired. `counterparty_hint` is the bank's narrative.",
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "counterparty_hint": {
             "title": "Counterparty Hint",
@@ -9115,29 +9322,6 @@
           "currency"
         ],
         "title": "MoneyIn",
-        "type": "object"
-      },
-      "MoneyOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "enum": [
-              "UGX",
-              "USD"
-            ],
-            "title": "Currency",
-            "type": "string"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "MoneyOut",
         "type": "object"
       },
       "MoneyView": {
@@ -10176,6 +10360,105 @@
           "score"
         ],
         "title": "Outcome",
+        "type": "object"
+      },
+      "OverviewOut": {
+        "additionalProperties": false,
+        "properties": {
+          "attention": {
+            "items": {
+              "$ref": "#/components/schemas/AttentionOut"
+            },
+            "title": "Attention",
+            "type": "array"
+          },
+          "balancing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BalancingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "floats": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/FloatOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Floats"
+          },
+          "holdings": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HoldingOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Holdings"
+          },
+          "maturities": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/WeekOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maturities"
+          },
+          "money": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__modules__overview__api__MoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "today": {
+            "format": "date",
+            "title": "Today",
+            "type": "string"
+          }
+        },
+        "required": [
+          "today",
+          "currency",
+          "money",
+          "floats",
+          "balancing",
+          "maturities",
+          "holdings",
+          "attention"
+        ],
+        "title": "OverviewOut",
         "type": "object"
       },
       "OverviewView": {
@@ -16210,7 +16493,7 @@
           "amount": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Amount-Output"
+                "$ref": "#/components/schemas/app__modules__support__api__Amount"
               },
               {
                 "type": "null"
@@ -18715,7 +18998,7 @@
             "type": "string"
           },
           "closing": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "id": {
             "maxLength": 20,
@@ -18729,7 +19012,7 @@
             "type": "integer"
           },
           "opening": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "source": {
             "enum": [
@@ -19484,7 +19767,7 @@
             "title": "Decided By"
           },
           "fee": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__MoneyOut"
           },
           "from_pot": {
             "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__PotOut"
@@ -19527,10 +19810,10 @@
             "type": "string"
           },
           "received": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__MoneyOut"
           },
           "sent": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__transfers_api__MoneyOut"
           },
           "status": {
             "enum": [
@@ -19889,7 +20172,7 @@
           "difference": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -19897,7 +20180,7 @@
             ]
           },
           "ledger_balance": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "read_at": {
             "anyOf": [
@@ -19914,7 +20197,7 @@
           "wallet_balance": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -19930,6 +20213,40 @@
           "read_at"
         ],
         "title": "WalletOut",
+        "type": "object"
+      },
+      "WeekOut": {
+        "additionalProperties": false,
+        "properties": {
+          "first_day": {
+            "format": "date",
+            "title": "First Day",
+            "type": "string"
+          },
+          "investments": {
+            "title": "Investments",
+            "type": "integer"
+          },
+          "last_day": {
+            "format": "date",
+            "title": "Last Day",
+            "type": "string"
+          },
+          "pay_out_principal": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "principal": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          }
+        },
+        "required": [
+          "first_day",
+          "last_day",
+          "investments",
+          "principal",
+          "pay_out_principal"
+        ],
+        "title": "WeekOut",
         "type": "object"
       },
       "WithdrawalRequest": {
@@ -20645,6 +20962,79 @@
         "title": "AmountView",
         "type": "object"
       },
+      "app__modules__overview__api__Amount": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "Amount",
+        "type": "object"
+      },
+      "app__modules__overview__api__MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "awaiting_start": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "client_money_held": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "clients_invested": {
+            "title": "Clients Invested",
+            "type": "integer"
+          },
+          "clients_verified": {
+            "title": "Clients Verified",
+            "type": "integer"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/DayFlowOut"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "in_transit": {
+            "$ref": "#/components/schemas/app__modules__overview__api__Amount"
+          },
+          "interest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InterestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "client_money_held",
+          "in_transit",
+          "awaiting_start",
+          "clients_invested",
+          "clients_verified",
+          "interest",
+          "days"
+        ],
+        "title": "MoneyOut",
+        "type": "object"
+      },
       "app__modules__payments__routes__MatchIn": {
         "additionalProperties": false,
         "properties": {
@@ -20706,12 +21096,35 @@
         "title": "MatchIn",
         "type": "object"
       },
+      "app__modules__reconciliation__api__MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyOut",
+        "type": "object"
+      },
       "app__modules__reconciliation__api__MovementOut": {
         "additionalProperties": false,
         "description": "A ledger movement on the pot still unpaired. `id` is \"<entry ID>:<line number>\".",
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "direction": {
             "enum": [
@@ -20778,7 +21191,7 @@
             "type": "array"
           },
           "ledger_closing": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "name": {
             "title": "Name",
@@ -20789,7 +21202,7 @@
             "type": "integer"
           },
           "open_exceptions_total": {
-            "$ref": "#/components/schemas/MoneyOut"
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
           },
           "source": {
             "enum": [
@@ -20802,7 +21215,7 @@
           "statement_closing": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -20812,7 +21225,7 @@
           "unexplained": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -20853,7 +21266,7 @@
           "last_closing": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/MoneyOut"
+                "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
               },
               {
                 "type": "null"
@@ -20894,6 +21307,29 @@
           "last_closing"
         ],
         "title": "PotOut",
+        "type": "object"
+      },
+      "app__modules__reconciliation__transfers_api__MoneyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MoneyOut",
         "type": "object"
       },
       "app__modules__reconciliation__transfers_api__PotOut": {
@@ -45736,6 +46172,74 @@
         "summary": "Send Back",
         "tags": [
           "organisations"
+        ]
+      }
+    },
+    "/staff/overview": {
+      "get": {
+        "description": "The Overview's figures that this member of staff may see. Reads only.",
+        "operationId": "overview_staff_overview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "default": "UGX",
+              "enum": [
+                "UGX",
+                "USD"
+              ],
+              "title": "Currency",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Overview",
+        "tags": [
+          "staff overview"
         ]
       }
     },

@@ -67,6 +67,7 @@ from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
 from app.modules.notifications.settings import EmailHashSettings
 from app.modules.organisations import api as organisations_api
+from app.modules.overview import api as overview_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import bank_account_routes, reassignment_routes
 from app.modules.payments import routes as payment_routes
@@ -223,6 +224,7 @@ def create_app(
         *payouts_api.routers,
         *approvals_api.routers,
         *review_queue_api.routers,
+        *overview_api.routers,
         *payouts_staff_api.routers,
         *staff_payouts_api.routers,
         *staff_held_api.routers,
