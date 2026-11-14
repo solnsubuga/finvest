@@ -175,7 +175,7 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 
 Before a signed-in client changes their own password or mobile number, a passkey or authenticator app proves the device, and a live selfie proves the person ([sign-in.md](sign-in.md#changing-how-you-sign-in)). The selfie runs on the same liveness provider, and the face it captured is compared with the face on file by the same face match the hand-in uses. Only a live person whose face matches confirms the change.
 
-The face on file (`service.approved_selfie`) is the current selfie of the client's approved check, or, for a check carried over from Finvest 1.0, the selfie on the claim check staff matched. A client with neither, or with liveness off, is not asked: the passkey or app alone confirms the change. An approved check is always picked by `status = 'approved'`, since a client may also have a superseded one.
+The face on file (`service.approved_selfie`) is the current selfie of the client's approved check, or, for a check carried over at the switch with no photos (`source = finvest1`), the selfie on the claim check staff matched. If existing clients instead take the full ID check, as the migration thread has proposed for paper records, they are found the usual way and the claim fallback simply matches nobody. A client with neither, or with liveness off, is not asked: the passkey or app alone confirms the change. An approved check is always picked by `status = 'approved'`, since a client may also have a superseded one.
 
 How an attempt goes (`app/modules/kyc/face_confirmations.py`, `face_confirmation_jobs.py`, `domain/face_confirmations.py`):
 

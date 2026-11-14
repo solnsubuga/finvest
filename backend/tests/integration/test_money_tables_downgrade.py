@@ -818,6 +818,20 @@ ROWS = {
         "('-Nabc0000000000000L1', '-Nabc0000000000000A1', 'iotec-faces', now(), now())",
         "refusing to drop liveness records",
     ),
+    "0391_kyc_face_confirmations": (
+        "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'national_id', "
+        "'UG', now(), now()); "
+        "INSERT INTO kyc_photos (id, check_id, kind, storage_key, content_type, byte_size, "
+        "sha256, created_at) VALUES ('-Nabc0000000000000P1', '-Nabc0000000000000A1', 'selfie', "
+        "'kyc/a/p', 'image/jpeg', 10, repeat('ab', 32), now()); "
+        "INSERT INTO kyc_face_confirmations (id, client_id, check_id, reference_photo_id, "
+        "session_id, provider, matcher, created_at, updated_at) VALUES "
+        "('-Nabc0000000000000F1', '-Nabc0000000000000B1', '-Nabc0000000000000A1', "
+        "'-Nabc0000000000000P1', '-Nabc0000000000000S1', 'iotec-faces', 'iotec-verify', now(), "
+        "now())",
+        "refusing to drop face confirmations",
+    ),
     "0241_investment_transfers": (
         "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
         "ALTER TABLE investment_transfers DISABLE TRIGGER USER; "
