@@ -1490,6 +1490,13 @@
             "title": "Retake Photos",
             "type": "array"
           },
+          "retaken": {
+            "items": {
+              "$ref": "#/components/schemas/PhotoKind"
+            },
+            "title": "Retaken",
+            "type": "array"
+          },
           "status": {
             "$ref": "#/components/schemas/CheckStatus"
           },
@@ -1516,6 +1523,7 @@
           "photos",
           "missing",
           "retake_photos",
+          "retaken",
           "client_message",
           "submitted_at",
           "account_number"

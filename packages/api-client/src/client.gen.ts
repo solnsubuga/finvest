@@ -158,6 +158,7 @@ export const ClientCheck = z.object({
   missing: z.array(z.string()),
   photos: z.array(ClientPhoto),
   retake_photos: z.array(PhotoKind),
+  retaken: z.array(PhotoKind),
   status: CheckStatus,
   submitted_at: z.string().nullable(),
 });
