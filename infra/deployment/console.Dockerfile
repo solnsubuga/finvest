@@ -12,8 +12,10 @@ WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/console/package.json apps/console/
 COPY packages/tokens/package.json packages/tokens/
+COPY packages/api-client/package.json packages/api-client/
 RUN pnpm install --frozen-lockfile --filter "@finvest/console..."
 COPY packages/tokens packages/tokens
+COPY packages/api-client packages/api-client
 COPY apps/console apps/console
 RUN pnpm --filter @finvest/console build
 
