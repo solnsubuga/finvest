@@ -27,6 +27,10 @@ const ITEM = {
   file_name: null,
   byte_size: null,
   not_final_from: null,
+  investment_id: null,
+  deposit_id: null,
+  reference: `ST-${ID}`,
+  note: null,
 };
 
 type Call = { url: string; init: RequestInit };
@@ -45,7 +49,7 @@ afterEach(() => setFetch(null));
 it("asks for a statement with the period and the key", async () => {
   const calls = answer(202, ITEM);
   const document = await createApiDocumentsClient().requestStatement("2026-08-01", "2026-11-13", "key-123456789012");
-  expect(document).toMatchObject({ id: ID, status: "pending", dateFrom: "2026-08-01", notFinalFrom: null });
+  expect(document).toMatchObject({ id: ID, status: "pending", dateFrom: "2026-08-01", notFinalFrom: null, reference: `ST-${ID}` });
   const call = calls[0]!;
   expect(call.url).toMatch(/\/client\/statements$/);
   expect(call.init.method).toBe("POST");
@@ -106,6 +110,8 @@ it("downloads only a ready document, under a plain name", async () => {
     finishedAt: "2026-11-13T12:40:05Z",
     byteSize: 1000,
     notFinalFrom: null,
+    reference: `RC-${ID}`,
+    note: null,
   };
   await expect(client.download({ ...base, status: "pending", fileName: null })).rejects.toMatchObject({ code: "not_found" });
   await client.download({ ...base, status: "ready", fileName: "Finvest receipt RC-Pq30vNa2.pdf" });

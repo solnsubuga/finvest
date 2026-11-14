@@ -27,9 +27,16 @@ jobs:
       - run: make audit
 
   integration:
-    name: Integration tests on PostgreSQL
+    # The suite is split by test file into shards, each with its own throwaway database,
+    # so no single job runs long enough to hit its time limit. Files are dealt out in
+    # sorted order, so every file lands in exactly one shard.
+    name: Integration tests on PostgreSQL, part ${{ matrix.shard }} of 4
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     services:
       postgres:
         image: postgres:17@sha256:846a7ddaa67a4b354ae1d21087b683901aa6113a4ed626d3787cfbf6c85e3e07
@@ -54,7 +61,35 @@ jobs:
           cache-dependency-glob: backend/uv.lock
       - run: psql --version
       - run: make bootstrap
-      - run: make test-integration
+      - name: Run this shard's integration test files
+        working-directory: backend
+        env:
+          SHARD: ${{ matrix.shard }}
+          SHARDS: 4
+        run: |
+          mapfile -t files < <(find tests/integration -name 'test_*.py' | LC_ALL=C sort \
+            | awk -v shard="$SHARD" -v shards="$SHARDS" 'NR % shards == shard % shards')
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "Shard $SHARD has no test files" >&2
+            exit 1
+          fi
+          printf 'Shard %s runs %s files\n' "$SHARD" "${#files[@]}"
+          uv run --locked pytest -m integration "${files[@]}"
+
+  integration-result:
+    # One stable check name for branch protection, whatever the number of shards.
+    name: Integration tests on PostgreSQL
+    if: always()
+    needs: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shard passed
+        env:
+          RESULT: ${{ needs.integration.result }}
+        run: |
+          echo "Integration shards: $RESULT"
+          [ "$RESULT" = "success" ]
 
   journeys:
     name: End-to-end journeys

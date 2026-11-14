@@ -54,6 +54,22 @@ class DocumentStatus(StrEnum):
     FAILED = "failed"
 
 
+class NoteStage(StrEnum):
+    """An investment note is keyed `started:<id>` when it starts and `ended:<id>` when it ends."""
+
+    STARTED = "started"
+    ENDED = "ended"
+
+
+_REFERENCE_PREFIX = {
+    DocumentKind.MONTHLY_STATEMENT: "ST",
+    DocumentKind.REQUESTED_STATEMENT: "ST",
+    DocumentKind.RECEIPT: "RC",
+    DocumentKind.TAX_CERTIFICATE: "TC",
+    DocumentKind.INVESTMENT_NOTE: "IN",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class DocumentView:
     """A document's record, without its file."""
@@ -72,6 +88,18 @@ class DocumentView:
     byte_size: int | None
     # For a statement the client asked for: the first day whose figures were not yet final.
     not_final_from: date | None = None
+
+    @property
+    def reference(self) -> str:
+        """What the document's PDF and email call it: "ST-", "RC-", "TC-" or "IN-" and its ID."""
+        return f"{_REFERENCE_PREFIX[self.kind]}-{self.id}"
+
+    @property
+    def note(self) -> NoteStage | None:
+        """For an investment note, whether it confirms the investment started or ended."""
+        if self.kind is not DocumentKind.INVESTMENT_NOTE:
+            return None
+        return NoteStage.ENDED if self.idempotency_key.startswith("ended:") else NoteStage.STARTED
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +189,26 @@ async def request_statement(
     if view.period != period:
         raise ApplicationError("idempotency_key_reused")
     return view
+
+
+async def staff_statement(
+    session: AsyncSession, client_id: str, period: Period, *, action_id: str, now: datetime
+) -> DocumentView:
+    """Ask for a statement two members of staff agreed to send the client.
+
+    Called only by the console module, in the staff transaction that approved the action.
+    Migration 0353 refuses the row anywhere else. It is built, put in the app and emailed
+    exactly as one the client asked for, so the client's limit of statements a day is not
+    charged.
+    """
+    return await ask(
+        session,
+        client_id=client_id,
+        kind=DocumentKind.REQUESTED_STATEMENT,
+        key=f"staff:{action_id}",
+        period=period,
+        now=now,
+    )
 
 
 async def ask(

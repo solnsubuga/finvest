@@ -19,7 +19,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer, SealError, associated_data, key_from_text
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import clear_attempts, reserve_attempts, throttle_key
-from app.modules.identity import trail
+from app.modules.identity import notices, trail
 from app.modules.identity.domain import totp
 from app.modules.identity.domain.sessions import Transport
 from app.modules.identity.passkeys import (
@@ -188,6 +188,14 @@ class AuthenticatorService:
         await self._clear_attempts(staff.staff_id)
         return await self.identity.confirm_staff(staff, "authenticator")
 
+    async def client_reconfirm(self, client: ClientSession, code: str) -> datetime:
+        """Check a code from the client's app on this session. Returns when it stops counting."""
+        self._require()
+        await self._count_attempt(client.client_id)
+        await self._accept(client.actor, code)
+        await self._clear_attempts(client.client_id)
+        return await self.identity.confirm_client(client, "authenticator")
+
     async def _accept(self, actor: Actor, code: str) -> None:
         """Accept `code` for this person's confirmed app once, or raise `invalid_code`."""
         async with self.database.transaction() as session:
@@ -298,6 +306,9 @@ class AuthenticatorService:
                 resource_type="authenticator",
                 resource_id=pending.id,
             )
+            await notices.second_step_changed(
+                session, client.client_id, "authenticator_added", pending.id, now
+            )
         await self._clear_attempts(client.client_id)
         logger.info("authenticator_added", kind="client")
 
@@ -320,6 +331,9 @@ class AuthenticatorService:
                     "identity.authenticator.removed",
                     resource_type="authenticator",
                     resource_id=removed,
+                )
+                await notices.second_step_changed(
+                    session, client.client_id, "authenticator_removed", removed, self.clock.now()
                 )
         if not removed:
             raise ApplicationError("not_found")

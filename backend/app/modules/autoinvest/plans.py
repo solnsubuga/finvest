@@ -366,6 +366,9 @@ async def _checked(
         raise _invalid("product_code", "unsupported_currency")
     if quote.product.term_days is None and terms.at_maturity is not None:
         raise _invalid("at_maturity", "open_term_has_no_maturity")
+    # Paying the interest out needs a payout account, which a plan does not name.
+    if terms.at_maturity is AtMaturity.PAY_INTEREST:
+        raise _invalid("at_maturity", "not_for_automatic_investing")
     return payer
 
 

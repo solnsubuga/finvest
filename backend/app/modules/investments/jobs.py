@@ -25,9 +25,11 @@ from app.infrastructure.jobs import (
 from app.infrastructure.jobs import queue as job_queue
 from app.modules.investments import (
     accrual,
+    bookings,
     corrections,
     holdings,
     maturity,
+    reminders,
     transfers,
     withdrawal,
 )
@@ -42,6 +44,8 @@ CANCEL_UNPAID_KIND = "investments.cancel_unpaid"
 ACCRUE_KIND = "investments.accrue_interest"
 MATURE_KIND = "investments.mature"
 TELL_EARNINGS_KIND = "investments.tell_earnings"
+# The scheduler asks for this every morning, so a reminder is not sent at night.
+REMIND_MATURING_KIND = "investments.remind_maturing"
 logger = structlog.get_logger()
 
 
@@ -57,7 +61,9 @@ class InvestmentJobs:
             ACCRUE_KIND: self.accrue_interest,
             MATURE_KIND: self.mature,
             TELL_EARNINGS_KIND: self.tell_earnings,
+            REMIND_MATURING_KIND: self.remind_maturing,
             corrections.APPLY_KIND: self.apply_correction,
+            bookings.CARRY_OUT_KIND: self.carry_out_booking,
             WITHDRAW_KIND: self.withdraw_early,
             PAY_EARLY_WITHDRAWAL_KIND: self.pay_early_withdrawal,
             transfers.CARRY_OUT_KIND: self.carry_out_transfer,
@@ -162,6 +168,21 @@ class InvestmentJobs:
             except ApplicationError as error:
                 raise PermanentJobError(code=f"correction_{error.code}") from error
             return {"status": done.status.value, "error_code": done.failure_code}
+
+        await context.apply(effect)
+
+    async def carry_out_booking(self, job: ClaimedJob, context: JobContext) -> None:
+        """Save the investment two members of staff booked. A refusal is recorded on it."""
+        booking_id = job.payload.get("booking_id")
+        if not isinstance(booking_id, str):
+            raise PermanentJobError(code="booking_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                done = await bookings.carry_out_booking(session, booking_id, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"booking_{error.code}") from error
+            return {"status": done.status, "error_code": done.failure_code}
 
         await context.apply(effect)
 
@@ -292,6 +313,32 @@ class InvestmentJobs:
         await context.apply(effect)
         log = logger.error if failed else logger.info
         log("maturity_run_finished", run_date=run_date.isoformat(), matured=matured, failed=failed)
+
+    async def remind_maturing(self, job: ClaimedJob, context: JobContext) -> None:
+        """Remind clients whose investment matures in as many days as Settings says.
+
+        A batch at a time in fenced transactions, as the maturity run. Every reminder is keyed,
+        so a retry, or a second run on the same day, tells nobody twice.
+        """
+        run_date = _run_date(job.payload)
+        told = 0
+        after = ""
+        async with context.kept_alive():
+            while True:
+                async with self._database.actor_transaction(SYSTEM) as session:
+                    await job_queue.lock_fenced(session, job)
+                    batch = await reminders.remind_batch(
+                        session, run_date, self._clock, after=after
+                    )
+                told += batch.told
+                if batch.last_id is None:
+                    break
+                after = batch.last_id
+
+        async def effect(_: AsyncSession) -> Mapping[str, object]:
+            return {"run_date": run_date.isoformat(), "told": told}
+
+        await context.apply(effect)
 
 
 async def _nothing(_: AsyncSession) -> Mapping[str, object]:

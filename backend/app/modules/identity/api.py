@@ -109,7 +109,7 @@ async def current_client(request: Request, identity: Identity) -> ClientSession:
 
 async def current_staff(request: Request, identity: Identity) -> StaffSession:
     token = _credentials(request, "staff")
-    session = await identity.staff_session(token) if token else None
+    session = await identity.staff_session(token, caller_address(request)) if token else None
     if session is None:
         raise ApplicationError("unauthorized")
     return session
@@ -117,6 +117,22 @@ async def current_staff(request: Request, identity: Identity) -> StaffSession:
 
 CurrentClient = Annotated[ClientSession, Depends(current_client)]
 CurrentClientEvenLocked = Annotated[ClientSession, Depends(current_client_even_locked)]
+
+
+async def current_confirmed_client(request: Request, client: CurrentClient) -> ClientSession:
+    """A signed-in client who used a passkey or authenticator app in the last ten minutes.
+
+    Declare it on a route that changes how the client signs in or is reached. A refusal is
+    `confirm_it_is_you`: the app asks for the passkey or app code, then sends it again. A code
+    texted or emailed never counts, because whoever holds the SIM could have it.
+    """
+    now = request.app.state.clock.now()
+    if client.confirmed_at is None or now - client.confirmed_at > CONFIRMATION_WINDOW:
+        raise ApplicationError("confirm_it_is_you")
+    return client
+
+
+CurrentConfirmedClient = Annotated[ClientSession, Depends(current_confirmed_client)]
 CurrentStaff = Annotated[StaffSession, Depends(current_staff)]
 
 

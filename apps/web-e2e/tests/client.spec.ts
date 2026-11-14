@@ -327,6 +327,7 @@ test("a client sends part of an investment to another client after checking the 
   await expect(id(page, "recipient")).toContainText("Brian K.");
   await expect(id(page, "recipient")).toContainText("Finvest account 1001005170");
   await id(page, "send-amount").fill("1000000");
+  await id(page, "send-purpose-gift").click();
   await id(page, "review-send").click();
   await expect(id(page, "send-confirm")).toContainText("You are sending UGX 1,000,000 to Brian K.");
   await id(page, "confirm-send").click();

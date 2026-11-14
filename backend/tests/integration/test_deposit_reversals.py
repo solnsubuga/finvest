@@ -83,6 +83,18 @@ async def live(database: Database, investment_id: str) -> bool:
         )
 
 
+async def reversal_notices(database: Database, deposit: service.Deposit) -> list[str]:
+    async with database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text(
+                "SELECT body FROM notifications WHERE client_id = :client AND link_id = :id "
+                "AND link_kind = 'deposit' AND event = 'payment_reversed'"
+            ),
+            {"client": deposit.client_id, "id": deposit.id},
+        )
+        return [row.body for row in rows]
+
+
 async def scalar(database: Database, sql: str, **parameters: object) -> object:
     async with database.actor_transaction(SYSTEM) as session:
         return await session.scalar(text(sql), parameters)
@@ -144,8 +156,13 @@ async def test_two_people_take_back_a_mistaken_deposit_and_the_client_can_pay_ag
         proposed.id,
     )
     assert not await live(worker_database, investment.id)
+    # The client is told once, by method and never by amount.
+    [notice] = await reversal_notices(worker_database, deposit)
+    assert "matched to your account by mistake" in notice
+    assert str(MINOR) not in notice and f"{MINOR // 100:,}" not in notice
     # Running it again changes nothing.
     assert (await apply(worker_database, proposed.id)).entry_id == done.entry_id
+    assert len(await reversal_notices(worker_database, deposit)) == 1
     actions = [event.action for event in await audit_for(migrator_database, [proposed.id])]
     assert actions == [
         "payments.reversal_proposed",
@@ -228,6 +245,7 @@ async def test_money_that_moved_after_approval_fails_the_reversal_and_moves_noth
     )
     assert (await reload(worker_database, deposit.id)).reversal_id is None
     assert await live(worker_database, investment.id)
+    assert await reversal_notices(worker_database, deposit) == []
     # A failed reversal frees the deposit for a fresh proposal once the money is back.
     with pytest.raises(ApplicationError) as refused:
         await propose(app_database, staff(), deposit.id)

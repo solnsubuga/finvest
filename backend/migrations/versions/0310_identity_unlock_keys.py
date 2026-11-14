@@ -1,7 +1,7 @@
 """Let a phone open the Finvest app with a fingerprint or face, through its own unlock key.
 
 Revision ID: 0310_identity_unlock_keys
-Revises: 0183_monitoring_transfers
+Revises: 0360_investment_product_changes
 
 Turning it on, with the PIN, gives the phone a random key once. The phone keeps it where only a
 fingerprint or face can read it, and sends it to open a locked app instead of the PIN. Only its
@@ -13,7 +13,7 @@ is sent. The PIN itself never stays on the phone.
 from alembic import op
 
 revision = "0310_identity_unlock_keys"
-down_revision = "0183_monitoring_transfers"
+down_revision = "0360_investment_product_changes"
 branch_labels = None
 depends_on = None
 

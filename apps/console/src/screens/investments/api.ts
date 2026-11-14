@@ -17,7 +17,7 @@ export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "with
 
 /** Every status, so a list of all investments can ask for each in turn. */
 export const INVESTMENT_STATUSES: readonly InvestmentStatus[] = ["awaiting_payment", "active", "matured", "withdrawn", "unwound", "transferred", "cancelled"];
-export type AtMaturity = "roll_over" | "pay_out";
+export type AtMaturity = "roll_over" | "pay_out" | "pay_interest";
 
 export interface Investment {
   id: string;

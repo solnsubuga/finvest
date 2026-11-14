@@ -209,9 +209,10 @@ async def propose_correction(
             if not amount.is_positive:
                 raise invalid("investment_id", "nothing_waiting")
         else:
-            if not _held(investment):
+            waiting = investment.waiting
+            if waiting is None:
                 raise ApplicationError("conflict")
-            amount = _proceeds(investment)
+            amount = waiting
         await check_payable_destination(session, investment.client_id, destination_id, amount, now)
     correction_id = push_id()
     try:
@@ -522,9 +523,9 @@ async def _pay_out(
     session: AsyncSession, correction: Correction, investment: Investment, clock: Clock
 ) -> _Outcome:
     # Still waiting: the client may have sent it on from the app since it was proposed.
-    if not _held(investment) or correction.destination_id is None:
+    if investment.waiting is None or correction.destination_id is None:
         return None, None, "investment_not_held"
-    if _proceeds(investment) != correction.amount:
+    if investment.waiting != correction.amount:
         return None, None, "amount_changed"
     try:
         # A refusal leaves nothing behind, and the money keeps waiting for the client.
@@ -553,20 +554,6 @@ async def _pay_out(
 
 
 # Internals --------------------------------------------------------------------------------------
-
-
-def _held(investment: Investment) -> bool:
-    """Matured, and its money waits for the client: neither rolled over nor paid out."""
-    return (
-        investment.status is InvestmentStatus.MATURED
-        and investment.rolled_into_id is None
-        and investment.payout_id is None
-    )
-
-
-def _proceeds(investment: Investment) -> Money:
-    """What a matured investment handed to payouts: the principal and the interest after tax."""
-    return investment.amount + investment.accrued_net
 
 
 def _awaiting_start(investment: Investment) -> AccountSpec:

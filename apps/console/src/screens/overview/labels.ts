@@ -14,6 +14,15 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   // The subject is the currency, such as "UGX". The details are shown on Settings.
   bank_account_change: { label: "Bank account clients pay into", path: at("/settings") },
   account_code_map: { label: "Accounting system codes", path: at("/settings") },
+  // The subject is the setting's key, such as "public_holidays".
+  payment_channels_change: { label: "Payment channels", path: at("/settings") },
+  calendar_change: { label: "Calendar", path: at("/settings") },
+  staff_security_change: { label: "Staff security", path: at("/settings") },
+  statement_layout_change: { label: "Statement import layouts", path: at("/settings") },
+  // The subject is the day the new limits start.
+  withdrawal_limits_change: { label: "Withdrawal limits", path: at("/settings") },
+  report_schedule: { label: "Scheduled report", path: at("/reports") },
+  month_close: { label: "Close the month", path: at("/finance") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
   pot_transfer: { label: "Transfer between pots", path: at("/reconciliation") },
   bank_transfer_match: { label: "Bank transfer match", path: at("/reconciliation") },
@@ -32,11 +41,20 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   client_lock: { label: "Client lock", path: (item) => `/clients?client=${encodeURIComponent(item.subject.split(" ").pop() ?? "")}` },
   // The subject is the client's ID.
   account_closure: { label: "Account closure", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  // Acting for a client from their page. The subject is the client's ID.
+  client_pin_reset: { label: "Client's app PIN reset", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  client_limits: { label: "Client's own withdrawal limits", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  client_statement: { label: "Statement to send a client", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
+  client_withdrawal: { label: "Withdrawal a client asked for", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },
   suppression_lift: { label: "Email suppression lift", path: at("/clients") },
   complaint_outcome: { label: "Complaint outcome", path: at("/complaints") },
   payout_account: { label: "Payout account check", path: at("/review-queue") },
   // The subject is the payment's ID; the reassignment opens by its own.
   deposit_reassignment: { label: "Payment to move to another client", path: (item) => `/reconciliation?reassignment=${encodeURIComponent(item.id)}` },
+  // The subject is the payment's ID; the reversal opens by its own.
+  deposit_reversal: { label: "Mistaken payment to take back", path: (item) => `/reconciliation?reversal=${encodeURIComponent(item.id)}` },
+  // The subject is the step and the payment's ID, such as "open -N…"; the step opens by its own.
+  deposit_receivable: { label: "Money a client owes for a mistaken payment", path: (item) => `/reconciliation?receivable=${encodeURIComponent(item.id)}` },
   tax_remittance: { label: "Payment to URA", path: at("/finance") },
   // The subject is the outcome proposed: "paid" or "failed".
   payout_resolution: { label: "Stranded payout to settle", path: at("/money-movement") },
@@ -50,7 +68,16 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
     label: "Company or group account to open",
     path: (item) => `/review-queue?tab=organisations&organisation=${encodeURIComponent(item.id)}`,
   },
+  // Undoing, refunding or sending on a matured term's money, decided under Corrections.
+  investment_correction: { label: "Investment correction", path: at("/investments") },
+  // The subject is "interest 2026-11-13" or "maturity 2026-11-14".
+  investment_run: {
+    label: "Run again",
+    path: (item) => (item.subject.startsWith("maturity") ? "/maturities" : "/investments"),
+  },
 };
+
+const RECEIVABLE_STEPS: Record<string, string> = { open: "Record what is owed", recover: "Money arrived", write_off: "Write off" };
 
 const SUBJECT_WORDS: Record<string, string> = {
   invite: "Invite",
@@ -62,6 +89,9 @@ const SUBJECT_WORDS: Record<string, string> = {
   bank: "Bank account",
   company: "Company",
   group: "Group or SACCO",
+  unwind: "Undo an investment",
+  refund: "Refund to the client",
+  pay_out: "Send matured money on",
 };
 
 /** The subject in words where it is a code, such as `change_role` or `lock -N…`. */
@@ -71,7 +101,16 @@ export function describeSubject(item: ApprovalItem): string {
     return `${kind === "unlock" ? "Unlock" : "Lock"} client ${client ?? ""}`.trim();
   }
   if (item.kind === "suppression_lift") return `Address ${item.subject}…`;
+  if (item.kind === "investment_run") {
+    const [kind, day] = item.subject.split(" ");
+    return `${kind === "maturity" ? "Maturities" : "Interest"} for ${day ?? ""}`.trim();
+  }
   if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
+  if (item.kind === "deposit_reversal") return `Payment ${item.subject}`;
+  if (item.kind === "deposit_receivable") {
+    const [step, deposit] = item.subject.split(" ");
+    return `${RECEIVABLE_STEPS[step ?? ""] ?? "Step"} for payment ${deposit ?? ""}`.trim();
+  }
   return SUBJECT_WORDS[item.subject] ?? item.subject;
 }
 

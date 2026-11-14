@@ -14,6 +14,7 @@ import {
   type Decision,
   type DocumentType,
   type KycApi,
+  type PhoneNameStatus,
   type PhotoKind,
   type QueueItem,
 } from "./api.ts";
@@ -37,6 +38,7 @@ interface CheckJson extends QueueJson {
   document_expires_on: string | null;
   photos: { id: string; kind: PhotoKind; live?: boolean }[];
   automatic_checks: AutomaticCheck[];
+  phone_name?: { status: PhoneNameStatus; registered_name: string | null } | null;
   retake_photos: PhotoKind[];
   client_message: string | null;
   account_number: string | null;
@@ -77,6 +79,7 @@ export function toCheck(json: CheckJson, links: PhotoLinksJson | null): CheckDet
       live: photo.live === true,
     })),
     automaticChecks: json.automatic_checks.map((item) => ({ check: item.check, verdict: item.verdict, score: item.score })),
+    phoneName: json.phone_name ? { status: json.phone_name.status, registeredName: json.phone_name.registered_name } : null,
     retakePhotos: json.retake_photos,
     clientMessage: json.client_message,
     accountNumber: json.account_number,

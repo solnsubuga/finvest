@@ -43,6 +43,8 @@ const paths = {
     "M5 15c.6-1.2.9-2.4.9-3.8a6.1 6.1 0 0112.2 0c0 1.6-.1 3.1-.5 4.6",
     "M12 13c0 3-.8 5.6-2.2 8",
   ],
+  // A padlock: freezing the account.
+  lock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 018 0v4"],
 } as const;
 
 export type IconName = keyof typeof paths;

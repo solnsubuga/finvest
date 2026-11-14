@@ -24,14 +24,21 @@ from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
-from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
+from app.modules.investments.jobs import (
+    ACCRUE_KIND,
+    CANCEL_UNPAID_KIND,
+    MATURE_KIND,
+    REMIND_MATURING_KIND,
+)
 from app.modules.kyc.service import SWEEP_UNANSWERED
+from app.modules.migration.jobs import CLAIM_REMINDERS_KIND, CLAIM_REMINDERS_MAX_AGE
 from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
 from app.modules.payouts import payouts
+from app.modules.reports.jobs import QUEUE_KIND as REPORT_SCHEDULES_KIND
 from app.modules.screening.service import RESCREEN_KIND
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
@@ -113,6 +120,22 @@ def schedules() -> list[Schedule]:
             kind=SEND_REMINDERS_KIND,
             max_age=timedelta(hours=10),
         ),
+        # Investments maturing in as many days as Settings says (7 and 1 unless changed), in
+        # the morning so no text arrives at night. Each reminder is sent once.
+        Schedule(
+            name="investments.remind_maturing",
+            trigger=CronTrigger(hour=8, minute=30, timezone=KAMPALA),
+            kind=REMIND_MATURING_KIND,
+            max_age=timedelta(hours=10),
+        ),
+        # A fresh claim link for migrated clients whose last one is a week old and unused, in
+        # the morning so no text arrives at night. One run covers every client due.
+        Schedule(
+            name="migration.claim_reminders",
+            trigger=CronTrigger(hour=9, minute=0, timezone=KAMPALA),
+            kind=CLAIM_REMINDERS_KIND,
+            max_age=CLAIM_REMINDERS_MAX_AGE,
+        ),
         # Last month's statement for every client. It runs every morning and asks for a month
         # only once the ledger is closed through its last day; each client is asked once.
         Schedule(
@@ -120,6 +143,14 @@ def schedules() -> list[Schedule]:
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
             max_age=timedelta(hours=20),
+        ),
+        # Scheduled reports due today: an email to each recipient with a link to download it.
+        # A missed morning is not caught up; the next sends the next period.
+        Schedule(
+            name="reports.send_scheduled",
+            trigger=CronTrigger(hour=7, minute=0, timezone=KAMPALA),
+            kind=REPORT_SCHEDULES_KIND,
+            max_age=timedelta(hours=10),
         ),
         # Closes document emails still queued a week after their document was ready, whose
         # job expired or failed, so the record says they were never sent.

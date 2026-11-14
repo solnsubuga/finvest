@@ -30,9 +30,18 @@ const KINDS: readonly { kind: CorrectionKind; label: string; hint: string }[] = 
     label: "Refund money waiting to start",
     hint: "For money the client paid in themselves for an investment that was cancelled or undone. It is paid to one of their approved payout accounts.",
   },
+  {
+    kind: "pay_out",
+    label: "Send a matured investment's money on",
+    hint: "For a term that ended with nowhere to send the money. The client asked for it to go to another of their approved payout accounts. Maturities offers this on each waiting term too.",
+  },
 ];
 
-const KIND_TITLES: Record<CorrectionKind, string> = { unwind: "Undo an investment", refund: "Refund to the client" };
+const KIND_TITLES: Record<CorrectionKind, string> = {
+  unwind: "Undo an investment",
+  refund: "Refund to the client",
+  pay_out: "Send matured money on",
+};
 
 const STATUS: Record<Correction["status"], { label: string; className: string }> = {
   proposed: { label: "Waiting for a second person", className: "bg-warning-surface text-warning-text" },
@@ -56,7 +65,7 @@ interface CorrectionsSectionProps {
   newKey?: () => string;
 }
 
-/** Undoing an investment started by mistake, and refunding money that never started one. Two people each. */
+/** Undoing an investment started by mistake, refunding money that never started one, and sending held maturity money on. Two people each. */
 export function CorrectionsSection({ api, directory, me, canChange, newKey = () => crypto.randomUUID() }: CorrectionsSectionProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [writing, setWriting] = useState(false);
@@ -140,7 +149,7 @@ export function CorrectionsSection({ api, directory, me, canChange, newKey = () 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex max-w-[720px] flex-col gap-1">
           <h2 id="corrections" className="m-0 text-xl font-extrabold">
-            Undoing and refunds
+            Corrections
           </h2>
           <p className="m-0 text-md leading-normal text-muted">
             One person proposes, someone else approves, and Finvest then moves the money.{" "}
@@ -255,7 +264,7 @@ function ProposeForm({ busy, error, refused, onCancel, onSubmit }: ProposeFormPr
     ...(investmentId.trim() ? [] : [{ field: "investment_id" as const, code: "required" }]),
     ...(reason.trim() ? [] : [{ field: "reason" as const, code: "required" }]),
     ...(reason.length > REASON_LIMIT ? [{ field: "reason" as const, code: "too_long" }] : []),
-    ...(kind === "refund" && !destinationId.trim() ? [{ field: "destination_id" as const, code: "required" }] : []),
+    ...(kind !== "unwind" && !destinationId.trim() ? [{ field: "destination_id" as const, code: "required" }] : []),
   ];
   const shown = [...(tried ? missing : missing.filter((p) => p.code !== "required")), ...refused];
   const codesFor = (field: CorrectionField) => [...new Set(shown.filter((p) => p.field === field).map((p) => p.code))];
@@ -301,7 +310,7 @@ function ProposeForm({ busy, error, refused, onCancel, onSubmit }: ProposeFormPr
           kind,
           investmentId: investmentId.trim(),
           reason: reason.trim(),
-          destinationId: kind === "refund" ? destinationId.trim() : null,
+          destinationId: kind === "unwind" ? null : destinationId.trim(),
         });
       }}
     >
@@ -331,7 +340,7 @@ function ProposeForm({ busy, error, refused, onCancel, onSubmit }: ProposeFormPr
         </p>
       ) : null}
       {field("investment_id", "Investment ID", "The ID of the investment to correct, as payments or the client's page gives it.", investmentId, setInvestmentId)}
-      {kind === "refund"
+      {kind !== "unwind"
         ? field("destination_id", "Payout account ID", "One of the client's approved payout accounts, from their client page.", destinationId, setDestinationId)
         : null}
       {field("reason", "Why?", "Staff only, for the person who approves it and the audit trail. Name the payment or statement line.", reason, setReason, 3)}
