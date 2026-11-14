@@ -427,8 +427,15 @@ class BankTransferOut(Contract):
     candidates: list[StatementLineOut]
 
 
+class BankTransferInQueue(PaymentView):
+    # The step the transfer waits for: `check` (nobody has reviewed it), `second_person` (one
+    # person matched it and a different one must approve), `posting` (approved or refused, and
+    # the worker is settling it).
+    awaiting: Literal["check", "second_person", "posting"]
+
+
 class BankTransferPage(Contract):
-    items: list[PaymentView]
+    items: list[BankTransferInQueue]
     next_before: PushId | None
 
 
@@ -483,10 +490,24 @@ async def bank_transfers_in_review(
         deposits = await service.list_deposits(
             session, status=DepositStatus.IN_REVIEW, limit=PAGE, before_id=before
         )
-        items = [await _payment_view(session, deposit) for deposit in deposits]
+        items = [
+            BankTransferInQueue(
+                **vars(await _payment_view(session, deposit)),
+                awaiting=_awaiting(await bank.get_review(session, staff.actor, deposit.id)),
+            )
+            for deposit in deposits
+        ]
     return BankTransferPage(
         items=items, next_before=deposits[-1].id if len(deposits) == PAGE else None
     )
+
+
+def _awaiting(review: bank.ReviewView | None) -> Literal["check", "second_person", "posting"]:
+    if review is None:
+        return "check"
+    if review.outcome == "matched" and review.approved_by is None:
+        return "second_person"
+    return "posting"
 
 
 RECEIPT_LINK_LIFETIME = timedelta(minutes=5)

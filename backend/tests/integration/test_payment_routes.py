@@ -377,9 +377,15 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         pot = await import_statement(api, minor)
         matcher = await api.staff(first)
         await api.staff(second)
-        queue = await first.get("/staff/payments/bank-transfers")
-        assert queue.status_code == 200
-        assert payment["id"] in [item["id"] for item in queue.json()["items"]]
+
+        async def awaiting() -> str:
+            queue = await first.get("/staff/payments/bank-transfers")
+            assert queue.status_code == 200
+            found = [item for item in queue.json()["items"] if item["id"] == payment["id"]]
+            assert len(found) == 1
+            return str(found[0]["awaiting"])
+
+        assert await awaiting() == "check"
         detail = (await first.get(f"/staff/payments/bank-transfers/{payment['id']}")).json()
         line = next(line for line in detail["candidates"] if line["account_reference"] == pot)
         assert detail["receipt_link"]["url"].startswith(f"memory://{stored_key}?")
@@ -392,6 +398,7 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
         assert matched.status_code == 200, matched.text
         assert matched.json()["review"]["reviewed_by"] == matcher.id
         assert matched.json()["candidates"] == []
+        assert await awaiting() == "second_person"
         # The second person sees the chosen line beside the receipt before approving.
         shown = (await second.get(f"/staff/payments/bank-transfers/{payment['id']}")).json()
         assert shown["matched_line"]["id"] == line["id"]
@@ -405,6 +412,7 @@ async def test_a_bank_transfer_is_checked_by_one_person_and_approved_by_another(
             f"/staff/payments/bank-transfers/{payment['id']}/approve", headers=key()
         )
         assert approved.status_code == 200, approved.text
+        assert await awaiting() == "posting"
 
         worker = Worker(
             worker_database,
@@ -489,6 +497,9 @@ async def test_a_refused_transfer_says_why_and_staff_without_the_permission_are_
             headers=key(),
         )
         assert refused.status_code == 200
+        # Refused: no second person is needed, the worker settles it.
+        queue = (await staff_http.get("/staff/payments/bank-transfers")).json()["items"]
+        assert [item["awaiting"] for item in queue if item["id"] == payment_id] == ["posting"]
         worker = Worker(
             worker_database,
             BankTransferJobs(worker_database, api.clock).handlers(),

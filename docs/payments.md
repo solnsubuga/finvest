@@ -88,7 +88,7 @@ Seeing transfers needs `reconciliation.view`. Matching, refusing and approving n
 
 | Route | What it does |
 | --- | --- |
-| `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). |
+| `GET /staff/payments/bank-transfers` | Transfers in review, newest first, 50 a page (`?before=`). Each item says what it is `awaiting`: `check` (not reviewed yet), `second_person` (matched, waiting for a different person to approve) or `posting` (approved or refused, the worker is settling it). The list is not audited: it shows no receipt link or statement narrative. |
 | `GET /staff/payments/bank-transfers/{id}` | The transfer, its receipt details, its review, and the statement lines that could be it. Once matched, `matched_line` is the chosen line (amount, value date, reference and narrative), so the second person checks it beside the receipt rather than approving blind. `receipt_link` opens the receipt file inline for 5 minutes. It is never logged. The link is the main reason opening a transfer writes `payments.bank_transfer_opened`: whoever saw the receipt is on the audit trail. |
 | `POST /staff/payments/bank-transfers/{id}/review` (`bank_transfers.change`) | `{"outcome": "matched", "statement_line_id": …}` or `{"outcome": "not_matched", "reason": …}`. |
 | `POST /staff/payments/bank-transfers/{id}/approve` (`bank_transfers.change`) | A second member of staff approves a match. The matcher gets `403`. |
