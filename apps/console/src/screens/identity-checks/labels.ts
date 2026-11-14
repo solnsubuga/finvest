@@ -1,4 +1,4 @@
-import type { AutomaticCheckName, CheckStatus, DocumentType, PhotoKind, Verdict } from "./api.ts";
+import type { AutomaticCheckName, CheckStatus, DocumentType, PhotoKind, ScreeningStanding, Verdict } from "./api.ts";
 
 export const DOCUMENT_LABELS: Record<DocumentType, string> = {
   national_id: "National ID",
@@ -58,6 +58,36 @@ const FLAG_LABELS: Record<string, string> = {
   provider_not_received: "Provider never received the check",
   provider_no_answer: "Provider did not answer",
 };
+
+export const SCREENING_LABELS: Record<ScreeningStanding | "none", string> = {
+  clear: "Clear",
+  possible_match: "Possible match",
+  confirmed_match: "Match confirmed",
+  unavailable: "Could not run",
+  pending: "Running",
+  not_run: "Not run",
+  none: "Not screened",
+};
+
+/** Why a screening result other than clear needs a look before approving. Null when it is clear. */
+export function screeningWarning(standing: ScreeningStanding | null): string | null {
+  switch (standing) {
+    case "clear":
+      return null;
+    case "possible_match":
+      return "Screening found a possible match on a sanctions or political exposure list. Look at the case on the Compliance screen before approving.";
+    case "confirmed_match":
+      return "Compliance confirmed this client matches a sanctions or political exposure list. Do not approve without compliance.";
+    case "unavailable":
+      return "Screening could not run, so this client has not been checked against the sanctions and political exposure lists. It is tried again.";
+    case "pending":
+      return "Screening has not finished yet. Wait for its result before approving.";
+    case "not_run":
+      return "Screening did not run for this client, so they have not been checked against the sanctions and political exposure lists.";
+    case null:
+      return "This client has never been screened against the sanctions and political exposure lists.";
+  }
+}
 
 /** The first reason a person is needed, in words. */
 export function flagLabel(flags: readonly string[]): string | null {

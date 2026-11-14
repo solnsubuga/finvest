@@ -156,6 +156,27 @@ describe("identity checks screen", () => {
     expect(within(review).getByRole("button", { name: "Approve" })).toBeInTheDocument();
   });
 
+  it("shows a clear screening without a warning", async () => {
+    renderScreen();
+    const review = await openCheck("David Mugisha");
+    expect(within(review).getByText("Screening on file").nextElementSibling).toHaveTextContent("Clear");
+    expect(within(review).queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("asks for a look before approving when screening found a possible match", async () => {
+    renderScreen(undefined, "/identity-checks?check=-OdSample0000000003A");
+    const review = await openCheck("Grace Namara");
+    expect(within(review).getByText("Screening on file").nextElementSibling).toHaveTextContent("Possible match");
+    expect(within(review).getByRole("note")).toHaveTextContent("Look before approving. Screening found a possible match");
+  });
+
+  it("asks for a look before approving a client who was never screened", async () => {
+    renderScreen(undefined, "/identity-checks?check=-OdSample0000000002A");
+    const review = await openCheck("Ruth Akello");
+    expect(within(review).getByText("Screening on file").nextElementSibling).toHaveTextContent("Not screened");
+    expect(within(review).getByRole("note")).toHaveTextContent("never been screened");
+  });
+
   it("shows a check that is waiting for the client without any decision buttons", async () => {
     renderScreen(undefined, "/identity-checks?check=-OdSample0000000004A");
     const review = await openCheck("Joseph Nakato");

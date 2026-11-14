@@ -49,6 +49,12 @@ export interface AutomaticCheck {
   score: number | null;
 }
 
+/**
+ * Where the client stands with sanctions and political exposure screening (docs/screening.md):
+ * the outcome of their latest screen, or null when they were never screened.
+ */
+export type ScreeningStanding = "clear" | "possible_match" | "confirmed_match" | "unavailable" | "pending" | "not_run";
+
 export interface CheckDetail extends QueueItem {
   documentCountry: string;
   /** The details the client confirmed. Null until they have. */
@@ -60,6 +66,8 @@ export interface CheckDetail extends QueueItem {
   documentExpiresOn: string | null;
   photos: readonly Photo[];
   automaticChecks: readonly AutomaticCheck[];
+  /** Anything but `clear` is a reason to look before approving. */
+  screening: ScreeningStanding | null;
   /** Photos staff asked the client to take again. */
   retakePhotos: readonly PhotoKind[];
   clientMessage: string | null;

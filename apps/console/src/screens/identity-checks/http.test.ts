@@ -22,6 +22,7 @@ const CHECK = {
     { id: "-NphotoSelfie0000001", kind: "selfie", live: true },
   ],
   automatic_checks: [{ check: "selfie_match", verdict: "unsure", score: 62 }],
+  screening: "possible_match",
   retake_photos: [],
   client_message: null,
   account_number: null,
@@ -71,7 +72,23 @@ describe("identity checks over HTTP", () => {
       { kind: "front", url: "https://files.test/front?sig=1", live: false },
       { kind: "selfie", url: null, live: true },
     ]);
-    expect(check).toMatchObject({ documentNumberMasked: "CM90••••••••4PL", givenNames: "David", automaticChecks: [{ score: 62 }] });
+    expect(check).toMatchObject({
+      documentNumberMasked: "CM90••••••••4PL",
+      givenNames: "David",
+      automaticChecks: [{ score: 62 }],
+      screening: "possible_match",
+    });
+  });
+
+  it("reads a check from an older API without screening as never screened", async () => {
+    const older: Partial<typeof CHECK> = { ...CHECK };
+    delete older.screening;
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(200, older))
+      .mockImplementationOnce(() => reply(200, LINKS));
+    const check = await createHttpKycApi(createHttp("https://api.test", fetch)).getCheck(CHECK.id);
+    expect(check.screening).toBeNull();
   });
 
   it("reuses the links while they are good, so one look is one audit event", async () => {
