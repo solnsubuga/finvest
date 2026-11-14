@@ -40,6 +40,7 @@ WALLET = "5e83b187-801e-410e-b76e-f491928547e0"
 TRANSACTION = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 AMOUNT = Money(250_000, Currency.UGX)
 CALLBACK_TOKEN = "callback-token-for-tests"
+DEPOSIT = push_id()
 
 Answer = Callable[[httpx.Request], httpx.Response]
 
@@ -62,7 +63,7 @@ def transaction(status: str, **changes: object) -> dict[str, object]:
         "id": TRANSACTION,
         "status": status,
         "statusCode": status.lower(),
-        "externalId": None,
+        "externalId": DEPOSIT,
         "walletId": WALLET,
         "amount": AMOUNT.minor,
         "currency": "UGX",
@@ -267,7 +268,7 @@ async def test_anything_but_a_positive_shilling_amount_is_refused_without_sendin
 async def test_a_successful_collection_is_confirmed_for_the_amount_ioTec_says_moved() -> None:
     fake = FakeIotec(answering(200, transaction("Success", amount=250_001)))
     reading = await adapter(fake).collection_status(
-        request_id=push_id(), provider_reference=TRANSACTION
+        request_id=DEPOSIT, provider_reference=TRANSACTION
     )
     assert reading == Confirmed(TRANSACTION, Money(250_001, Currency.UGX))
     assert str(fake.requests[0].url) == f"{PAY_URL}/api/collections/status/{TRANSACTION}"
@@ -279,7 +280,7 @@ async def test_a_whole_amount_written_with_a_decimal_point_is_read_exactly() -> 
         return httpx.Response(200, content=body.encode())
 
     reading = await adapter(FakeIotec(answer)).collection_status(
-        request_id=push_id(), provider_reference=TRANSACTION
+        request_id=DEPOSIT, provider_reference=TRANSACTION
     )
     assert reading == Confirmed(TRANSACTION, AMOUNT)
 
@@ -292,9 +293,12 @@ async def test_without_ioTecs_id_the_status_is_found_by_the_deposit_id() -> None
     assert str(fake.requests[0].url) == f"{PAY_URL}/api/collections/external-id/{deposit_id}"
 
 
-async def test_a_record_for_another_deposit_is_not_read_as_this_one() -> None:
+@pytest.mark.parametrize("reference", [None, TRANSACTION])
+async def test_a_record_for_another_deposit_is_not_read_as_this_one(reference: str | None) -> None:
     fake = FakeIotec(answering(200, transaction("Success", externalId=push_id())))
-    reading = await adapter(fake).collection_status(request_id=push_id(), provider_reference=None)
+    reading = await adapter(fake).collection_status(
+        request_id=DEPOSIT, provider_reference=reference
+    )
     assert reading == Unavailable()
 
 
@@ -311,7 +315,7 @@ async def test_a_record_for_another_deposit_is_not_read_as_this_one() -> None:
 async def test_each_ioTec_status_reads_as_ours(status: str, expected: object) -> None:
     fake = FakeIotec(answering(200, transaction(status)))
     reading = await adapter(fake).collection_status(
-        request_id=push_id(), provider_reference=TRANSACTION
+        request_id=DEPOSIT, provider_reference=TRANSACTION
     )
     assert reading == expected
 
@@ -340,7 +344,7 @@ async def test_no_record_is_not_found() -> None:
 )
 async def test_a_status_that_cannot_be_trusted_decides_nothing(answer: Answer) -> None:
     reading = await adapter(FakeIotec(answer)).collection_status(
-        request_id=push_id(), provider_reference=TRANSACTION
+        request_id=DEPOSIT, provider_reference=TRANSACTION
     )
     assert reading == Unavailable()
 
@@ -348,7 +352,7 @@ async def test_a_status_that_cannot_be_trusted_decides_nothing(answer: Answer) -
 async def test_without_a_token_the_status_is_unavailable() -> None:
     fake = FakeIotec(answering(200, transaction("Success")), token_status=401)
     reading = await adapter(fake).collection_status(
-        request_id=push_id(), provider_reference=TRANSACTION
+        request_id=DEPOSIT, provider_reference=TRANSACTION
     )
     assert reading == Unavailable()
 
@@ -356,7 +360,7 @@ async def test_without_a_token_the_status_is_unavailable() -> None:
 async def test_a_test_wallets_amount_is_read_in_the_test_currency() -> None:
     fake = FakeIotec(answering(200, transaction("Success", currency="ITX")))
     reading = await adapter(fake, currency_code="ITX").collection_status(
-        request_id=push_id(), provider_reference=TRANSACTION
+        request_id=DEPOSIT, provider_reference=TRANSACTION
     )
     assert reading == Confirmed(TRANSACTION, AMOUNT)
 
@@ -493,6 +497,24 @@ def test_a_test_wallet_is_refused_where_real_money_is_expected(
 def test_a_test_wallet_is_allowed_in_staging(iotec_environment: pytest.MonkeyPatch) -> None:
     iotec_environment.setenv("FINVEST_IOTEC_CURRENCY_CODE", "ITX")
     ensure_allowed(PaymentsSettings(provider="iotec"), Deployment(environment="staging"))
+
+
+@pytest.mark.parametrize("field", ["token_url", "pay_url"])
+@pytest.mark.parametrize("address", ["http://pay.example", "ftp://pay.example", "https://", ""])
+def test_ioTec_is_reached_over_https_only(field: str, address: str) -> None:
+    with pytest.raises(ValueError, match="https"):
+        settings(**{field: address})
+
+
+def test_the_scheduler_checks_the_test_wallet_rule_without_ioTec_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in ("CLIENT_ID", "CLIENT_SECRET", "WALLET_ID"):
+        monkeypatch.delenv(f"FINVEST_IOTEC_{name}", raising=False)
+    ensure_allowed(PaymentsSettings(provider="iotec"), Deployment(environment="production"))
+    monkeypatch.setenv("FINVEST_IOTEC_CURRENCY_CODE", "ITX")
+    with pytest.raises(SandboxNotAllowed):
+        ensure_allowed(PaymentsSettings(provider="iotec"), Deployment(environment="production"))
 
 
 def test_iotec_without_its_credentials_refuses_to_start(monkeypatch: pytest.MonkeyPatch) -> None:

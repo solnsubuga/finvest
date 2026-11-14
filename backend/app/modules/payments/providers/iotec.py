@@ -190,9 +190,11 @@ class IotecCollections:
         try:
             data = _read(response)
             reference = _reference(data)
+            # Both reads must be about this deposit: ioTec's ID we hold, and our own ID sent
+            # as `externalId`. Anything else is not read as this deposit's money.
             if provider_reference is not None and reference != provider_reference:
                 raise _Unreadable
-            if provider_reference is None and data.get("externalId") != request_id:
+            if data.get("externalId") != request_id:
                 raise _Unreadable
             state = _status(data)
             if state == "Success":
