@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import type { Currency } from "./api.ts";
-import { booksErrorMessage, type Books, type BooksApi, type Days, type IncomeLine, type JournalFile } from "./books.ts";
+import {
+  booksErrorMessage,
+  type Books,
+  type BooksApi,
+  type Days,
+  type FormatOption,
+  type IncomeLine,
+  type JournalFile,
+  type JournalFormat,
+} from "./books.ts";
 import { Figure } from "./Figure.tsx";
 import { formatAmount, formatDay, formatMonth, formatNumber } from "./format.ts";
 
@@ -15,6 +24,26 @@ function monthsBack(today: string, count: number): string[] {
     const index = year * 12 + (month - 1) - back;
     return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
   });
+}
+
+const FILE_DESCRIPTIONS: Record<JournalFormat, string> = {
+  csv: "Daily journal by Finvest account, for any system",
+  quickbooks: "Journal entry import, one entry per day",
+  xero: "Manual journal import, one journal per day",
+  sage: "Journal import, one journal per day",
+  zoho: "Manual journal import, one draft journal per day",
+};
+
+function formatName(formats: readonly FormatOption[], format: JournalFormat): string {
+  return formats.find((option) => option.format === format)?.name ?? "Finvest CSV";
+}
+
+/** Why a format cannot be downloaded now, or null when it can. */
+function blocked(option: FormatOption | undefined, currency: Currency): string | null {
+  if (!option) return null;
+  if (!option.currencies.includes(currency)) return `${option.name} takes the journal in shillings only. Download dollar journals as the Finvest CSV.`;
+  if (!option.ready) return `No ${option.name} account codes are approved yet. An admin sets them under Settings, Accounting system codes, and a second admin approves them.`;
+  return null;
 }
 
 function daysLabel(dateFrom: string, dateTo: string): string {
@@ -39,6 +68,8 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [downloading, setDownloading] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+  // Null until chosen: then the format of the last download, or the Finvest CSV.
+  const [chosen, setChosen] = useState<JournalFormat | null>(null);
 
   const fetchBooks = useCallback(
     (): Promise<Load> =>
@@ -59,12 +90,12 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
 
   // The server records each download as it answers, so a file lost on the way can be
   // downloaded again from its row. Saving is a separate step that can fail on its own.
-  async function download(days: Days, id: string) {
+  async function download(days: Days, id: string, format: JournalFormat) {
     setDownloading(id);
     setDownloadError(null);
     let file: JournalFile;
     try {
-      file = await api.exportJournal(currency, days);
+      file = await api.exportJournal(currency, days, format);
     } catch (error) {
       setDownloadError(booksErrorMessage(error));
       setDownloading(null);
@@ -140,6 +171,9 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
   const { books } = load;
   const period = month === thisMonth ? "this month" : `in ${formatMonth(month)}`;
   const latest = books.exports[0];
+  const format: JournalFormat = chosen ?? (latest && !blocked(books.formats.find((f) => f.format === latest.format), currency) ? latest.format : "csv");
+  const option = books.formats.find((f) => f.format === format);
+  const cannot = blocked(option, currency);
 
   return (
     <section aria-label="Books" className="flex flex-col gap-5">
@@ -227,7 +261,25 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
 
           <div className="flex flex-col gap-2.5 rounded-[20px] border border-border bg-surface p-5">
             <h2 className="m-0 text-[17px] font-extrabold">Accounting export</h2>
-            <Row name="File" value="Daily journal by account, after the day is closed" />
+            <label className="flex flex-col gap-1.5 border-t border-border-subtle pt-2.5 text-sm font-bold">
+              File for
+              <select
+                className="rounded-lg border border-border-strong bg-surface px-3 py-2 text-md font-medium text-ink"
+                value={format}
+                onChange={(event) => {
+                  setChosen(event.target.value as JournalFormat);
+                  setDownloadError(null);
+                }}
+              >
+                {books.formats.map((f) => (
+                  <option key={f.format} value={f.format}>
+                    {f.name}
+                    {f.format !== "csv" && !f.ready ? " (not set up)" : ""}
+                  </option>
+                ))}
+              </select>
+              <span className="font-medium text-muted">{FILE_DESCRIPTIONS[format]}, after the day is closed</span>
+            </label>
             <Row name="Closed through" value={books.closedThrough ? formatDay(books.closedThrough) : "No day closed yet"} />
             <Row
               name="Last downloaded"
@@ -236,9 +288,24 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
             <p className="m-0 text-sm leading-normal text-muted">
               Nothing is sent to the accounting system from here. Download the file and import it there yourself.
             </p>
+            {cannot ? (
+              <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-normal text-muted">{cannot}</p>
+            ) : option && option.unmapped.length > 0 ? (
+              <p className="m-0 rounded-lg bg-warning-surface p-3 text-sm leading-normal text-warning-text">
+                {option.unmapped.length === 1 ? "1 account has" : `${option.unmapped.length} accounts have`} no {option.name} account yet:{" "}
+                {option.unmapped.join(", ")}. A day that moved {option.unmapped.length === 1 ? "it" : "one of them"} cannot be downloaded for {option.name} until
+                an admin names {option.unmapped.length === 1 ? "it" : "them"} in Settings.
+              </p>
+            ) : null}
             {books.nextExport ? (
-              <Button className="mt-1 h-12 rounded-[24px]" disabled={downloading !== null} onClick={() => books.nextExport && void download(books.nextExport, "next")}>
-                {downloading === "next" ? "Preparing the file" : `Download ${daysLabel(books.nextExport.dateFrom, books.nextExport.dateTo)}`}
+              <Button
+                className="mt-1 h-12 rounded-[24px]"
+                disabled={downloading !== null || cannot !== null}
+                onClick={() => books.nextExport && void download(books.nextExport, "next", format)}
+              >
+                {downloading === "next"
+                  ? "Preparing the file"
+                  : `Download ${daysLabel(books.nextExport.dateFrom, books.nextExport.dateTo)}${format === "csv" ? "" : ` for ${option?.name ?? format}`}`}
               </Button>
             ) : (
               <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-normal text-muted">
@@ -261,17 +328,20 @@ export function BooksSection({ api, currency, today, save }: BooksSectionProps) 
                       <span className="flex flex-col">
                         <span className="font-bold">{daysLabel(past.dateFrom, past.dateTo)}</span>
                         <span className="text-muted">
-                          {past.lines} line{past.lines === 1 ? "" : "s"}, by {past.exportedByName ?? "a former member of staff"}
+                          {formatName(books.formats, past.format)}, {past.lines} line{past.lines === 1 ? "" : "s"}, by{" "}
+                          {past.exportedByName ?? "a former member of staff"}
                         </span>
                       </span>
                       <Button
                         variant="secondary"
                         className="h-9"
                         disabled={downloading !== null}
-                        onClick={() => void download({ dateFrom: past.dateFrom, dateTo: past.dateTo }, past.id)}
+                        onClick={() => void download({ dateFrom: past.dateFrom, dateTo: past.dateTo }, past.id, past.format)}
                       >
                         {downloading === past.id ? "Preparing" : "Download again"}
-                        <span className="sr-only">, {daysLabel(past.dateFrom, past.dateTo)}</span>
+                        <span className="sr-only">
+                          , {daysLabel(past.dateFrom, past.dateTo)}, {formatName(books.formats, past.format)}
+                        </span>
                       </Button>
                     </li>
                   ))}

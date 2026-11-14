@@ -43,12 +43,20 @@ export type Method = "GET" | "POST" | "PUT" | "DELETE";
 export interface Http {
   /** `body` is sent as JSON, or as multipart form data when it is a FormData. */
   request<T>(method: Method, path: string, body?: unknown, init?: RequestOptions): Promise<T>;
-  /** For a file such as a CSV export. */
-  download(path: string): Promise<Blob>;
+  /**
+   * For a file such as a CSV export. An export the server records is a POST,
+   * with its choices as a JSON body.
+   */
+  download(path: string, init?: DownloadOptions): Promise<Blob>;
 }
 
 export interface RequestOptions {
   idempotencyKey?: string;
+}
+
+export interface DownloadOptions {
+  method?: "GET" | "POST";
+  body?: unknown;
 }
 
 type Fetch = typeof fetch;
@@ -101,8 +109,8 @@ export function createHttp(baseUrl: string, fetchImpl: Fetch = fetch, confirm: C
       if (response.status === 204) return undefined as T;
       return (await response.json()) as T;
     },
-    async download(path: string) {
-      const response = await sendConfirmed("GET", path, undefined);
+    async download(path: string, init?: DownloadOptions) {
+      const response = await sendConfirmed(init?.method ?? "GET", path, init?.body);
       return response.blob();
     },
   };

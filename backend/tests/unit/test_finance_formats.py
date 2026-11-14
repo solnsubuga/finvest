@@ -12,6 +12,7 @@ from app.modules.finance.domain.formats import (
     QUICKBOOKS_HEADER,
     SAGE_HEADER,
     XERO_HEADER,
+    ZOHO_HEADER,
     CodeMap,
     CodesNotMapped,
     Format,
@@ -131,14 +132,33 @@ def test_sage_fills_both_sides_and_keeps_journals_off_the_vat_return() -> None:
     assert len(found) == 6
 
 
-@pytest.mark.parametrize("format_", [Format.QUICKBOOKS, Format.XERO, Format.SAGE])
+ZOHO = code_map(System.ZOHO, dict(QUICKBOOKS.accounts))
+
+
+def test_zoho_books_has_one_draft_journal_per_day_by_journal_number() -> None:
+    found = rows(render(Format.ZOHO, UGX, LINES, ZOHO))
+    assert found[0] == ",".join(ZOHO_HEADER)
+    assert found[1] == (
+        "12/11/2026,FINVEST-UGX-20261112,FINVEST-UGX-20261112,Finvest daily journal 2026-11-12,"
+        "Draft,UGX,Trust account,Trust bank account (bank.trust),210000,"
+    )
+    assert found[2].endswith(
+        ',Client funds:Awaiting start,"Paid in, awaiting start (client.awaiting_start)",,250000'
+    )
+    assert len(found) == 6
+
+
+@pytest.mark.parametrize("format_", [Format.QUICKBOOKS, Format.XERO, Format.SAGE, Format.ZOHO])
 def test_every_days_lines_still_balance_in_every_format(format_: Format) -> None:
-    maps = {Format.QUICKBOOKS: QUICKBOOKS, Format.XERO: XERO, Format.SAGE: SAGE}
+    maps = {Format.QUICKBOOKS: QUICKBOOKS, Format.XERO: XERO, Format.SAGE: SAGE, Format.ZOHO: ZOHO}
     found = list(csv.DictReader(io.StringIO(render(format_, UGX, LINES, maps[format_]))))
     totals: dict[str, int] = {}
     for cells in found:
         if format_ is Format.XERO:
             reference, amount = cells["*Narration"], int(cells["*Amount"])
+        elif format_ is Format.ZOHO:
+            reference = cells["Journal Number"]
+            amount = int(cells["Debit"] or 0) - int(cells["Credit"] or 0)
         elif format_ is Format.QUICKBOOKS:
             reference = cells["Journal No."]
             amount = int(cells["Debits"] or 0) - int(cells["Credits"] or 0)
@@ -191,6 +211,7 @@ def test_an_empty_journal_is_only_a_header() -> None:
         (Format.QUICKBOOKS, QUICKBOOKS_HEADER, QUICKBOOKS),
         (Format.XERO, XERO_HEADER, XERO),
         (Format.SAGE, SAGE_HEADER, SAGE),
+        (Format.ZOHO, ZOHO_HEADER, ZOHO),
     ):
         assert rows(render(format_, UGX, [], cmap)) == [",".join(header)]
 
