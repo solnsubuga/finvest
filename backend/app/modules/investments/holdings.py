@@ -114,6 +114,19 @@ class Investment:
     def accrued_net(self) -> Money:
         return self.accrued_gross - self.accrued_tax
 
+    @property
+    def waiting(self) -> Money | None:
+        """What of a matured investment's money waits in payouts for the client to say where
+        to send it. All of it, or only the interest when the principal rolled over. None when
+        nothing waits."""
+        if self.status is not InvestmentStatus.MATURED or self.payout_id is not None:
+            return None
+        if self.rolled_into_id is None:
+            return self.amount + self.accrued_net
+        if self.at_maturity is AtMaturity.PAY_INTEREST and self.accrued_net.is_positive:
+            return self.accrued_net
+        return None
+
 
 @dataclass(frozen=True, slots=True)
 class PayableInvestment:
@@ -157,6 +170,8 @@ class ClientInvestment:
     payout_id: str | None
     # Matured, and the money is waiting for the client to say where to send it.
     waiting_for_destination: bool
+    # How much waits: all of it, or the interest when the principal rolled over.
+    waiting: Money | None
     # Whether the client may ask to withdraw it early now, and when they did.
     can_withdraw: bool = False
     withdrawal_requested_at: datetime | None = None
@@ -671,9 +686,8 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         ),
         rolled_into_id=investment.rolled_into_id,
         payout_id=investment.payout_id,
-        waiting_for_destination=investment.status is InvestmentStatus.MATURED
-        and investment.payout_id is None
-        and investment.rolled_into_id is None,
+        waiting_for_destination=investment.waiting is not None,
+        waiting=investment.waiting,
         can_withdraw=can_withdraw_early(
             investment.status,
             investment.maturity_date,

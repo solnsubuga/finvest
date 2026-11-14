@@ -635,7 +635,8 @@
         "description": "What the client wants done when a fixed term ends. Rolling over is the default.",
         "enum": [
           "roll_over",
-          "pay_out"
+          "pay_out",
+          "pay_interest"
         ],
         "title": "AtMaturity",
         "type": "string"
@@ -3530,6 +3531,17 @@
           "waiting_for_destination": {
             "title": "Waiting For Destination",
             "type": "boolean"
+          },
+          "waiting_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Minor"
           },
           "withdrawal_requested_at": {
             "anyOf": [

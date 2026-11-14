@@ -201,6 +201,7 @@ describe("the investing client for the real API", () => {
       rolledIntoId: null,
       payoutId: null,
       waitingForDestination: false,
+      waiting: null,
       canWithdraw: false,
       withdrawalRequestedAt: null,
     });

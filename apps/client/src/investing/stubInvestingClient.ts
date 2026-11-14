@@ -230,6 +230,11 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     const yesterday = days > 0 ? netInterest(amount.minor, product, days - 1) : 0;
     const atMaturityInterest = product.termDays === null ? null : netInterest(amount.minor, product, product.termDays);
     const money = (minor: number): Amount => ({ currency: amount.currency, minor });
+    const waiting = () =>
+      status === "matured" &&
+      (entry.atMaturity === "pay_out" || entry.atMaturity === "pay_interest") &&
+      entry.payoutId === null &&
+      entry.destinationId === null;
     return {
       id: entry.id,
       productCode: product.code,
@@ -239,7 +244,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       ratePercent: product.ratePercent,
       termDays: product.termDays,
       atMaturity: entry.atMaturity,
-      payoutDestinationId: entry.atMaturity === "pay_out" ? entry.destinationId : null,
+      payoutDestinationId: entry.atMaturity === "pay_out" || entry.atMaturity === "pay_interest" ? entry.destinationId : null,
       canChangeMaturity: product.termDays !== null && (status === "awaiting_payment" || (status === "active" && maturity !== null && today < addDays(maturity, -1))),
       payBy: new Date(entry.createdAtMs + PAY_WINDOW_MS).toISOString(),
       startDate: start,
@@ -252,7 +257,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       totalAtMaturity: atMaturityInterest === null ? null : money(amount.minor + atMaturityInterest),
       rolledIntoId: null,
       payoutId: entry.payoutId,
-      waitingForDestination: status === "matured" && entry.atMaturity === "pay_out" && entry.payoutId === null && entry.destinationId === null,
+      waitingForDestination: waiting(),
+      waiting: waiting() ? (entry.atMaturity === "pay_interest" ? money(soFar) : money(amount.minor + soFar)) : null,
       canWithdraw: status === "active" && entry.withdrawnAtMs === null && (maturity === null || today < maturity),
       withdrawalRequestedAt: entry.withdrawnAtMs === null ? null : new Date(entry.withdrawnAtMs).toISOString(),
     };
@@ -403,7 +409,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       if (!view(entry).canChangeMaturity) {
         throw new InvestingError("cannot_change_maturity");
       }
-      if (choice.atMaturity === "pay_out") {
+      if (choice.atMaturity === "pay_out" || choice.atMaturity === "pay_interest") {
         // Like the backend: any approved account, even one still in its first day.
         const accounts = options.accounts === "none" ? [] : demoAccounts(now());
         if (!accounts.some((account) => account.id === choice.destinationId)) {
@@ -435,7 +441,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       if (!account || !account.ready) {
         throw new InvestingError("account_not_ready");
       }
-      if (account.kind === "mobile_money" && shown.value.minor > MOBILE_MONEY_PER_PAYOUT) {
+      if (account.kind === "mobile_money" && (shown.waiting ?? shown.value).minor > MOBILE_MONEY_PER_PAYOUT) {
         throw new InvestingError("over_mobile_money_limit");
       }
       nextId += 1;

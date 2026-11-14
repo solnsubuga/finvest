@@ -146,7 +146,7 @@ export const AssignComplaint = z.object({
 });
 export type AssignComplaint = z.infer<typeof AssignComplaint>;
 
-export const AtMaturity = z.enum(["roll_over", "pay_out"]);
+export const AtMaturity = z.enum(["roll_over", "pay_out", "pay_interest"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
 export const AuthenticatorSetupView = z.object({

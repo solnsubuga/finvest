@@ -84,7 +84,13 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
   }
   if (investment.interestAtMaturity && investment.totalAtMaturity && investment.status !== "matured" && toMaturity) {
     rows.push({ label: "Interest at maturity, after tax", value: formatAmount(investment.interestAtMaturity) });
-    rows.push({ label: "You get back", value: formatAmount(investment.totalAtMaturity) });
+    if (investment.atMaturity === "pay_interest") {
+      // The interest is paid out and what was put in starts another term.
+      rows.push({ label: "Paid to you", value: formatAmount(investment.interestAtMaturity) });
+      rows.push({ label: "Stays invested", value: formatAmount(investment.amount) });
+    } else {
+      rows.push({ label: "You get back", value: formatAmount(investment.totalAtMaturity) });
+    }
   }
   if (investment.atMaturity && toMaturity) {
     rows.push({ label: "When the term ends", value: atMaturityLabel[investment.atMaturity] });
@@ -124,7 +130,11 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
         </Notice>
       ) : null}
       {investment.waitingForDestination ? (
-        <Notice tone="warning">Your money is ready. Choose where to be paid and we will send it.</Notice>
+        <Notice tone="warning">
+          {investment.rolledIntoId && investment.waiting
+            ? `Your interest of ${formatAmount(investment.waiting)} is ready, and what you put in started another term. Choose where to be paid and we will send it.`
+            : "Your money is ready. Choose where to be paid and we will send it."}
+        </Notice>
       ) : null}
       {investment.payoutId ? (
         <TextLink

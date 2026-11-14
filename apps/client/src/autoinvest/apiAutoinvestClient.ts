@@ -29,8 +29,9 @@ export function toPlan(view: PlanView): Plan {
     day: view.day,
     network: view.network,
     payer: view.payer_msisdn,
-    // An open-term product has nothing to do at maturity. Plans list fixed terms only.
-    atMaturity: view.at_maturity ?? "roll_over",
+    // An open-term product has nothing to do at maturity. Plans list fixed terms only, and a
+    // plan never pays the interest alone: it names no payout account, so the API refuses it.
+    atMaturity: view.at_maturity === "pay_out" ? "pay_out" : "roll_over",
     status: view.status,
     nextRunOn: view.next_run_on,
     runs: view.runs.map(toRun),

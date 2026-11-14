@@ -255,7 +255,7 @@ function NotClosed({ investments, cards, today }: { investments: readonly Invest
                 {late} {late === 1 ? "day" : "days"} ago
               </div>
             </td>
-            <td className={CELL}>{investment.atMaturity === "pay_out" ? "Pay out" : "Roll over"}</td>
+            <td className={CELL}>{investment.atMaturity === "pay_out" ? "Pay out" : investment.atMaturity === "pay_interest" ? "Pay the interest" : "Roll over"}</td>
           </tr>
         );
       })}

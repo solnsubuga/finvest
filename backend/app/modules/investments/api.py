@@ -152,6 +152,9 @@ class ClientInvestmentOut(Contract):
     rolled_into_id: PushId | None
     payout_id: PushId | None
     waiting_for_destination: bool
+    # What waits for the client to say where to send it: all of it, or only the interest when
+    # they chose to keep the principal invested. Null when nothing waits.
+    waiting_minor: int | None = None
     # Whether the client may ask to withdraw it early now, and when they did. An early
     # withdrawal pays `value_minor`: interest stops when it is asked for.
     can_withdraw: bool
@@ -420,6 +423,7 @@ def _client_out(view: service.ClientInvestment, request: Request) -> ClientInves
         rolled_into_id=view.rolled_into_id,
         payout_id=view.payout_id,
         waiting_for_destination=view.waiting_for_destination,
+        waiting_minor=None if view.waiting is None else view.waiting.minor,
         can_withdraw=view.can_withdraw and _withdrawals_open(request),
         withdrawal_requested_at=view.withdrawal_requested_at,
         can_send=view.can_send,

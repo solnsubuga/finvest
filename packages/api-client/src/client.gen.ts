@@ -46,7 +46,7 @@ export const AskBody = z.object({
 });
 export type AskBody = z.infer<typeof AskBody>;
 
-export const AtMaturity = z.enum(["roll_over", "pay_out"]);
+export const AtMaturity = z.enum(["roll_over", "pay_out", "pay_interest"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
 export const AuthenticatorSetupView = z.object({
@@ -342,6 +342,7 @@ export const ClientInvestmentOut = z.object({
   total_at_maturity_minor: z.number().int().nullable(),
   value_minor: z.number().int(),
   waiting_for_destination: z.boolean(),
+  waiting_minor: z.number().int().nullable().optional(),
   withdrawal_requested_at: z.string().nullable(),
 });
 export type ClientInvestmentOut = z.infer<typeof ClientInvestmentOut>;
