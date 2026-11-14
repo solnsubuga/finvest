@@ -774,6 +774,14 @@ ROWS = {
         "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
         "refusing to drop the record of investment transfers",
     ),
+    "0242_organisations": (
+        "BEGIN; ALTER TABLE organisations DISABLE TRIGGER USER; "
+        "INSERT INTO organisations (id, kind, name, applicant_id, approvals_needed, created_at) "
+        "VALUES ('-Nabc0000000000000O1', 'group', 'Ntinda Savings Group', "
+        "'-Nabc0000000000000B1', 2, now()); "
+        "ALTER TABLE organisations ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of company and group applications",
+    ),
     "0152_client_locks": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "

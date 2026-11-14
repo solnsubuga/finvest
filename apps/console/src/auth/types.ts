@@ -75,6 +75,8 @@ export const ACTION_PERMISSIONS = [
   "investment_corrections.change",
   // Proposing to let a large investment sent to another client through, approving someone else's proposal, or declining it.
   "investment_transfers.change",
+  // Checking an application for a company or group account, approving someone else's check, sending one back or rejecting it.
+  "organisations.review",
   // Inviting staff, changing a role, deactivating or reactivating, resetting sign-in. Two admins.
   "team.change",
   // Reading the audit trail and exporting it.

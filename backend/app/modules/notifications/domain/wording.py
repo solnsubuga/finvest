@@ -205,6 +205,29 @@ DEFAULTS: dict[str, Wording] = {
         "Finvest: we could not approve your identity check. Open Help in the app for what "
         "happens next.",
     ),
+    "organisation_invited": Wording(
+        "You are asked to sign for {organisation}",
+        "{person} asked you to sign for {organisation} on Finvest. Open it in the app to join "
+        "or decline.",
+        "Finvest: {person} asked you to sign for {organisation}. Open the app to join or decline.",
+    ),
+    "organisation_returned": Wording(
+        "Please change your application",
+        "We need something changed in the application for {organisation} before we can open "
+        "it. See what in the app.",
+        "Finvest: please change the application for {organisation}. See what in the app.",
+    ),
+    "organisation_rejected": Wording(
+        "Application not approved",
+        "We could not open an account for {organisation}. Open Help in the app and we will "
+        "explain what happens next.",
+        "Finvest: we could not open an account for {organisation}. Open Help in the app.",
+    ),
+    "organisation_approved": Wording(
+        "{organisation} is open",
+        "The account for {organisation} is open, with its own account number. See it in the app.",
+        "Finvest: the account for {organisation} is open. See its account number in the app.",
+    ),
     "payout_destination_approved": Wording(
         "Payout account approved",
         "{destination} is approved. You can withdraw to it after the 24 hour wait.",
@@ -420,5 +443,6 @@ def sample_values(spec: EventSpec) -> dict[str, Value]:
         "message": "Your investment matures soon.",
         "person": "Brian K.",
         "goal": "School fees 2027",
+        "organisation": "Kampala Traders Ltd",
     }
     return {name: samples[name] for name in spec.variables}

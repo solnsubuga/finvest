@@ -51,6 +51,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "email_suppressions.lift",
     "payout_accounts.change",
     "investment_transfers.change",
+    "organisations.review",
     "identity_checks.review",
     "client_phones.change",
   ],
@@ -95,6 +96,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "clients.close",
     "payout_accounts.change",
     "investment_transfers.change",
+    "organisations.review",
     "identity_checks.review",
   ],
   // Support works complaints but does not close them, as the backend's table says.
