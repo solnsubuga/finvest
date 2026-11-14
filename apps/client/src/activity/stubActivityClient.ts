@@ -1,4 +1,4 @@
-import { buildActivity, InvestmentRow, PaymentRow, PayoutRow } from "./build";
+import { buildActivity, from, InvestmentRow, PaymentRow, PayoutRow } from "./build";
 import { ActivityClient, ActivityError } from "./types";
 
 /**
@@ -7,10 +7,12 @@ import { ActivityClient, ActivityError } from "./types";
  *
  * The two demo accounts have a few weeks of history. An account made by
  * signing up has none, which shows the empty state. A number ending in 99
- * cannot reach the service.
+ * cannot reach the service. The second demo account stands for a client with
+ * more payments than the app reads, so its list starts 60 days back.
  */
 
 const SEEDED = new Set(["+256772123456", "+256701000200"]);
+const CUT_SHORT = "+256701000200";
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function ago(now: number, days: number, hours = 0): string {
@@ -49,8 +51,11 @@ export function createStubActivityClient(
     async list() {
       if (delayMs > 0) await new Promise((resolve) => setTimeout(resolve, delayMs));
       if (phone?.endsWith("99")) throw new ActivityError();
-      if (!phone || !SEEDED.has(phone)) return [];
-      return buildActivity(...history(now()));
+      if (!phone || !SEEDED.has(phone)) return { items: [], since: null };
+      const items = buildActivity(...history(now()));
+      if (phone !== CUT_SHORT) return { items, since: null };
+      const since = ago(now(), 60);
+      return { items: from(items, since), since };
     },
   };
 }

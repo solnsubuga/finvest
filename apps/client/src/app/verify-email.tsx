@@ -48,13 +48,20 @@ export default function VerifyEmail() {
         if (fresh) setSession(fresh);
         if (live) setState({ status: "proved" });
       })
-      .catch((caught: unknown) => {
+      .catch(async (caught: unknown) => {
+        const expired = caught instanceof AuthError && caught.code === "expired";
+        // A first try may have gone through with its answer lost, which spends the
+        // link. A signed-in client then asks the session before saying it failed.
+        if (expired && session) {
+          const fresh = await client.restoreSession().catch(() => null);
+          if (fresh?.emailVerified) {
+            setSession(fresh);
+            if (live) setState({ status: "proved" });
+            return;
+          }
+        }
         if (!live) return;
-        setState(
-          caught instanceof AuthError && caught.code === "expired"
-            ? { status: "expired" }
-            : { status: "failed", message: describeAuthError(caught) },
-        );
+        setState(expired ? { status: "expired" } : { status: "failed", message: describeAuthError(caught) });
       });
     return () => {
       live = false;
