@@ -110,3 +110,8 @@ jobs:
             echo "The demo identity check was bundled into a production build" >&2
             exit 1
           fi
+          # Nor the demo Activity history.
+          if grep -rIl -e "demo-activity-" dist; then
+            echo "The demo activity was bundled into a production build" >&2
+            exit 1
+          fi

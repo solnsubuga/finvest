@@ -4,6 +4,7 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { ActivityProvider } from "@/activity/ActivityProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
 import { DocumentsProvider } from "@/documents/DocumentsProvider";
@@ -44,12 +45,14 @@ export default function RootLayout() {
                     <GoalsProvider>
                       <DocumentsProvider>
                         <PayoutsProvider>
-                          <Stack
-                            screenOptions={{
-                              headerShown: false,
-                              contentStyle: { backgroundColor: colors.paper },
-                            }}
-                          />
+                          <ActivityProvider>
+                            <Stack
+                              screenOptions={{
+                                headerShown: false,
+                                contentStyle: { backgroundColor: colors.paper },
+                              }}
+                            />
+                          </ActivityProvider>
                         </PayoutsProvider>
                       </DocumentsProvider>
                     </GoalsProvider>
