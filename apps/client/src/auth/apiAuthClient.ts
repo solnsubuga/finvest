@@ -177,6 +177,21 @@ export function createApiAuthClient(): AuthClient {
         }
       }),
 
+    confirmWithPin: (pin, action) =>
+      wrap(async () => {
+        try {
+          const result = await api("POST /client/pin/confirm", { body: { pin, action } });
+          return { confirmed: result.confirmed, triesLeft: result.tries_left, confirmation: result.confirmation ?? null };
+        } catch (error) {
+          // The fifth wrong PIN ended the session on the server.
+          if (error instanceof ApiError && error.code === "unauthorized") {
+            await saveToken(null);
+            throw new AuthError("signed_out");
+          }
+          throw error;
+        }
+      }),
+
     sendLoginCode: (loginId, channel) =>
       wrap(async () => {
         await api("POST /client/login/code/send", { body: { login_id: loginId, channel } });

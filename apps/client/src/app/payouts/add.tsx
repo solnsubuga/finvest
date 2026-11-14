@@ -6,6 +6,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { formatNational, nationalDigits } from "@/auth/phone";
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
+import { usePinConfirmation } from "@/components/pin/ConfirmWithPin";
 import { Button } from "@/components/Button";
 import { Field, PhoneField, TextField } from "@/components/Field";
 import { LoadFailed } from "@/components/Loading";
@@ -44,6 +45,7 @@ export default function AddPayoutAccount() {
   const [problems, setProblems] = useState<Problems>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { ask: askPin, screen: pinScreen } = usePinConfirmation();
   // The banks come from the backend, which refuses a code it does not list.
   const [banks, retryBanks] = useFocusLoaded(useCallback(() => client.listBanks(), [client]));
 
@@ -64,11 +66,23 @@ export default function AddPayoutAccount() {
     setError(null);
     if (Object.keys(found).length) return;
     setBusy(true);
+    // On a phone with a PIN, adding a payout account is confirmed with it too.
+    const answer = await askPin("payout_account");
+    if (answer === "cancelled") {
+      setBusy(false);
+      return;
+    }
     try {
       const account = await client.addAccount(
         kind === "mobile_money"
-          ? { kind, phone: `+256${nationalDigits(phone)}`, holderName }
-          : { kind, bankCode: bankCode ?? "", accountNumber: accountNumber.replace(/[ -]/g, ""), holderName },
+          ? { kind, phone: `+256${nationalDigits(phone)}`, holderName, pinConfirmation: answer.confirmation }
+          : {
+              kind,
+              bankCode: bankCode ?? "",
+              accountNumber: accountNumber.replace(/[ -]/g, ""),
+              holderName,
+              pinConfirmation: answer.confirmation,
+            },
       );
       // Text the code straight away. If that fails the account screen offers to send it.
       let sent = true;
@@ -92,10 +106,12 @@ export default function AddPayoutAccount() {
     }
   };
 
+  if (pinScreen) return pinScreen;
+
   return (
     <Screen
       signedIn
-      footer={<Button label="Save and text me a code" onPress={save} loading={busy} testID="payout-account-save" />}
+      footer={<Button label="Save and text me a code" onPress={() => void save()} loading={busy} testID="payout-account-save" />}
     >
       <Stack.Screen options={{ title: "Add a payout account" }} />
       <BackButton fallback="/payouts" />

@@ -70,9 +70,13 @@ export type PayoutAccount = {
   createdAt: string;
 };
 
-export type NewAccount =
+export type NewAccount = (
   | { kind: "mobile_money"; phone: string; holderName: string }
-  | { kind: "bank"; bankCode: string; accountNumber: string; holderName: string };
+  | { kind: "bank"; bankCode: string; accountNumber: string; holderName: string }
+) & {
+  /** From confirming with the PIN, on a phone with one. Used once, only if the account is saved. */
+  pinConfirmation?: string | null;
+};
 
 /** `processing` covers everything from queued to the provider's answer. */
 export type PayoutStatus = "in_review" | "processing" | "paid" | "failed" | "cancelled";
@@ -157,6 +161,7 @@ export type PayoutsErrorCode =
   | "name_check_in_progress"
   | "name_check_limit_reached"
   | "id_not_approved"
+  | "pin_required"
   | "unavailable";
 
 export class PayoutsError extends Error {
@@ -192,6 +197,7 @@ const messages: Record<PayoutsErrorCode, string> = {
   name_check_in_progress: "We are still checking this number with the network. Try again in a few minutes.",
   name_check_limit_reached: "We have tried to check this number several times. Remove it and add it again later.",
   id_not_approved: "We can only compare the name once your ID check is approved.",
+  pin_required: "Your PIN confirmation ran out or was already used. Try again and enter your PIN.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 
