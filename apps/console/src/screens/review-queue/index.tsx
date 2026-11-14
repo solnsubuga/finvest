@@ -13,21 +13,34 @@ import { AccountsSection } from "./Accounts.tsx";
 import { notConnectedReviewQueueApi, type ReviewQueueApi } from "./api.ts";
 import { HeldSection } from "./Held.tsx";
 import { createHttpReviewQueueApi } from "./http.ts";
+import {
+  createHttpOrganisationsApi,
+  createStubOrganisationsApi,
+  notConnectedOrganisationsApi,
+  type OrganisationsApi,
+} from "./organisations.ts";
+import { OrganisationsSection } from "./Organisations.tsx";
 import { createStubReviewQueueApi, type StubCase } from "./stub.ts";
 
-type Tab = "accounts" | "held";
+type Tab = "accounts" | "held" | "organisations";
 
-const SUMMARY = "Only what the system could not clear on its own: payout accounts to check, and large withdrawals to release.";
+const SUMMARY =
+  "Only what the system could not clear on its own: payout accounts to check, large withdrawals to release, and company and group accounts to open.";
 
 export function ReviewQueueScreen({
   api,
   directory,
   me,
   canDecide,
+  organisations = notConnectedOrganisationsApi,
+  canReviewOrganisations = false,
   now = () => new Date(),
   newKey = () => crypto.randomUUID(),
 }: {
   api: ReviewQueueApi;
+  /** Company and group account applications, shown only to someone with `organisations.review`. */
+  organisations?: OrganisationsApi;
+  canReviewOrganisations?: boolean;
   directory: Directory;
   me: string;
   /** Whether this person holds `payout_accounts.change`. */
@@ -36,14 +49,17 @@ export function ReviewQueueScreen({
   newKey?: () => string;
 }) {
   const [params, setParams] = useSearchParams();
-  const tab: Tab = params.get("tab") === "held" ? "held" : "accounts";
+  const asked = params.get("tab");
+  const tab: Tab = asked === "held" ? "held" : asked === "organisations" && canReviewOrganisations ? "organisations" : "accounts";
   const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({});
   const countAccounts = useCallback((count: number) => setCounts((known) => ({ ...known, accounts: count })), []);
   const countHeld = useCallback((count: number) => setCounts((known) => ({ ...known, held: count })), []);
+  const countOrganisations = useCallback((count: number) => setCounts((known) => ({ ...known, organisations: count })), []);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "accounts", label: "Payout accounts" },
     { id: "held", label: "Held payouts" },
+    ...(canReviewOrganisations ? [{ id: "organisations" as const, label: "Company accounts" }] : []),
   ];
 
   return (
@@ -58,7 +74,7 @@ export function ReviewQueueScreen({
               role="tab"
               aria-selected={tab === id}
               onClick={() => {
-                if (id !== tab) setParams(id === "held" ? { tab: "held" } : {});
+                if (id !== tab) setParams(id === "accounts" ? {} : { tab: id });
               }}
               className={cn(
                 "h-11 cursor-pointer rounded-pill px-4 text-sm",
@@ -82,6 +98,14 @@ export function ReviewQueueScreen({
           selectedId={params.get("account")}
           onSelect={(id) => setParams({ account: id })}
           onCount={countAccounts}
+        />
+      ) : tab === "organisations" ? (
+        <OrganisationsSection
+          api={organisations}
+          now={now}
+          selectedId={params.get("organisation")}
+          onSelect={(id) => setParams({ tab: "organisations", organisation: id })}
+          onCount={countOrganisations}
         />
       ) : (
         <HeldSection
@@ -109,17 +133,28 @@ export default function ReviewQueuePage() {
   const { session } = useAuth();
   // A sample queue under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and
   // `?sample=error` show those states. Otherwise the real API.
-  const [{ api, directory }] = useState<{ api: ReviewQueueApi; directory: Directory }>(() => {
+  const [{ api, directory, organisations }] = useState<{ api: ReviewQueueApi; directory: Directory; organisations: OrganisationsApi }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
-      return { api: createStubReviewQueueApi(me.id, Date.now, stubCase()), directory: createStubDirectory(me) };
+      return {
+        api: createStubReviewQueueApi(me.id, Date.now, stubCase()),
+        directory: createStubDirectory(me),
+        organisations: createStubOrganisationsApi(me.id, Date.now, stubCase()),
+      };
     }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedReviewQueueApi, directory: emptyDirectory };
+    if (!base) return { api: notConnectedReviewQueueApi, directory: emptyDirectory, organisations: notConnectedOrganisationsApi };
     const http = createHttp(base);
-    return { api: createHttpReviewQueueApi(http), directory: createHttpDirectory(http) };
+    return { api: createHttpReviewQueueApi(http), directory: createHttpDirectory(http), organisations: createHttpOrganisationsApi(http) };
   });
   return (
-    <ReviewQueueScreen api={api} directory={directory} me={session?.staffId ?? ""} canDecide={session ? can(session, "payout_accounts.change") : false} />
+    <ReviewQueueScreen
+      api={api}
+      directory={directory}
+      organisations={organisations}
+      canReviewOrganisations={session ? can(session, "organisations.review") : false}
+      me={session?.staffId ?? ""}
+      canDecide={session ? can(session, "payout_accounts.change") : false}
+    />
   );
 }
