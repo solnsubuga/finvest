@@ -23,6 +23,8 @@ export type Session = {
 
 export type AuthErrorCode =
   | "invalid_credentials"
+  /** The same refusal as `invalid_credentials`, for a log in by email. */
+  | "invalid_email_credentials"
   | "invalid_code"
   | "phone_taken"
   | "leaked_password"
@@ -58,9 +60,18 @@ export type PasswordReset = { challengeId: string; phone: string };
  * a passkey, an authenticator app, or a code sent by SMS.
  */
 export type SecondStep = "passkey" | "authenticator" | "code";
+/** Where a sign-in code goes. Email only when the client logged in with a proved address. */
+export type CodeChannel = "sms" | "email";
+/** Log in with the mobile number, or with an email address the client has proved. */
+export type LoginIdentifier = { phone: string } | { email: string };
 export type LoginChallenge = {
   loginId: string;
-  phone: string;
+  /** The number typed to log in. Null for a log in by email, which never shows the number. */
+  phone: string | null;
+  /** The proved address typed to log in, so a code can go there. Null for a log in by number. */
+  email: string | null;
+  /** Where the code was last sent, once one has been. */
+  codeSentBy?: CodeChannel;
   /**
    * Only the methods this client has set up, strongest first. The first is
    * offered up front and the client can switch to any of the others.
@@ -122,14 +133,21 @@ export interface AuthClient {
   /** Sign up, step 2: sets the password and opens the first session. */
   completeSignup(ticket: string, password: string): Promise<Session>;
 
-  /** Log in, step 1: number and password. Never opens a session on its own. */
-  startLogin(phone: string, password: string): Promise<LoginChallenge>;
+  /**
+   * Log in, step 1: the number or a proved email address, and the password.
+   * Never opens a session on its own. An address the client never proved
+   * fails like a wrong password.
+   */
+  startLogin(identifier: LoginIdentifier, password: string): Promise<LoginChallenge>;
   /** Log in, step 2, with a passkey. */
   verifyWithPasskey(loginId: string): Promise<Session>;
   /** Log in, step 2, with the 6 digit code from an authenticator app. */
   verifyWithAuthenticator(loginId: string, code: string): Promise<Session>;
-  /** Log in, step 2, with a code sent by SMS. Opens a restricted session. */
-  sendLoginCode(loginId: string): Promise<void>;
+  /**
+   * Log in, step 2, with a code sent by SMS, or by email after a log in by
+   * email. Opens a restricted session.
+   */
+  sendLoginCode(loginId: string, channel: CodeChannel): Promise<void>;
   verifyWithCode(loginId: string, code: string): Promise<Session>;
 
   /**
@@ -203,6 +221,8 @@ export interface AuthClient {
 
 const messages: Record<AuthErrorCode, string> = {
   invalid_credentials: "That number and password do not match. Check both and try again.",
+  invalid_email_credentials:
+    "That email and password do not match. Only an email address you confirmed by its link works here.",
   invalid_code: "That code is not right. Check it and try again.",
   phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:

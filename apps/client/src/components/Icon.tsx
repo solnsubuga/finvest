@@ -24,6 +24,7 @@ const paths = {
     "M8 3h8a1 1 0 011 1v16a1 1 0 01-1 1H8a1 1 0 01-1-1V4a1 1 0 011-1zM11 18h2",
   ],
   message: ["M4 5h16v11H9l-5 4z"],
+  mail: ["M3 6h18v12H3z", "M3 7l9 6 9-6"],
   bell: ["M6 16V11a6 6 0 0112 0v5l2 2H4zM10 21h4"],
   insights: ["M5 20v-7M10 20V6M15 20v-10M20 20V9"],
   repeat: [

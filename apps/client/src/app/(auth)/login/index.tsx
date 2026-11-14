@@ -3,12 +3,13 @@ import { StyleSheet, View } from "react-native";
 import { Stack, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
+import { isValidEmail } from "@/auth/password";
 import { toE164 } from "@/auth/phone";
 import { describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
-import { PasswordField, PhoneField } from "@/components/Field";
+import { PasswordField, PhoneField, TextField } from "@/components/Field";
 import { Icon } from "@/components/Icon";
 import { LogoMark } from "@/components/Logo";
 import { Screen } from "@/components/Screen";
@@ -18,25 +19,39 @@ import { colors, fontSizes } from "@/theme";
 export default function LoginStart() {
   const router = useRouter();
   const { client, setLogin } = useAuth();
+  // The design's "Use email instead": a proved address in place of the number.
+  const [byEmail, setByEmail] = useState(false);
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const e164 = toE164(phone);
-  const phoneError = submitted && !e164 ? "Enter a mobile number like 772 123 456." : null;
+  const emailOk = isValidEmail(email);
+  const phoneError = submitted && !byEmail && !e164 ? "Enter a mobile number like 772 123 456." : null;
+  const emailError =
+    submitted && byEmail && !emailOk ? "Enter an email address like name@example.com." : null;
   const passwordError = submitted && password.length === 0 ? "Enter your password." : null;
+
+  const switchTo = (email: boolean) => {
+    setByEmail(email);
+    setSubmitted(false);
+    setError(null);
+  };
 
   const submit = async () => {
     setSubmitted(true);
     setError(null);
-    if (!e164 || password.length === 0) {
+    if ((byEmail ? !emailOk : !e164) || password.length === 0) {
       return;
     }
     setBusy(true);
     try {
-      setLogin(await client.startLogin(e164, password));
+      setLogin(
+        await client.startLogin(byEmail ? { email } : { phone: e164 as string }, password),
+      );
       setPassword("");
       router.push("/login/verify");
     } catch (caught) {
@@ -69,12 +84,32 @@ export default function LoginStart() {
       </View>
       <View style={{ marginTop: 20, gap: 10 }}>
         <Title>Welcome back</Title>
-        <Txt color={colors.muted}>Sign in with your mobile number and password.</Txt>
+        <Txt color={colors.muted}>
+          {byEmail
+            ? "Sign in with your email address and password."
+            : "Sign in with your mobile number and password."}
+        </Txt>
       </View>
 
       <View style={{ marginTop: 20, gap: 14 }}>
         {error ? <Notice tone="danger">{error}</Notice> : null}
-        <PhoneField value={phone} onChangeText={setPhone} error={phoneError} />
+        {byEmail ? (
+          <TextField
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            hint="The address you confirmed by the link we emailed you."
+            error={emailError}
+            keyboardType="email-address"
+            inputMode="email"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            testID="email-input"
+          />
+        ) : (
+          <PhoneField value={phone} onChangeText={setPhone} error={phoneError} />
+        )}
         <PasswordField
           label="Password"
           value={password}
@@ -85,7 +120,11 @@ export default function LoginStart() {
         />
       </View>
       <View style={styles.links}>
-        <TextLink label="Use email instead" onPress={() => unavailable("email-login")} />
+        <TextLink
+          label={byEmail ? "Use mobile number instead" : "Use email instead"}
+          onPress={() => switchTo(!byEmail)}
+          testID="switch-identifier"
+        />
         <TextLink label="Forgot password?" onPress={() => router.push("/reset")} />
       </View>
       <View style={{ marginTop: 8 }}>

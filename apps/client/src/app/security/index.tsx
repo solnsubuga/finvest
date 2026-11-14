@@ -188,7 +188,7 @@ export default function Security() {
 
           {session.restricted ? (
             <Notice tone="warning">
-              You signed in with an SMS code, so withdrawals only go to accounts you have used before
+              You signed in with a code, so withdrawals only go to accounts you have used before
               until 24 hours have passed. Adding a passkey or an authenticator app now does not end
               that early. It counts from your next log in.
             </Notice>
