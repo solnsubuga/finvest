@@ -62,7 +62,7 @@ async function openPayScreen() {
   await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
   await fireEvent.press(screen.getByTestId("login-submit"));
   await fireEvent.press(await screen.findByTestId("use-passkey"));
-  await screen.findByText("Welcome, Amara");
+  await screen.findByTestId("home");
   await fireEvent.press(screen.getByLabelText("Invest"));
   await fireEvent.press(await screen.findByTestId("demo-pay"));
   await screen.findByText("Pay UGX 1,000,000");
@@ -119,7 +119,7 @@ describe("paying for an investment by mobile money", () => {
     share.mockRestore();
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("repeats the same request under the same key after a lost try", async () => {

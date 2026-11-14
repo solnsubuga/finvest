@@ -93,6 +93,54 @@ afterEach(() => {
 });
 
 describe("the investing client for the real API", () => {
+  it("reads the Home and Portfolio totals as the API added them up", async () => {
+    const seen = serve(200, {
+      currency: "UGX",
+      invested_minor: 8000000,
+      worth_minor: 8164760,
+      interest_so_far_minor: 164760,
+      earning_per_day_minor: 2416,
+      interest_today_minor: 2416,
+      active_count: 3,
+      awaiting_payment_count: 1,
+      outside_goals: { worth_minor: 5604760, count: 2 },
+      in_goals: { worth_minor: 2560000, count: 1 },
+      open_goals: 2,
+      products: [
+        { product_code: "TREA-91", product_name: "91 Day Treasury Bill", worth_minor: 5049486, count: 2, percent: 62 },
+        { product_code: "TREA-182", product_name: "182 Day Treasury Bill", worth_minor: 3115274, count: 1, percent: 38 },
+      ],
+      next_maturity: {
+        investment_id: ID,
+        product_name: "91 Day Treasury Bill",
+        on: "2027-01-09",
+        at_maturity: "roll_over",
+        term_days: 91,
+        days_earned: 34,
+        days_left: 57,
+      },
+    });
+    const portfolio = await createApiInvestingClient().getPortfolio();
+    expect(seen[0]).toMatchObject({ method: "GET", path: "/client/portfolio?currency=UGX" });
+    expect(portfolio).toMatchObject({
+      worth: ugx(8164760),
+      earningPerDay: ugx(2416),
+      inGoals: { worth: ugx(2560000), count: 1 },
+      openGoals: 2,
+      nextMaturity: { investmentId: ID, on: "2027-01-09", daysLeft: 57, atMaturity: "roll_over" },
+    });
+    expect(portfolio.products.map((share) => share.percent)).toEqual([62, 38]);
+  });
+
+  it("refuses totals that came back in another currency rather than mislabel them", async () => {
+    serve(200, {
+      currency: "USD", invested_minor: 0, worth_minor: 0, interest_so_far_minor: 0, earning_per_day_minor: 0,
+      interest_today_minor: 0, active_count: 0, awaiting_payment_count: 0, outside_goals: { worth_minor: 0, count: 0 },
+      in_goals: { worth_minor: 0, count: 0 }, open_goals: 0, products: [], next_maturity: null,
+    });
+    await expect(createApiInvestingClient().getPortfolio("UGX")).rejects.toEqual(new InvestingError("unavailable"));
+  });
+
   it("lists products with the rate after tax, as sent", async () => {
     const seen = serve(200, [product, { ...product, code: "USD-BOND", currency: "USD", status: "paused", term_days: null }]);
     const products = await createApiInvestingClient().listProducts();
@@ -205,6 +253,7 @@ describe("the investing client for the real API", () => {
       canWithdraw: false,
       withdrawalRequestedAt: null,
       canSend: false,
+      lockedUntil: null,
     });
 
     const one = serve(200, { ...investment, interest_at_maturity_minor: null, total_at_maturity_minor: null });

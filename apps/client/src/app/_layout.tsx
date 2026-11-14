@@ -8,6 +8,7 @@ import { ActivityProvider } from "@/activity/ActivityProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
 import { ClaimProvider } from "@/claim/ClaimProvider";
+import { ConnectionProvider } from "@/connection/ConnectionProvider";
 import { DataSavingProvider } from "@/dataSaving/DataSavingProvider";
 import { DocumentsProvider } from "@/documents/DocumentsProvider";
 import { GoalsProvider } from "@/goals/GoalsProvider";
@@ -54,12 +55,14 @@ export default function RootLayout() {
                               <ActivityProvider>
                                 <ProfileProvider>
                                   <OrganisationsProvider>
-                                    <Stack
-                                      screenOptions={{
-                                        headerShown: false,
-                                        contentStyle: { backgroundColor: colors.paper },
-                                      }}
-                                    />
+                                    <ConnectionProvider>
+                                      <Stack
+                                        screenOptions={{
+                                          headerShown: false,
+                                          contentStyle: { backgroundColor: colors.paper },
+                                        }}
+                                      />
+                                    </ConnectionProvider>
                                   </OrganisationsProvider>
                                 </ProfileProvider>
                               </ActivityProvider>

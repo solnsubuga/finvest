@@ -19,6 +19,7 @@ const SIGNED_IN = [
   "/goals/new",
   "/goals/demo-goal-1",
   "/goals/edit/demo-goal-1",
+  "/goals/payday/demo-goal-1",
   "/insights",
   "/documents",
   "/help",
@@ -36,6 +37,9 @@ const SIGNED_IN = [
   "/security",
   "/security/devices",
   "/security/passkeys",
+  "/security/password",
+  "/security/phone",
+  "/security/email",
   "/payouts",
   "/payouts/add",
   "/payouts/history",
@@ -110,7 +114,7 @@ test("every main screen after sign-in meets WCAG 2.1 AA", async ({ page }) => {
   await expect(page.getByText("Type your PIN again")).toBeVisible();
   expect(await violations(page), "type the PIN again").toEqual([]);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   const found: string[] = [];
   for (const path of SIGNED_IN) {
     await visit(page, path);
@@ -129,7 +133,7 @@ test("the PIN lock, its reset and the sign out after wrong PINs meet WCAG 2.1 AA
   await page.getByTestId("use-passkey").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
   await expect(page.getByText("Enter your PIN to open the app on this phone")).toBeVisible();
@@ -157,7 +161,7 @@ test("freezing the account and the frozen screen meet WCAG 2.1 AA", async ({ pag
   await page.getByTestId("login-submit").click();
   await page.getByTestId("use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/account/freeze");
   await expect(page.getByTestId("freeze-confirm")).toBeVisible();
   expect(await violations(page), "freeze your account").toEqual([]);
@@ -165,6 +169,25 @@ test("freezing the account and the frozen screen meet WCAG 2.1 AA", async ({ pag
   await page.getByTestId("freeze-confirm").click();
   await expect(page.getByTestId("account-frozen")).toBeVisible();
   expect(await violations(page), "your account is frozen").toEqual([]);
+});
+
+test("confirming it is you before a sign-in change meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/");
+  await page.getByText("Log in", { exact: true }).first().click();
+  await page.getByTestId("phone-input").fill(DEMO_PHONE);
+  await page.getByTestId("password-input").fill(DEMO_PASSWORD);
+  await page.getByTestId("login-submit").click();
+  // A texted code is not enough for a sign-in change, so the card asks for more.
+  await page.getByTestId("use-code").click();
+  await page.getByTestId("code-input").fill("123456");
+  await page.getByTestId("code-submit").click();
+  await createPin(page);
+  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await visit(page, "/security/email");
+  await page.getByTestId("email-input").fill("nakato@example.com");
+  await page.getByTestId("email-change").click();
+  await expect(page.getByTestId("confirm-it-is-you")).toBeVisible();
+  expect(await violations(page), "confirm it is you").toEqual([]);
 });
 
 test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ page }) => {
@@ -176,7 +199,7 @@ test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ 
   await page.getByTestId("use-passkey").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/payouts/add");
   await page.getByTestId("phone-input").fill("701 555 012");
   await page.getByTestId("holder-name-input").fill("Amara Nakato");
@@ -221,10 +244,9 @@ test("sending an investment to someone meets WCAG 2.1 AA at every step", async (
   await page.getByTestId("use-passkey").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/portfolio");
-  await page.getByLabel(/^91 Day Treasury Bill, Running/).first().click();
-  await page.getByTestId("send-investment").click();
+  await openToSend(page);
   await expect(page.getByTestId("send-to")).toBeVisible();
   const found: string[] = [];
   const check = async (step: string) => found.push(...(await violations(page)).map((line) => `${step} ${line}`));
@@ -286,3 +308,17 @@ test("a claim link that no longer works meets WCAG 2.1 AA", async ({ page }) => 
   await expect(page.getByText("Open the link from our message")).toBeVisible();
   expect(await violations(page), "claim without a link").toEqual([]);
 });
+
+/** A phone opens the investment's own screen to send; a wide Portfolio has Send in the detail beside its table. */
+async function openToSend(page: Page) {
+  const card = page.getByLabel(/^91 Day Treasury Bill, Running/).first();
+  const row = page.getByLabel(/^91 Day Treasury Bill, worth/).first();
+  await card.or(row).first().waitFor();
+  if (await card.count()) {
+    await card.click();
+    await page.getByTestId("send-investment").click();
+  } else {
+    await row.click();
+    await page.getByTestId("detail-send").click();
+  }
+}

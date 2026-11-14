@@ -71,6 +71,11 @@ class DocumentItem(Contract):
     # investment an investment note confirms, or the payment a receipt is for. Null otherwise.
     investment_id: str | None
     deposit_id: str | None
+    # What the PDF and its email call the document: "ST-", "RC-", "TC-" or "IN-" and its ID.
+    reference: str
+    # For an investment note, whether it confirms the investment started or ended. Null for
+    # every other kind.
+    note: Literal["started", "ended"] | None
 
 
 class DocumentList(Contract):
@@ -93,6 +98,8 @@ def _item(view: DocumentView) -> DocumentItem:
         not_final_from=view.not_final_from,
         investment_id=view.source_id if view.kind is DocumentKind.INVESTMENT_NOTE else None,
         deposit_id=view.source_id if view.kind is DocumentKind.RECEIPT else None,
+        reference=view.reference,
+        note=view.note.value if view.note else None,
     )
 
 

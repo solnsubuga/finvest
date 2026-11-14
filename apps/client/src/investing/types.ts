@@ -86,6 +86,11 @@ export type Investment = {
   withdrawalRequestedAt: string | null;
   /** Running, and part or all of it may be sent to another client now. */
   canSend: boolean;
+  /**
+   * Locked through a goal, YYYY-MM-DD: the first day it may be withdrawn early or
+   * sent on again. Null when it is not locked.
+   */
+  lockedUntil: string | null;
 };
 
 /** Another client, found by their Finvest account number or mobile number. */
@@ -197,7 +202,48 @@ export type NewInvestment = {
   idempotencyKey: string;
 };
 
+/** One product's part of what is invested, with its whole-number share. The shares add up to 100. */
+export type ProductShare = { productCode: string; productName: string; worth: Amount; count: number; percent: number };
+
+/** The running investment that matures soonest. */
+export type NextMaturity = {
+  investmentId: string;
+  productName: string;
+  /** A calendar date. */
+  on: string;
+  atMaturity: AtMaturity | null;
+  termDays: number;
+  daysEarned: number;
+  daysLeft: number;
+};
+
+/**
+ * The totals on Home and Portfolio, in one currency, from `GET /client/portfolio`. The backend
+ * adds them up from the same views as the list, so they agree to the shilling. Only running
+ * investments count; one waiting for payment is only in `awaitingPaymentCount`.
+ */
+export type Portfolio = {
+  currency: Currency;
+  invested: Amount;
+  worth: Amount;
+  interestSoFar: Amount;
+  /** What one more day of interest adds, after tax. */
+  earningPerDay: Amount;
+  interestToday: Amount;
+  activeCount: number;
+  awaitingPaymentCount: number;
+  /** `worth` split by where it sits. The two add up to `worth`. */
+  outsideGoals: { worth: Amount; count: number };
+  inGoals: { worth: Amount; count: number };
+  openGoals: number;
+  /** Biggest first. */
+  products: ProductShare[];
+  nextMaturity: NextMaturity | null;
+};
+
 export interface InvestingClient {
+  /** The Home and Portfolio totals in one currency. */
+  getPortfolio(currency?: Currency): Promise<Portfolio>;
   listProducts(): Promise<Product[]>;
   quote(productCode: string, amount: Amount): Promise<Quote>;
   /** Review and confirm: saves the investment at today's rate, waiting for its payment. */

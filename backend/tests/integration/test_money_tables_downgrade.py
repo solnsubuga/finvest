@@ -24,6 +24,18 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0310_identity_unlock_keys": (
+        "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
+        "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "
+        "INSERT INTO identity_sessions (id, actor_kind, actor_id, token_hash, second_step, "
+        "transport, created_at, last_seen_at, idle_expires_at, absolute_expires_at) "
+        "VALUES ('-Nabc0000000000000A1', 'client', '-Nabc0000000000000B1', "
+        "decode(repeat('00', 32), 'hex'), 'passkey', 'token', now(), now(), now(), now()); "
+        "INSERT INTO identity_app_pins (session_id, pin_hash, created_at, unlock_key_hash, "
+        "unlock_key_set_at) VALUES ('-Nabc0000000000000A1', 'x', now(), "
+        "decode(repeat('00', 32), 'hex'), now())",
+        "refusing to drop unlock keys that are in use",
+    ),
     "0183_monitoring_transfers": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'system', true); "
         "INSERT INTO monitoring_transactions (id, client_id, kind, source_id, currency, "
@@ -924,6 +936,13 @@ ROWS = {
         "now())",
         "refusing to drop staff re-confirmations",
     ),
+    "0236_client_own_changes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
+        "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'phone_change', "
+        "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop number change codes",
+    ),
     "0235_client_freezes": (
         "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "
         "created_at) VALUES ('-Nabc0000000000000B1', '+256772123456', 'x', now(), 'active', "
@@ -982,6 +1001,23 @@ ROWS = {
         "UPDATE payout_send_attempts SET outcome = 'deferred', finished_at = now(), "
         "deferred_for = 'wallet_short' WHERE payout_id = '-Nabc0000000000000A1'; COMMIT",
         "refusing to drop why payout sends were deferred",
+    ),
+    "0321_finance_month_closes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO finance_month_closes (id, month, books, books_sha256, reason, status, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', '2026-10-01', '[]', "
+        "repeat('a', 64), 'Test', 'proposed', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop month closes",
+    ),
+    "0320_report_schedules": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO report_schedules (id, report_key, frequency, currency, recipients, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'daily_position', "
+        "'daily', 'UGX', ARRAY['-Nabc0000000000000S2']::push_id[], 'Test', 'proposed', "
+        "'-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop report schedules",
     ),
     "0290_finance_code_maps": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
@@ -1180,6 +1216,26 @@ ROWS = {
         "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', "
         "DATE '2099-01-01', now(), now()); COMMIT",
         "refusing to drop the locks clients set",
+    ),
+    "0360_investment_product_changes": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_product_changes (id, action, code, name, kind, currency, "
+        "term_days, minimum_minor, interest_paid, product_status, first_annual_rate_bps, "
+        "first_tax_bps, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'create', 'TREA-28', 'Treasury bill, 28 days', 'treasury_bill', 'UGX', 28, 100000, "
+        "'at_maturity', 'draft', 1000, 1500, 'A shorter bill', '-Nabc0000000000000S1', now()); "
+        "COMMIT",
+        "refusing to drop product changes",
+    ),
+    "0334_investment_bookings": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000S1', true); "
+        "INSERT INTO investment_bookings (id, client_id, product_id, currency, principal_minor, "
+        "at_maturity, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'FvProduct1TREA91_001', 'UGX', 1000000, 'roll_over', "
+        "'The client called the office', '-Nabc0000000000000S1', now()); COMMIT",
+        "refusing to drop the record of investments staff booked",
     ),
 }
 

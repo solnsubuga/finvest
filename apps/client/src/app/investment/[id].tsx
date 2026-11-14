@@ -106,6 +106,10 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
   if (investment.atMaturity && toMaturity) {
     rows.push({ label: "When the term ends", value: atMaturityLabel[investment.atMaturity] });
   }
+  if (investment.lockedUntil) {
+    // Locked through its goal: not taken out early or sent to anyone before then.
+    rows.push({ label: "Locked by your goal until", value: formatDay(investment.lockedUntil) });
+  }
 
   return (
     <View style={{ marginTop: 20, gap: 16 }}>

@@ -8,23 +8,36 @@ import { Txt } from "@/components/Txt";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed, ProductCard } from "@/investing/Parts";
 import { useLoaded } from "@/investing/useLoaded";
+import { WideInvest } from "@/investing/WideInvest";
 import { Loading } from "@/payments/Parts";
 import { usePayments } from "@/payments/PaymentsProvider";
 import { colors, fontSizes } from "@/theme";
+import { useIsWide } from "@/theme/useIsWide";
 
 /** What a client can invest in, with the rate after tax. */
 export default function Invest() {
   const router = useRouter();
   const client = useInvesting();
   const { demoPayableId } = usePayments();
+  const wide = useIsWide();
   const [products, retry] = useLoaded(useCallback(() => client.listProducts(), [client]));
 
   return (
-    <AppPage title="Invest" subtitle="Government-backed and fixed income products. Rates shown are after tax.">
+    <AppPage
+      title="Invest"
+      subtitle={
+        wide
+          ? "Pick an investment on the left, work out what it earns on the right."
+          : "Government-backed and fixed income products. Rates shown are after tax."
+      }
+      roomy={wide}
+    >
       {products.state === "loading" ? (
         <Loading label="Loading products" />
       ) : products.state === "failed" ? (
         <Failed message={products.message} onRetry={retry} />
+      ) : wide ? (
+        <WideInvest products={products.value} />
       ) : (
         <View style={{ gap: 12 }}>
           {products.value.map((product) => (

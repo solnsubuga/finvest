@@ -48,10 +48,10 @@ describe("the shell, from the first screen", () => {
 
     // The password alone is not enough: the second step comes first.
     await screen.findByText("Confirm it is you");
-    expect(screen.queryByText("Welcome, Amara")).toBeNull();
+    expect(screen.queryByTestId("home")).toBeNull();
 
     await fireEvent.press(screen.getByTestId("use-passkey"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
   });
 
   it("logs in with a proved email and a code sent to that address", async () => {
@@ -136,7 +136,7 @@ describe("the shell, from the first screen", () => {
     await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "green matooke sunday");
     await fireEvent.press(screen.getByTestId("password-submit"));
 
-    await waitFor(() => expect(screen.getByText("Welcome to Finvest")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("home")).toBeTruthy());
     // The signed-in shell keeps saying it is a demo.
     expect(screen.getByText(/Demo\. Not connected to Finvest yet/)).toBeTruthy();
   });
@@ -183,7 +183,7 @@ describe("the shell, from the first screen", () => {
 
     await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
-    await screen.findByText("Welcome, Amara");
+    await screen.findByTestId("home");
     expect(screen.queryByText(/You signed in with a code/)).toBeNull();
   });
 

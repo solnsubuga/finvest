@@ -655,6 +655,7 @@
               "buffer_rules",
               "buffer_capital",
               "rate_change",
+              "product_change",
               "migration_totals",
               "migration_sign_off",
               "phone_change",
@@ -666,6 +667,7 @@
               "payout_account",
               "investment_correction",
               "investment_run",
+              "investment_booking",
               "payout_resolution",
               "tax_remittance",
               "deposit_reassignment",
@@ -686,7 +688,9 @@
               "calendar_change",
               "staff_security_change",
               "statement_layout_change",
-              "withdrawal_limits_change"
+              "withdrawal_limits_change",
+              "report_schedule",
+              "month_close"
             ],
             "title": "Kind",
             "type": "string"
@@ -2029,6 +2033,228 @@
           "closing"
         ],
         "title": "BookLineOut",
+        "type": "object"
+      },
+      "BookingIn": {
+        "additionalProperties": false,
+        "description": "An investment to set up for a client who asked, for a second person to approve.",
+        "properties": {
+          "amount_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "at_maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AtMaturity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "product_code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9-]+$",
+            "title": "Product Code",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_id",
+          "product_code",
+          "amount_minor",
+          "currency",
+          "reason"
+        ],
+        "title": "BookingIn",
+        "type": "object"
+      },
+      "BookingOut": {
+        "additionalProperties": false,
+        "description": "An investment booked for a client. Once a different person approves it, the worker saves\nit unpaid on the day's terms and the client pays for it as usual.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "at_maturity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AtMaturity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "investment_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investment Id"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_name": {
+            "title": "Product Name",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "sent_back",
+              "withdrawn",
+              "done",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "product_code",
+          "product_name",
+          "amount_minor",
+          "currency",
+          "at_maturity",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "investment_id",
+          "failure_code",
+          "finished_at"
+        ],
+        "title": "BookingOut",
         "type": "object"
       },
       "BufferLevel": {
@@ -5859,6 +6085,22 @@
         "title": "DecideChange",
         "type": "object"
       },
+      "DecideCloseIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DecideCloseIn",
+        "type": "object"
+      },
       "DecideCodeMap": {
         "additionalProperties": false,
         "properties": {
@@ -6016,6 +6258,22 @@
           "decision"
         ],
         "title": "DecideOutcome",
+        "type": "object"
+      },
+      "DecideScheduleIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DecideScheduleIn",
         "type": "object"
       },
       "DecideSetting": {
@@ -6723,6 +6981,25 @@
             ],
             "title": "Not Final From"
           },
+          "note": {
+            "anyOf": [
+              {
+                "enum": [
+                  "started",
+                  "ended"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
           "requested_at": {
             "format": "date-time",
             "title": "Requested At",
@@ -6750,7 +7027,9 @@
           "byte_size",
           "not_final_from",
           "investment_id",
-          "deposit_id"
+          "deposit_id",
+          "reference",
+          "note"
         ],
         "title": "DocumentItem",
         "type": "object"
@@ -6880,6 +7159,37 @@
         ],
         "title": "DocumentType",
         "type": "string"
+      },
+      "EmailChange": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailChange",
+        "type": "object"
+      },
+      "EmailChanged": {
+        "additionalProperties": false,
+        "description": "The new address, not proved until the link sent to it is opened.",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "EmailChanged",
+        "type": "object"
       },
       "EmailConfirm": {
         "additionalProperties": false,
@@ -10699,6 +11009,173 @@
         "title": "MonitoringRulesOut",
         "type": "object"
       },
+      "MonthCloseOut": {
+        "additionalProperties": false,
+        "properties": {
+          "books": {
+            "items": {
+              "$ref": "#/components/schemas/SignedLineOut"
+            },
+            "title": "Books",
+            "type": "array"
+          },
+          "books_sha256": {
+            "title": "Books Sha256",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "month",
+          "status",
+          "books",
+          "books_sha256",
+          "reason",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_reason",
+          "yours"
+        ],
+        "title": "MonthCloseOut",
+        "type": "object"
+      },
+      "MonthClosesOut": {
+        "additionalProperties": false,
+        "properties": {
+          "closes": {
+            "items": {
+              "$ref": "#/components/schemas/MonthCloseOut"
+            },
+            "title": "Closes",
+            "type": "array"
+          },
+          "last_closed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Closed"
+          },
+          "next": {
+            "$ref": "#/components/schemas/MonthToCloseOut"
+          }
+        },
+        "required": [
+          "last_closed",
+          "next",
+          "closes"
+        ],
+        "title": "MonthClosesOut",
+        "type": "object"
+      },
       "MonthOut": {
         "additionalProperties": false,
         "properties": {
@@ -10781,6 +11258,45 @@
           "tins_shown"
         ],
         "title": "MonthReportOut",
+        "type": "object"
+      },
+      "MonthToCloseOut": {
+        "additionalProperties": false,
+        "properties": {
+          "closed_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Through"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "refusal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refusal"
+          }
+        },
+        "required": [
+          "month",
+          "closed_through",
+          "refusal"
+        ],
+        "title": "MonthToCloseOut",
         "type": "object"
       },
       "MonthView": {
@@ -11136,6 +11652,85 @@
         "title": "NewPasskey",
         "type": "object"
       },
+      "NewProductIn": {
+        "additionalProperties": false,
+        "description": "A new product. It is created as a draft, with this first rate, once a second person\napproves. Opening it to clients is a change of its own.",
+        "properties": {
+          "annual_rate_bps": {
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Annual Rate Bps",
+            "type": "integer"
+          },
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "interest_paid": {
+            "$ref": "#/components/schemas/InterestPaid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductKind"
+          },
+          "minimum_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Minimum Minor",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "tax_bps": {
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Tax Bps",
+            "type": "integer"
+          },
+          "term_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Days"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "currency",
+          "term_days",
+          "minimum_minor",
+          "interest_paid",
+          "annual_rate_bps",
+          "tax_bps",
+          "reason"
+        ],
+        "title": "NewProductIn",
+        "type": "object"
+      },
       "NewSavedReply": {
         "additionalProperties": false,
         "properties": {
@@ -11208,6 +11803,67 @@
           "network"
         ],
         "title": "NewSavingRule",
+        "type": "object"
+      },
+      "NewTermsIn": {
+        "additionalProperties": false,
+        "description": "New terms for an existing product. The code and currency never change, and the kind and\nwhen interest is paid change only while it is a draft. The rate changes on its own route.",
+        "properties": {
+          "interest_paid": {
+            "$ref": "#/components/schemas/InterestPaid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductKind"
+          },
+          "minimum_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Minimum Minor",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "product_code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9-]+$",
+            "title": "Product Code",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "term_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Days"
+          }
+        },
+        "required": [
+          "product_code",
+          "name",
+          "kind",
+          "term_days",
+          "minimum_minor",
+          "interest_paid",
+          "reason"
+        ],
+        "title": "NewTermsIn",
         "type": "object"
       },
       "NextOfKinBody": {
@@ -12194,6 +12850,29 @@
         "title": "PasskeyOptions",
         "type": "object"
       },
+      "PasswordChange": {
+        "additionalProperties": false,
+        "properties": {
+          "current_password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChange",
+        "type": "object"
+      },
       "PayOutRequest": {
         "additionalProperties": false,
         "properties": {
@@ -12842,6 +13521,22 @@
         "title": "PersonBody",
         "type": "object"
       },
+      "PhoneChangeConfirm": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "PhoneChangeConfirm",
+        "type": "object"
+      },
       "PhoneChangeList": {
         "additionalProperties": false,
         "properties": {
@@ -12857,6 +13552,40 @@
           "items"
         ],
         "title": "PhoneChangeList",
+        "type": "object"
+      },
+      "PhoneChangeStart": {
+        "additionalProperties": false,
+        "properties": {
+          "phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "title": "PhoneChangeStart",
+        "type": "object"
+      },
+      "PhoneChangeStarted": {
+        "additionalProperties": false,
+        "description": "Send the code texted to the new number with this ID, within ten minutes.",
+        "properties": {
+          "challenge_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Challenge Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "challenge_id"
+        ],
+        "title": "PhoneChangeStarted",
         "type": "object"
       },
       "PhoneChangeView": {
@@ -12912,6 +13641,20 @@
           "expires_at"
         ],
         "title": "PhoneChangeView",
+        "type": "object"
+      },
+      "PhoneChanged": {
+        "additionalProperties": false,
+        "properties": {
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone"
+        ],
+        "title": "PhoneChanged",
         "type": "object"
       },
       "PhoneName": {
@@ -13556,6 +14299,16 @@
         "title": "ProblemView",
         "type": "object"
       },
+      "ProductAction": {
+        "enum": [
+          "create",
+          "edit",
+          "pause",
+          "open"
+        ],
+        "title": "ProductAction",
+        "type": "string"
+      },
       "ProductAllocationOut": {
         "additionalProperties": false,
         "properties": {
@@ -13610,6 +14363,144 @@
           "waiting"
         ],
         "title": "ProductAllocationOut",
+        "type": "object"
+      },
+      "ProductChangeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ProductAction"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "first_rate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RateOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "interest_paid": {
+            "$ref": "#/components/schemas/InterestPaid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ProductKind"
+          },
+          "minimum_minor": {
+            "title": "Minimum Minor",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "product_status": {
+            "$ref": "#/components/schemas/ProductStatus"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProposalStatus"
+          },
+          "term_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Days"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "product_code",
+          "name",
+          "kind",
+          "currency",
+          "term_days",
+          "minimum_minor",
+          "interest_paid",
+          "product_status",
+          "first_rate",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note"
+        ],
+        "title": "ProductChangeOut",
         "type": "object"
       },
       "ProductKind": {
@@ -13675,6 +14566,50 @@
           "client_rate_percent"
         ],
         "title": "ProductOut",
+        "type": "object"
+      },
+      "ProductReachOut": {
+        "additionalProperties": false,
+        "properties": {
+          "active_plans": {
+            "title": "Active Plans",
+            "type": "integer"
+          },
+          "awaiting_payment": {
+            "title": "Awaiting Payment",
+            "type": "integer"
+          },
+          "clients": {
+            "title": "Clients",
+            "type": "integer"
+          },
+          "open_goals": {
+            "title": "Open Goals",
+            "type": "integer"
+          },
+          "paused_plans": {
+            "title": "Paused Plans",
+            "type": "integer"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "running_investments": {
+            "title": "Running Investments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "product_code",
+          "running_investments",
+          "awaiting_payment",
+          "clients",
+          "open_goals",
+          "active_plans",
+          "paused_plans"
+        ],
+        "title": "ProductReachOut",
         "type": "object"
       },
       "ProductStatus": {
@@ -14155,6 +15090,28 @@
         "title": "ProposeChange",
         "type": "object"
       },
+      "ProposeCloseIn": {
+        "additionalProperties": false,
+        "properties": {
+          "month": {
+            "pattern": "^[0-9]{4}-[0-9]{2}$",
+            "title": "Month",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "month",
+          "reason"
+        ],
+        "title": "ProposeCloseIn",
+        "type": "object"
+      },
       "ProposeCodeMap": {
         "additionalProperties": false,
         "properties": {
@@ -14542,6 +15499,69 @@
           "reason"
         ],
         "title": "ProposePublicHolidays",
+        "type": "object"
+      },
+      "ProposeScheduleIn": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "default": "UGX",
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "frequency": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipients": {
+            "items": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Recipients",
+            "type": "array"
+          },
+          "report_key": {
+            "enum": [
+              "daily_position",
+              "deposits_and_withdrawals",
+              "interest_and_tax",
+              "maturity_ladder",
+              "identity_and_risk",
+              "client_statements",
+              "complaints_quarterly"
+            ],
+            "title": "Report Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "report_key",
+          "frequency",
+          "recipients",
+          "reason"
+        ],
+        "title": "ProposeScheduleIn",
         "type": "object"
       },
       "ProposeStaffIdleMinutes": {
@@ -15527,27 +16547,6 @@
           "byte_size"
         ],
         "title": "ReceiptView",
-        "type": "object"
-      },
-      "RecipientOut": {
-        "additionalProperties": false,
-        "description": "Who the client is about to send to: never their full name.",
-        "properties": {
-          "account_number": {
-            "pattern": "^\\d{10}$",
-            "title": "Account Number",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_number",
-          "name"
-        ],
-        "title": "RecipientOut",
         "type": "object"
       },
       "RecoveryAsk": {
@@ -17442,6 +18441,7 @@
                 "finance.view",
                 "tax_remittances.change",
                 "products.view",
+                "products.change",
                 "rates.view",
                 "rates.change",
                 "compliance.view",
@@ -18256,6 +19256,270 @@
           "maturity_date"
         ],
         "title": "SavingView",
+        "type": "object"
+      },
+      "ScheduleOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "anyOf": [
+              {
+                "enum": [
+                  "UGX",
+                  "USD"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "frequency": {
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly"
+            ],
+            "title": "Frequency",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Sent At"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "recipient_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recipient Names",
+            "type": "array"
+          },
+          "recipients": {
+            "items": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "type": "string"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "report_key": {
+            "enum": [
+              "daily_position",
+              "deposits_and_withdrawals",
+              "interest_and_tax",
+              "maturity_ladder",
+              "identity_and_risk",
+              "client_statements",
+              "complaints_quarterly"
+            ],
+            "title": "Report Key",
+            "type": "string"
+          },
+          "report_name": {
+            "title": "Report Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "active",
+              "declined",
+              "withdrawn",
+              "stopped"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "stopped_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped At"
+          },
+          "stopped_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped By"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "report_key",
+          "report_name",
+          "frequency",
+          "currency",
+          "recipients",
+          "recipient_names",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "stopped_by",
+          "stopped_at",
+          "last_sent_at",
+          "yours"
+        ],
+        "title": "ScheduleOut",
+        "type": "object"
+      },
+      "SchedulesOut": {
+        "additionalProperties": false,
+        "properties": {
+          "frequencies": {
+            "additionalProperties": {
+              "items": {
+                "enum": [
+                  "daily",
+                  "weekly",
+                  "monthly",
+                  "quarterly"
+                ],
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "propertyNames": {
+              "enum": [
+                "daily_position",
+                "deposits_and_withdrawals",
+                "interest_and_tax",
+                "maturity_ladder",
+                "identity_and_risk",
+                "client_statements",
+                "complaints_quarterly"
+              ]
+            },
+            "title": "Frequencies",
+            "type": "object"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__reports__api__RecipientOut"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "schedules": {
+            "items": {
+              "$ref": "#/components/schemas/ScheduleOut"
+            },
+            "title": "Schedules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "schedules",
+          "frequencies",
+          "people"
+        ],
+        "title": "SchedulesOut",
         "type": "object"
       },
       "SearchResult": {
@@ -19074,6 +20338,49 @@
         ],
         "title": "SignatoryStatus",
         "type": "string"
+      },
+      "SignedLineOut": {
+        "additionalProperties": false,
+        "properties": {
+          "closing": {
+            "title": "Closing",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "credits": {
+            "title": "Credits",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "debits": {
+            "title": "Debits",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "opening": {
+            "title": "Opening",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "code",
+          "kind",
+          "opening",
+          "debits",
+          "credits",
+          "closing"
+        ],
+        "title": "SignedLineOut",
+        "type": "object"
       },
       "SignedOut": {
         "additionalProperties": false,
@@ -21822,6 +23129,7 @@
                 "finance.view",
                 "tax_remittances.change",
                 "products.view",
+                "products.change",
                 "rates.view",
                 "rates.change",
                 "compliance.view",
@@ -22901,6 +24209,39 @@
         ],
         "title": "Status",
         "type": "string"
+      },
+      "StatusChangeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "product_code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9-]+$",
+            "title": "Product Code",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "live",
+              "paused"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_code",
+          "to",
+          "reason"
+        ],
+        "title": "StatusChangeIn",
+        "type": "object"
       },
       "StepDetailOut": {
         "additionalProperties": false,
@@ -24207,6 +25548,54 @@
         "title": "TrialView",
         "type": "object"
       },
+      "UnlockKeyBody": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "UnlockKeyBody",
+        "type": "object"
+      },
+      "UnlockKeyTurnedOn": {
+        "additionalProperties": false,
+        "description": "A right PIN gives `key`, once: keep it where only a fingerprint or face can read it.\nOtherwise `tries_left` before this device signs out.",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "enabled",
+          "tries_left",
+          "key"
+        ],
+        "title": "UnlockKeyTurnedOn",
+        "type": "object"
+      },
       "Unread": {
         "additionalProperties": false,
         "properties": {
@@ -25373,6 +26762,27 @@
         "title": "PersonView",
         "type": "object"
       },
+      "app__modules__investments__transfers_api__RecipientOut": {
+        "additionalProperties": false,
+        "description": "Who the client is about to send to: never their full name.",
+        "properties": {
+          "account_number": {
+            "pattern": "^\\d{10}$",
+            "title": "Account Number",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_number",
+          "name"
+        ],
+        "title": "RecipientOut",
+        "type": "object"
+      },
       "app__modules__kyc__api__Outcome": {
         "additionalProperties": false,
         "properties": {
@@ -25947,6 +27357,45 @@
           "name"
         ],
         "title": "PotOut",
+        "type": "object"
+      },
+      "app__modules__reports__api__RecipientOut": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reports": {
+            "items": {
+              "enum": [
+                "daily_position",
+                "deposits_and_withdrawals",
+                "interest_and_tax",
+                "maturity_ladder",
+                "identity_and_risk",
+                "client_statements",
+                "complaints_quarterly"
+              ],
+              "type": "string"
+            },
+            "title": "Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "reports"
+        ],
+        "title": "RecipientOut",
         "type": "object"
       },
       "app__modules__screening__domain__standing__Outcome": {
@@ -28690,6 +30139,98 @@
         "summary": "Download Document",
         "tags": [
           "client documents"
+        ]
+      }
+    },
+    "/client/email": {
+      "put": {
+        "description": "Set a new email address and send it a link to prove it.",
+        "operationId": "change_email_client_email_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailChanged"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Change Email",
+        "tags": [
+          "client sign-in"
         ]
       }
     },
@@ -35060,6 +36601,91 @@
         ]
       }
     },
+    "/client/password": {
+      "put": {
+        "description": "Change the password. A wrong current one is 401 `invalid_credentials`. Every other\nsession ends.",
+        "operationId": "change_password_client_password_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChange"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Change Password",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
     "/client/password/reset/complete": {
       "post": {
         "description": "Set a new password. Every session ends, and the account is restricted for 24 hours.",
@@ -36377,9 +38003,207 @@
         ]
       }
     },
+    "/client/phone-change": {
+      "post": {
+        "description": "Text a code to the new number.",
+        "operationId": "start_phone_change_client_phone_change_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneChangeStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneChangeStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Start Phone Change",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/phone-change/{challenge_id}/confirmation": {
+      "post": {
+        "description": "Move the account to the new number with its code. Every other session ends, and for a day\nwithdrawals go only to accounts the client already uses. 409 `phone_taken` when the number\nhas an account.",
+        "operationId": "confirm_phone_change_client_phone_change__challenge_id__confirmation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "challenge_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Challenge Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneChangeConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneChanged"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Confirm Phone Change",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
     "/client/pin": {
       "put": {
-        "description": "Set or replace the PIN for this phone. Needs a log in from the last ten minutes.",
+        "description": "Set or replace the PIN for this phone. Needs a log in, or a passkey or app confirmation,\nfrom the last ten minutes.",
         "operationId": "set_pin_client_pin_put",
         "requestBody": {
           "content": {
@@ -36671,6 +38495,293 @@
           }
         },
         "summary": "Unlock",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/unlock-key": {
+      "delete": {
+        "description": "Turn off fingerprint or face unlock for this phone.",
+        "operationId": "turn_off_unlock_key_client_pin_unlock_key_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Turn Off Unlock Key",
+        "tags": [
+          "client sign-in"
+        ]
+      },
+      "put": {
+        "description": "Turn on fingerprint or face unlock for this phone, with the PIN. A wrong PIN counts.",
+        "operationId": "turn_on_unlock_key_client_pin_unlock_key_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnlockKeyTurnedOn"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Turn On Unlock Key",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/unlock-with-key": {
+      "post": {
+        "description": "Open a locked app with this phone's unlock key. A wrong key turns fingerprint unlock off.",
+        "operationId": "unlock_with_key_client_pin_unlock_with_key_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UnlockKeyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinChecked"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Unlock With Key",
         "tags": [
           "client sign-in"
         ]
@@ -37376,6 +39487,272 @@
           }
         },
         "summary": "Client Session",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/session/confirmation/authenticator": {
+      "post": {
+        "description": "Confirm it is you with a code from the authenticator app.",
+        "operationId": "client_confirmation_authenticator_client_session_confirmation_authenticator_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmCode"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Confirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Confirmation Authenticator",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/session/confirmation/passkey": {
+      "post": {
+        "description": "Confirm it is you with a passkey, so sign-in changes work for the next ten minutes.",
+        "operationId": "client_confirmation_passkey_client_session_confirmation_passkey_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmWithPasskey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Confirmed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Confirmation Passkey",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/session/confirmation/passkey/options": {
+      "post": {
+        "description": "Ask the device to sign again, for this session only.",
+        "operationId": "client_confirmation_passkey_options_client_session_confirmation_passkey_options_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Confirmation Passkey Options",
         "tags": [
           "client sign-in"
         ]
@@ -38281,7 +40658,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RecipientOut"
+                  "$ref": "#/components/schemas/app__modules__investments__transfers_api__RecipientOut"
                 }
               }
             },
@@ -47206,6 +49583,429 @@
         ]
       }
     },
+    "/staff/finance/month-closes": {
+      "get": {
+        "operationId": "month_closes_staff_finance_month_closes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthClosesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "The month to close next, and the latest closes",
+        "tags": [
+          "finance"
+        ]
+      },
+      "post": {
+        "operationId": "propose_month_close_staff_finance_month_closes_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeCloseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthCloseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose closing a month",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/month-closes/{close_id}/approve": {
+      "post": {
+        "operationId": "approve_month_close_staff_finance_month_closes__close_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "close_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Close Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideCloseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthCloseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Close the month",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/month-closes/{close_id}/decline": {
+      "post": {
+        "operationId": "decline_month_close_staff_finance_month_closes__close_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "close_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Close Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideCloseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthCloseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send a month close back",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/month-closes/{close_id}/withdraw": {
+      "post": {
+        "operationId": "withdraw_month_close_staff_finance_month_closes__close_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "close_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Close Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideCloseIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MonthCloseOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Take back your month close",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
     "/staff/goal-groups": {
       "get": {
         "operationId": "staff_list_groups_staff_goal_groups_get",
@@ -48460,6 +51260,559 @@
           }
         },
         "summary": "Staff Interest Runs",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-bookings": {
+      "get": {
+        "description": "Investments booked for clients, newest first.",
+        "operationId": "staff_bookings_staff_investment_bookings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "proposed",
+                    "approved",
+                    "sent_back",
+                    "withdrawn",
+                    "done",
+                    "failed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "client_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "minLength": 20,
+                  "pattern": "^[-0-9A-Z_a-z]{20}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Client Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BookingOut"
+                  },
+                  "title": "Response Staff Bookings Staff Investment Bookings Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Bookings",
+        "tags": [
+          "staff investing"
+        ]
+      },
+      "post": {
+        "description": "Book an investment a client asked for. A second person must approve it before it is\nsaved, and the client then pays for it as usual.",
+        "operationId": "staff_propose_booking_staff_investment_bookings_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Booking",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-bookings/{booking_id}/approve": {
+      "post": {
+        "description": "Approve someone else's booking. The worker saves the investment straight away.",
+        "operationId": "staff_approve_booking_staff_investment_bookings__booking_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Approve Booking",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-bookings/{booking_id}/send-back": {
+      "post": {
+        "operationId": "staff_send_back_booking_staff_investment_bookings__booking_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Send Back Booking",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/investment-bookings/{booking_id}/withdraw": {
+      "post": {
+        "operationId": "staff_withdraw_booking_staff_investment_bookings__booking_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "booking_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Booking Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Withdraw Booking",
         "tags": [
           "staff investing"
         ]
@@ -60273,6 +63626,602 @@
         ]
       }
     },
+    "/staff/product-changes": {
+      "get": {
+        "description": "New products, new terms, pauses and openings, newest first.",
+        "operationId": "staff_product_changes_staff_product_changes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ProposalStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductChangeOut"
+                  },
+                  "title": "Response Staff Product Changes Staff Product Changes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Product Changes",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/product-changes/new-product": {
+      "post": {
+        "description": "Propose a new product. A second member of staff must approve it, and it starts as a draft.",
+        "operationId": "staff_propose_new_product_staff_product_changes_new_product_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewProductIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose New Product",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/product-changes/new-terms": {
+      "post": {
+        "description": "Propose new terms for a product. New investments take them once a second person approves.",
+        "operationId": "staff_propose_new_terms_staff_product_changes_new_terms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTermsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose New Terms",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/product-changes/status": {
+      "post": {
+        "description": "Propose opening or pausing a product. A second member of staff must approve it.",
+        "operationId": "staff_propose_status_staff_product_changes_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatusChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Status",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/product-changes/{change_id}/approve": {
+      "post": {
+        "operationId": "staff_approve_product_change_staff_product_changes__change_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Approve Product Change",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/product-changes/{change_id}/send-back": {
+      "post": {
+        "operationId": "staff_send_back_product_change_staff_product_changes__change_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Send Back Product Change",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/product-changes/{change_id}/withdraw": {
+      "post": {
+        "operationId": "staff_withdraw_product_change_staff_product_changes__change_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Withdraw Product Change",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
     "/staff/products": {
       "get": {
         "operationId": "staff_products_staff_products_get",
@@ -60429,6 +64378,78 @@
           }
         },
         "summary": "Staff Rate History",
+        "tags": [
+          "staff investing"
+        ]
+      }
+    },
+    "/staff/products/{code}/reach": {
+      "get": {
+        "operationId": "product_reach_staff_products__code__reach_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductReachOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Product Reach",
         "tags": [
           "staff investing"
         ]
@@ -62413,6 +66434,580 @@
         "summary": "Close Recovery Request",
         "tags": [
           "client numbers"
+        ]
+      }
+    },
+    "/staff/report-schedules": {
+      "get": {
+        "description": "Schedules for the reports this member of staff may download, and who may be sent each.",
+        "operationId": "list_schedules_staff_report_schedules_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchedulesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Schedules",
+        "tags": [
+          "staff reports"
+        ]
+      },
+      "post": {
+        "description": "The first person proposes a schedule. A different person must approve it.",
+        "operationId": "propose_schedule_staff_report_schedules_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProposeScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/approve": {
+      "post": {
+        "description": "A different person approves the schedule, which starts it.",
+        "operationId": "approve_schedule_staff_report_schedules__schedule_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/decline": {
+      "post": {
+        "description": "A different person declines it. Nothing is sent.",
+        "operationId": "decline_schedule_staff_report_schedules__schedule_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/stop": {
+      "post": {
+        "description": "Stops a running schedule. One person may, because it sends less.",
+        "operationId": "stop_schedule_staff_report_schedules__schedule_id__stop_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Stop Schedule",
+        "tags": [
+          "staff reports"
+        ]
+      }
+    },
+    "/staff/report-schedules/{schedule_id}/withdraw": {
+      "post": {
+        "description": "The proposer takes it back.",
+        "operationId": "withdraw_schedule_staff_report_schedules__schedule_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "schedule_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Schedule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideScheduleIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Schedule",
+        "tags": [
+          "staff reports"
         ]
       }
     },
