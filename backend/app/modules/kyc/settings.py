@@ -37,8 +37,10 @@ class KycSettings(BaseSettings):
     iotec_verify_client_id: str | None = None
     iotec_verify_api_key: SecretStr | None = None
     iotec_verify_base_url: str = BASE_URL
-    # The owner's decision (docs/decisions.md). Off: a person approves every client.
-    identity_automatic_approval: bool = False
+    # The owner's decision (docs/decisions.md, 2026-11-14): a client whose automatic checks all
+    # passed is approved with no person involved. Unset, it is on with ioTec Verify and off
+    # for the other providers, which run no real checks. `false` sends everyone to a person.
+    identity_automatic_approval: bool | None = None
     # `staging` or `production` where deployed (infra/README.md). Unset on a developer's machine.
     environment: str | None = None
 
@@ -67,14 +69,14 @@ class KycSettings(BaseSettings):
                 )
             if not self.iotec_verify_base_url.startswith("https://"):
                 raise ValueError("FINVEST_IOTEC_VERIFY_BASE_URL must use https")
-            if self.identity_automatic_approval:
-                # Liveness now runs before hand-in (docs/identity-checks.md#liveness), but
-                # approving with no person involved is still the owner's decision to make.
-                raise ValueError(
-                    "Automatic approval with ioTec Verify awaits the owner's decision "
-                    "(docs/decisions.md)"
-                )
         return self
+
+    @property
+    def automatic_approval(self) -> bool:
+        """Whether the worker approves a client whose automatic checks all passed."""
+        if self.identity_automatic_approval is None:
+            return self.identity_provider == "iotec"
+        return self.identity_automatic_approval
 
     def sealer(self) -> Sealer:
         if self.identity_data_key is None:

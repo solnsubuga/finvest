@@ -55,7 +55,7 @@ def test_without_a_key_the_default_is_the_manual_provider_and_nothing_is_sealed(
         monkeypatch.delenv(f"FINVEST_{name}", raising=False)
     settings = KycSettings()
     assert isinstance(settings.provider(MemoryStorage()), ManualProvider)
-    assert not settings.identity_automatic_approval
+    assert not settings.automatic_approval
     with pytest.raises(ValueError, match="FINVEST_IDENTITY_DATA_KEY is not set"):
         settings.sealer()
 
@@ -96,6 +96,7 @@ def test_the_development_stub_can_never_approve_clients() -> None:
         )
     stub = KycSettings(identity_data_key=fresh_key(), identity_provider="development-stub")
     assert isinstance(stub.provider(MemoryStorage()), DevelopmentStubProvider)
+    assert not stub.automatic_approval
 
 
 async def test_the_stub_passes_everyone_except_document_numbers_ending_in_zero() -> None:
