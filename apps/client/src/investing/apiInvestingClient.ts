@@ -69,6 +69,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     rolledIntoId: view.rolled_into_id,
     payoutId: view.payout_id,
     waitingForDestination: view.waiting_for_destination,
+    waiting: view.waiting_minor == null ? null : money(view.waiting_minor, currency),
     canWithdraw: view.can_withdraw,
     withdrawalRequestedAt: view.withdrawal_requested_at,
     canSend: view.can_send ?? false,

@@ -19,7 +19,8 @@ export type Amount = { currency: Currency; minor: number };
 export type ProductKind = "treasury_bill" | "fixed_income";
 export type ProductStatus = "live" | "paused";
 export type InterestPaid = "at_maturity" | "monthly";
-export type AtMaturity = "roll_over" | "pay_out";
+/** `pay_interest`: keep what was put in invested for another term, and pay the interest out. */
+export type AtMaturity = "roll_over" | "pay_out" | "pay_interest";
 export type InvestmentStatus = "awaiting_payment" | "active" | "matured" | "cancelled" | "withdrawn" | "unwound" | "transferred";
 
 export type Product = {
@@ -77,6 +78,8 @@ export type Investment = {
   payoutId: string | null;
   /** Matured, and waiting for the client to say where to send the money. */
   waitingForDestination: boolean;
+  /** What waits: all of it, or only the interest when the rest was kept invested. */
+  waiting: Amount | null;
   /** Running, and the client may ask to withdraw it early now. */
   canWithdraw: boolean;
   /** When the client asked to withdraw early. ISO 8601, UTC. Interest stopped then. */
@@ -173,7 +176,7 @@ export type EarlyWithdrawal = {
 export type MaturityChoice = {
   investmentId: string;
   atMaturity: AtMaturity;
-  /** Required to be paid out, and only then: one of the client's approved accounts. */
+  /** Required to be paid out, all of it or the interest, and only then: one of the client's approved accounts. */
   destinationId: string | null;
 };
 
