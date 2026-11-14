@@ -29,6 +29,7 @@ from app.modules.closures import api as closures_api
 from app.modules.console import api as console_api
 from app.modules.dealing import allocations_api as dealing_allocations_api
 from app.modules.dealing import api as dealing_api
+from app.modules.dealing import auctions_api as dealing_auctions_api
 from app.modules.dealing import buffer_api as dealing_buffer_api
 from app.modules.documents import api as documents_api
 from app.modules.finance import api as finance_api
@@ -62,7 +63,6 @@ from app.modules.insights import api as insights_api
 from app.modules.investments import api as investments_api
 from app.modules.investments import transfers_api as investment_transfers_api
 from app.modules.kyc import api as kyc_api
-from app.modules.kyc import claims_api as kyc_claims_api
 from app.modules.kyc import face_confirmations_api
 from app.modules.kyc import profile_api as kyc_profile_api
 from app.modules.kyc.domain.face_confirmations import FaceMatcher
@@ -299,13 +299,12 @@ def create_app(
     )
     for router in organisations_api.create_routers(storage):
         app.include_router(router)
-    for router in kyc_claims_api.create_routers(storage):
-        app.include_router(router)
     for router in kyc_profile_api.create_routers(identity_sealer):
         app.include_router(router)
     app.include_router(dealing_api.router)
     app.include_router(dealing_buffer_api.router)
     app.include_router(dealing_allocations_api.router)
+    app.include_router(dealing_auctions_api.router)
     app.include_router(tax_api.create_router(identity_sealer))
     app.include_router(finance_api.create_router())
     app.include_router(client_data_api.create_router(identity_sealer))

@@ -9,7 +9,6 @@ hands the answer to `record_provider_result`.
 """
 
 import json
-import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -60,8 +59,6 @@ from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
 
 RESOURCE = "kyc_check"
-# The same as a Finvest 1.0 reference on the migration sheet.
-_LEGACY_REFERENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,63}")
 # Published when a check is approved or rejected, by staff or by the worker. Other modules that
 # need to hear, such as migration for a client claiming an account, add their consumer here.
 DECIDED_TOPIC = "kyc.check_decided"
@@ -129,7 +126,8 @@ class CheckView:
     decided_by: str | None
     account_number: str | None
     photos: tuple[PhotoView, ...]
-    # `finvest1` when the check was carried over from Finvest 1.0, otherwise `finvest2`.
+    # Always `finvest2` now. `finvest1` was for checks carried over from Finvest 1.0, which
+    # never happened: every client takes the full ID check.
     source: str = "finvest2"
     retake_requested_at: datetime | None = None
 
@@ -179,6 +177,7 @@ _BY_CLIENT_LOCKED = text(
     f"SELECT {_COLUMNS} FROM kyc_checks WHERE client_id = :client_id FOR UPDATE"  # noqa: S608
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id")  # noqa: S608
+_CLIENT_OF = text("SELECT client_id FROM kyc_checks WHERE id = :id")
 _BY_ID_LOCKED = text(f"SELECT {_COLUMNS} FROM kyc_checks WHERE id = :id FOR UPDATE")  # noqa: S608
 _INSERT = text(
     "INSERT INTO kyc_checks (id, client_id, document_type, document_country, created_at, "
@@ -236,18 +235,6 @@ _GIVE_TO_PERSON = text(
 _UNANSWERED = text(
     "SELECT id, submission FROM kyc_checks WHERE status = 'submitted' AND submitted_at < :before "
     "ORDER BY submitted_at, id LIMIT :limit FOR UPDATE SKIP LOCKED"
-)
-_INSERT_CARRIED_OVER = text(
-    "INSERT INTO kyc_checks (id, client_id, status, document_type, document_country, surname, "
-    "given_names, document_number_sealed, date_of_birth_sealed, document_expires_on, tin_sealed, "
-    "document_fingerprint, details_confirmed_at, decided_at, account_number, source, "
-    "legacy_reference, created_at, updated_at) VALUES (:id, :client_id, 'approved', "
-    ":document_type, :document_country, :surname, :given_names, :document_number, "
-    ":date_of_birth, :document_expires_on, :tin, :document_fingerprint, :now, :now, "
-    ":account_number, 'finvest1', :legacy_reference, :now, :now)"
-)
-_BY_LEGACY_REFERENCE = text(
-    f"SELECT {_COLUMNS} FROM kyc_checks WHERE legacy_reference = :legacy_reference"  # noqa: S608
 )
 _DOCUMENT_TAKEN = text(
     "SELECT EXISTS (SELECT FROM kyc_checks WHERE status = 'approved' "
@@ -629,6 +616,10 @@ async def record_provider_result(
     live = await liveness_outcome(session, row.id)
     if live is not None:
         outcomes = (*outcomes, live)
+    # With the screening module on, screening is its answer, not the identity provider's.
+    screened = await screening_outcome(session, row.client_id)
+    if screened is not None:
+        outcomes = (*(o for o in outcomes if o.check is not AutomaticCheck.SCREENING), screened)
     decision = decide(outcomes, automatic_approval=automatic_approval)
     flags = list(decision.flags)
     if decision.approve and row.document_expires_on < clock.now().date():
@@ -682,6 +673,41 @@ async def _phone_name_allows(session: AsyncSession, check_id: str) -> bool:
     return looked_up is None or looked_up.status is PhoneName.MATCHES
 
 
+async def screening_outcome(session: AsyncSession, client_id: str) -> CheckOutcome | None:
+    """The sanctions and PEP screening result for the automatic decision. None with the
+    screening module off, when the identity provider's own screening, if any, is used.
+
+    Clear passes. A possible or confirmed match fails, so a person looks. A politically
+    exposed person, a screen still running, one that could not run, or none at all is unsure.
+    """
+    if not ScreeningSettings().screening_on:
+        return None
+    standing = await screening.latest_outcome(session, client_id)
+    if standing is None:
+        verdict = Verdict.UNSURE
+    elif standing.outcome in (screening.Outcome.POSSIBLE_MATCH, screening.Outcome.CONFIRMED_MATCH):
+        verdict = Verdict.FAIL
+    elif standing.outcome is screening.Outcome.CLEAR and not standing.pep:
+        verdict = Verdict.PASS
+    else:
+        verdict = Verdict.UNSURE
+    return CheckOutcome(AutomaticCheck.SCREENING, verdict)
+
+
+async def screening_running(session: AsyncSession, check_id: str) -> bool:
+    """Whether the client's screen is still to finish, so the automatic decision should wait.
+
+    Only with the screening module on. The worker asks before applying the provider's answer.
+    """
+    if not ScreeningSettings().screening_on:
+        return False
+    client_id = (await session.execute(_CLIENT_OF, {"id": check_id})).scalar_one_or_none()
+    if client_id is None:
+        return False
+    standing = await screening.latest_outcome(session, client_id)
+    return standing is not None and standing.outcome is screening.Outcome.PENDING
+
+
 async def liveness_outcome(session: AsyncSession, check_id: str) -> CheckOutcome | None:
     """The liveness result for the automatic decision, from the selfie as handed in.
 
@@ -697,105 +723,6 @@ async def liveness_outcome(session: AsyncSession, check_id: str) -> CheckOutcome
 
 
 # Finvest 1.0 ----------------------------------------------------------------------------------
-
-
-async def record_carried_over_check(
-    session: AsyncSession,
-    sealer: Sealer,
-    system: Actor,
-    *,
-    client_id: str,
-    document_type: DocumentType,
-    document_country: str,
-    details: IdentityDetails,
-    legacy_reference: str,
-    reason: str,
-    clock: Clock,
-) -> CheckView:
-    """Carry over an identity Finvest 1.0 checked, approved, with a new account number.
-
-    The switch calls it in the worker, in its own transaction, for a client whose document has
-    not expired; one whose document has expired does the full check when they claim. An unknown
-    expiry is accepted. Calling again with the same reference for the same client returns the
-    same check and issues nothing. The client is not told: they hear at the claim.
-    """
-    if system.kind != "system":
-        raise ApplicationError("forbidden")
-    existing = (
-        await session.execute(_BY_LEGACY_REFERENCE, {"legacy_reference": legacy_reference})
-    ).one_or_none()
-    if existing is not None:
-        if existing.client_id != client_id:
-            raise ApplicationError("conflict")
-        return await _view(session, sealer, existing)
-    if COUNTRY.fullmatch(document_country) is None:
-        raise _invalid("document_country", "invalid_country")
-    if not _LEGACY_REFERENCE.fullmatch(legacy_reference):
-        raise _invalid("legacy_reference", "invalid")
-    if not reason.strip():
-        raise _invalid("reason", "missing")
-    details = details.normalised()
-    now = clock.now()
-    problems = detail_problems(details, now.date())
-    if problems:
-        raise ApplicationError(
-            "validation_failed",
-            fields=[FieldProblem(field_path=[p.field], code=p.code) for p in problems],
-        )
-    if (await session.execute(_BY_CLIENT, {"client_id": client_id})).one_or_none() is not None:
-        # The client already handed in a check of their own.
-        raise ApplicationError("conflict")
-    check_id = push_id()
-    fingerprint = sealer.fingerprint(
-        f"{document_country}|{document_type.value}|{details.document_number}"
-    )
-    taken = await session.execute(_DOCUMENT_TAKEN, {"document_fingerprint": fingerprint})
-    if taken.scalar_one():
-        raise _invalid("document_number", "document_taken")
-    try:
-        async with session.begin_nested():
-            number = await issue_account_number(session, AccountType.PERSONAL, clock)
-            await session.execute(
-                _INSERT_CARRIED_OVER,
-                {
-                    "id": check_id,
-                    "client_id": client_id,
-                    "document_type": document_type.value,
-                    "document_country": document_country,
-                    "surname": details.surname,
-                    "given_names": details.given_names,
-                    "document_number": _seal(
-                        sealer, check_id, "document_number", details.document_number
-                    ),
-                    "date_of_birth": _seal(
-                        sealer, check_id, "date_of_birth", details.date_of_birth.isoformat()
-                    ),
-                    "document_expires_on": details.document_expires_on,
-                    "tin": _seal(sealer, check_id, "tin", details.tin) if details.tin else None,
-                    "document_fingerprint": fingerprint,
-                    "account_number": number.value,
-                    "legacy_reference": legacy_reference,
-                    "now": now,
-                },
-            )
-    except IntegrityError as error:
-        constraint = str(error.orig)
-        if "uq_kyc_checks_approved_document" in constraint:
-            raise _invalid("document_number", "document_taken") from None
-        if "uq_kyc_checks_client" in constraint or "uq_kyc_checks_legacy_reference" in constraint:
-            raise ApplicationError("conflict") from None
-        raise
-    await _audit(
-        session,
-        system,
-        "approval",
-        "kyc.check.carried_over",
-        check_id,
-        clock,
-        reason=reason,
-        details={"legacy_reference": legacy_reference},
-    )
-    return await _view_by_id(session, sealer, check_id)
 
 
 # Staff ----------------------------------------------------------------------------------------
@@ -858,10 +785,7 @@ class ApprovedSelfie:
     """The face on file for an approved client, to compare a new live selfie with."""
 
     check_id: str
-    # Exactly one is set: a selfie on the approved check, or, for a check carried over at
-    # the switch (source finvest1, no photos), the selfie on the claim check staff matched.
-    photo_id: str | None
-    claim_photo_id: str | None
+    photo_id: str
     photo: PhotoRef
 
 
@@ -871,34 +795,15 @@ _APPROVED_SELFIE = text(
     "WHERE c.client_id = :client_id AND c.status = 'approved' "
     "AND p.kind = 'selfie' AND p.replaced_at IS NULL"
 )
-_MATCHED_CLAIM_SELFIE = text(
-    "SELECT c.id AS check_id, p.id AS photo_id, p.storage_key, p.sha256, p.content_type "
-    "FROM kyc_checks c JOIN kyc_claim_checks m ON m.check_id = c.id "
-    "JOIN kyc_claim_photos p ON p.claim_check_id = m.id "
-    "WHERE c.client_id = :client_id AND c.status = 'approved' AND m.status = 'matched' "
-    "AND p.kind = 'selfie' AND p.replaced_at IS NULL"
-)
 
 
 async def approved_selfie(session: AsyncSession, client_id: str) -> ApprovedSelfie | None:
-    """The current selfie of the client's approved check, or of its matched claim.
-
-    None when the client has no approved check, or a carried-over one whose claim staff have
-    not matched: there is no face on file then.
-    """
+    """The current selfie of the client's approved check, or None when they have none."""
     row = (await session.execute(_APPROVED_SELFIE, {"client_id": client_id})).one_or_none()
-    if row is not None:
-        return ApprovedSelfie(
-            row.check_id,
-            row.photo_id,
-            None,
-            PhotoRef(row.storage_key, row.sha256, row.content_type),
-        )
-    row = (await session.execute(_MATCHED_CLAIM_SELFIE, {"client_id": client_id})).one_or_none()
     if row is None:
         return None
     return ApprovedSelfie(
-        row.check_id, None, row.photo_id, PhotoRef(row.storage_key, row.sha256, row.content_type)
+        row.check_id, row.photo_id, PhotoRef(row.storage_key, row.sha256, row.content_type)
     )
 
 
@@ -947,7 +852,7 @@ _APPROVED_CLIENTS = text(
 
 
 async def approved_client_ids(session: AsyncSession, *, after: str | None, limit: int) -> list[str]:
-    """Approved clients, including those carried over from Finvest 1.0, by client id.
+    """Approved clients, by client id.
 
     One page at a time: pass the last id of the previous page as `after`. For the screening
     module's sweep, in a worker transaction.

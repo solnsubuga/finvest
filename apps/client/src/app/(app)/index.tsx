@@ -83,7 +83,7 @@ function useSetUpSteps(openGoals: number | null, moving: boolean): SetUpStep[] |
       return null;
     }
     const steps: SetUpStep[] = [];
-    // A client moving from Finvest 1.0 has the move card instead, which takes in the ID check.
+    // A client moved from paper records has the move card instead, which takes in the ID check.
     if (identity.status === "ready" && !moving) {
       const approved = identity.check?.status === "approved";
       // What the check needs next, in the same words the ID check screens use.
@@ -134,9 +134,8 @@ export default function Home() {
   const activity = useActivity();
   const steps = useSecondSteps();
   const claim = useClaim();
-  // A client moved from Finvest 1.0 is led by their move, which takes in the ID check.
-  const moving =
-    claim.status === "ready" && claimOpen(claim.claim) ? { claim: claim.claim, check: claim.check } : null;
+  // A client moved from paper records is led by their move, which takes in the ID check.
+  const moving = claim.status === "ready" && claimOpen(claim.claim) ? { claim: claim.claim } : null;
   // Shown only when we know SMS is the one second step. If the list cannot be
   // loaded, Home stays quiet about it: Sign in and security reports the error.
   const onlySms = steps.status === "ready" && steps.methods.length === 1;
@@ -167,7 +166,7 @@ export default function Home() {
           You signed in with a code, so for 24 hours withdrawals only go to accounts you have used before.
         </Notice>
       ) : null}
-      {moving ? <ClaimCard claim={moving.claim} check={moving.check} /> : null}
+      {moving ? <ClaimCard claim={moving.claim} /> : null}
       {onlySms ? (
         <Pressable
           accessibilityRole="link"

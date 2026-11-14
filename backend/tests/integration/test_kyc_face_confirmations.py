@@ -16,9 +16,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.jobs import Worker, WorkerConfig
 from app.infrastructure.storage import MemoryStorage
 from app.modules.audit.service import events_for_resource
-from app.modules.kyc import claims
 from app.modules.kyc import face_confirmations as confirmations
-from app.modules.kyc.domain.checks import PhotoKind
 from app.modules.kyc.domain.face_confirmations import (
     COUNTS_FOR,
     MAX_PER_DAY,
@@ -36,9 +34,8 @@ from app.modules.kyc.face_confirmation_jobs import FaceConfirmationJobs
 from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
-from tests.integration.test_kyc_claims import carried_over
 from tests.support.clock import AsyncBarrier, FakeClock
-from tests.support.kyc import SEALER, SHA256, verify
+from tests.support.kyc import SEALER, verify
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 
@@ -342,39 +339,3 @@ async def test_a_finished_attempt_never_changes(setup: Setup) -> None:
                 text("UPDATE kyc_face_confirmations SET status = 'failed' WHERE id = :id"),
                 {"id": view.id},
             )
-
-
-async def test_a_carried_over_client_is_compared_with_their_matched_claim_selfie(
-    setup: Setup,
-) -> None:
-    client, _ = await carried_over(setup.worker, setup.clock)
-    # Carried over with no photos, and no claim matched yet: nothing to compare with.
-    assert not await setup.needed(client)
-    async with setup.app.actor_transaction(client) as session:
-        await claims.start(session, client, setup.clock)
-        for kind in (PhotoKind.FRONT, PhotoKind.SELFIE):
-            await claims.add_photo(
-                session,
-                client,
-                kind,
-                content_type="image/jpeg",
-                byte_size=2048,
-                sha256=SHA256,
-                clock=setup.clock,
-            )
-        claim = await claims.submit(session, client, setup.clock)
-    assert not await setup.needed(client)
-    staff = new_staff()
-    async with setup.app.actor_transaction(staff) as session:
-        await claims.decide(
-            session, staff, claim.id, matched=True, reason="Same face as the ID", clock=setup.clock
-        )
-    assert await setup.needed(client)
-
-    here = push_id()
-    view = await setup.start(client, here)
-    await setup.settle()
-    assert (await setup.view(client, view.id)).status is ConfirmationStatus.PASSED
-    (_, _, on_file) = setup.matcher.sent[0]
-    assert on_file.storage_key.startswith(f"kyc-claims/{claim.id}/")
-    assert await setup.confirmed(client, here)

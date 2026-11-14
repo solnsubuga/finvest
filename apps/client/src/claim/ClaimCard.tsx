@@ -5,28 +5,16 @@ import { Icon } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
 import { colors } from "@/theme";
 
-import { Claim, ClaimCheck } from "./types";
+import { Claim } from "./types";
 
-function copyFor(claim: Claim, check: ClaimCheck | null): { title: string; detail: string; urgent: boolean } | null {
+function copyFor(claim: Claim): { title: string; detail: string; urgent: boolean } | null {
   switch (claim.status) {
     case "signed_in":
-      if (check?.status === "not_matched") {
-        return { title: "We could not confirm it is you", detail: "We will contact you to sort it out.", urgent: false };
-      }
-      return {
-        title: "Confirm it is you",
-        detail:
-          claim.identityStep === "selfie"
-            ? "A photo of your ID and a selfie, to finish moving from Finvest 1.0."
-            : "An ID check, to finish moving from Finvest 1.0.",
-        urgent: true,
-      };
+      return { title: "Confirm who you are", detail: "An ID check, to finish opening your account.", urgent: true };
     case "identity_submitted":
-      return check?.status === "awaiting_client"
-        ? { title: "We need a new photo", detail: "Take it again to finish moving from Finvest 1.0.", urgent: true }
-        : { title: "We are checking it is you", detail: "We will tell you as soon as it is done.", urgent: false };
+      return { title: "We are checking it is you", detail: "We will tell you as soon as it is done.", urgent: false };
     case "identity_confirmed":
-      return { title: "Check your investments", detail: "Confirm the ones we carried over from Finvest 1.0.", urgent: true };
+      return { title: "Check your investments", detail: "Confirm the ones we copied from your paper records.", urgent: true };
     case "problem_reported":
       return { title: "We are looking into it", detail: "Staff will contact you about what you told us.", urgent: false };
     default:
@@ -34,10 +22,10 @@ function copyFor(claim: Claim, check: ClaimCheck | null): { title: string; detai
   }
 }
 
-/** On Home until a client moved from Finvest 1.0 has confirmed their investments. */
-export function ClaimCard({ claim, check }: { claim: Claim; check: ClaimCheck | null }) {
+/** On Home until a client moved from paper records has confirmed their investments. */
+export function ClaimCard({ claim }: { claim: Claim }) {
   const router = useRouter();
-  const copy = copyFor(claim, check);
+  const copy = copyFor(claim);
   if (!copy) return null;
   const { urgent } = copy;
   return (

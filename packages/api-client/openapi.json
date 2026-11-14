@@ -965,6 +965,102 @@
         "title": "AttentionOut",
         "type": "object"
       },
+      "AuctionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "auction_date": {
+            "format": "date",
+            "title": "Auction Date",
+            "type": "string"
+          },
+          "product_code": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9-]+$",
+            "title": "Product Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "product_code",
+          "auction_date"
+        ],
+        "title": "AuctionIn",
+        "type": "object"
+      },
+      "AuctionOut": {
+        "additionalProperties": false,
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "added_by": {
+            "title": "Added By",
+            "type": "string"
+          },
+          "auction_date": {
+            "format": "date",
+            "title": "Auction Date",
+            "type": "string"
+          },
+          "cancel_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Reason"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "cancelled_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled By"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "product_code",
+          "auction_date",
+          "added_by",
+          "added_at",
+          "cancelled_by",
+          "cancelled_at",
+          "cancel_reason"
+        ],
+        "title": "AuctionOut",
+        "type": "object"
+      },
       "AuthenticatorSetupView": {
         "additionalProperties": false,
         "description": "Show `uri` as a QR code, and `secret` for typing in by hand. Neither is shown again.",
@@ -1897,21 +1993,6 @@
         "title": "Body_add_document_client_organisations__organisation_id__documents__kind__put",
         "type": "object"
       },
-      "Body_add_photo_client_claim_check_photos__kind__put": {
-        "properties": {
-          "photo": {
-            "contentMediaType": "application/octet-stream",
-            "description": "JPEG, PNG or WebP, at most 10 MiB",
-            "title": "Photo",
-            "type": "string"
-          }
-        },
-        "required": [
-          "photo"
-        ],
-        "title": "Body_add_photo_client_claim_check_photos__kind__put",
-        "type": "object"
-      },
       "Body_add_photo_client_identity_check_photos__kind__put": {
         "properties": {
           "photo": {
@@ -2654,6 +2735,44 @@
         "title": "BulkOut",
         "type": "object"
       },
+      "CalendarOut": {
+        "additionalProperties": false,
+        "properties": {
+          "auctions": {
+            "items": {
+              "$ref": "#/components/schemas/AuctionOut"
+            },
+            "title": "Auctions",
+            "type": "array"
+          },
+          "may_change": {
+            "title": "May Change",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "auctions",
+          "may_change"
+        ],
+        "title": "CalendarOut",
+        "type": "object"
+      },
+      "CancelIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "CancelIn",
+        "type": "object"
+      },
       "CaseAmountOut": {
         "additionalProperties": false,
         "properties": {
@@ -3362,17 +3481,6 @@
         "title": "CheckStatus",
         "type": "string"
       },
-      "ClaimCheckStatus": {
-        "enum": [
-          "draft",
-          "needs_review",
-          "awaiting_client",
-          "matched",
-          "not_matched"
-        ],
-        "title": "ClaimCheckStatus",
-        "type": "string"
-      },
       "ClaimComplete": {
         "additionalProperties": false,
         "properties": {
@@ -3443,23 +3551,6 @@
           "cannot_be_invited"
         ],
         "title": "ClaimProgressView",
-        "type": "object"
-      },
-      "ClaimQueue": {
-        "additionalProperties": false,
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/StaffClaimCheck"
-            },
-            "title": "Items",
-            "type": "array"
-          }
-        },
-        "required": [
-          "items"
-        ],
-        "title": "ClaimQueue",
         "type": "object"
       },
       "ClaimStart": {
@@ -3773,105 +3864,6 @@
           "check"
         ],
         "title": "ClientCheckEnvelope",
-        "type": "object"
-      },
-      "ClientClaimCheck": {
-        "additionalProperties": false,
-        "description": "The client's own claim check. Nothing about who decided.",
-        "properties": {
-          "client_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Message"
-          },
-          "id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Id",
-            "type": "string"
-          },
-          "missing": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Missing",
-            "type": "array"
-          },
-          "photos": {
-            "items": {
-              "$ref": "#/components/schemas/ClientPhoto"
-            },
-            "title": "Photos",
-            "type": "array"
-          },
-          "retake_photos": {
-            "items": {
-              "$ref": "#/components/schemas/PhotoKind"
-            },
-            "title": "Retake Photos",
-            "type": "array"
-          },
-          "retaken": {
-            "items": {
-              "$ref": "#/components/schemas/PhotoKind"
-            },
-            "title": "Retaken",
-            "type": "array"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ClaimCheckStatus"
-          },
-          "submitted_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submitted At"
-          }
-        },
-        "required": [
-          "id",
-          "status",
-          "photos",
-          "missing",
-          "retake_photos",
-          "retaken",
-          "client_message",
-          "submitted_at"
-        ],
-        "title": "ClientClaimCheck",
-        "type": "object"
-      },
-      "ClientClaimCheckEnvelope": {
-        "additionalProperties": false,
-        "properties": {
-          "check": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ClientClaimCheck"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "check"
-        ],
-        "title": "ClientClaimCheckEnvelope",
         "type": "object"
       },
       "ClientClosureView": {
@@ -21222,102 +21214,6 @@
         "title": "StaffCheck",
         "type": "object"
       },
-      "StaffClaimCheck": {
-        "additionalProperties": false,
-        "properties": {
-          "check_id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Check Id",
-            "type": "string"
-          },
-          "client_id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Client Id",
-            "type": "string"
-          },
-          "client_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Client Message"
-          },
-          "decided_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided At"
-          },
-          "id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Id",
-            "type": "string"
-          },
-          "photos": {
-            "items": {
-              "$ref": "#/components/schemas/StaffPhoto"
-            },
-            "title": "Photos",
-            "type": "array"
-          },
-          "retake_photos": {
-            "items": {
-              "$ref": "#/components/schemas/PhotoKind"
-            },
-            "title": "Retake Photos",
-            "type": "array"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ClaimCheckStatus"
-          },
-          "submission": {
-            "title": "Submission",
-            "type": "integer"
-          },
-          "submitted_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submitted At"
-          }
-        },
-        "required": [
-          "id",
-          "client_id",
-          "check_id",
-          "status",
-          "submission",
-          "submitted_at",
-          "photos",
-          "retake_photos",
-          "client_message",
-          "decided_at"
-        ],
-        "title": "StaffClaimCheck",
-        "type": "object"
-      },
       "StaffClosureList": {
         "additionalProperties": false,
         "properties": {
@@ -26953,6 +26849,18 @@
           "lot_size": {
             "$ref": "#/components/schemas/AmountOut"
           },
+          "next_auction": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Auction"
+          },
           "on_order": {
             "$ref": "#/components/schemas/AmountOut"
           },
@@ -26978,7 +26886,8 @@
           "to_buy",
           "on_order",
           "face_held",
-          "cover"
+          "cover",
+          "next_auction"
         ],
         "title": "PositionOut",
         "type": "object"
@@ -29344,352 +29253,6 @@
         ]
       }
     },
-    "/client/claim-check": {
-      "get": {
-        "description": "The signed-in client's claim check, or `null` before they have started it.",
-        "operationId": "my_claim_check_client_claim_check_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClientClaimCheckEnvelope"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "My Claim Check",
-        "tags": [
-          "identity checks"
-        ]
-      },
-      "post": {
-        "description": "Start the claim check. Only a client carried over from Finvest 1.0 has one.",
-        "operationId": "start_client_claim_check_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClientClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Start",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/client/claim-check/photos/{kind}": {
-      "put": {
-        "description": "Send the selfie or the front of the ID as `multipart/form-data`.",
-        "operationId": "add_photo_client_claim_check_photos__kind__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "kind",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/PhotoKind"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "$ref": "#/components/schemas/Body_add_photo_client_claim_check_photos__kind__put"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClientClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Add Photo",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/client/claim-check/submit": {
-      "post": {
-        "description": "Hand the photos in. Answers which photos are missing if it is not ready.",
-        "operationId": "submit_client_claim_check_submit_post",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClientClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Submit",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
     "/client/claim/complete": {
       "post": {
         "description": "The texted code and a new password. The account becomes the client's and is signed in.\n\nThe link is checked again first, so one that expired or was replaced since `start` is\nrefused before anything changes.",
@@ -29846,7 +29409,7 @@
     },
     "/client/claim/identity": {
       "post": {
-        "description": "Hand in the identity step: the claim check's photos, or the full ID check.\n\n`conflict` unless the claim is waiting for it. Answers which photos or details are missing,\nas the identity check routes do, and then nothing changes.",
+        "description": "Hand in the identity step: the full ID check, which every client takes.\n\n`conflict` unless the claim is waiting for it. Answers which photos or details are missing,\nas the ID check routes do, and then nothing changes.",
         "operationId": "hand_in_identity_client_claim_identity_post",
         "responses": {
           "200": {
@@ -43239,597 +42802,6 @@
         ]
       }
     },
-    "/staff/claim-checks": {
-      "get": {
-        "description": "Claim checks waiting for a person, the longest waiting first.",
-        "operationId": "queue_staff_claim_checks_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClaimQueue"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Queue",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/staff/claim-checks/{claim_check_id}": {
-      "get": {
-        "operationId": "one_staff_claim_checks__claim_check_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "claim_check_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Claim Check Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StaffClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "One",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/staff/claim-checks/{claim_check_id}/ask-for-photos": {
-      "post": {
-        "description": "Ask the client to take the named photos again, with a message.",
-        "operationId": "ask_for_photos_staff_claim_checks__claim_check_id__ask_for_photos_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "claim_check_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Claim Check Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AskForPhotosBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StaffClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Ask For Photos",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/staff/claim-checks/{claim_check_id}/match": {
-      "post": {
-        "description": "The photos match each other and the carried-over check. It cannot be undone.",
-        "operationId": "match_staff_claim_checks__claim_check_id__match_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "claim_check_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Claim Check Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReasonBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StaffClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Match",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/staff/claim-checks/{claim_check_id}/no-match": {
-      "post": {
-        "description": "The photos do not match. It cannot be undone; staff then follow the claim up.",
-        "operationId": "no_match_staff_claim_checks__claim_check_id__no_match_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "claim_check_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Claim Check Id",
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ReasonBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/StaffClaimCheck"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "No Match",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
-    "/staff/claim-checks/{claim_check_id}/photo-links": {
-      "post": {
-        "description": "Short-lived links to the photos. Each call is written to the audit trail.",
-        "operationId": "photo_links_staff_claim_checks__claim_check_id__photo_links_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "claim_check_id",
-            "required": true,
-            "schema": {
-              "maxLength": 20,
-              "minLength": 20,
-              "pattern": "^[-0-9A-Z_a-z]{20}$",
-              "title": "Claim Check Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PhotoLinks"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Unprocessable Content"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            },
-            "description": "Service Unavailable"
-          }
-        },
-        "summary": "Photo Links",
-        "tags": [
-          "identity checks"
-        ]
-      }
-    },
     "/staff/clients/actions/{action_id}/decision": {
       "post": {
         "description": "Approve or reject someone else's proposal, or withdraw your own.",
@@ -47514,6 +46486,286 @@
           }
         },
         "summary": "Get Bills Behind",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/auctions": {
+      "get": {
+        "operationId": "get_calendar_staff_dealing_auctions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Calendar",
+        "tags": [
+          "dealing desk"
+        ]
+      },
+      "post": {
+        "operationId": "add_auction_staff_dealing_auctions_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AuctionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Add Auction",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/auctions/{auction_id}/cancel": {
+      "post": {
+        "operationId": "cancel_auction_staff_dealing_auctions__auction_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "auction_id",
+            "required": true,
+            "schema": {
+              "title": "Auction Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Cancel Auction",
         "tags": [
           "dealing desk"
         ]
