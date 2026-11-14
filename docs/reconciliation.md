@@ -1,6 +1,6 @@
 # Reconciliation
 
-How Finvest proves each day that the ledger agrees with the money that really moved. The pure rules are in `backend/app/modules/reconciliation/domain`. The scheduled run and the console screens arrive in later pull requests, and this document grows with them.
+How Finvest proves each day that the ledger agrees with the money that really moved. The pure rules are in `backend/app/modules/reconciliation/domain`. The console's day close is under "Close the day" on the Reconciliation screen. The scheduled run arrives in a later pull request, and this document grows with it.
 
 ## Pots
 
@@ -136,6 +136,10 @@ In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation
 A statement line's narrative is shown only as `counterparty_hint`. Statements are uploaded in the `standard` layout (`domain/formats.py`): a header row `Date,Details,Reference,In,Out`, dates as `YYYY-MM-DD`, and money in and money out in separate columns. Each provider's own export gets a format once one of its files has been seen. Until then staff save the export in that layout.
 
 The journeys import ioTec's statements and sign every day off through these routes (`tests/journeys/test_99_day_close.py`). Pot transfers have no routes yet.
+
+### In the console
+
+"Close the day" on the Reconciliation screen (`apps/console/src/screens/reconciliation/dayclose/`) opens the first day not yet closed. For each pot it shows the statement's closing balance, the ledger's, the open differences and what is unexplained, with every open line and movement. Staff import a missing statement there, pair a line with one of its `suggested_movements` and a reason, and prepare the close once nothing blocks it. Anyone else then sees approve and send back, and the person who prepared it can only take it back. The screen decides nothing: it words what the routes answer and reloads the day after any refusal. These routes take no idempotency key, since none of them moves money and a repeat is refused rather than done twice.
 
 ## Transfers between pots
 
