@@ -1161,6 +1161,15 @@ ROWS = {
         "'Asked in chat', '-Nabc0000000000000S1', now())",
         "refusing to drop withdrawals staff started that hold records",
     ),
+    "0302_goal_paydays": (
+        "BEGIN; SELECT set_config('finvest.actor_kind', 'client', true); "
+        "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
+        "INSERT INTO goals (id, client_id, name, category, currency, target_minor, "
+        "product_code, payday, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'School fees', 'school_fees', 'UGX', 2000000, 'TREA-91', 25, "
+        "now(), now()); COMMIT",
+        "refusing to drop the paydays clients named",
+    ),
 }
 
 
