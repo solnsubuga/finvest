@@ -432,6 +432,33 @@ ROWS = {
         "'-Nabc0000000000000S1', now())",
         "refusing to drop the batches of bank payouts",
     ),
+    "0044_payout_returns": (
+        "INSERT INTO payout_destinations (id, client_id, kind, network, account_number, "
+        "holder_name, status, created_at, updated_at) VALUES ('-Nabc0000000000000D1', "
+        "'-Nabc0000000000000B1', 'mobile_money', 'mtn', '256772000000', 'Test', "
+        "'awaiting_code', now(), now()); "
+        "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, "
+        "status, business_date, source_account_id, source_reference, in_flight_account_id, "
+        "request_key, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', '-Nabc0000000000000D1', 'mobile_money', 1000, 'UGX', 'queued', "
+        "DATE '2026-11-10', '-Nabc0000000000000E1', 'investment-1', '-Nabc0000000000000F1', "
+        "'request-key-1', now(), now()); "
+        "INSERT INTO reconciliation_statements (id, source, account_reference, business_date, "
+        "currency, opening_minor, closing_minor, line_count, file_sha256, imported_by, "
+        "imported_at) VALUES ('-Nabc0000000000000C1', 'iotec', 'mtn', DATE '2026-11-10', "
+        "'UGX', 100, 1100, 1, repeat('0', 64), '-Nabc0000000000000B1', now()); "
+        "INSERT INTO reconciliation_statement_lines (id, statement_id, line_no, value_date, "
+        "direction, amount_minor, reference, narrative, fingerprint) VALUES "
+        "('-Nabc0000000000000L1', '-Nabc0000000000000C1', 1, DATE '2026-11-10', 'in', 1000, "
+        "'r', 'n', repeat('0', 64)); "
+        # The guard admits only staff proposing with the statement line as evidence.
+        "ALTER TABLE payout_returns DISABLE TRIGGER payout_returns_guard; "
+        "INSERT INTO payout_returns (id, payout_id, client_id, statement_line_id, reason, "
+        "status, proposed_by, proposed_at) VALUES ('-Nabc0000000000000R1', "
+        "'-Nabc0000000000000A1', '-Nabc0000000000000B1', '-Nabc0000000000000L1', 'Came back', "
+        "'proposed', '-Nabc0000000000000S1', now())",
+        "refusing to drop the returns of payouts",
+    ),
     "0051_kyc_sealed_details": (
         "INSERT INTO kyc_checks (id, client_id, document_type, document_country, "
         "document_number_sealed, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "

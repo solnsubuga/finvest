@@ -26,6 +26,8 @@ from app.shared.money import Currency, Money
 INVESTED = ("client.holding", "investment.started")
 EARNED = ("client.interest_accrued", "investment.interest_accrued")
 PAID_OUT = ("client.payout_in_flight", "payout.settle")
+# A paid payout that came back, owed to the client again. It comes off paid out in its month.
+RETURNED = ("client.payout_pending", "payout.returned")
 UPCOMING_LIMIT = 5
 
 
@@ -39,7 +41,7 @@ class Month:
     invested: Money
     # Interest earned after tax.
     earned: Money
-    # Money that reached the client's mobile money or bank account.
+    # Money that reached the client's mobile money or bank account, less any that came back.
     paid_out: Money
 
 
@@ -95,14 +97,19 @@ async def client_insights(
             "invested": INVESTED,
             "earned": EARNED,
             "paid_out": PAID_OUT,
+            "returned": RETURNED,
         }.items()
+    }
+    zero = Money(0, currency)
+    paid_out = {
+        start: figures["paid_out"].get(start, zero) - figures["returned"].get(start, zero)
+        for start in window
     }
     portfolio = [
         held
         for held in await investments.client_investments(session, client, clock)
         if held.status is InvestmentStatus.ACTIVE and held.amount.currency is currency
     ]
-    zero = Money(0, currency)
     upcoming = sorted(
         (
             Upcoming(
@@ -126,7 +133,7 @@ async def client_insights(
                 month=start,
                 invested=figures["invested"].get(start, zero),
                 earned=figures["earned"].get(start, zero),
-                paid_out=figures["paid_out"].get(start, zero),
+                paid_out=paid_out[start],
             )
             for start in window
         ),

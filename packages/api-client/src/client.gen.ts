@@ -710,6 +710,7 @@ export const PayoutOut = z.object({
   destination_id: z.string(),
   id: z.string(),
   kind: z.enum(["mobile_money", "bank"]),
+  returned_at: z.string().nullable().optional(),
   status: z.enum(["in_review", "processing", "paid", "failed", "cancelled"]),
 });
 export type PayoutOut = z.infer<typeof PayoutOut>;
@@ -829,6 +830,11 @@ export const Rename = z.object({
   display_name: z.string(),
 });
 export type Rename = z.infer<typeof Rename>;
+
+export const ResendIn = z.object({
+  destination_id: z.string(),
+});
+export type ResendIn = z.infer<typeof ResendIn>;
 
 export const ResetComplete = z.object({
   challenge_id: z.string(),
@@ -1958,6 +1964,19 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
+    response: PayoutOut,
+  },
+  "POST /client/payouts/{payout_id}/resend": {
+    method: "POST",
+    path: "/client/payouts/{payout_id}/resend",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: ResendIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
     response: PayoutOut,
   },
   "GET /client/products": {
