@@ -7,8 +7,9 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account, the record of clients who froze their accounts, the journals sent to the accounting
-system, who set the bank account clients pay into or why a payout send waited."""
+account, the record of clients who froze their accounts, the codes for a client's new number,
+the journals sent to the accounting system, who set the bank account clients pay into or why a
+payout send waited."""
 
 import os
 from collections.abc import Iterator
@@ -883,6 +884,13 @@ ROWS = {
         "decode(repeat('00', 32), 'hex'), 'passkey', 'cookie', now(), now(), now(), now(), "
         "now())",
         "refusing to drop staff re-confirmations",
+    ),
+    "0236_client_own_changes": (
+        "INSERT INTO identity_codes (id, purpose, channel, phone, actor_id, bound_to, "
+        "code_hash, created_at, expires_at) VALUES ('-Nabc0000000000000A1', 'phone_change', "
+        "'sms', '+256772123456', '-Nabc0000000000000B1', '-Nabc0000000000000C1', "
+        "decode(repeat('00', 32), 'hex'), now(), now())",
+        "refusing to drop number change codes",
     ),
     "0235_client_freezes": (
         "INSERT INTO identity_clients (id, phone, password_hash, password_changed_at, status, "

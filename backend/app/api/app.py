@@ -34,6 +34,7 @@ from app.modules.identity import (
     codes_api,
     email_checks_api,
     freeze_api,
+    own_changes_api,
     passkeys_api,
     people_api,
     phone_changes_api,
@@ -47,6 +48,7 @@ from app.modules.identity.codes import CodeService
 from app.modules.identity.devices import DeviceMiddleware
 from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.hashing import PasswordHasher
+from app.modules.identity.own_changes import OwnChangeService
 from app.modules.identity.passkeys import PasskeyService
 from app.modules.identity.phone_changes import PhoneChangeService
 from app.modules.identity.pins import PinService
@@ -177,6 +179,9 @@ def create_app(
         clock,
         settings.client_app(),
     )
+    app.state.own_changes = OwnChangeService(
+        database, clock, hasher, app.state.codes, app.state.email_checks
+    )
     install_error_handlers(app)
     # The last middleware added is the outermost, so the request ID exists before anything runs.
     origins = sorted({*settings.client_allowed_origins, *settings.staff_allowed_origins})
@@ -232,6 +237,7 @@ def create_app(
         *pot_transfers_api.routers,
         *closures_api.routers,
         freeze_api.router,
+        own_changes_api.router,
     ):
         app.include_router(router)
     app.include_router(payments_api.create_router(collections))

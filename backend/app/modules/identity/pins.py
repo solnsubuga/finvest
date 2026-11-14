@@ -76,8 +76,10 @@ class PinService:
                 "validation_failed", fields=[FieldProblem(field_path=["pin"], code=problem)]
             )
         now = self.clock.now()
-        if now - client.signed_in_at > RECENT_SIGN_IN:
-            # A new PIN follows a fresh log in, as a forgotten one does.
+        confirmed = client.confirmed_at is not None and now - client.confirmed_at <= RECENT_SIGN_IN
+        if now - client.signed_in_at > RECENT_SIGN_IN and not confirmed:
+            # A new PIN follows a fresh log in, as a forgotten one does, or a passkey or app
+            # used again on this session to change it.
             raise ApplicationError("sign_in_again")
         hashed = await self.hasher.hash(pin)
         async with self.database.transaction() as session:

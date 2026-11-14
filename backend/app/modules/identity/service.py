@@ -53,6 +53,9 @@ ADDRESS_ATTEMPTS = 50
 TOUCH_INTERVAL = timedelta(minutes=1)
 # Approving another person's change needs a second step this recent.
 CONFIRMATION_WINDOW = timedelta(minutes=10)
+# A sign-in with one of these confirms it is the client. A texted or emailed code, and the code
+# that proved the number at sign up, never do: whoever holds the SIM could have them.
+STRONG_STEPS: frozenset[SecondStep] = frozenset({"passkey", "authenticator"})
 
 logger = structlog.get_logger()
 
@@ -76,6 +79,10 @@ class ClientSession:
     # The phone app's PIN for this session. A locked session answers nothing but the PIN.
     pin_set: bool = False
     locked: bool = False
+    # When the client last used a passkey or authenticator app on this session: signing in
+    # with one, or confirming it is them again. None when only a texted or emailed code, or the
+    # sign up code, was used. A change to how they sign in needs this in the last ten minutes.
+    confirmed_at: datetime | None = None
 
     @property
     def actor(self) -> Actor:
@@ -445,7 +452,8 @@ class IdentityService:
                 await session.execute(
                     text(
                         "SELECT id, actor_id, transport, created_at, last_seen_at, "
-                        "idle_expires_at, reverified_at, EXISTS (SELECT FROM identity_app_pins "
+                        "idle_expires_at, reverified_at, second_step, "
+                        "EXISTS (SELECT FROM identity_app_pins "
                         "WHERE session_id = identity_sessions.id) AS pin_set "
                         "FROM identity_sessions "
                         "WHERE token_hash = :hash AND actor_kind = :kind AND revoked_at IS NULL "
@@ -498,6 +506,8 @@ class IdentityService:
             locked=is_locked(
                 pin_set=row.pin_set, last_seen_at=row.last_seen_at, now=self.clock.now()
             ),
+            confirmed_at=row.reverified_at
+            or (row.created_at if row.second_step in STRONG_STEPS else None),
         )
 
     async def staff_session(self, token: str) -> StaffSession | None:
@@ -542,6 +552,32 @@ class IdentityService:
                 details={"second_step": second_step},
             )
         logger.info("staff_reconfirmed", second_step=second_step)
+        return now + CONFIRMATION_WINDOW
+
+    async def confirm_client(self, client: ClientSession, second_step: SecondStep) -> datetime:
+        """Note that the client just used a passkey or their authenticator app on this session."""
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            confirmed = await session.scalar(
+                text(
+                    "UPDATE identity_sessions SET reverified_at = :now WHERE id = :id "
+                    "AND actor_kind = 'client' AND actor_id = :client AND revoked_at IS NULL "
+                    "RETURNING true"
+                ),
+                {"now": now, "id": client.session_id, "client": client.client_id},
+            )
+            if not confirmed:
+                raise ApplicationError("unauthorized")
+            await trail.note(
+                session,
+                self.clock,
+                client.actor,
+                "identity.session.reconfirmed",
+                resource_type="session",
+                resource_id=client.session_id,
+                details={"second_step": second_step},
+            )
+        logger.info("client_reconfirmed", second_step=second_step)
         return now + CONFIRMATION_WINDOW
 
     async def sign_out(self, token: str, kind: AccountKind) -> None:

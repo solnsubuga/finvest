@@ -188,6 +188,14 @@ class AuthenticatorService:
         await self._clear_attempts(staff.staff_id)
         return await self.identity.confirm_staff(staff, "authenticator")
 
+    async def client_reconfirm(self, client: ClientSession, code: str) -> datetime:
+        """Check a code from the client's app on this session. Returns when it stops counting."""
+        self._require()
+        await self._count_attempt(client.client_id)
+        await self._accept(client.actor, code)
+        await self._clear_attempts(client.client_id)
+        return await self.identity.confirm_client(client, "authenticator")
+
     async def _accept(self, actor: Actor, code: str) -> None:
         """Accept `code` for this person's confirmed app once, or raise `invalid_code`."""
         async with self.database.transaction() as session:

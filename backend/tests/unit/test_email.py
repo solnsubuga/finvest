@@ -284,6 +284,9 @@ EMAILED: dict[str, dict[str, object]] = {
     "new_sign_in": {"device": "Chrome on Windows", "when": "13 Nov 2026, 15:32"},
     "recovery_requested": {"when": "14 Nov 2026, 10:05"},
     "phone_changed": {"ending": "456"},
+    "own_phone_changed": {"ending": "456", "when": "14 Nov 2026, 11:40"},
+    "password_changed": {"when": "14 Nov 2026, 11:40"},
+    "email_changed": {"when": "14 Nov 2026, 11:40"},
     "email_verification": {"link": "https://app.finvestug.com/email#abc", "hours": 24},
     "claim_invitation": {"link": "https://app.finvestug.com/claim#abc", "hours": 72},
     "staff_enrolment": {
@@ -343,3 +346,19 @@ def test_email_buttons_and_footer_use_the_links_they_are_given() -> None:
     )
     assert "https://app.staging.example/security" in signed_in.html
     assert "app.finvestug.com" not in signed_in.html + notice.html
+
+
+@pytest.mark.parametrize(
+    ("template", "variables", "words"),
+    [
+        ("phone_change_code", {"code": "482913", "minutes": 10}, "482913"),
+        ("own_phone_changed", {"ending": "456", "when": "14 Nov 2026, 11:40"}, "ending 456"),
+        ("password_changed", {"when": "14 Nov 2026, 11:40"}, "password"),
+    ],
+)
+def test_the_notices_of_a_change_a_client_made_fit_two_text_parts(
+    template: str, variables: dict[str, object], words: str
+) -> None:
+    sms = render_sms(template, variables)
+    assert words in sms
+    assert len(sms) <= 306 and sms.isascii()

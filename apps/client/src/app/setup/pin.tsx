@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { Redirect, Stack, useRouter } from "expo-router";
+import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { PIN_LENGTH, pinProblem } from "@/auth/pin";
 import { signupSteps, stepOf } from "@/auth/signupSteps";
 import { AuthError, describeAuthError } from "@/auth/types";
 import { StepProgress } from "@/components/Blocks";
+import { ConfirmItIsYou } from "@/components/ConfirmItIsYou";
 import { PinDots, PinPad } from "@/components/pin/PinPad";
 import { Screen } from "@/components/Screen";
 import { needsSignInAgain, SignInAgain } from "@/components/SignInAgain";
@@ -17,6 +18,9 @@ import { colors, fontSizes } from "@/theme";
  * Create your PIN, from the design canvas: type it, then type it again. It
  * opens the app on this phone. A new log in on the phone comes here too,
  * because a PIN belongs to one session.
+ *
+ * With `?change=1`, from Sign in and security, it replaces the PIN. That needs a log in or a
+ * passkey or authenticator app in the last ten minutes, so an older session confirms first.
  */
 export default function CreatePin() {
   const router = useRouter();
@@ -26,6 +30,9 @@ export default function CreatePin() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stale, setStale] = useState(false);
+  const changing = useLocalSearchParams<{ change?: string }>().change === "1";
+  /** In change mode, the PIN typed twice while the client confirms it is them. */
+  const [pending, setPending] = useState<string | null>(null);
 
   if (!session) {
     return <Redirect href="/welcome" />;
@@ -34,21 +41,25 @@ export default function CreatePin() {
     return <Redirect href="/" />;
   }
 
-  const offerPasskey = justSignedUp && signupSteps(true).includes("passkey");
+  const offerPasskey = !changing && justSignedUp && signupSteps(true).includes("passkey");
 
   const save = async (chosen: string) => {
     setBusy(true);
     try {
       await client.setPin(chosen);
       setSession({ ...session, pinSet: true });
-      if (offerPasskey) {
+      if (changing) {
+        router.replace("/security");
+      } else if (offerPasskey) {
         router.replace("/setup/passkey");
       } else {
         setJustSignedUp(false);
         router.replace("/");
       }
     } catch (caught) {
-      if (needsSignInAgain(caught)) {
+      if (needsSignInAgain(caught) && changing) {
+        setPending(chosen);
+      } else if (needsSignInAgain(caught)) {
         setStale(true);
       } else {
         setError(describeAuthError(caught));
@@ -82,6 +93,28 @@ export default function CreatePin() {
     void save(next);
   };
 
+  if (pending) {
+    return (
+      <Screen signedIn>
+        <Stack.Screen options={{ title: "Change your PIN" }} />
+        <View style={{ marginTop: 28, gap: 10 }}>
+          <Title>Change your PIN</Title>
+          <Txt color={colors.muted}>Confirm it is you, and we save your new PIN.</Txt>
+        </View>
+        <View style={{ marginTop: 20 }}>
+          <ConfirmItIsYou
+            onConfirmed={() => {
+              const chosen = pending;
+              setPending(null);
+              void save(chosen);
+            }}
+            onCancel={() => router.replace("/security")}
+          />
+        </View>
+      </Screen>
+    );
+  }
+
   if (stale) {
     return (
       <Screen>
@@ -106,7 +139,9 @@ export default function CreatePin() {
       <Stack.Screen options={{ title: "Create your PIN" }} />
       {justSignedUp ? <StepProgress {...stepOf("pin", true)} onDark /> : null}
       <View style={styles.top}>
-        <Title onDark>{first === null ? "Create a 5 digit PIN" : "Type your PIN again"}</Title>
+        <Title onDark>
+          {first !== null ? "Type your PIN again" : changing ? "Choose a new 5 digit PIN" : "Create a 5 digit PIN"}
+        </Title>
         <Txt color={colors.onBlackMuted} center>
           {first === null
             ? "It opens the app on this phone. Your password is still needed to sign in on a new device."
