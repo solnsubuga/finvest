@@ -80,8 +80,9 @@ variable "deploy_ssh_public_key" {
 }
 
 variable "ssh_source_addresses" {
-  description = "Addresses allowed to reach SSH. The Provision run adds its own address only while it prepares the host."
+  description = "Addresses allowed to reach SSH. Optional: empty means only the Provision or deploy run, while it works."
   type        = list(string)
+  default     = []
 }
 
 variable "provisioner_address" {
