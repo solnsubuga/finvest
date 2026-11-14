@@ -1999,6 +1999,15 @@ export const ReturnIn = z.object({
 });
 export type ReturnIn = z.infer<typeof ReturnIn>;
 
+export const ReturnLineOut = z.object({
+  amount: MoneyView,
+  id: z.string(),
+  narrative: z.string(),
+  reference: z.string(),
+  value_date: z.string(),
+});
+export type ReturnLineOut = z.infer<typeof ReturnLineOut>;
+
 export const ReturnOut = z.object({
   client_id: z.string(),
   decided_at: z.string().nullable(),
@@ -2014,6 +2023,19 @@ export const ReturnOut = z.object({
   status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
 });
 export type ReturnOut = z.infer<typeof ReturnOut>;
+
+export const ReturnablePayoutOut = z.object({
+  amount: MoneyView,
+  bank_name: z.string().nullable(),
+  client_id: z.string(),
+  holder_name: z.string(),
+  id: z.string(),
+  kind: z.enum(["bank", "mobile_money"]),
+  masked_account: z.string(),
+  network: z.string().nullable(),
+  paid_at: z.string(),
+});
+export type ReturnablePayoutOut = z.infer<typeof ReturnablePayoutOut>;
 
 export const ReviewIn = z.object({
   reason: z.string(),
@@ -4446,6 +4468,20 @@ export const operations = {
     status: 200,
     response: z.array(ReturnOut),
   },
+  "GET /staff/payout-returns/returnable": {
+    method: "GET",
+    path: "/staff/payout-returns/returnable",
+    params: z.object({}),
+    query: z.object({
+    amount_minor: z.number().int().nullable().optional(),
+    currency: z.enum(["UGX", "USD"]).optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ReturnablePayoutOut),
+  },
   "GET /staff/payout-returns/{return_id}": {
     method: "GET",
     path: "/staff/payout-returns/{return_id}",
@@ -4606,6 +4642,19 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: ResolutionOut,
+  },
+  "GET /staff/payouts/{payout_id}/return-lines": {
+    method: "GET",
+    path: "/staff/payouts/{payout_id}/return-lines",
+    params: z.object({
+    payout_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ReturnLineOut),
   },
   "POST /staff/payouts/{payout_id}/returns": {
     method: "POST",
