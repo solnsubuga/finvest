@@ -59,6 +59,7 @@ const goal = {
   plan,
   savings: [saving],
   saving_rule: null,
+  payday: null,
 };
 
 type Seen = { method: string; path: string; key: string | undefined; body: unknown };

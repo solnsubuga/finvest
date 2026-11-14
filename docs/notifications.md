@@ -62,6 +62,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `investment_transfer_failed` | Investments | `product`, `person` | Investments |
 | `interest_earned` | Investments | `amount`, `count` | Daily earnings |
 | `goal_top_up_due` | Goals | `goal`, `date` | Investments |
+| `goal_payday` | Goals | `goal` | Investments |
 | `goal_reached` | Goals | `goal` | Investments |
 | `autoinvest_run_retrying` | Automatic investing | `date` | Investments |
 | `autoinvest_run_failed` | Automatic investing | `date` | Investments |
