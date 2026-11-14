@@ -84,6 +84,17 @@ describe("automatic investing over HTTP", () => {
     const overview = await createHttpAutoinvestApi(createHttp("https://api.test", fetch), directory).getOverview("2026-11-14");
     expect(overview.runs.map((run) => run.id)).toEqual(["-NrunA0000000000002", "-NrunA0000000000001"]);
     expect(fetch.mock.calls.some(([url]) => String(url).includes(`before_id=${RUN.run_id}`))).toBe(true);
+    expect(overview.cut).toBe(false);
+  });
+
+  it("says so when a week holds more runs than it reads", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((url) =>
+      String(url).includes("/plans/counts") ? reply(200, { active: 1, paused: 0 }) : reply(200, { runs: [RUN], next_before_id: RUN.run_id }),
+    );
+    const overview = await createHttpAutoinvestApi(createHttp("https://api.test", fetch), directory).getOverview("2026-11-14");
+    expect(overview.cut).toBe(true);
+    // The counts, then fifty pages of runs and no more.
+    expect(fetch).toHaveBeenCalledTimes(51);
   });
 
   it.each([

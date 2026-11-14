@@ -43,7 +43,7 @@ export function toAutoinvestError(error: unknown): AutoinvestError {
 }
 
 export function createHttpAutoinvestApi(http: Http, directory: Directory): AutoinvestApi {
-  async function runsBetween(from: string, to: string): Promise<StaffRunView[]> {
+  async function runsBetween(from: string, to: string): Promise<{ runs: StaffRunView[]; cut: boolean }> {
     const found: StaffRunView[] = [];
     let before: string | null = null;
     for (let page = 0; page < MAX_PAGES; page++) {
@@ -51,17 +51,17 @@ export function createHttpAutoinvestApi(http: Http, directory: Directory): Autoi
       if (before) query.set("before_id", before);
       const list: StaffRunList = await http.request<StaffRunList>("GET", `/staff/autoinvest/runs?${query.toString()}`);
       found.push(...list.runs);
-      if (!list.next_before_id) break;
+      if (!list.next_before_id) return { runs: found, cut: false };
       before = list.next_before_id;
     }
-    return found;
+    return { runs: found, cut: true };
   }
 
   return {
     async getOverview(today) {
       const from = addDays(today, -6);
       try {
-        const [plans, runs] = await Promise.all([
+        const [plans, { runs, cut }] = await Promise.all([
           http.request<PlanCountsView>("GET", "/staff/autoinvest/plans/counts"),
           runsBetween(from, today),
         ]);
@@ -71,6 +71,7 @@ export function createHttpAutoinvestApi(http: Http, directory: Directory): Autoi
           from,
           to: today,
           runs: runs.map((run, index) => toRun(run, cards[index] ?? null)),
+          cut,
         };
       } catch (error) {
         throw toAutoinvestError(error);

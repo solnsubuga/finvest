@@ -44,6 +44,8 @@ export interface Overview {
   from: string;
   to: string;
   runs: readonly Run[];
+  /** True when the week held more runs than the screen reads, so the list stops short. */
+  cut?: boolean;
 }
 
 export interface AutoinvestApi {

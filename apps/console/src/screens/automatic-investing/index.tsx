@@ -175,6 +175,11 @@ function Ready({
           ) : (
             <RunsTable runs={shown} />
           )}
+          {overview.cut ? (
+            <p role="status" className="m-0 text-md font-bold text-warning-text">
+              This week has more runs than the screen can show, so the oldest are left out. Tell an engineer.
+            </p>
+          ) : null}
         </section>
         <aside className="flex min-w-0 flex-[2_1_280px] flex-col gap-4">
           <Panel title="How a run works">
