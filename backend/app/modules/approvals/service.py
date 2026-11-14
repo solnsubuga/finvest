@@ -302,6 +302,7 @@ async def _client_locks(session: AsyncSession) -> list[Waiting]:
 _CLIENT_ACTIONS: dict[client_actions.Kind, Kind] = {
     "pin_reset": "client_pin_reset",
     "withdrawal_limits": "client_limits",
+    "statement": "client_statement",
 }
 
 

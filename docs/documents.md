@@ -88,6 +88,7 @@ A document is asked for first and built later, so no request waits on the ledger
 | Who asks | Kind | Key, unique per client and kind |
 | --- | --- | --- |
 | The client, in the app | `requested_statement` | The client's `Idempotency-Key` |
+| Two members of staff, from the client's page ([client-accounts.md](client-accounts.md#acting-for-a-client)) | `requested_statement` | `staff:` and the approved action's ID |
 | The monthly run, for every client with a ledger account | `monthly_statement` | The month, `2026-10` |
 | The monthly run for June, for every client with a ledger account | `tax_certificate` | The tax year, `2026-27` |
 | A confirmed payment, through the `documents.receipt_from_deposit` consumer of `payments.deposit_confirmed` | `receipt` | The deposit ID, also unique on its own |
