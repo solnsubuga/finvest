@@ -58,13 +58,21 @@ async def test_a_message_is_sent_with_our_key_as_its_reference() -> None:
 
 
 @pytest.mark.parametrize(
-    ("phone", "local"), [("+256772123456", "0772123456"), ("+256701000000", "0701000000")]
+    ("phone", "local"),
+    [
+        ("+256772123456", "0772123456"),
+        ("+256701000000", "0701000000"),
+        ("+256391234567", "0391234567"),
+        ("+256201234567", "0201234567"),
+    ],
 )
 def test_ugandan_mobile_numbers_are_written_as_ioTec_writes_them(phone: str, local: str) -> None:
     assert local_number(phone) == local
 
 
-@pytest.mark.parametrize("phone", ["+254712345678", "+256414123456", "+2567721234567"])
+@pytest.mark.parametrize(
+    "phone", ["+254712345678", "+256414123456", "+2567721234567", "+25639123456"]
+)
 async def test_a_number_ioTec_cannot_reach_is_refused_before_any_request(phone: str) -> None:
     sms, seen = transport(lambda _: httpx.Response(200, json={"id": MESSAGE_ID}))
     with pytest.raises(SmsRejected) as refused:
