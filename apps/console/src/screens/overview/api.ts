@@ -18,6 +18,7 @@ export const KINDS = [
   "buffer_rules",
   "buffer_capital",
   "rate_change",
+  "product_change",
   "migration_totals",
   "migration_sign_off",
   "phone_change",

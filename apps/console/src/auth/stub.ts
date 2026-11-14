@@ -73,6 +73,7 @@ export const STUB_ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
     "products.view",
     "rates.view",
     "rates.change",
+    "products.change",
     "investment_corrections.change",
     "reports.view",
     "migration.view",

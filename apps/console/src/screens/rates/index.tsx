@@ -18,7 +18,8 @@ import {
 } from "../products/api.ts";
 import { formatBps, formatDay, formatStamp, parsePercent, previewClientRate } from "../products/format.ts";
 import { connectedCatalogueApi } from "../products/http.ts";
-import { createStubCatalogueApi } from "../products/stub.ts";
+import { Reach } from "../products/Reach.tsx";
+import { createStubCatalogueApi, sampleFrom } from "../products/stub.ts";
 
 const SUMMARY = "Every rate change is proposed by one person, approved by another, and starts on a set date.";
 
@@ -118,9 +119,23 @@ export function RatesScreen({ api, me, canChange, today = kampalaToday }: RatesS
   const { book } = load;
   const names = new Map(book.products.map((product) => [product.code, product.name]));
   const day = today();
+  const upcoming = book.products
+    .flatMap((product) => (book.history.get(product.code) ?? []).filter((rate) => rate.effectiveFrom > day))
+    .map((rate) => rate.effectiveFrom)
+    .sort()[0];
+  const waitingNames = [...new Set(book.waiting.map((proposal) => names.get(proposal.productCode) ?? proposal.productCode))];
   return (
     <>
       <PageHeader title="Rates" summary={SUMMARY} />
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,180px),1fr))] gap-4">
+        <Tile
+          name="Waiting for approval"
+          value={book.waiting.length === 1 ? "1 change" : `${book.waiting.length} changes`}
+          note={waitingNames.length ? waitingNames.join(", ") : "Nothing waiting"}
+        />
+        <Tile name="Next change takes effect" value={upcoming ? formatDay(upcoming) : "None approved"} note={upcoming ? "At the start of the day, Kampala time" : "Every rate is in force"} />
+        <Tile name="Clients affected" value="New investments only" note="Running ones keep their rate" />
+      </div>
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[3_1_520px] flex-col gap-4">
           <History book={book} today={day} />
@@ -153,6 +168,7 @@ export function RatesScreen({ api, me, canChange, today = kampalaToday }: RatesS
                     onApprove={() => void run(proposal.id, () => api.approve(proposal.id))}
                     onSendBack={(note) => void run(proposal.id, () => api.sendBack(proposal.id, note))}
                     onWithdraw={() => void run(proposal.id, () => api.withdraw(proposal.id))}
+                    reach={<Reach api={api} productCode={proposal.productCode} change="rate" />}
                   />
                 ))
               )}
@@ -163,6 +179,7 @@ export function RatesScreen({ api, me, canChange, today = kampalaToday }: RatesS
                 busy={busy === "propose"}
                 error={failed?.on === "propose" ? failed.message : null}
                 onSubmit={(proposal) => void run("propose", () => api.propose(proposal))}
+                reach={(code) => <Reach key={code} api={api} productCode={code} change="rate" />}
               />
             </>
           )}
@@ -247,9 +264,11 @@ interface WaitingProps {
   onApprove(): void;
   onSendBack(note: string): void;
   onWithdraw(): void;
+  /** Who the change reaches. */
+  reach: ReactNode;
 }
 
-function Waiting({ proposal, productName, current, mine, busy, error, onApprove, onSendBack, onWithdraw }: WaitingProps) {
+function Waiting({ proposal, productName, current, mine, busy, error, onApprove, onSendBack, onWithdraw, reach }: WaitingProps) {
   const [sendingBack, setSendingBack] = useState(false);
   const [note, setNote] = useState("");
   const noteId = `note-${proposal.id}`;
@@ -271,7 +290,7 @@ function Waiting({ proposal, productName, current, mine, busy, error, onApprove,
         <Row name="Proposed" value={`${mine ? "By you" : "By a colleague"}, ${formatStamp(proposal.proposedAt)}`} />
       </dl>
       <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-[1.45]">{proposal.reason}</p>
-      <p className="m-0 text-xs font-bold text-muted">New investments only</p>
+      {reach}
       {error ? (
         <p role="alert" className="m-0 text-sm font-bold text-danger">
           {error}
@@ -326,9 +345,11 @@ interface ProposeFormProps {
   busy: boolean;
   error: string | null;
   onSubmit(proposal: NewProposal): void;
+  /** Who a change to the chosen product reaches. */
+  reach(productCode: string): ReactNode;
 }
 
-function ProposeForm({ products, today, busy, error, onSubmit }: ProposeFormProps) {
+function ProposeForm({ products, today, busy, error, onSubmit, reach }: ProposeFormProps) {
   const first = products[0];
   const [productCode, setProductCode] = useState(first?.code ?? "");
   const product = products.find((p) => p.code === productCode);
@@ -410,6 +431,7 @@ function ProposeForm({ products, today, busy, error, onSubmit }: ProposeFormProp
           After tax. New investments only{product?.rate ? `. Today it is ${product.rate.clientRatePercent}%` : ""}.
         </p>
       </div>
+      {productCode ? reach(productCode) : null}
       {error ? (
         <p role="alert" className="m-0 text-sm font-bold text-danger">
           {error}
@@ -432,6 +454,16 @@ function Problem({ id, label, problem, children }: { id: string; label: string; 
   );
 }
 
+function Tile({ name, value, note }: { name: string; value: string; note: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-lg border border-border bg-surface p-4">
+      <p className="m-0 text-sm text-muted">{name}</p>
+      <p className="m-0 text-[22px] font-extrabold tracking-[-0.4px] tabular-nums">{value}</p>
+      <p className="m-0 text-xs font-bold text-muted">{note}</p>
+    </div>
+  );
+}
+
 function Row({ name, value }: { name: string; value: string }) {
   return (
     <div className="flex justify-between gap-3 border-t border-divider pt-2.5 text-md">
@@ -449,7 +481,7 @@ export default function RatesPage() {
       ? createStubCatalogueApi({
           me: session.staffId,
           today: kampalaToday(),
-          sample: new URLSearchParams(window.location.search).get("sample") === "empty" ? "empty" : "default",
+          sample: sampleFrom(window.location.search),
         })
       : connectedCatalogueApi(),
   );
