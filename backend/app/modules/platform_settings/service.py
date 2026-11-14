@@ -114,6 +114,12 @@ async def current(session: AsyncSession, key: Key, now: datetime) -> Value:
     return default(key, now) if row is None else _parse(key, row.value)
 
 
+async def approved(session: AsyncSession, key: Key) -> Value | None:
+    """The last value approved for `key`, or None while the default is in use."""
+    row = (await session.execute(_IN_USE, {"key": key})).one_or_none()
+    return None if row is None else _parse(key, row.value)
+
+
 async def list_settings(session: AsyncSession, now: datetime) -> list[Setting]:
     """Every setting, the value in use and any change waiting for a decision."""
     in_use = {row.key: row for row in (await session.execute(_ALL_IN_USE)).all()}
