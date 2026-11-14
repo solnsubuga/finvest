@@ -4954,7 +4954,8 @@
       "CorrectionKind": {
         "enum": [
           "unwind",
-          "refund"
+          "refund",
+          "pay_out"
         ],
         "title": "CorrectionKind",
         "type": "string"

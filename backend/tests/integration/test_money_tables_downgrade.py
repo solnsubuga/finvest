@@ -1038,6 +1038,23 @@ ROWS = {
         "'The run stopped part way', '-Nabc0000000000000S1', now()); COMMIT",
         "refusing to drop the record of runs staff asked for again",
     ),
+    "0331_correction_pay_out_held": (
+        "BEGIN; ALTER TABLE investments DISABLE TRIGGER USER; "
+        "ALTER TABLE investment_corrections DISABLE TRIGGER USER; "
+        "INSERT INTO investments (id, client_id, product_id, currency, principal_minor, "
+        "annual_rate_bps, tax_bps, term_days, at_maturity, created_at, pay_by, updated_at) "
+        "VALUES ('-Nabc0000000000000A1', '-Nabc0000000000000B1', 'FvProduct1TREA91_001', "
+        "'UGX', 1000000, 1250, 1500, 91, 'pay_out', now(), now() + interval '72 hours', "
+        "now()); "
+        "INSERT INTO investment_corrections (id, kind, investment_id, client_id, currency, "
+        "amount_minor, destination_id, reason, proposed_by, proposed_at) "
+        "VALUES ('-Nabc0000000000000C1', 'pay_out', '-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'UGX', 1026490, '-Nabc0000000000000D1', "
+        "'The client asked on the phone', '-Nabc0000000000000E1', now()); "
+        "ALTER TABLE investment_corrections ENABLE TRIGGER USER; "
+        "ALTER TABLE investments ENABLE TRIGGER USER; COMMIT",
+        "refusing to drop the record of held money staff sent on",
+    ),
 }
 
 
