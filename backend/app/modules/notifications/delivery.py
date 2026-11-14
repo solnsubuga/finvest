@@ -73,6 +73,10 @@ class ClientContact(Protocol):
     @property
     def email(self) -> str | None: ...
 
+    # False for an account carried over from Finvest 1.0 that its owner has not claimed yet.
+    @property
+    def claimed(self) -> bool: ...
+
 
 # Looks up where to reach a client, in the worker's transaction. Identity owns the answer, and
 # answers nothing for a client who is locked or closed.
@@ -163,6 +167,11 @@ class DeliveryJobs:
                     queued.append("push")
             if channels & {Channel.SMS, Channel.EMAIL}:
                 contact = await self._contacts(session, row.client_id)
+                if contact is not None and not contact.claimed:
+                    # A Finvest 1.0 account nobody has claimed yet: its phone and email are
+                    # the old system's, and its owner hears from us only through the claim
+                    # invitation and its reminders, which the migration module sends.
+                    contact = None
                 by_sms = Channel.SMS in channels
                 if (
                     not by_sms

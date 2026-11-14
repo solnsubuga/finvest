@@ -100,7 +100,7 @@ SMS is on by default only for money and security, because each text is paid for.
 
 `notify` writes the notification and, in the same transaction, queues one fan-out job that carries the notification's ID and nothing else. The worker does the rest (`delivery.py`):
 
-1. **Fan-out** reads the notification and the client's channels for its kind of alert. If push is chosen and the client has a phone registered, it queues a push job. If SMS or email is chosen, it asks identity where to reach the client (`client_contact`) and queues the text or the email through `queue_message` under the `client_notice` template. Everything it queues commits with the job, so it happens once.
+1. **Fan-out** reads the notification and the client's channels for its kind of alert. If push is chosen and the client has a phone registered, it queues a push job. If SMS or email is chosen, it asks identity where to reach the client (`client_contact`) and queues the text or the email through `queue_message` under the `client_notice` template. An account carried over from Finvest 1.0 that its owner has not claimed yet gets no text or email: its phone and email are the old system's, and its owner hears from us only through the claim invitation and its reminders, which the migration module sends. The notification still waits in the app for when they claim it. Everything it queues commits with the job, so it happens once.
 2. **Push** sends the title and body to the client's phones through Expo, with no transaction open. The app gets the notification's ID and its link, so a tap opens the right screen.
 3. **SMS and email** are sent by the same jobs as sign-in codes, with the same retries, and their content is cleared once sent.
 
