@@ -33,7 +33,8 @@ export function toInvestment(json: StaffInvestmentOut): Investment {
     annualRateBps: json.annual_rate_bps,
     taxBps: json.tax_bps,
     termDays: json.term_days,
-    atMaturity: json.at_maturity,
+    // The console labels saving interest to a goal in a later change; until then it shows the rollover.
+    atMaturity: json.at_maturity === "interest_to_goal" ? "roll_over" : json.at_maturity,
     createdAt: json.created_at,
     payBy: json.pay_by,
     startDate: json.start_date,

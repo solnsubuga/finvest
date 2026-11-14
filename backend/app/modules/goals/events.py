@@ -12,3 +12,10 @@ LINK_PLAN_RUN_KIND = "goals.link_plan_run"
 # links the run's investment to the goal whose monthly saving the plan is, and ignores any other
 # plan. Its handler arrives with goal saving plans.
 LINK_PLAN_RUN = Consumer(kind=LINK_PLAN_RUN_KIND)
+
+LINK_INTEREST_SAVING_KIND = "goals.link_interest_saving"
+# The investments module names this consumer when it publishes
+# `investments.interest_saved_to_goal`: an investment matured and its interest started a new
+# investment for the goal the client chose. Goals records that investment as a saving towards
+# the goal, and tells the client.
+LINK_INTEREST_SAVING = Consumer(kind=LINK_INTEREST_SAVING_KIND)

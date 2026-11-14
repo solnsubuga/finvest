@@ -203,7 +203,7 @@ export const AssignComplaint = z.object({
 });
 export type AssignComplaint = z.infer<typeof AssignComplaint>;
 
-export const AtMaturity = z.enum(["roll_over", "pay_out", "pay_interest"]);
+export const AtMaturity = z.enum(["roll_over", "pay_out", "pay_interest", "interest_to_goal"]);
 export type AtMaturity = z.infer<typeof AtMaturity>;
 
 export const AttentionOut = z.object({
@@ -1868,6 +1868,9 @@ export const StaffInvestmentOut = z.object({
   created_at: z.string(),
   currency: Currency,
   id: z.string(),
+  interest_from_investment_id: z.string().nullable().optional(),
+  interest_goal_id: z.string().nullable().optional(),
+  interest_goal_name: z.string().nullable().optional(),
   interest_gross_minor: z.number().int(),
   interest_net_minor: z.number().int(),
   maturity_date: z.string().nullable(),
@@ -3358,6 +3361,7 @@ export type StaffGoalView = z.infer<typeof StaffGoalView>;
 export const StaffSavingView = z.object({
   accrued_net_minor: z.number().int(),
   amount_minor: z.number().int(),
+  interest_from_investment_id: z.string().nullable().optional(),
   investment_id: z.string(),
   maturity_date: z.string().nullable(),
   product_code: z.string(),
