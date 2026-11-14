@@ -156,8 +156,20 @@ RULES = [
     f"ALTER TABLE {D} ENABLE ROW LEVEL SECURITY",
     f"CREATE POLICY {D}_app ON {D} FOR SELECT TO {APP_ROLE} USING ({STAFF})",
     f"CREATE POLICY {D}_worker ON {D} FOR ALL TO {WORKER_ROLE} USING (true) WITH CHECK (true)",
-    # The worker emails staff their reports: these columns only.
-    f"GRANT SELECT (id, email, name, role, status) ON identity_staff TO {WORKER_ROLE}",
+    # The worker emails staff their reports. It never reads the staff table itself, which holds
+    # sign-in secrets: this function answers the few columns a send needs, for the IDs asked.
+    """
+CREATE FUNCTION identity_staff_contacts(p_ids text[])
+    RETURNS TABLE (id text, email text, name text, role text, status text)
+    LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp
+    AS $$
+        SELECT s.id::text, s.email::text, s.name::text, s.role::text, s.status::text
+        FROM public.identity_staff AS s
+        WHERE s.id = ANY(p_ids)
+    $$
+""",
+    "REVOKE ALL ON FUNCTION identity_staff_contacts(text[]) FROM PUBLIC",
+    f"GRANT EXECUTE ON FUNCTION identity_staff_contacts(text[]) TO {APP_ROLE}, {WORKER_ROLE}",
 ]
 
 
@@ -184,9 +196,7 @@ $$
 
 def downgrade() -> None:
     op.execute(EMPTY_GUARD)
-    op.execute(
-        "REVOKE SELECT (id, email, name, role, status) ON identity_staff FROM finvest_worker"
-    )
+    op.execute("DROP FUNCTION identity_staff_contacts(text[])")
     op.execute(f"DROP TABLE {D}")
     op.execute(f"DROP TABLE {S}")
     op.execute("DROP FUNCTION finvest_report_schedules_guard()")

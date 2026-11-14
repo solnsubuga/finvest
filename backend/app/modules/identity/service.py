@@ -780,12 +780,13 @@ async def staff_contacts(
     """The email address, name, role and status of these members of staff, for the worker that
     sends them their scheduled reports. An ID with no account is left out.
 
-    The worker may read these columns of a staff account and nothing else.
+    The worker cannot read the staff table, which holds sign-in secrets, so this asks a database
+    function that answers these columns and nothing else.
     """
     if not staff_ids:
         return {}
     rows = await session.execute(
-        text("SELECT id, email, name, role, status FROM identity_staff WHERE id = ANY(:ids)"),
+        text("SELECT id, email, name, role, status FROM identity_staff_contacts(:ids)"),
         {"ids": sorted(set(staff_ids))},
     )
     return {
