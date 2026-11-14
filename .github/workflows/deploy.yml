@@ -33,7 +33,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    # GitHub environment names: prod for production, dev for staging.
+    environment: ${{ inputs.environment == 'production' && 'prod' || 'dev' }}
     timeout-minutes: 40
     env:
       REVISION: ${{ inputs.revision }}

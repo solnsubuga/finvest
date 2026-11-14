@@ -2,7 +2,7 @@ name: Deploy Staging
 
 # Deploys the head of `main` to staging (Reusable Deploy). Staging is on hold to save cost (the
 # owner's decision, docs/decisions.md): this runs only when the repository variable
-# STAGING_ENABLED is `true` and `staging` is listed in DEPLOY_ENVIRONMENTS. The `staging` GitHub
+# STAGING_ENABLED is `true` and `dev` is listed in DEPLOY_ENVIRONMENTS. The `dev` GitHub
 # environment's protection rules apply to every run.
 
 on:
@@ -24,7 +24,7 @@ jobs:
   deploy:
     if: >-
       github.ref == 'refs/heads/main' && vars.STAGING_ENABLED == 'true' &&
-      contains(vars.DEPLOY_ENVIRONMENTS, 'staging')
+      contains(vars.DEPLOY_ENVIRONMENTS, 'dev')
     uses: ./.github/workflows/deploy.yml
     with:
       environment: staging

@@ -3,12 +3,12 @@ name: Provision
 # Manual only, from main. Creates or updates DigitalOcean and Cloudflare resources from
 # infra/terraform, writes the deployment settings into the GitHub environment, installs Docker on
 # the host and creates the database roles. Follows Fidiba's Provision workflow, with these changes:
-#   - "Plan" runs in <env>-plan with read-only tokens. "Apply" runs in <env>, which holds the write
-#     tokens and waits for approval, then refuses to apply a plan that differs from the reviewed one.
+#   - "Plan" and "Apply" both run in the environment (prod or dev). Apply waits for approval, then
+#     refuses to apply a plan that differs from the reviewed one.
 #   - Roles are created from the host, inside the VPC. The database is never opened to the runner.
 #     The runner is admitted to SSH only for the host step and removed again.
-#   - "shared" (the finvest project and Cloudflare zone settings) uses the production environments.
-# Every environment must be limited to the main branch, so no other branch can read its secrets.
+#   - "shared" (the finvest project and Cloudflare zone settings) uses the prod environment.
+# The GitHub environments are prod (production) and dev (staging), limited to the main branch.
 
 on:
   workflow_dispatch:
@@ -38,15 +38,13 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TARGET: ${{ inputs.environment }}
-  # shared has no GitHub environments of its own.
-  GH_ENVIRONMENT: ${{ inputs.environment == 'shared' && 'production' || inputs.environment }}
+  # GitHub environment names. shared has none of its own and uses prod.
+  GH_ENVIRONMENT: ${{ inputs.environment == 'staging' && 'dev' || 'prod' }}
   TF_DIR: ${{ inputs.environment == 'shared' && 'infra/terraform/shared' || 'infra/terraform' }}
   TERRAFORM_STATE_BUCKET: ${{ vars.TERRAFORM_STATE_BUCKET }}
   SSH_SOURCE_ADDRESSES: ${{ vars.SSH_SOURCE_ADDRESSES }}
-  DEPLOY_SSH_PUBLIC_KEY: ${{ vars.DEPLOY_SSH_PUBLIC_KEY }}
   ADMIN_ACCESS_EMAILS: ${{ vars.ADMIN_ACCESS_EMAILS }}
   ALERT_EMAILS: ${{ vars.ALERT_EMAILS }}
-  CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
   CLIENT_APP_PUBLIC: ${{ vars.CLIENT_APP_PUBLIC }}
   TF_VAR_github_owner: ${{ github.repository_owner }}
   TF_VAR_github_repository: ${{ github.event.repository.name }}
@@ -56,7 +54,7 @@ jobs:
     name: Plan
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: ${{ (inputs.environment == 'shared' && 'production' || inputs.environment) }}-plan
+    environment: ${{ inputs.environment == 'staging' && 'dev' || 'prod' }}
     timeout-minutes: 20
     outputs:
       plan_hash: ${{ steps.plan.outputs.plan_hash }}
@@ -68,6 +66,8 @@ jobs:
       AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_SECRET_ACCESS_KEY }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.TERRAFORM_GITHUB_TOKEN }}
+      # Only its public half is used, as the deploy user's login key.
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
     steps:
       - name: Refuse staging while it is on hold
         if: inputs.environment == 'staging' && vars.STAGING_ENABLED != 'true'
@@ -118,7 +118,7 @@ jobs:
     if: github.ref == 'refs/heads/main' && inputs.action == 'apply'
     runs-on: ubuntu-latest
     # Required reviewers on this environment make every apply wait for approval.
-    environment: ${{ inputs.environment == 'shared' && 'production' || inputs.environment }}
+    environment: ${{ inputs.environment == 'staging' && 'dev' || 'prod' }}
     timeout-minutes: 45
     env:
       DIGITALOCEAN_TOKEN: ${{ secrets.TERRAFORM_DIGITALOCEAN_TOKEN }}
@@ -207,7 +207,7 @@ jobs:
           for attempt in $(seq 1 30); do
             ssh "${ssh_opts[@]}" "$target" true && break
             if [[ $attempt == 30 ]]; then
-              echo "Host $host never accepted SSH. If the server was rebuilt, delete the DEPLOY_HOST_KEY variable of the $TARGET environment and run Provision again." >&2
+              echo "Host $host never accepted SSH. If the server was rebuilt, delete the DEPLOY_HOST_KEY variable of the $GH_ENVIRONMENT environment and run Provision again." >&2
               exit 1
             fi
             sleep 10
@@ -215,9 +215,9 @@ jobs:
           if [[ -z $DEPLOY_HOST_KEY ]]; then
             host_key=$(awk '$2 == "ssh-ed25519" { print $2, $3; exit }' "$known")
             [[ $host_key =~ $key_pattern ]] || { echo 'The host key was not recorded' >&2; exit 1; }
-            GH_TOKEN="$GITHUB_TOKEN" gh api --method POST "repos/$GITHUB_REPOSITORY/environments/$TARGET/variables" \
+            GH_TOKEN="$GITHUB_TOKEN" gh api --method POST "repos/$GITHUB_REPOSITORY/environments/$GH_ENVIRONMENT/variables" \
               -f name=DEPLOY_HOST_KEY -f value="$host_key" > /dev/null
-            echo "Recorded the host key as DEPLOY_HOST_KEY in the $TARGET environment: \`$host_key\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "Recorded the host key as DEPLOY_HOST_KEY in the $GH_ENVIRONMENT environment: \`$host_key\`" >> "$GITHUB_STEP_SUMMARY"
           fi
           ssh "${ssh_opts[@]}" "$target" 'cloud-init status --wait >/dev/null || true; mkdir -p ~/provision'
           scp "${ssh_opts[@]}" "$GITHUB_WORKSPACE/infra/deployment/prepare-host.sh" \
@@ -256,7 +256,7 @@ jobs:
           {
             echo "## $TARGET is provisioned"
             echo
-            echo "Deployment settings and secrets were written to the \`$TARGET\` GitHub environment."
+            echo "Deployment settings and secrets were written to the \`$GH_ENVIRONMENT\` GitHub environment."
             echo "Host address: \`$(terraform output -raw deploy_host)\`. DNS for these names points at it through Cloudflare:"
             echo
             echo '```json'
