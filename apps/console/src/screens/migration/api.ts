@@ -136,7 +136,58 @@ export type Blocker =
  * entering and confirming the Finvest 1.0 totals: both routes require `migration.sign_off`,
  * the same permission that gives `sign_off` (backend/app/modules/migration/api.py).
  */
-export type Allowed = "run_trial" | "enter_totals" | "sign_off";
+export type Allowed =
+  | "run_trial"
+  | "enter_totals"
+  | "sign_off"
+  | "propose_switch"
+  | "decide_switch"
+  | "propose_resolution"
+  | "decide_resolution";
+
+/**
+ * A client the worker could not carry over at the switch, and where resolving them stands.
+ * `retrying` is an approved retry the worker has not finished. A client carried over or closed
+ * leaves the list.
+ */
+export type NotCarriedState = "noted" | "retry_proposed" | "close_proposed" | "retrying";
+export type ResolutionAction = "retry" | "close";
+
+export interface NotCarried {
+  legacyClientRef: string;
+  /** Why the worker refused them. Never anything from the sheets. */
+  code: string;
+  /** Which time the worker tried them. A retry refused again is the next attempt. */
+  attempt: number;
+  notedAt: string;
+  state: NotCarriedState;
+  /** The proposal awaiting a decision, or the approved retry. */
+  resolutionId: string | null;
+  proposedBy: string | null;
+  /** Why it was proposed. */
+  reason: string | null;
+  /** True when the signed-in person proposed it, so they cannot decide it. */
+  mine: boolean;
+}
+
+/**
+ * The newest proposal to switch. One member of staff proposes it with the sheets of the trial
+ * that cleared every check, and a different one approves it, which creates every account.
+ */
+export interface Switch {
+  id: string;
+  asOf: string;
+  proposedBy: string;
+  proposedAt: string;
+  state: "proposed" | "approved" | "rejected";
+  decidedBy: string | null;
+  decisionReason: string | null;
+  /** Accounts the approval created. */
+  clientsCarried: number;
+  notCarried: readonly NotCarried[];
+  /** True when the signed-in person proposed it. */
+  mine: boolean;
+}
 
 export interface Overview {
   trialsRun: number;
@@ -146,6 +197,8 @@ export interface Overview {
   lines: readonly TotalLine[];
   differences: readonly Difference[];
   claims: ClaimProgress | null;
+  /** Null until someone proposes the switch. */
+  switch: Switch | null;
   /** Why the switch cannot be scheduled yet. Empty when it can. */
   blockers: readonly Blocker[];
   /** What the signed-in person may do. The backend decides. */
@@ -156,6 +209,12 @@ export interface TrialInput {
   clients: File;
   investments: File;
   asOf: string;
+}
+
+/** The two sheets of the latest trial, exactly as that trial read them. */
+export interface SwitchInput {
+  clients: File;
+  investments: File;
 }
 
 export interface MigrationApi {
@@ -169,6 +228,13 @@ export interface MigrationApi {
   proposeSignOff(key: string, reason: string): Promise<Overview>;
   /** Approve, or reject with a reason. Never the proposer. */
   decideSignOff(signOffId: string, approve: boolean, reason?: string): Promise<Overview>;
+  /** Asks a second person to approve the switch. Nothing is created yet. */
+  proposeSwitch(input: SwitchInput): Promise<Overview>;
+  /** Approve, which creates every account, or reject with a reason. Never the proposer. */
+  decideSwitch(switchId: string, approve: boolean, reason?: string): Promise<Overview>;
+  /** Asks a second person to approve retrying or closing a client the switch could not carry over. */
+  proposeResolution(switchId: string, legacyClientRef: string, action: ResolutionAction, reason: string): Promise<Overview>;
+  decideResolution(resolutionId: string, approve: boolean, reason?: string): Promise<Overview>;
 }
 
 /** The largest sheet the backend accepts, in bytes. */
@@ -179,6 +245,9 @@ export type MigrationErrorCode =
   | "conflict"
   | "invalid"
   | "file_too_large"
+  | "not_the_trial_sheet"
+  | "phone_missing"
+  | "phone_taken"
   | "not_confirmed"
   | "stale"
   | "not_connected"
@@ -201,6 +270,9 @@ const MESSAGES: Record<MigrationErrorCode, string> = {
   not_confirmed: "Nothing was changed, because you did not confirm it is you.",
   stale: "That was saved, but the screen could not load the latest figures. It has been reloaded.",
   file_too_large: "One of the files is too large. A sheet holds at most 100,000 rows.",
+  not_the_trial_sheet: "These are not the sheets the latest trial checked. Choose the same two files, unchanged.",
+  phone_missing: "A client in the sheets has no phone number. Every client claims their account by phone, so add one and run a trial again.",
+  phone_taken: "A phone number in the sheets already has a Finvest 2.0 account, so no account was created. Look into it, then approve again.",
   not_connected: "Migration is not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
@@ -219,4 +291,8 @@ export const notConnectedMigrationApi: MigrationApi = {
   confirmTotals: notConnected,
   proposeSignOff: notConnected,
   decideSignOff: notConnected,
+  proposeSwitch: notConnected,
+  decideSwitch: notConnected,
+  proposeResolution: notConnected,
+  decideResolution: notConnected,
 };

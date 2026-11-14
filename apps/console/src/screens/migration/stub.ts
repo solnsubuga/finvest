@@ -6,9 +6,12 @@ import {
   type Difference,
   type EnteredTotals,
   type MigrationApi,
+  type NotCarried,
   type Overview,
   type Problem,
+  type ResolutionAction,
   type SignOff,
+  type Switch,
   type TotalLine,
   type TotalsInput,
   type TrialInput,
@@ -132,12 +135,52 @@ interface State {
   differences: Difference[];
   // Sign-offs on total lines, by key.
   lineSignOffs: Record<string, SignOff>;
+  switch: Switch | null;
   allowed: readonly Allowed[];
 }
 
+const NOT_CARRIED: readonly NotCarried[] = [
+  { legacyClientRef: "C-10482", code: "document_taken", attempt: 1, notedAt: "2026-11-14T06:02:00Z", state: "noted", resolutionId: null, proposedBy: null, reason: null, mine: false },
+  {
+    legacyClientRef: "C-11930",
+    code: "investment_interest_differs",
+    attempt: 1,
+    notedAt: "2026-11-14T06:03:00Z",
+    state: "retry_proposed",
+    resolutionId: "resolution-11930",
+    proposedBy: "Grace Finance",
+    reason: "The 12% product's rate for July was corrected to match Finvest 1.0.",
+    mine: false,
+  },
+  {
+    legacyClientRef: "C-12007",
+    code: "document_taken",
+    attempt: 2,
+    notedAt: "2026-11-14T07:15:00Z",
+    state: "close_proposed",
+    resolutionId: "resolution-12007",
+    proposedBy: YOU,
+    reason: "Same person as an account opened in October. Operations will merge them by hand.",
+    mine: true,
+  },
+];
+
+const PROPOSED_SWITCH: Switch = {
+  id: "switch-sample",
+  asOf: "2026-11-12",
+  proposedBy: "Sarah Operations",
+  proposedAt: "2026-11-14T05:10:00Z",
+  state: "proposed",
+  decidedBy: null,
+  decisionReason: null,
+  clientsCarried: 0,
+  notCarried: [],
+  mine: false,
+};
+
 function build(state: State): Overview {
   if (state.trialsRun === 0) {
-    return { trialsRun: 0, trial: null, totals: null, lines: [], differences: [], claims: null, blockers: ["no_trial"], allowed: state.allowed };
+    return { trialsRun: 0, trial: null, totals: null, lines: [], differences: [], claims: null, switch: null, blockers: ["no_trial"], allowed: state.allowed };
   }
   const problems = state.clean ? PROBLEMS.filter((problem) => problem.severity === "warning") : PROBLEMS;
   const errorCount = problems.filter((problem) => problem.severity === "error").length;
@@ -162,7 +205,11 @@ function build(state: State): Overview {
     totals: state.totals,
     lines,
     differences: state.differences,
-    claims: null,
+    claims:
+      state.switch?.state === "approved"
+        ? { invited: 1909, claimedAndConfirmed: 0, saidSomethingIsWrong: 0, notYetClaimed: 1909, cannotBeInvited: 0 }
+        : null,
+    switch: state.switch,
     blockers,
     allowed: state.allowed,
   };
@@ -176,19 +223,63 @@ const nextId = (prefix: string) => `${prefix}-${++counter}`;
  * with problems, or that trial with Finvest 1.0 totals a colleague entered and
  * nobody has confirmed. `allowed` is everything by default, like an admin.
  */
-export function createStubMigrationApi(delayMs = 150, start: "empty" | "imported" | "unconfirmed" = "imported", allowed: readonly Allowed[] = ["run_trial", "enter_totals", "sign_off"]): MigrationApi {
+const EVERYTHING: readonly Allowed[] = [
+  "run_trial",
+  "propose_switch",
+  "propose_resolution",
+  "enter_totals",
+  "sign_off",
+  "decide_switch",
+  "decide_resolution",
+];
+
+/** A second trial that came back clean, with every total and difference signed off. */
+function cleared(allowed: readonly Allowed[], proposal: Switch | null): State {
+  const signedOff = (item: Difference): Difference => ({ ...item, signedOff: approvedBy(`sign-off-${item.key}`, ROUNDING) });
+  const lineSignOffs: Record<string, SignOff> = {};
+  const imported = newTotals(true);
+  for (const line of LINES) {
+    if (BigInt(oldFigure(SAMPLE_TOTALS, line)) !== BigInt(imported[line.key]!)) lineSignOffs[line.key] = approvedBy(`sign-off-${line.key}`, ROUNDING);
+  }
+  return { trialsRun: 2, asOf: "2026-11-12", clean: true, totals: SAMPLE_TOTALS, differences: DIFFERENCES.map(signedOff), lineSignOffs, switch: proposal, allowed };
+}
+
+/**
+ * `start` picks what the screen opens with: nothing imported yet, a first trial
+ * with problems, that trial with Finvest 1.0 totals a colleague entered and
+ * nobody has confirmed, every check cleared with a switch a colleague proposed,
+ * the same where approving finds a phone number that already has an account,
+ * or an approved switch with clients it could not carry over. `allowed` is
+ * everything by default, like an admin.
+ */
+export function createStubMigrationApi(
+  delayMs = 150,
+  start: "empty" | "imported" | "unconfirmed" | "cleared" | "taken" | "switched" = "imported",
+  allowed: readonly Allowed[] = EVERYTHING,
+): MigrationApi {
   const state: State =
     start === "empty"
-      ? { trialsRun: 0, asOf: "2026-11-12", clean: false, totals: null, differences: [], lineSignOffs: {}, allowed }
-      : {
-          trialsRun: 1,
-          asOf: "2026-11-12",
-          clean: false,
-          totals: start === "unconfirmed" ? { ...SAMPLE_TOTALS, confirmedBy: null } : SAMPLE_TOTALS,
-          differences: DIFFERENCES.map((item) => ({ ...item })),
-          lineSignOffs: { "total:interest_before_tax:USD": approvedBy("sign-off-usd", ROUNDING) },
-          allowed,
-        };
+      ? { trialsRun: 0, asOf: "2026-11-12", clean: false, totals: null, differences: [], lineSignOffs: {}, switch: null, allowed }
+      : start === "cleared" || start === "taken"
+        ? cleared(allowed, PROPOSED_SWITCH)
+        : start === "switched"
+          ? cleared(allowed, {
+              ...PROPOSED_SWITCH,
+              state: "approved",
+              decidedBy: "Grace Finance",
+              clientsCarried: 1912,
+              notCarried: NOT_CARRIED.map((client) => ({ ...client })),
+            })
+          : {
+              trialsRun: 1,
+              asOf: "2026-11-12",
+              clean: false,
+              totals: start === "unconfirmed" ? { ...SAMPLE_TOTALS, confirmedBy: null } : SAMPLE_TOTALS,
+              differences: DIFFERENCES.map((item) => ({ ...item })),
+              lineSignOffs: { "total:interest_before_tax:USD": approvedBy("sign-off-usd", ROUNDING) },
+              switch: null,
+              allowed,
+            };
 
   const wait = (change: () => void): Promise<Overview> =>
     new Promise((resolve, reject) =>
@@ -271,5 +362,50 @@ export function createStubMigrationApi(delayMs = 150, start: "empty" | "imported
         if (signOff.state !== "proposed") throw new MigrationError("conflict");
         setSignOff(key, { ...signOff, state: approve ? "approved" : "rejected", decidedBy: YOU, decisionReason: reason?.trim() || null });
       }),
+    proposeSwitch: () =>
+      wait(() => {
+        may("propose_switch");
+        if (build(state).blockers.length > 0 || (state.switch && state.switch.state !== "rejected")) throw new MigrationError("conflict");
+        state.switch = { ...PROPOSED_SWITCH, id: nextId("switch"), proposedBy: YOU, proposedAt: new Date().toISOString(), mine: true };
+      }),
+    decideSwitch: (switchId: string, approve: boolean, reason?: string) =>
+      wait(() => {
+        may("decide_switch");
+        const current = state.switch;
+        if (!current || current.id !== switchId || current.state !== "proposed") throw new MigrationError("conflict");
+        if (current.mine) throw new MigrationError("forbidden");
+        // `taken`: a phone number in the sheets already has an account, so nothing is created.
+        if (approve && start === "taken") throw new MigrationError("phone_taken");
+        state.switch = approve
+          ? { ...current, state: "approved", decidedBy: YOU, clientsCarried: 1912, notCarried: NOT_CARRIED.slice(0, 1).map((client) => ({ ...client })) }
+          : { ...current, state: "rejected", decidedBy: YOU, decisionReason: reason?.trim() || null };
+      }),
+    proposeResolution: (switchId: string, ref: string, action: ResolutionAction, reason: string) =>
+      wait(() => {
+        may("propose_resolution");
+        const client = state.switch?.id === switchId ? state.switch.notCarried.find((item) => item.legacyClientRef === ref) : undefined;
+        if (!client || client.state !== "noted") throw new MigrationError("conflict");
+        updateClient(ref, { state: action === "retry" ? "retry_proposed" : "close_proposed", resolutionId: nextId("resolution"), proposedBy: YOU, reason, mine: true });
+      }),
+    decideResolution: (resolutionId: string, approve: boolean) =>
+      wait(() => {
+        may("decide_resolution");
+        const client = state.switch?.notCarried.find((item) => item.resolutionId === resolutionId);
+        if (!client || (client.state !== "retry_proposed" && client.state !== "close_proposed")) throw new MigrationError("conflict");
+        if (client.mine) throw new MigrationError("forbidden");
+        if (!approve) updateClient(client.legacyClientRef, { state: "noted", resolutionId: null, proposedBy: null, reason: null, mine: false });
+        else if (client.state === "close_proposed") removeClient(client.legacyClientRef);
+        else updateClient(client.legacyClientRef, { state: "retrying" });
+      }),
   };
+
+  function updateClient(ref: string, change: Partial<NotCarried>) {
+    const current = state.switch!;
+    state.switch = { ...current, notCarried: current.notCarried.map((item) => (item.legacyClientRef === ref ? { ...item, ...change } : item)) };
+  }
+
+  function removeClient(ref: string) {
+    const current = state.switch!;
+    state.switch = { ...current, notCarried: current.notCarried.filter((item) => item.legacyClientRef !== ref) };
+  }
 }

@@ -16,10 +16,10 @@ interface TrialFormProps {
 
 type Errors = Partial<Record<"clients" | "investments" | "asOf", string | undefined>>;
 
-const FILE = "block w-full rounded-lg border border-border-strong bg-surface p-3 text-sm font-semibold text-ink file:mr-3 file:rounded-pill file:border-0 file:bg-surface-sunken file:px-3 file:py-1.5 file:font-bold";
+export const FILE = "block w-full rounded-lg border border-border-strong bg-surface p-3 text-sm font-semibold text-ink file:mr-3 file:rounded-pill file:border-0 file:bg-surface-sunken file:px-3 file:py-1.5 file:font-bold";
 
 /** Checked before anything is uploaded, so a wrong or huge file costs nothing. */
-function sheetProblem(file: File | null, missing: string): string | undefined {
+export function sheetProblem(file: File | null, missing: string): string | undefined {
   if (!file) return missing;
   if (!file.name.toLowerCase().endsWith(".csv")) return "Save the sheet as CSV first.";
   if (file.size > MAX_SHEET_BYTES) return `This sheet is larger than ${formatMegabytes(MAX_SHEET_BYTES)}. Split the export or remove columns that are not in the format.`;

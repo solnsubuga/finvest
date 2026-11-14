@@ -25,6 +25,81 @@ async function fillTrial(user: ReturnType<typeof userEvent.setup>, asOf = "2026-
 }
 
 describe("migration screen", () => {
+  it("lets a second person approve the switch a colleague proposed", async () => {
+    const { user } = renderScreen(createStubMigrationApi(0, "cleared"));
+    const panel = within((await screen.findByRole("heading", { name: "Before the switch" })).parentElement!);
+    expect(panel.getByText("Everything agrees. The switch waits for a second person.")).toBeInTheDocument();
+    expect(panel.getByText(/Proposed by Sarah Operations/)).toBeInTheDocument();
+    await user.click(panel.getByRole("button", { name: "Approve the switch" }));
+    const done = within((await screen.findByRole("heading", { name: "The switch" })).parentElement!);
+    expect(done.getByText("Accounts created").nextSibling).toHaveTextContent("1,912");
+    expect(done.getByText("Approved by").nextSibling).toHaveTextContent("You");
+    const list = within(screen.getByRole("list", { name: "Clients not carried over" }));
+    expect(list.getByText("Finvest 1.0 client C-10482")).toBeInTheDocument();
+    expect(list.getByText("Needs a person")).toBeInTheDocument();
+  });
+
+  it("asks why before rejecting the switch", async () => {
+    const { user } = renderScreen(createStubMigrationApi(0, "cleared"));
+    await user.click(await screen.findByRole("button", { name: "Reject" }));
+    const form = screen.getByRole("form", { name: "Reject the switch" });
+    await user.click(within(form).getByRole("button", { name: "Reject the switch" }));
+    expect(within(form).getByText("Say why, in a sentence someone else can check.")).toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Why reject the switch"), "Wait for the month end");
+    await user.click(within(form).getByRole("button", { name: "Reject the switch" }));
+    expect(await screen.findByText("Wait for the month end")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Propose the switch again" })).toBeInTheDocument();
+  });
+
+  it("checks both sheets before proposing the switch", async () => {
+    const { user } = renderScreen(createStubMigrationApi(0, "cleared"));
+    await user.click(await screen.findByRole("button", { name: "Reject" }));
+    await user.type(screen.getByLabelText("Why reject the switch"), "Wrong day");
+    await user.click(screen.getByRole("button", { name: "Reject the switch" }));
+    await user.click(await screen.findByRole("button", { name: "Propose the switch again" }));
+    const form = screen.getByRole("form", { name: "Propose the switch" });
+    await user.click(within(form).getByRole("button", { name: "Propose the switch" }));
+    expect(within(form).getByText("Choose the clients sheet.")).toBeInTheDocument();
+    expect(within(form).getByText("Choose the investments sheet.")).toBeInTheDocument();
+    await user.upload(within(form).getByLabelText("Clients sheet (CSV)"), csv("clients.csv"));
+    await user.upload(within(form).getByLabelText("Investments sheet (CSV)"), csv("investments.csv"));
+    await user.click(within(form).getByRole("button", { name: "Propose the switch" }));
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Propose the switch" })).not.toBeInTheDocument());
+    expect(screen.getByText("Someone else approves it.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Approve the switch" })).not.toBeInTheDocument();
+  });
+
+  it("retries or closes a client the switch could not carry over, with a second person", async () => {
+    const { user } = renderScreen(createStubMigrationApi(0, "switched"));
+    const list = within(await screen.findByRole("list", { name: "Clients not carried over" }));
+    const row = (ref: string) => within(list.getByText(`Finvest 1.0 client ${ref}`).closest("li")!);
+
+    // Noted: anyone who may propose says what was put right.
+    expect(row("C-10482").getByText(/identity document belongs to another Finvest 2.0 client/)).toBeInTheDocument();
+    await user.click(row("C-10482").getByRole("button", { name: "Retry" }));
+    await user.type(row("C-10482").getByLabelText("What was put right for client C-10482"), "The other account was closed");
+    await user.click(row("C-10482").getByRole("button", { name: "Propose a retry" }));
+    expect(await row("C-10482").findByText("Retry awaiting approval")).toBeInTheDocument();
+    expect(row("C-10482").getByText("Someone else approves it.")).toBeInTheDocument();
+    expect(row("C-10482").queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+
+    // A colleague's retry: approve it, and the worker tries again.
+    expect(row("C-11930").getByText(/rate for July was corrected/)).toBeInTheDocument();
+    await user.click(row("C-11930").getByRole("button", { name: "Approve" }));
+    expect(await row("C-11930").findByText("Retrying")).toBeInTheDocument();
+
+    // Your own close waits for someone else, and says how many times the client was tried.
+    expect(row("C-12007").getByText(/Tried 2 times/)).toBeInTheDocument();
+    expect(row("C-12007").queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+  });
+
+  it("shows a client noted to someone who may neither propose nor decide, with no buttons", async () => {
+    renderScreen(createStubMigrationApi(0, "switched", []));
+    const list = within(await screen.findByRole("list", { name: "Clients not carried over" }));
+    expect(list.getAllByRole("listitem")).toHaveLength(3);
+    expect(list.queryAllByRole("button")).toEqual([]);
+  });
+
   it("compares Finvest 1.0 with the latest trial, line by line", async () => {
     renderScreen();
     const table = await screen.findByRole("table", { name: "Finvest 1.0 totals compared with the trial import" });
@@ -93,7 +168,7 @@ describe("migration screen", () => {
     expect(await screen.findByText("Claimed and confirmed")).toBeInTheDocument();
     expect(screen.getByText("1,204")).toBeInTheDocument();
     expect(screen.getByText("699")).toBeInTheDocument();
-    expect(screen.getByText("Everything agrees. The switch can be scheduled.")).toBeInTheDocument();
+    expect(screen.getByText("Everything agrees. The switch can be proposed.")).toBeInTheDocument();
   });
 
   it("starts empty and explains what to do", async () => {

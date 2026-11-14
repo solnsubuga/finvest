@@ -233,4 +233,85 @@ describe("migration over HTTP", () => {
     expect(error).toMatchObject({ code: "not_confirmed" });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it("reads the switch and the clients it could not carry over, with whose proposal is whose", async () => {
+    const json: OverviewJson = {
+      ...OVERVIEW,
+      switch: {
+        id: "-Nswitch0000000001",
+        trial_id: "-Ntrial00000000001",
+        as_of: "2026-11-12",
+        proposed_by: ME,
+        proposed_at: "2026-11-14T05:00:00Z",
+        state: "approved",
+        decided_by: GRACE,
+        decision_reason: null,
+        clients_carried: 1912,
+        not_carried: [
+          {
+            legacy_client_ref: "C-1",
+            code: "document_taken",
+            attempt: 2,
+            noted_at: "2026-11-14T06:00:00Z",
+            state: "close_proposed",
+            resolution_id: "-Nresolution000001",
+            proposed_by: DANIEL,
+            reason: "Same person",
+          },
+          { legacy_client_ref: "C-2", code: "refused", attempt: 1, noted_at: "2026-11-14T06:01:00Z", state: "noted", resolution_id: null, proposed_by: null, reason: null },
+        ],
+      },
+    };
+    const overview = await apiWith(vi.fn<typeof globalThis.fetch>(() => reply(200, json))).getOverview();
+    expect(overview.switch).toMatchObject({ proposedBy: "You", decidedBy: "Grace Finance", mine: true, clientsCarried: 1912 });
+    expect(overview.switch?.notCarried).toEqual([
+      {
+        legacyClientRef: "C-1",
+        code: "document_taken",
+        attempt: 2,
+        notedAt: "2026-11-14T06:00:00Z",
+        state: "close_proposed",
+        resolutionId: "-Nresolution000001",
+        proposedBy: "A colleague",
+        reason: "Same person",
+        mine: false,
+      },
+      expect.objectContaining({ legacyClientRef: "C-2", proposedBy: null, mine: false }),
+    ]);
+    // An older backend sends no switch at all.
+    expect((await apiWith(vi.fn<typeof globalThis.fetch>(() => reply(200, OVERVIEW))).getOverview()).switch).toBeNull();
+  });
+
+  it("proposes and decides the switch and each resolution, then reads the overview again", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>((url) => (String(url).endsWith("/staff/migration") ? reply(200, OVERVIEW) : reply(200, {})));
+    const api = apiWith(fetch);
+    const sheet = (text: string) => ({ size: text.length, text: () => Promise.resolve(text) }) as unknown as File;
+    await api.proposeSwitch({ clients: sheet("a\n"), investments: sheet("b\n") });
+    await api.decideSwitch("-Nswitch0000000001", true);
+    await api.proposeResolution("-Nswitch0000000001", "C-1", "retry", "Fixed the name");
+    await api.decideResolution("-Nresolution000001", false, "Not yet");
+    const calls = fetch.mock.calls
+      .map(([url, init]) => [String(url), init?.body ? JSON.parse(String(init.body)) : null])
+      .filter(([url]) => !String(url).endsWith("/staff/migration"));
+    expect(calls).toEqual([
+      ["https://api.test/staff/migration/switch", { clients_csv: "a\n", investments_csv: "b\n" }],
+      ["https://api.test/staff/migration/switch/-Nswitch0000000001/decision", { approve: true, reason: null }],
+      ["https://api.test/staff/migration/switch/-Nswitch0000000001/resolutions", { legacy_client_ref: "C-1", action: "retry", reason: "Fixed the name" }],
+      ["https://api.test/staff/migration/switch/resolutions/-Nresolution000001/decision", { approve: false, reason: "Not yet" }],
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(8);
+  });
+
+  it.each([
+    ["not_the_trial_sheet", ["clients_csv"], "validation_failed", "not_the_trial_sheet"],
+    ["missing", ["clients", 4, "phone"], "validation_failed", "phone_missing"],
+    ["phone_taken", ["clients", 4, "phone"], "phone_taken", "phone_taken"],
+  ])("says why the switch was refused: %s", async (field, path, code, expected) => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      reply(422, { request_id: "req", error: { code, message: code, fields: [{ field_path: path, code: field }] } }),
+    );
+    const error = await apiWith(fetch).decideSwitch("-Nswitch0000000001", true).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code: expected });
+    expect(migrationErrorMessage(error)).not.toMatch(/could not reach/);
+  });
 });

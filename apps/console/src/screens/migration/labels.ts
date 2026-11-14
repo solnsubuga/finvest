@@ -182,3 +182,19 @@ export function formatDay(day: string): string {
 export function formatMoment(instant: string): string {
   return MOMENT.format(new Date(instant));
 }
+
+/** Why the worker could not carry a client over, by the code it noted. */
+const NOT_CARRIED_LABELS: Record<string, string> = {
+  document_taken: "Their identity document belongs to another Finvest 2.0 client",
+  investment_interest_differs: "An investment's interest is not what the finance check showed",
+  invalid_name: "Their name is not accepted by the identity check",
+  invalid_document_number: "Their document number is not accepted by the identity check",
+  in_the_future: "Their date of birth is in the future",
+  under_age: "They are under 18",
+};
+
+export function notCarriedLabel(code: string): string {
+  if (NOT_CARRIED_LABELS[code]) return NOT_CARRIED_LABELS[code];
+  if (code.startsWith("investment_")) return `An investment could not be opened (${code.slice("investment_".length)})`;
+  return `Refused (${code})`;
+}

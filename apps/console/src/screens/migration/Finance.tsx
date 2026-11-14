@@ -251,7 +251,7 @@ function items(overview: Overview): Item[] {
   return [...lines, ...investments];
 }
 
-function ReasonForm({ label, submit, busy, onSubmit, onCancel }: { label: string; submit: string; busy: boolean; onSubmit: (reason: string) => void; onCancel: () => void }) {
+export function ReasonForm({ label, submit, busy, onSubmit, onCancel }: { label: string; submit: string; busy: boolean; onSubmit: (reason: string) => void; onCancel: () => void }) {
   // The form is named by its button, so the reason box keeps the question as its own label.
   const id = useId();
   const [reason, setReason] = useState("");
