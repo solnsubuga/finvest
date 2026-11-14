@@ -20,7 +20,7 @@ from app.infrastructure.logging import configure_logging
 from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
-from app.modules.documents.service import MONTHLY_KIND
+from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
@@ -117,6 +117,14 @@ def schedules() -> list[Schedule]:
             name="documents.monthly_statements",
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
+            max_age=timedelta(hours=20),
+        ),
+        # Closes document emails still queued a week after their document was ready, whose
+        # job expired or failed, so the record says they were never sent.
+        Schedule(
+            name="documents.expire_emails",
+            trigger=CronTrigger(hour=4, minute=40, timezone=KAMPALA),
+            kind=EXPIRE_EMAILS_KIND,
             max_age=timedelta(hours=20),
         ),
         # Screens again every approved client whose last screen is a month old, and gives up on
