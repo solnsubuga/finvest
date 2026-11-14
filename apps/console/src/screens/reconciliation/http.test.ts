@@ -44,8 +44,9 @@ const LINE = {
   narrative: "TRANSFER FROM A CLIENT",
 };
 
-function transfer(review: Record<string, unknown> | null, status = "in_review") {
+function transfer(review: Record<string, unknown> | null, status = "in_review", usedBefore: unknown[] = []) {
   return {
+    receipt_used_before: usedBefore,
     payment: { ...PAYMENT, status },
     client_id: "-Nclient00000000000A",
     receipt_link: { url: "https://files.test/receipt", expires_at: "2026-11-14T10:05:00Z" },
@@ -105,6 +106,36 @@ describe("bank transfers over HTTP", () => {
     expect(mine.review).toMatchObject({ reviewedByYou: true, approvedByYou: null });
     expect(mine.receipt).toEqual({ contentType: "application/pdf", byteSize: 120_000, url: "https://files.test/receipt" });
     expect(mine.matchedLine?.reference).toBe("FT2631600123");
+  });
+
+  it("says when the receipt's file or transaction number was handed in before", async () => {
+    const earlier = {
+      payment_id: "-Npayment0000000000Z",
+      client_id: "-Nclient00000000000Z",
+      status: "failed",
+      submitted_at: "2026-11-05T10:00:00Z",
+      same_file: true,
+      same_transaction_number: false,
+    };
+    const found = await api(vi.fn<typeof globalThis.fetch>(() => reply(200, transfer(null, "in_review", [earlier])))).getTransfer(
+      PAYMENT.id,
+    );
+    expect(found.usedBefore).toBe(true);
+    expect(found.clientId).toBe("-Nclient00000000000A");
+    expect(found.earlierUses).toEqual([
+      {
+        paymentId: "-Npayment0000000000Z",
+        clientId: "-Nclient00000000000Z",
+        status: "failed",
+        submittedAt: "2026-11-05T10:00:00Z",
+        sameFile: true,
+        sameTransactionNumber: false,
+      },
+    ]);
+    const queue = await api(
+      vi.fn<typeof globalThis.fetch>(() => reply(200, { items: [{ ...PAYMENT, receipt_used_before: true }], next_before: null })),
+    ).listQueue();
+    expect(queue[0]?.usedBefore).toBe(true);
   });
 
   it("sends a match, a refusal and an approval with the idempotency key", async () => {

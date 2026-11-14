@@ -872,3 +872,55 @@ async def test_receipts_and_reviews_are_kept_as_written_and_added_only_by_the_ri
                 ),
                 {"id": fresh.deposit.id},
             )
+
+
+# A receipt used before
+
+
+async def test_staff_are_told_when_a_receipt_file_or_transaction_was_used_before(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    number = f"FT{secrets.randbelow(10**10):010d}"
+    file = receipt_file()
+    first = await submit(
+        app_database, fake_clock, amount(), file=file, receipt=details(1, transaction_number=number)
+    )
+    # The same file from another client, with a new number.
+    again = await submit(
+        app_database,
+        fake_clock,
+        amount(),
+        file=file,
+        receipt=details(1, transaction_number=f"FT{secrets.randbelow(10**10):010d}"),
+    )
+    # A new file naming the same transaction, typed differently.
+    retyped = f"{number[:4].lower()} {number[4:8]}-{number[8:]}"
+    third = await submit(
+        app_database, fake_clock, amount(), receipt=details(1, transaction_number=retyped)
+    )
+    fresh = await submit(
+        app_database,
+        fake_clock,
+        amount(),
+        receipt=details(1, transaction_number=f"FT{secrets.randbelow(10**10):010d}"),
+    )
+    async with app_database.actor_transaction(staff()) as session:
+        uses = {
+            transfer.deposit.id: await bank.earlier_uses(session, staff(), transfer.deposit.id)
+            for transfer in (first, again, third, fresh)
+        }
+    assert [
+        (use.deposit_id, use.same_file, use.same_transaction_number)
+        for use in uses[first.deposit.id]
+    ] == [(again.deposit.id, True, False), (third.deposit.id, False, True)]
+    assert [(u.deposit_id, u.same_file) for u in uses[again.deposit.id]] == [
+        (first.deposit.id, True)
+    ]
+    assert [(u.deposit_id, u.client_id, u.status) for u in uses[third.deposit.id]] == [
+        (first.deposit.id, first.deposit.client_id, S.IN_REVIEW)
+    ]
+    assert uses[fresh.deposit.id] == []
+    # Only staff are told. A client cannot learn of anyone else's receipt.
+    async with app_database.actor_transaction(client()) as session:
+        with pytest.raises(ApplicationError):
+            await bank.earlier_uses(session, client(), first.deposit.id)

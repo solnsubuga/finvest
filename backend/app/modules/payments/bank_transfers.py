@@ -593,6 +593,54 @@ async def matches_awaiting_approval(
     ]
 
 
+@dataclass(frozen=True, slots=True)
+class EarlierUse:
+    """Another deposit whose receipt is the same file, or names the same bank transaction."""
+
+    deposit_id: str
+    client_id: str
+    status: DepositStatus
+    created_at: datetime
+    same_file: bool
+    same_transaction_number: bool
+
+
+# The transaction number as people retype it: no case, spaces, dots, slashes or dashes. The
+# index in migration 0431 is on this same expression, so it must stay written exactly so.
+_EARLIER_USES = text(
+    "WITH me AS (SELECT deposit_id, sha256, "
+    "upper(regexp_replace(transaction_number, '[ ./-]', '', 'g')) AS number "
+    "FROM payment_bank_receipts WHERE deposit_id = :id) "
+    "SELECT r.deposit_id, r.client_id, d.status, r.created_at, r.sha256 = me.sha256 AS same_file, "
+    "upper(regexp_replace(r.transaction_number, '[ ./-]', '', 'g')) = me.number AS same_number "
+    "FROM me JOIN payment_bank_receipts r ON r.deposit_id <> me.deposit_id AND ("
+    "r.sha256 = me.sha256 "
+    "OR upper(regexp_replace(r.transaction_number, '[ ./-]', '', 'g')) = me.number) "
+    "JOIN payment_deposits d ON d.id = r.deposit_id "
+    "ORDER BY r.created_at, r.deposit_id LIMIT 20"
+)
+
+
+async def earlier_uses(session: AsyncSession, staff: Actor, deposit_id: str) -> list[EarlierUse]:
+    """Other deposits, by any client and in any state, handed in with the same receipt file or
+    the same bank transaction number. A fraud signal for the person checking the transfer: it
+    never credits or refuses anything by itself. At most 20, oldest first."""
+    if staff.kind != "staff":
+        raise ApplicationError("forbidden")
+    rows = await session.execute(_EARLIER_USES, {"id": deposit_id})
+    return [
+        EarlierUse(
+            deposit_id=row.deposit_id,
+            client_id=row.client_id,
+            status=DepositStatus(row.status),
+            created_at=row.created_at,
+            same_file=bool(row.same_file),
+            same_transaction_number=bool(row.same_number),
+        )
+        for row in rows
+    ]
+
+
 async def record_opened(session: AsyncSession, staff: Actor, deposit_id: str, clock: Clock) -> None:
     """Write to the audit trail that a member of staff opened a transfer. Its receipt and the
     bank's narrative can name the client and the sender, so each look is recorded."""

@@ -2,6 +2,7 @@ import {
   BankTransferError,
   type Amount,
   type BankTransfersApi,
+  type EarlierUse,
   type QueueItem,
   type RefuseReason,
   type Review,
@@ -34,6 +35,7 @@ interface Stored {
   status: "in_review" | "confirmed" | "failed";
   review: (Omit<Review, "reviewedByYou" | "approvedByYou"> & { by: string; approvedBy: string | null; lineId: string | null }) | null;
   lines: StatementLine[];
+  earlierUses?: EarlierUse[];
 }
 
 function ago(minutes: number, now: Date): string {
@@ -85,6 +87,17 @@ function sample(now: Date, me: string): Stored[] {
       status: "in_review",
       review: null,
       lines: [],
+      // The same receipt was handed in last week by another client, and refused.
+      earlierUses: [
+        {
+          paymentId: "-OdBank0000000000Z9A",
+          clientId: "-OdClient00000000Z9A",
+          status: "failed",
+          submittedAt: ago(8 * 24 * 60, now),
+          sameFile: true,
+          sameTransactionNumber: true,
+        },
+      ],
     },
     {
       id: "-OdBank000000000003A",
@@ -182,6 +195,7 @@ export function createStubBankTransfersApi(me: string, delayMs = 150, which: Stu
     return {
       id: stored.id,
       investmentId: stored.investmentId,
+      clientId: `-OdClient${stored.id.slice(7)}`,
       amount: stored.amount,
       sentOn: stored.sentOn,
       bankName: stored.bankName,
@@ -202,6 +216,8 @@ export function createStubBankTransfersApi(me: string, delayMs = 150, which: Stu
       matchedLine: review?.lineId ? (stored.lines.find((found) => found.id === review.lineId) ?? null) : null,
       candidates: reviewed ? [] : stored.lines.filter((found) => !used.has(found.id)),
       allowed: allowed(stored),
+      usedBefore: (stored.earlierUses ?? []).length > 0,
+      earlierUses: stored.earlierUses ?? [],
     };
   }
 
@@ -220,8 +236,16 @@ export function createStubBankTransfersApi(me: string, delayMs = 150, which: Stu
         transfers
           .filter((stored) => stored.status === "in_review")
           .map((stored) => {
-            const { id, amount, sentOn, bankName, submittedAt } = detail(stored);
-            return { id, amount, sentOn, bankName, submittedAt, stage: which === "unsorted" ? ("in_review" as const) : stage(stored) };
+            const { id, amount, sentOn, bankName, submittedAt, usedBefore } = detail(stored);
+            return {
+              id,
+              amount,
+              sentOn,
+              bankName,
+              submittedAt,
+              usedBefore,
+              stage: which === "unsorted" ? ("in_review" as const) : stage(stored),
+            };
           })
           .sort((a, b) => b.submittedAt.localeCompare(a.submittedAt)),
       ),

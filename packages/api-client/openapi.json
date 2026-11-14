@@ -1690,6 +1690,10 @@
               }
             ]
           },
+          "receipt_used_before": {
+            "title": "Receipt Used Before",
+            "type": "boolean"
+          },
           "status": {
             "enum": [
               "created",
@@ -1715,7 +1719,8 @@
           "receipt",
           "created_at",
           "confirmed_at",
-          "awaiting"
+          "awaiting",
+          "receipt_used_before"
         ],
         "title": "BankTransferInQueue",
         "type": "object"
@@ -1760,6 +1765,13 @@
               }
             ]
           },
+          "receipt_used_before": {
+            "items": {
+              "$ref": "#/components/schemas/EarlierUseOut"
+            },
+            "title": "Receipt Used Before",
+            "type": "array"
+          },
           "review": {
             "anyOf": [
               {
@@ -1774,6 +1786,7 @@
         "required": [
           "payment",
           "client_id",
+          "receipt_used_before",
           "receipt_link",
           "review",
           "matched_line",
@@ -7492,6 +7505,53 @@
         ],
         "title": "DocumentType",
         "type": "string"
+      },
+      "EarlierUseOut": {
+        "additionalProperties": false,
+        "description": "Another deposit handed in with the same receipt file or bank transaction number.",
+        "properties": {
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "payment_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Payment Id",
+            "type": "string"
+          },
+          "same_file": {
+            "title": "Same File",
+            "type": "boolean"
+          },
+          "same_transaction_number": {
+            "title": "Same Transaction Number",
+            "type": "boolean"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "client_id",
+          "status",
+          "submitted_at",
+          "same_file",
+          "same_transaction_number"
+        ],
+        "title": "EarlierUseOut",
+        "type": "object"
       },
       "EmailChange": {
         "additionalProperties": false,

@@ -32,6 +32,11 @@ export function Queue({ items, selectedId, onSelect }: QueueProps) {
               <span className={cn("mt-1 text-xs font-bold", item.stage === "to_match" || item.stage === "in_review" ? "text-warning-text" : "text-muted")}>
                 {STAGE_LABELS[item.stage]}
               </span>
+              {item.usedBefore ? (
+                <span className="mt-1.5 self-start rounded-pill bg-danger-surface px-2.5 py-0.5 text-xs font-bold text-danger">
+                  Receipt used before
+                </span>
+              ) : null}
             </button>
           </li>
         );
