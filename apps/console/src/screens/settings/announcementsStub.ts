@@ -65,6 +65,8 @@ export function createStubAnnouncementsApi(
 
   return {
     list: () => settle(() => rows.map(view)),
+    // Most clients keep news to push, as the defaults say.
+    reach: () => settle(() => ({ clients: SAMPLE_CLIENTS, sms: 96, email: 310 })),
     propose: (input) =>
       settle(() => {
         const problems = checkAnnouncement(input);

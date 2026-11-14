@@ -200,6 +200,7 @@ Staff can tell every client something, such as an office closure, as an `announc
 
 - **Two people.** Sending is a permission of its own, `announcements.send`, apart from changing a wording, so fewer people can tell every client at once. Only the admin role holds it for now. One member of staff with it proposes a title and a message, with a reason. A different one approves or rejects it, and a rejection says why. The proposer can withdraw their own. PostgreSQL enforces that the person who decides is never the person who proposed, that a rejection has a reason, and that a decided announcement never changes. Every step is written to the audit trail.
 - **The same word rules as a wording.** The title is at most 60 characters. The message is at most 291 characters, so that "Finvest: " and the message fit one SMS send. Both may link only to finvestug.com, contain no percent sign and no braces, and the message uses only basic letters, digits and punctuation.
+- **Who it reaches, before approving.** The console shows the approver how many active clients an approval sends it to, and how many of them chose SMS and email for news, from `GET /staff/announcements/reach`. Every one gets it in the app, and by push where they have the app. The SMS and email counts follow each client's choices, or the default for news (push only); a client with no email address still counts among those who chose email.
 - **Sending.** Approving queues the sending in the same transaction. The worker tells active clients 500 at a time, in ID order, with one job per page. Each page commits together with its job and queues the next page. The notification key is the announcement's ID, so a page that runs twice tells nobody twice. Clients who are locked or closed, and accounts carried over from Finvest 1.0 that have not been claimed, are not told.
 - **Nothing is deleted.** The list shows the latest 50 announcements with how many clients each has reached.
 
@@ -217,6 +218,7 @@ Staff can tell every client something, such as an office closure, as an `announc
 | `POST /staff/notification-wordings/{event}/proposals` | Staff with `wordings.change` | Proposes new words, with a reason |
 | `POST /staff/notification-wordings/proposals/{id}/decision` | Staff with `wordings.change` | `approved` or `rejected` by someone else, `withdrawn` by the proposer |
 | `GET /staff/announcements` | Staff with `settings.view` | The latest announcements, any waiting for a second person, and how many clients each has reached |
+| `GET /staff/announcements/reach` | Staff with `settings.view` | How many clients an announcement approved now reaches, and how many of them chose SMS and email for news |
 | `POST /staff/announcements` | Staff with `announcements.send` | Proposes a title and a message, with a reason |
 | `POST /staff/announcements/{id}/decision` | Staff with `announcements.send` | `approved`, which starts sending, or `rejected` with a reason, by someone else, or `withdrawn` by the proposer |
 | `POST /webhooks/resend` | Resend's webhook, by Svix signature | One Resend delivery event. See "Email delivery events". |
