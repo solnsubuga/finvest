@@ -18,6 +18,8 @@ export type RejectionReason =
   | "proof_wrong_account"
   | "proof_wrong_document"
   | "suspected_fraud";
+/** A refusal staff never choose: the worker refused a number its network holds no name for. */
+export type ShownRejection = RejectionReason | "network_name_unavailable";
 export type Currency = "UGX" | "USD";
 
 /** An amount in the smallest unit of its currency. Never a float. */
@@ -51,7 +53,12 @@ export interface PayoutAccount {
   proofKind: ProofKind | null;
   /** Null until the first person checks it. With a check it waits for a different person. */
   check: AccountCheck | null;
-  rejectionReason: RejectionReason | null;
+  /**
+   * A mobile money number's proof: the name its network holds, as ioTec Verify gave it. A check
+   * of a number is recorded with this name; nobody types one. Null for a bank account.
+   */
+  networkName: string | null;
+  rejectionReason: ShownRejection | null;
   approvedBy: string | null;
   approvedAt: string | null;
   /** When it can first be paid: 24 hours after the approval. */
@@ -69,7 +76,8 @@ export interface PayoutAccountDetail extends PayoutAccount {
 }
 
 export interface NewCheck {
-  proofName: string;
+  /** The name read on the proof. Null for a mobile money number, checked with `networkName`. */
+  proofName: string | null;
   /** Needed for a bank statement, ignored otherwise. */
   statementDate: string | null;
   reason: string;
@@ -142,6 +150,8 @@ export type ReviewQueueErrorCode =
   | "statement_date_required"
   | "statement_too_old"
   | "proof_kind_not_accepted"
+  | "proof_name_required"
+  | "proof_name_from_network"
   | "client_not_verified"
   | "destination_not_checked"
   | "account_in_use"
@@ -176,6 +186,9 @@ const MESSAGES: Record<ReviewQueueErrorCode, string> = {
   statement_date_required: "Give the date printed on the bank statement.",
   statement_too_old: "The statement is more than three calendar months old. Refuse the proof as too old.",
   proof_kind_not_accepted: "This kind of proof is not accepted for this account. Refuse the proof.",
+  proof_name_required: "Type the name exactly as the proof shows it.",
+  proof_name_from_network:
+    "A mobile money number is checked with the name its network holds. It has been reloaded: record the check without typing a name.",
   client_not_verified: "This client has no approved identity check, so the account cannot be checked yet.",
   destination_not_checked: "This account has no check to approve. It has been reloaded.",
   account_in_use:

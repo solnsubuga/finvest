@@ -72,21 +72,38 @@ describe("review queue: payout accounts", () => {
     expect(within(review).getByText(/Approve only if you judge it is the same person/)).toBeInTheDocument();
   });
 
-  it("refuses a name that is not the client's, and records one that is", async () => {
-    const { user } = renderScreen();
+  it("checks a number against the name the network holds, with no name to type", async () => {
+    const api = stub();
+    const check = vi.spyOn(api, "check");
+    const { user } = renderScreen({ api });
     const review = await openAccount(user, "Amara Nakato");
-    await user.type(within(review).getByLabelText("Name on the proof"), "Amara Atim");
-    await user.type(within(review).getByLabelText("Reason for your decision"), "Name the network holds");
+    expect(within(review).getByText("Registered name on the number")).toBeInTheDocument();
+    expect(within(review).getByText("AMARA NAKATO", { selector: "dd" })).toBeInTheDocument();
+    expect(within(review).queryByLabelText("Name on the proof")).not.toBeInTheDocument();
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Network name is the ID name");
     await user.click(within(review).getByRole("button", { name: "Record the check" }));
-    expect(await within(review).findByRole("alert")).toHaveTextContent("A different name can never be approved");
-
-    await user.clear(within(review).getByLabelText("Name on the proof"));
-    await user.type(within(review).getByLabelText("Name on the proof"), "Nakato Amara");
-    await user.click(within(review).getByRole("button", { name: "Record the check" }));
+    expect(check).toHaveBeenCalledWith("sample-account-amara", expect.objectContaining({ proofName: null }));
     const updated = await screen.findByRole("article", { name: "Payout account for Amara Nakato" });
     expect(await within(updated).findByText("Checked by you")).toBeInTheDocument();
     expect(within(updated).getByText(/You made this check, so a different person must approve it/)).toBeInTheDocument();
     expect(within(updated).queryByRole("tab", { name: "Approve the check" })).not.toBeInTheDocument();
+  });
+
+  it("refuses a typed name that is not the client's, and records one that is", async () => {
+    const { user } = renderScreen();
+    const review = await openAccount(user, "Peter Okello");
+    await user.click(within(review).getByRole("tab", { name: "Check again" }));
+    await user.type(within(review).getByLabelText("Name on the proof"), "Peter Atim");
+    await user.type(within(review).getByLabelText("Date on the statement"), "2026-11-01");
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Name on the statement");
+    await user.click(within(review).getByRole("button", { name: "Check again" }));
+    expect(await within(review).findByRole("alert")).toHaveTextContent("A different name can never be approved");
+
+    await user.clear(within(review).getByLabelText("Name on the proof"));
+    await user.type(within(review).getByLabelText("Name on the proof"), "Okello Peter James");
+    await user.click(within(review).getByRole("button", { name: "Check again" }));
+    const updated = await screen.findByRole("article", { name: "Payout account for Peter Okello" });
+    expect(await within(updated).findByText("Checked by you")).toBeInTheDocument();
   });
 
   it("asks for the statement date on a bank statement before sending", async () => {
@@ -127,7 +144,6 @@ describe("review queue: payout accounts", () => {
     const { user } = renderScreen();
     const review = await openAccount(user, "David Mugisha");
     expect(within(review).getByText("No approved identity check")).toBeInTheDocument();
-    await user.type(within(review).getByLabelText("Name on the proof"), "David Mugisha");
     await user.type(within(review).getByLabelText("Reason for your decision"), "Network name");
     await user.click(within(review).getByRole("button", { name: "Record the check" }));
     expect(await within(review).findByRole("alert")).toHaveTextContent("no approved identity check");

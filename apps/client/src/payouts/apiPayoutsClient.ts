@@ -29,6 +29,7 @@ export function toAccount(view: DestinationOut, banks: Bank[]): PayoutAccount {
     status: view.status,
     proofKind: view.proof_kind,
     rejectionReason: view.rejection_reason,
+    nameCheck: view.name_check ?? null,
     payableFrom: view.payable_from,
     firstPaidAt: view.first_paid_at,
     createdAt: view.created_at,
@@ -102,6 +103,9 @@ export function toPayoutsError(error: unknown): PayoutsError {
     case "conflict":
       if (codes.includes("payout_not_returned")) return new PayoutsError("not_returned");
       if (codes.includes("too_many_unconfirmed_accounts")) return new PayoutsError("too_many_unconfirmed");
+      if (codes.includes("name_check_in_progress")) return new PayoutsError("name_check_in_progress");
+      if (codes.includes("name_check_limit_reached")) return new PayoutsError("name_check_limit_reached");
+      if (codes.includes("client_not_verified")) return new PayoutsError("id_not_approved");
       // A conflict with no reason is the same account saved twice. Any other reason means the
       // account is no longer at the step the screen showed.
       return new PayoutsError(codes.length === 0 ? "already_saved" : "moved_on");
@@ -179,6 +183,16 @@ export function createApiPayoutsClient(): PayoutsClient {
           await api("POST /client/payout-destinations/{destination_id}/code/verify", {
             params: { destination_id: accountId },
             body: { code },
+          }),
+          await banksOrNone(),
+        ),
+      ),
+
+    checkNameAgain: (accountId) =>
+      wrap(async () =>
+        toAccount(
+          await api("POST /client/payout-destinations/{destination_id}/name-check", {
+            params: { destination_id: accountId },
           }),
           await banksOrNone(),
         ),
