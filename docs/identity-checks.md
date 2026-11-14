@@ -64,6 +64,8 @@ A carried-over check has no photos. So when the client claims their account, the
 - A claim check starts as a draft and goes to `needs_review` when handed in. From there staff mark it `matched` or `not_matched`, which are final, or send it back to the client (`awaiting_client`) for named photos with a message. Every decision needs a reason and is written to the audit trail.
 - Only a client whose own approved check was carried over can start one. The photos are stored and kept exactly as identity photos are, under `kyc-claims/<claim check>/<photo>`.
 - The decision is published as `kyc.claim_check_decided`, with the client, the claim check and `matched`, in the decision's own transaction. The migration module moves the claim on from that in the worker, by adding its consumer to `claims.DECIDED_CONSUMERS`. This module never writes the migration tables.
+- When staff send photos back, the client gets the same `kyc_retake_requested` notice as for an identity check, once for each hand-in. It carries no link, because notification links have no kind for a claim; the app opens the claim.
+- `not_matched` is final, and a client has one claim check. A client refused in error is not reopened here. The migration module moves their claim to staff follow-up, and staff contact the client and check their identity outside the app, as for any other claim problem (step 7 in [migration.md](migration.md)).
 - A trigger holds the same transitions and the columns each actor may change. The worker only reads.
 
 | Route | What it does |

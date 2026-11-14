@@ -83,6 +83,14 @@ async def decided_events(worker_database: Database, claim_check_id: str) -> list
         return list(rows.scalars())
 
 
+async def notices(worker_database: Database, client: Actor) -> list[str]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text("SELECT event FROM notifications WHERE client_id = :id"), {"id": client.id}
+        )
+        return list(rows.scalars())
+
+
 async def test_a_carried_over_client_hands_in_a_selfie_and_the_front_of_their_id(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
@@ -208,6 +216,7 @@ async def test_staff_ask_for_the_selfie_again_and_the_client_retakes_only_that(
     assert mine is not None
     assert (mine.missing, mine.retaken) == (["selfie"], frozenset())
     assert mine.client_message == "Your face is hidden. Please take it again."
+    assert await notices(worker_database, client) == ["kyc_retake_requested"]
 
     fake_clock.advance(minutes=2)
     with pytest.raises(ApplicationError) as error:
@@ -222,6 +231,12 @@ async def test_staff_ask_for_the_selfie_again_and_the_client_retakes_only_that(
         2,
         None,
     )
+    # Asked again after the second hand-in, the client is told again.
+    async with app_database.actor_transaction(staff) as session:
+        await claims.ask_for_photos(
+            session, staff, view.id, frozenset({PhotoKind.FRONT}), "Too blurred.", fake_clock
+        )
+    assert await notices(worker_database, client) == ["kyc_retake_requested"] * 2
 
 
 async def test_a_client_cannot_decide_and_staff_cannot_hand_in(

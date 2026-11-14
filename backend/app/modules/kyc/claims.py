@@ -37,6 +37,7 @@ from app.modules.kyc.service import (
     _message,
     _person,
 )
+from app.modules.notifications import contract as notifications
 from app.shared.actors import Actor, ActorKind
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
@@ -320,6 +321,16 @@ async def ask_for_photos(
             "client_message": _message(client_message, required=True),
             "now": clock.now(),
         },
+    )
+    # The same notice as for an identity check. Once for each submission it is sent back.
+    # No link: the notification links have no kind for a claim, and the app opens the claim.
+    await notifications.notify(
+        session,
+        event_name="kyc_retake_requested",
+        client_id=row.client_id,
+        idempotency_key=f"claim:{row.id}:{row.submission}",
+        variables={},
+        now=clock.now(),
     )
     # The message can name the client, so only the photo kinds reach the trail.
     await _audit(
