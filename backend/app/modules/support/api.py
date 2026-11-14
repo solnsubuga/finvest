@@ -400,10 +400,23 @@ class PendingOutcome(Contract):
     proposed_at: datetime
 
 
+class RejectedOutcome(Contract):
+    """The outcome a second person rejected last, and why, for the next proposal to start from."""
+
+    outcome: Outcome
+    resolution: str
+    client_accepted: bool
+    decided_by: PushId
+    decided_at: datetime
+    reason: str
+
+
 class ComplaintDetail(Contract):
     complaint: StaffComplaint
     history: list[ComplaintHistoryItem]
     pending_outcome: PendingOutcome | None
+    # Only while the latest proposal is the rejected one.
+    last_rejected: RejectedOutcome | None
 
 
 class ComplaintSummary(Contract):
@@ -622,7 +635,20 @@ async def complaint_detail(
             session, complaint_id, business_date(clock.now())
         )
         pending = await complaints.pending_outcome(session, complaint_id)
+        rejected = await complaints.last_rejected(session, complaint_id)
     return ComplaintDetail(
+        last_rejected=(
+            RejectedOutcome(
+                outcome=rejected.outcome,
+                resolution=rejected.resolution,
+                client_accepted=rejected.client_accepted,
+                decided_by=rejected.decided_by,
+                decided_at=rejected.decided_at,
+                reason=rejected.reason,
+            )
+            if rejected
+            else None
+        ),
         pending_outcome=(
             PendingOutcome(
                 id=pending.id,

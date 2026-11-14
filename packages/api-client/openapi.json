@@ -3716,6 +3716,16 @@
             "title": "History",
             "type": "array"
           },
+          "last_rejected": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RejectedOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pending_outcome": {
             "anyOf": [
               {
@@ -3730,7 +3740,8 @@
         "required": [
           "complaint",
           "history",
-          "pending_outcome"
+          "pending_outcome",
+          "last_rejected"
         ],
         "title": "ComplaintDetail",
         "type": "object"
@@ -12024,6 +12035,55 @@
           "reason"
         ],
         "title": "RejectBody",
+        "type": "object"
+      },
+      "RejectedOutcome": {
+        "additionalProperties": false,
+        "description": "The outcome a second person rejected last, and why, for the next proposal to start from.",
+        "properties": {
+          "client_accepted": {
+            "title": "Client Accepted",
+            "type": "boolean"
+          },
+          "decided_at": {
+            "format": "date-time",
+            "title": "Decided At",
+            "type": "string"
+          },
+          "decided_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Decided By",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "upheld",
+              "partly_upheld",
+              "not_upheld"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "resolution": {
+            "title": "Resolution",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "resolution",
+          "client_accepted",
+          "decided_by",
+          "decided_at",
+          "reason"
+        ],
+        "title": "RejectedOutcome",
         "type": "object"
       },
       "Rejection": {

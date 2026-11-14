@@ -115,6 +115,19 @@ class OutcomeProposal:
 
 
 @dataclass(frozen=True, slots=True)
+class RejectedOutcome:
+    """The latest outcome proposed for a complaint, when a second person rejected it."""
+
+    outcome: Outcome
+    resolution: str
+    client_accepted: bool
+    decided_by: str
+    decided_at: datetime
+    # What the second person asked to change.
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class Summary:
     open: int
     overdue: int
@@ -363,6 +376,29 @@ async def pending_outcomes(session: AsyncSession) -> list[tuple[str, OutcomeProp
 async def pending_outcome(session: AsyncSession, complaint_id: str) -> OutcomeProposal | None:
     row = (await session.execute(_PENDING, {"id": complaint_id})).one_or_none()
     return _proposal(row) if row is not None else None
+
+
+# The latest proposal, if it is the one rejected. Anything newer, pending or decided, wins.
+_LAST_PROPOSAL = text(
+    "SELECT outcome, resolution, client_accepted, status, decided_by, decided_at, "
+    "decision_reason FROM complaint_outcome_proposals WHERE complaint_id = :id "
+    "ORDER BY proposed_at DESC, id DESC LIMIT 1"
+)
+
+
+async def last_rejected(session: AsyncSession, complaint_id: str) -> RejectedOutcome | None:
+    """The outcome a second person rejected last, so the next proposal can start from it."""
+    row = (await session.execute(_LAST_PROPOSAL, {"id": complaint_id})).one_or_none()
+    if row is None or row.status != "rejected":
+        return None
+    return RejectedOutcome(
+        outcome=row.outcome,
+        resolution=row.resolution,
+        client_accepted=row.client_accepted,
+        decided_by=row.decided_by,
+        decided_at=row.decided_at,
+        reason=row.decision_reason,
+    )
 
 
 async def propose_outcome(
