@@ -143,7 +143,7 @@ export const AuthenticatorSetupView = z.object({
 });
 export type AuthenticatorSetupView = z.infer<typeof AuthenticatorSetupView>;
 
-export const AutomaticCheck = z.enum(["document_genuine", "selfie_match", "screening"]);
+export const AutomaticCheck = z.enum(["document_genuine", "selfie_match", "screening", "liveness"]);
 export type AutomaticCheck = z.infer<typeof AutomaticCheck>;
 
 export const MoneyView = z.object({
@@ -425,6 +425,7 @@ export type ClaimProgressView = z.infer<typeof ClaimProgressView>;
 export const StaffPhoto = z.object({
   id: z.string(),
   kind: PhotoKind,
+  live: z.boolean().optional(),
 });
 export type StaffPhoto = z.infer<typeof StaffPhoto>;
 

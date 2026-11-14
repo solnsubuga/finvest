@@ -18,7 +18,7 @@ from app.infrastructure.sealing import Sealer
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
-from app.modules.kyc import service
+from app.modules.kyc import liveness, service
 from app.modules.kyc.domain.checks import (
     CheckStatus,
     DocumentType,
@@ -28,6 +28,7 @@ from app.modules.kyc.domain.checks import (
     photo_matches_type,
     staff_moves,
 )
+from app.modules.kyc.domain.liveness import LivenessProvider, LivenessStatus
 from app.modules.kyc.domain.provider import AutomaticCheck, IdentityProvider, Verdict
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -85,6 +86,8 @@ class ClientPhoto(Contract):
     kind: PhotoKind
     content_type: str
     byte_size: int
+    # True for a selfie captured by a liveness check that saw a live person.
+    live: bool = False
 
 
 class ClientCheck(Contract):
@@ -133,6 +136,33 @@ class Outcome(Contract):
 class StaffPhoto(Contract):
     id: PushId
     kind: PhotoKind
+    # True for a selfie captured by a liveness check that saw a live person.
+    live: bool = False
+
+
+class LivenessAttempt(Contract):
+    """One liveness attempt. Open the `url` page while `status` is `open`."""
+
+    id: PushId
+    status: LivenessStatus
+    # The provider's page for this attempt. Only while it is open; it is the client's alone.
+    url: str | None
+    # Why it failed or did not start, as a stable code.
+    failure_code: str | None
+    # True when the face it captured became the check's selfie.
+    photo_used: bool
+    expires_at: datetime
+
+
+class LivenessState(Contract):
+    """Whether the selfie step can use a liveness check, and the latest attempt."""
+
+    # False when liveness is not switched on: a camera selfie is the only way then.
+    available: bool
+    # Why a new attempt cannot start now, such as `too_many_attempts`, or null.
+    problem: str | None
+    attempts_left: int
+    latest: LivenessAttempt | None
 
 
 class StaffCheck(QueueEntry):
@@ -202,7 +232,9 @@ def _client_check(view: service.CheckView) -> ClientCheck:
         ),
         details_confirmed=view.details_confirmed,
         photos=[
-            ClientPhoto(kind=p.kind, content_type=p.content_type, byte_size=p.byte_size)
+            ClientPhoto(
+                kind=p.kind, content_type=p.content_type, byte_size=p.byte_size, live=p.live
+            )
             for p in view.photos
         ],
         missing=view.missing,
@@ -234,7 +266,7 @@ def _staff_check(view: service.CheckView) -> StaffCheck:
         document_number_masked=mask_document_number(details.document_number) if details else None,
         date_of_birth=details.date_of_birth if details else None,
         document_expires_on=details.document_expires_on if details else None,
-        photos=[StaffPhoto(id=p.id, kind=p.kind) for p in view.photos],
+        photos=[StaffPhoto(id=p.id, kind=p.kind, live=p.live) for p in view.photos],
         automatic_checks=[
             Outcome(check=o.check, verdict=o.verdict, score=o.score) for o in view.automatic_checks
         ],
@@ -251,8 +283,22 @@ def _staff_check(view: service.CheckView) -> StaffCheck:
     )
 
 
+def _attempt(view: liveness.LivenessView) -> LivenessAttempt:
+    return LivenessAttempt(
+        id=view.id,
+        status=view.status,
+        url=view.url,
+        failure_code=view.failure_code,
+        photo_used=view.photo_used,
+        expires_at=view.expires_at,
+    )
+
+
 def create_routers(
-    sealer: Sealer | None, provider: IdentityProvider, storage: FileStorage
+    sealer: Sealer | None,
+    provider: IdentityProvider,
+    storage: FileStorage,
+    liveness_provider: LivenessProvider | None = None,
 ) -> list[APIRouter]:
     """The routes for this process. Without the data key they answer `unavailable`."""
     client_router = APIRouter(
@@ -357,6 +403,43 @@ def create_routers(
         if view is None:
             raise ApplicationError("not_found")
         return _client_check(view)
+
+    @client_router.get("/liveness")
+    async def my_liveness(client: CurrentClient, request: Request) -> LivenessState:
+        """Whether the selfie can be taken with a liveness check, and how the latest one stands.
+
+        Read it again every few seconds while the latest attempt is `starting` or `open`.
+        """
+        async with database(request).actor_transaction(client.actor) as session:
+            state = await liveness.availability(
+                session,
+                seal(),
+                client.actor,
+                clock(request),
+                provider_on=liveness_provider is not None,
+            )
+        return LivenessState(
+            available=state.available,
+            problem=state.problem,
+            attempts_left=state.attempts_left,
+            latest=None if state.latest is None else _attempt(state.latest),
+        )
+
+    @client_router.post("/liveness")
+    async def start_liveness(client: CurrentClient, request: Request) -> LivenessAttempt:
+        """Start a liveness attempt for the selfie. Any attempt still waiting is retired.
+
+        The attempt starts as `starting`. Read `GET /liveness` until it is `open`, then open its
+        page. When it passes, the face it captured is the check's selfie.
+        """
+        if liveness_provider is None:
+            raise ApplicationError("unavailable")
+        async with database(request).actor_transaction(client.actor) as session:
+            seal()  # refuse before saving anything when the data key is missing
+            view = await liveness.start(
+                session, client.actor, liveness_provider.name, clock(request)
+            )
+        return _attempt(view)
 
     @client_router.put("/details")
     async def confirm_details(

@@ -157,7 +157,9 @@ async def test_a_clean_national_id_passes_all_three_checks_and_still_goes_to_a_p
         CheckOutcome(AutomaticCheck.SELFIE_MATCH, Verdict.PASS, 93),
         CheckOutcome(AutomaticCheck.SCREENING, Verdict.PASS),
     }
-    assert decide(result.outcomes).flags == ("automatic_checks_passed",)
+    # Liveness comes from the selfie handed in, not from this adapter.
+    live = CheckOutcome(AutomaticCheck.LIVENESS, Verdict.PASS)
+    assert decide((*result.outcomes, live)).flags == ("automatic_checks_passed",)
 
 
 async def test_a_result_still_running_is_pending() -> None:
@@ -191,6 +193,7 @@ async def test_a_list_hit_a_mismatch_and_a_weak_face_match_go_to_a_person_with_r
         "document_genuine_fail",
         "selfie_match_unsure",
         "screening_fail",
+        "liveness_not_run",
     }
 
 
@@ -300,7 +303,7 @@ def test_iotec_needs_its_credentials_and_never_approves_alone(
     key = "A" * 43
     with pytest.raises(ValidationError, match="FINVEST_IOTEC_VERIFY_CLIENT_ID"):
         KycSettings(identity_data_key=key, identity_provider="iotec")
-    with pytest.raises(ValidationError, match="does not check liveness"):
+    with pytest.raises(ValidationError, match="awaits the owner"):
         KycSettings(
             identity_data_key=key,
             identity_provider="iotec",
