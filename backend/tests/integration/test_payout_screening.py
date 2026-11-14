@@ -26,6 +26,7 @@ from tests.integration.test_screening import SUBJECT, Setup
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
+from tests.support.jobs import run_due
 from tests.support.payouts import World
 
 pytestmark = pytest.mark.integration
@@ -64,9 +65,7 @@ async def work(database: Database, clock: FakeClock, setup: Setup) -> None:
     worker = Worker(
         database, {**jobs.handlers(), **release_screened(database, clock)}, WorkerConfig(), clock
     )
-    for _ in range(50):
-        if not await worker.run_once():
-            return
+    await run_due(worker)
 
 
 async def status_of(database: Database, payout_id: str) -> PayoutStatus:

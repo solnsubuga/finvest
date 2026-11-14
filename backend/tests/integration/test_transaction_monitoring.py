@@ -30,6 +30,7 @@ from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
+from tests.support.jobs import run_due
 from tests.support.payments import FakeCollections, phone, start_deposit, ugx
 from tests.support.payouts import World
 
@@ -75,10 +76,7 @@ async def cases_of(database: Database, client_id: str) -> list[tuple[str, str, s
 
 
 async def run_all(worker: Worker) -> None:
-    # The database is shared, so earlier tests' payouts may have left jobs of these kinds too.
-    for _ in range(5_000):
-        if not await worker.run_once():
-            return
+    await run_due(worker)
 
 
 async def test_a_large_confirmed_deposit_opens_one_case(
