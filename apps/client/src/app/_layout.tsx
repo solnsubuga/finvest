@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ActivityProvider } from "@/activity/ActivityProvider";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { AutoinvestProvider } from "@/autoinvest/AutoinvestProvider";
+import { ClaimProvider } from "@/claim/ClaimProvider";
 import { ConnectionProvider } from "@/connection/ConnectionProvider";
 import { DocumentsProvider } from "@/documents/DocumentsProvider";
 import { GoalsProvider } from "@/goals/GoalsProvider";
@@ -15,6 +16,7 @@ import { InsightsProvider } from "@/insights/InsightsProvider";
 import { InvestingProvider } from "@/investing/InvestingProvider";
 import { PaymentsProvider } from "@/payments/PaymentsProvider";
 import { PayoutsProvider } from "@/payouts/PayoutsProvider";
+import { OrganisationsProvider } from "@/organisations/OrganisationsProvider";
 import { ProfileProvider } from "@/profile/ProfileProvider";
 import { SupportProvider } from "@/support/SupportProvider";
 import { colors, fontAssets } from "@/theme";
@@ -39,34 +41,38 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <AuthProvider>
         <IdentityProvider>
-          <PaymentsProvider>
-            <SupportProvider>
-              <InvestingProvider>
-                <AutoinvestProvider>
-                  <InsightsProvider>
-                    <GoalsProvider>
-                      <DocumentsProvider>
-                        <PayoutsProvider>
-                          <ActivityProvider>
-                            <ProfileProvider>
-                              <ConnectionProvider>
-                                <Stack
-                                  screenOptions={{
-                                    headerShown: false,
-                                    contentStyle: { backgroundColor: colors.paper },
-                                  }}
-                                />
-                              </ConnectionProvider>
-                            </ProfileProvider>
-                          </ActivityProvider>
-                        </PayoutsProvider>
-                      </DocumentsProvider>
-                    </GoalsProvider>
-                  </InsightsProvider>
-                </AutoinvestProvider>
-              </InvestingProvider>
-            </SupportProvider>
-          </PaymentsProvider>
+          <ClaimProvider>
+            <PaymentsProvider>
+              <SupportProvider>
+                <InvestingProvider>
+                  <AutoinvestProvider>
+                    <InsightsProvider>
+                      <GoalsProvider>
+                        <DocumentsProvider>
+                          <PayoutsProvider>
+                            <ActivityProvider>
+                              <ProfileProvider>
+                                <OrganisationsProvider>
+                                  <ConnectionProvider>
+                                    <Stack
+                                      screenOptions={{
+                                        headerShown: false,
+                                        contentStyle: { backgroundColor: colors.paper },
+                                      }}
+                                    />
+                                  </ConnectionProvider>
+                                </OrganisationsProvider>
+                              </ProfileProvider>
+                            </ActivityProvider>
+                          </PayoutsProvider>
+                        </DocumentsProvider>
+                      </GoalsProvider>
+                    </InsightsProvider>
+                  </AutoinvestProvider>
+                </InvestingProvider>
+              </SupportProvider>
+            </PaymentsProvider>
+          </ClaimProvider>
         </IdentityProvider>
       </AuthProvider>
     </SafeAreaProvider>

@@ -33,6 +33,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_resolution: { view: "reconciliation.view", decide: "reconciliation.change" },
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
   bank_account_change: { view: "settings.view", decide: "bank_accounts.change" },
+  organisation: { view: "review_queue.view", decide: "organisations.review" },
 };
 
 interface Reader {
@@ -58,6 +59,7 @@ export function createStubApprovalsApi(reader: Reader, now: () => number = Date.
     ["day_close", "-NstubClose000000012", "2026-11-12", "Daniel Kato", 600],
     ["payout_account", "-NstubDest0000000088", "bank", "Peter Okello", 2900],
     ["payout_release", "-NstubRelease0000003", "-NstubPayout00000017", "Grace Auma", 70],
+    ["organisation", "-NstubOrg00000000002", "company", "Ruth Namata", 90],
   ];
   const held = new Set(reader.permissions);
   const items: ApprovalItem[] =

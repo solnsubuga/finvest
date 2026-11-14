@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
 import { plural, termProgress } from "@/home/format";
 import { InvestmentsTable, Panel, PanelLine, SplitBar, Tile } from "@/home/Parts";
@@ -35,6 +36,12 @@ export default function Portfolio() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const open = (investment: Investment) => router.push(`/investment/${investment.id}`);
+  // Opened from Home's Withdraw or Send: go straight to that step when the investment allows it.
+  const choose = (investment: Investment) => {
+    if (params.for === "send" && investment.canSend) router.push(`/investment/send/${investment.id}`);
+    else if (params.for === "withdraw" && investment.canWithdraw) router.push(`/investment/withdraw/${investment.id}`);
+    else open(investment);
+  };
   const loading = totals.state === "loading" || investments.state === "loading";
   const failed = totals.state === "failed" ? totals : investments.state === "failed" ? investments : null;
   const retryAll = () => {
@@ -87,7 +94,16 @@ export default function Portfolio() {
               <View style={{ flex: 3, minWidth: 480 }}>
                 <InvestmentsTable investments={list} selectedId={selected?.id ?? null} onOpen={(item) => setSelectedId(item.id)} />
               </View>
-              <View style={{ flex: 2, minWidth: 300 }}>{selected ? <Detail investment={selected} onOpen={open} /> : null}</View>
+              <View style={{ flex: 2, minWidth: 300, gap: 16 }}>
+                {selected ? <Detail investment={selected} onOpen={open} /> : null}
+                <LinkCard
+                  icon="send"
+                  title="Sent and received"
+                  description="Investments you sent to other clients, and those sent to you"
+                  onPress={() => router.push("/transfers")}
+                  testID="open-transfers"
+                />
+              </View>
             </View>
           </>
         ) : null}
@@ -106,7 +122,7 @@ export default function Portfolio() {
             Your investments
           </Txt>
           {investments.value.map((investment) => (
-            <InvestmentCard key={investment.id} investment={investment} onPress={() => open(investment)} />
+            <InvestmentCard key={investment.id} investment={investment} onPress={() => choose(investment)} />
           ))}
           <Pressable
             accessibilityRole="link"
@@ -116,6 +132,13 @@ export default function Portfolio() {
           >
             <Txt weight="bold">Add an investment</Txt>
           </Pressable>
+          <LinkCard
+            icon="send"
+            title="Sent and received"
+            description="Investments you sent to other clients, and those sent to you"
+            onPress={() => router.push("/transfers")}
+            testID="open-transfers"
+          />
         </View>
       ) : null}
     </AppPage>
@@ -222,6 +245,9 @@ function Detail({ investment, onOpen }: { investment: Investment; onOpen: (inves
         ) : null}
         {investment.canChangeMaturity ? (
           <Button label="Change what happens at maturity" height={48} onPress={() => router.push(`/investment/maturity/${investment.id}`)} testID="detail-maturity" />
+        ) : null}
+        {investment.canSend ? (
+          <Button label="Send to someone" variant="secondary" height={48} onPress={() => router.push(`/investment/send/${investment.id}`)} testID="detail-send" />
         ) : null}
         {investment.canWithdraw ? (
           <Button label="Withdraw early" variant="secondary" height={48} onPress={() => router.push(`/investment/withdraw/${investment.id}`)} testID="detail-withdraw" />

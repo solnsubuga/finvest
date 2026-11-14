@@ -12,6 +12,9 @@ import { Notice } from "@/components/Blocks";
 import { Icon } from "@/components/Icon";
 import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
+import { ClaimCard } from "@/claim/ClaimCard";
+import { claimOpen } from "@/claim/types";
+import { useClaim } from "@/claim/useClaim";
 import { figure, greeting, monthName, plural, shortDay } from "@/home/format";
 import {
   FirstTimeCard,
@@ -68,7 +71,7 @@ function useFirstExample(enabled: boolean): string | null {
 }
 
 /** The "Get set up" steps. A step whose state could not be read is left out rather than guessed. */
-function useSetUpSteps(openGoals: number | null): SetUpStep[] | null {
+function useSetUpSteps(openGoals: number | null, moving: boolean): SetUpStep[] | null {
   const router = useRouter();
   const profile = useProfile();
   const identity = useIdentityCheck();
@@ -80,7 +83,8 @@ function useSetUpSteps(openGoals: number | null): SetUpStep[] | null {
       return null;
     }
     const steps: SetUpStep[] = [];
-    if (identity.status === "ready") {
+    // A client moving from Finvest 1.0 has the move card instead, which takes in the ID check.
+    if (identity.status === "ready" && !moving) {
       const approved = identity.check?.status === "approved";
       // What the check needs next, in the same words the ID check screens use.
       const copy = copyFor(identity.check);
@@ -119,7 +123,7 @@ function useSetUpSteps(openGoals: number | null): SetUpStep[] | null {
       onPress: () => router.push("/goals/new"),
     });
     return steps.every((step) => step.done) ? [] : steps;
-  }, [identity, questions, kin, openGoals, router]);
+  }, [identity, questions, kin, openGoals, moving, router]);
 }
 
 export default function Home() {
@@ -129,6 +133,10 @@ export default function Home() {
   const investing = useInvesting();
   const activity = useActivity();
   const steps = useSecondSteps();
+  const claim = useClaim();
+  // A client moved from Finvest 1.0 is led by their move, which takes in the ID check.
+  const moving =
+    claim.status === "ready" && claimOpen(claim.claim) ? { claim: claim.claim, check: claim.check } : null;
   // Shown only when we know SMS is the one second step. If the list cannot be
   // loaded, Home stays quiet about it: Sign in and security reports the error.
   const onlySms = steps.status === "ready" && steps.methods.length === 1;
@@ -143,7 +151,7 @@ export default function Home() {
   const ready = portfolio.state === "ready" ? portfolio.value : null;
   const empty = ready !== null && ready.activeCount === 0 && ready.awaitingPaymentCount === 0;
   const example = useFirstExample(empty);
-  const setUp = useSetUpSteps(ready ? ready.openGoals : null);
+  const setUp = useSetUpSteps(ready ? ready.openGoals : null, moving !== null);
 
   const actions: QuickAction[] = [
     { label: "Invest", icon: "plus", onPress: () => router.navigate("/invest"), testID: "quick-invest" },
@@ -159,6 +167,7 @@ export default function Home() {
           You signed in with a code, so for 24 hours withdrawals only go to accounts you have used before.
         </Notice>
       ) : null}
+      {moving ? <ClaimCard claim={moving.claim} check={moving.check} /> : null}
       {onlySms ? (
         <Pressable
           accessibilityRole="link"
