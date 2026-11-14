@@ -101,7 +101,7 @@ _SMS: dict[str, str] = {
     "{ending}. If you did not ask for this, contact Finvest support now.",
     "claim_invitation": "Finvest has a new app, and your investments are in it. Claim your "
     "account with this link: {link} It works once, for {hours} hours. Finvest staff will never "
-    "ask for your code.",
+    "ask for this link.",
 }
 
 
