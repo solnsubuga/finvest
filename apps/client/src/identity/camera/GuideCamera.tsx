@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import { LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { File } from "expo-file-system";
-import { useCameraPermission, usePhotoOutput } from "react-native-vision-camera";
+import { CommonResolutions, useCameraPermission, usePhotoOutput } from "react-native-vision-camera";
 import { Camera as FaceCamera, type Face } from "react-native-vision-camera-face-detector";
 
 import type { FaceReading } from "../guidance";
@@ -15,7 +15,9 @@ import type { GuideCameraProps } from "./types";
  */
 export function GuideCamera({ active, fileName, onReading, onTrouble, style, ref }: GuideCameraProps) {
   const { hasPermission, requestPermission } = useCameraPermission();
-  const photoOutput = usePhotoOutput({ containerFormat: "jpeg", quality: 0.9 });
+  // About 1440 by 1920: sharp enough for the face checks and staff, without a 4K upload on
+  // mobile data.
+  const photoOutput = usePhotoOutput({ targetResolution: CommonResolutions.FHD_4_3, containerFormat: "jpeg", quality: 0.85 });
   const size = useRef({ width: 0, height: 0 });
   const asked = useRef(false);
 
