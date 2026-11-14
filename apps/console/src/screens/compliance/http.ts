@@ -9,6 +9,7 @@ import type {
   CaseOut,
   ClientOut,
   MatchOut,
+  MonitoringRulesOut,
   RunOut,
   CaseProposalOut,
   StandingOut,
@@ -25,6 +26,7 @@ import {
   type ComplianceApi,
   type Match,
   type Proposal,
+  type Rules,
   type Run,
   type Standing,
   type Summary,
@@ -60,6 +62,7 @@ export function toCase(json: CaseOut): Case {
     outcome: json.outcome,
     closedAt: json.closed_at,
     waiting: json.waiting ? toProposal(json.waiting) : null,
+    amount: json.amount ? { minor: json.amount.minor, currency: json.amount.currency } : null,
   };
 }
 
@@ -113,7 +116,30 @@ const toSummary = (json: SummaryOut): Summary => ({
   pending: json.pending,
   lastScreenedAt: json.last_screened_at,
   payoutsWaiting: json.payouts_waiting,
+  reportsToFiaThisYear: json.reports_to_fia_this_year,
 });
+
+export const toRules = (json: MonitoringRulesOut): Rules => ({
+  currency: json.currency,
+  largeDepositMinor: json.large_deposit_minor,
+  splitDepositsDays: json.split_deposits_days,
+  manyDepositsCount: json.many_deposits_count,
+  manyDepositsHours: json.many_deposits_hours,
+  unusualMultiple: json.unusual_multiple,
+  unusualFloorMinor: json.unusual_floor_minor,
+  unusualHistory: json.unusual_history,
+  unusualLookbackDays: json.unusual_lookback_days,
+  quickWithdrawalDays: json.quick_withdrawal_days,
+  quickWithdrawalShare: [json.quick_withdrawal_share_numerator, json.quick_withdrawal_share_denominator],
+  quickWithdrawalFloorMinor: json.quick_withdrawal_floor_minor,
+  rescreenEveryDays: json.rescreen_every_days,
+});
+
+/** "finvest-compliance-register-2026-11-14.csv", named for the Kampala day. */
+export function registerFilename(now: Date = new Date()): string {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(now);
+  return `finvest-compliance-register-${day}.csv`;
+}
 
 const toWaitingPayout = (json: WaitingPayoutOut): WaitingPayout => ({
   id: json.id,
@@ -173,6 +199,14 @@ export function createHttpComplianceApi(http: Http): ComplianceApi {
     },
     getCase: (id) => read(`/cases/${encodeURIComponent(id)}`, toDetail),
     waitingPayouts: () => read("/payouts", (json: WaitingPayoutOut[]) => json.map(toWaitingPayout)),
+    rules: () => read("/rules", toRules),
+    exportRegister: async () => {
+      try {
+        return { file: await http.download(`${PATH}/cases.csv`), filename: registerFilename() };
+      } catch (error) {
+        throw toComplianceError(error);
+      }
+    },
     propose: (id, outcome, reason) => command(`/cases/${encodeURIComponent(id)}/proposals`, { outcome, reason }, false),
     approve: (id) => command(proposal(id, "approve"), undefined, true),
     sendBack: (id, note) => command(proposal(id, "send-back"), { note }, true),

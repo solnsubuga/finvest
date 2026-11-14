@@ -50,6 +50,33 @@ const refused = (code: string, fields: unknown[] = []) => ({ request_id: "r", er
 const field = (name: string, code: string) => ({ field_path: [name], code, message: code });
 
 describe("compliance over the API", () => {
+  it("reads the rules and downloads the register", async () => {
+    const fetchImpl = respond(200, {
+      currency: "UGX",
+      large_deposit_minor: 20_000_000,
+      split_deposits_days: 7,
+      many_deposits_count: 5,
+      many_deposits_hours: 24,
+      unusual_multiple: 5,
+      unusual_floor_minor: 5_000_000,
+      unusual_history: 3,
+      unusual_lookback_days: 180,
+      quick_withdrawal_days: 7,
+      quick_withdrawal_share_numerator: 1,
+      quick_withdrawal_share_denominator: 2,
+      quick_withdrawal_floor_minor: 5_000_000,
+      rescreen_every_days: 30,
+    });
+    const api = createHttpComplianceApi(createHttp("https://api.example", fetchImpl));
+    const rules = await api.rules();
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe("https://api.example/staff/compliance/rules");
+    expect(rules).toMatchObject({ largeDepositMinor: 20_000_000, quickWithdrawalShare: [1, 2], rescreenEveryDays: 30 });
+    const download = vi.fn<typeof fetch>().mockResolvedValue(new Response("Case ID\r\n", { status: 200, headers: { "Content-Type": "text/csv" } }));
+    const register = await createHttpComplianceApi(createHttp("https://api.example", download)).exportRegister();
+    expect(download.mock.calls[0]?.[0]).toBe("https://api.example/staff/compliance/cases.csv");
+    expect(register.filename).toMatch(/^finvest-compliance-register-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+
   it("lists cases in the console's shape, with the filter in the address", async () => {
     const fetchImpl = respond(200, [CASE]);
     const api = createHttpComplianceApi(createHttp("https://api.example", fetchImpl));

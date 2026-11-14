@@ -203,3 +203,19 @@ def median_minor(amounts: Sequence[int]) -> int:
 
 def _oldest_first(transactions: list[Transaction]) -> list[Transaction]:
     return sorted(transactions, key=lambda t: (t.occurred_at, t.id))
+
+
+# What the console shows of the rules and of a case. ---------------------------------------
+
+# The rules read shilling transactions only.
+RULE_CURRENCY = Currency.UGX
+
+
+def case_amount_minor(detail: dict[str, object]) -> int | None:
+    """The amount a monitoring case is about: the deposit or payout that raised it, or for split
+    deposits their total. None when the detail names no amount, as for a screening case."""
+    for key in ("amount_minor", "total_minor"):
+        value = detail.get(key)
+        if type(value) is int:
+            return value
+    return None

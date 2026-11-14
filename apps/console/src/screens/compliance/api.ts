@@ -52,6 +52,8 @@ export interface Case {
   closedAt: string | null;
   /** The proposal waiting for a second person, if any. */
   waiting: Proposal | null;
+  /** For a monitoring case, the payment that raised it, or for split deposits their total. */
+  amount: Amount | null;
 }
 
 export interface Run {
@@ -111,6 +113,30 @@ export interface Summary {
   pending: number;
   lastScreenedAt: string | null;
   payoutsWaiting: number;
+  /** Cases closed since 1 January with a report owed to the Financial Intelligence Authority. */
+  reportsToFiaThisYear: number;
+}
+
+/** The monitoring rules as they run, read from the backend's rules. Amounts in the smallest unit. */
+export interface Rules {
+  currency: "UGX" | "USD";
+  largeDepositMinor: number;
+  splitDepositsDays: number;
+  manyDepositsCount: number;
+  manyDepositsHours: number;
+  unusualMultiple: number;
+  unusualFloorMinor: number;
+  unusualHistory: number;
+  unusualLookbackDays: number;
+  quickWithdrawalDays: number;
+  quickWithdrawalShare: readonly [number, number];
+  quickWithdrawalFloorMinor: number;
+  rescreenEveryDays: number;
+}
+
+export interface RegisterFile {
+  file: Blob;
+  filename: string;
 }
 
 export interface WaitingPayout {
@@ -133,6 +159,9 @@ export interface ComplianceApi {
   listCases(filter: CaseFilter): Promise<readonly Case[]>;
   getCase(caseId: string): Promise<CaseDetail>;
   waitingPayouts(): Promise<readonly WaitingPayout[]>;
+  rules(): Promise<Rules>;
+  /** Every case as a CSV file. The export is on the audit trail. */
+  exportRegister(): Promise<RegisterFile>;
   propose(caseId: string, outcome: CaseOutcome, reason: string): Promise<CaseDetail>;
   approve(proposalId: string): Promise<CaseDetail>;
   sendBack(proposalId: string, note: string): Promise<CaseDetail>;
@@ -183,6 +212,8 @@ export const notConnectedComplianceApi: ComplianceApi = {
   listCases: notConnected,
   getCase: notConnected,
   waitingPayouts: notConnected,
+  rules: notConnected,
+  exportRegister: notConnected,
   propose: notConnected,
   approve: notConnected,
   sendBack: notConnected,
