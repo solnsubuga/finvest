@@ -178,6 +178,55 @@ describe("the identity check client for the real API", () => {
   });
 });
 
+describe("the guided selfie through the real API", () => {
+  const frame = { uri: "file:///p.jpg", name: "pose-left.jpg", mimeType: "image/jpeg" as const, size: 4 };
+
+  it("reads whether the selfie is guided, and the poses kept", async () => {
+    serve(200, { check: view({ guided_selfie: true, poses: ["left"], missing: ["pose_right", "pose_up", "pose_down"] }) });
+    await expect(createApiIdentityClient().getCheck()).resolves.toMatchObject({
+      guidedSelfie: true,
+      poses: ["left"],
+      missing: ["pose_right", "pose_up", "pose_down"],
+    });
+    // An API from before the guided selfie: not guided.
+    serve(200, { check: view() });
+    await expect(createApiIdentityClient().getCheck()).resolves.toMatchObject({ guidedSelfie: false, poses: [] });
+  });
+
+  it("sends a frame as a form with one field named photo", async () => {
+    const seen = serve(200, view({ guided_selfie: true, poses: ["left"] }));
+    await createApiIdentityClient().sendPose("left", frame);
+    expect(seen[0]).toMatchObject({ method: "PUT", path: "/client/identity-check/poses/left" });
+    expect((seen[0]!.body as FormData).get("photo")).toBeTruthy();
+  });
+
+  it("turns a refused frame or selfie into the prompts to take it again", async () => {
+    const client = createApiIdentityClient();
+    serve(422, refusal("validation_failed", [
+      { field_path: ["frame"], code: "turn_more" },
+      { field_path: ["frame"], code: "too_dark" },
+    ]));
+    await expect(client.sendPose("up", frame)).rejects.toMatchObject({ code: "retake", problems: ["turn_more", "too_dark"] });
+
+    serve(422, refusal("validation_failed", [{ field_path: ["photo"], code: "look_straight" }]));
+    await expect(client.sendPhoto("selfie", frame)).rejects.toMatchObject({ code: "retake", problems: ["look_straight"] });
+
+    serve(422, refusal("validation_failed", [{ field_path: ["pose"], code: "selfie_first" }]));
+    await expect(client.sendPose("left", frame)).rejects.toMatchObject({ code: "retake", problems: ["selfie_first"] });
+
+    // A code the app does not know is not a prompt.
+    serve(422, refusal("validation_failed", [{ field_path: ["frame"], code: "not_an_image_of_that_type" }]));
+    await expect(client.sendPose("left", frame)).rejects.toEqual(new IdentityError("photo_not_accepted"));
+
+    serve(409, refusal("conflict"));
+    await expect(client.sendPose("left", frame)).rejects.toEqual(new IdentityError("cannot_change"));
+
+    // The face quality service did not answer: send it again.
+    serve(503, refusal("unavailable"));
+    await expect(client.sendPose("left", frame)).rejects.toEqual(new IdentityError("unavailable"));
+  });
+});
+
 describe("the live selfie through the real API", () => {
   it("reads whether a live check is offered and how the latest one stands", async () => {
     const seen = serve(200, {

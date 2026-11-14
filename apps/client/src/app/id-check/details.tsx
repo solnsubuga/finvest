@@ -85,7 +85,7 @@ function DetailsFormScreen({ check }: { check: IdentityCheck }) {
       footer={<Button label="These are correct" onPress={save} loading={busy} testID="details-save" />}
     >
       <Stack.Screen options={{ title: "Check your details" }} />
-      <StepTop step="details" documentType={check.documentType} fallback="/id-check" />
+      <StepTop step="details" documentType={check.documentType} guided={check.guidedSelfie} fallback="/id-check" />
       <View style={{ marginTop: 28, gap: 8 }}>
         <Title>Your details</Title>
         <Txt color={colors.muted}>Type them exactly as they are printed on your ID. We check them against your photos.</Txt>

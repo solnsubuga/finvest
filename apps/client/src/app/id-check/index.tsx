@@ -15,7 +15,8 @@ import { handInIdCheck } from "@/claim/handInIdCheck";
 import { ClaimError, describeClaimError } from "@/claim/types";
 import { useIdentity } from "@/identity/IdentityProvider";
 import { Badge, Progress, StatusLine } from "@/identity/Parts";
-import { hrefFor, nextStep, stepsFor } from "@/identity/steps";
+import { posesMissing } from "@/identity/poses";
+import { hrefFor, nextStep, stepMissing, stepsFor } from "@/identity/steps";
 import {
   beingChecked,
   describeIdentityError,
@@ -38,9 +39,16 @@ function firstName(check: IdentityCheck): string | null {
 
 /** What `missing` names, in words, for a check that could not be handed in. */
 function missingWords(check: IdentityCheck, missing: string[]): string {
-  const names = missing.map((item) =>
-    item === "details" ? "your details" : photoName(item as PhotoKind, check.documentType).toLowerCase(),
+  if (missing.includes("poses")) {
+    // Both turns, or both tilts, went the same way.
+    return "Take your head turns again: one turn each way, and one tilt up and one down.";
+  }
+  const names = missing.flatMap((item) =>
+    item.startsWith("pose_")
+      ? []
+      : [item === "details" ? "your details" : photoName(item as PhotoKind, check.documentType).toLowerCase()],
   );
+  if (missing.some((item) => item.startsWith("pose_"))) names.push("your head turns");
   return `Still needed: ${names.join(", ")}.`;
 }
 
@@ -80,9 +88,10 @@ function Draft({ check, onSent }: { check: IdentityCheck; onSent: (check: Identi
     back: "Back of your ID",
     details: "Your details",
     selfie: "Selfie",
+    poses: "Head turns",
   };
-  const steps = stepsFor(check.documentType);
-  const firstOpen = steps.find((step) => step !== "document" && check.missing.includes(step));
+  const steps = stepsFor(check.documentType, check.guidedSelfie);
+  const firstOpen = steps.find((step) => stepMissing(step, check));
 
   return (
     <Screen
@@ -109,7 +118,7 @@ function Draft({ check, onSent }: { check: IdentityCheck; onSent: (check: Identi
         <Card>
           <View style={{ gap: 16 }}>
             {steps.map((step) => {
-              const done = step === "document" || !check.missing.includes(step);
+              const done = !stepMissing(step, check);
               const state: Progress = done ? "done" : step === firstOpen ? "now" : "next";
               return (
                 <Pressable
@@ -181,7 +190,11 @@ function Retake({ check, onSent }: { check: IdentityCheck; onSent: (check: Ident
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const done = retaken(check.id);
-  const allDone = check.retakePhotos.every((kind) => done.includes(kind));
+  // A new guided selfie needs its head turns again.
+  const turnsNeeded = check.guidedSelfie && check.retakePhotos.includes("selfie");
+  // Until the new selfie is in, the turns kept are the old selfie's, so they are still to take.
+  const turnsLeft = !done.includes("selfie") || posesMissing(check).length > 0;
+  const allDone = check.retakePhotos.every((kind) => done.includes(kind)) && !(turnsNeeded && turnsLeft);
   const several = check.retakePhotos.length > 1;
 
   const send = async () => {
@@ -253,6 +266,25 @@ function Retake({ check, onSent }: { check: IdentityCheck; onSent: (check: Ident
               </Pressable>
             );
           })}
+          {turnsNeeded ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${turnsLeft ? "Take" : "Taken again"}: your head turns`}
+              disabled={!done.includes("selfie")}
+              onPress={() => router.push(hrefFor("poses"))}
+              style={({ pressed }) => [styles.retakeRow, styles.divider, pressed && { opacity: 0.7 }]}
+              testID="retake-poses"
+            >
+              <View style={{ flex: 1 }}>
+                <StatusLine
+                  state={turnsLeft ? (done.includes("selfie") ? "now" : "next") : "done"}
+                  title="Your head turns"
+                  detail={turnsLeft ? "After the selfie: turn left, right, up and down" : "Taken again. Tap to change them."}
+                />
+              </View>
+              <Icon name="chevron" size={16} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
         </Card>
         {error ? <Notice tone="danger">{error}</Notice> : null}
       </View>

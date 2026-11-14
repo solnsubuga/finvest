@@ -5,6 +5,8 @@ type StubModule = typeof import("./stubIdentityClient");
 
 /** The demo account that starts with an approved check. */
 export const SEEDED_DEMO_PHONE = "+256772123456";
+/** The demo account that takes the selfie as an ioTec live check. Every other one takes the guided selfie. */
+export const LIVE_CHECK_DEMO_PHONE = "+256701000200";
 
 /**
  * The in-memory demo approves identities nobody checked, so it must never be
@@ -24,8 +26,10 @@ function loadStub(): StubModule | null {
 /** Chooses what the ID check screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveIdentityClient(phone: string | null, stub: StubModule | null = loadStub()): IdentityClient {
   if (stub) {
-    // The demo offers a live selfie check, as the API does once a liveness provider is set.
-    return stub.createStubIdentityClient({ seeded: phone === SEEDED_DEMO_PHONE, liveness: true });
+    // One demo account offers the ioTec live selfie check. The others take the guided selfie, as
+    // the API does with Regula.
+    const live = phone === LIVE_CHECK_DEMO_PHONE;
+    return stub.createStubIdentityClient({ seeded: phone === SEEDED_DEMO_PHONE, liveness: live, guided: !live });
   }
   return createApiIdentityClient();
 }

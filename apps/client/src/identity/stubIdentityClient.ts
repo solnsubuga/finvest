@@ -1,4 +1,5 @@
 import { kampalaToday } from "./photo";
+import { POSES, Pose } from "./poses";
 import {
   DetailField,
   DocumentType,
@@ -30,6 +31,11 @@ import {
  * - anything else: stays with staff
  *
  * The demo account with a passkey (+256 772 123 456) starts approved.
+ *
+ * With `guided`, the selfie is the guided one, as with Regula: four pose frames follow it. The
+ * demo cannot judge a picture, so it keeps every frame but one: the first "look up" frame of a
+ * check is refused as not tilted far enough, so the retake prompt can be seen. With a document
+ * number ending in 6, the first guided selfie sent finds the face check unavailable, as a 503 does.
  */
 
 type StubOptions = {
@@ -38,6 +44,8 @@ type StubOptions = {
   now?: () => number;
   /** Offer a live check for the selfie, as the API does when a liveness provider is set. */
   liveness?: boolean;
+  /** The guided selfie, as the API has with Regula: a frame for each pose after the selfie. */
+  guided?: boolean;
 };
 
 /** The demo's live check. It moves on by itself as it is read, as the worker would. */
@@ -57,6 +65,10 @@ type Stored = Omit<IdentityCheck, "missing"> & {
   awaitingDecision: boolean;
   /** Reads of the check still to answer before the decision is made. */
   readsBeforeDecision: number;
+  /** Whether the demo has refused a "look up" frame yet. */
+  refusedUp: boolean;
+  /** Whether the demo has answered a guided selfie with "unavailable" yet. */
+  failedSelfie: boolean;
 };
 
 export const DEMO_RETAKE_MESSAGE =
@@ -93,21 +105,29 @@ function seededCheck(): Stored {
     retaken: new Set(),
     awaitingDecision: false,
     readsBeforeDecision: 0,
+    refusedUp: false,
+    failedSelfie: false,
+    guidedSelfie: false,
+    poses: [],
   };
 }
 
 function missingFor(check: Stored): string[] {
   const missing: string[] = requiredPhotos(check.documentType).filter((kind) => !check.photos.includes(kind));
   if (!check.detailsConfirmed) missing.push("details");
+  if (check.guidedSelfie && requiredPhotos(check.documentType).includes("selfie")) {
+    missing.push(...POSES.filter((pose) => !check.poses.includes(pose)).map((pose) => `pose_${pose}`));
+  }
   return missing;
 }
 
 function view(check: Stored): IdentityCheck {
-  const { retaken: _retaken, awaitingDecision: _awaiting, readsBeforeDecision: _reads, ...rest } = check;
+  const { retaken: _retaken, awaitingDecision: _awaiting, readsBeforeDecision: _reads, refusedUp: _refused, failedSelfie: _failed, ...rest } = check;
   return {
     ...rest,
     details: rest.details ? { ...rest.details } : null,
     photos: [...rest.photos],
+    poses: [...rest.poses],
     retakePhotos: [...rest.retakePhotos],
     missing: missingFor(check),
   };
@@ -140,6 +160,7 @@ export function createStubIdentityClient({
   seeded = false,
   now = Date.now,
   liveness = false,
+  guided = false,
 }: StubOptions = {}): IdentityClient {
   let check: Stored | null = seeded ? seededCheck() : null;
   const attempts: StoredAttempt[] = [];
@@ -170,6 +191,7 @@ export function createStubIdentityClient({
     if (check && selfieEditable(check)) {
       if (!check.photos.includes("selfie")) check.photos.push("selfie");
       check.liveSelfie = true;
+      check.poses = [];
       if (check.status === "awaiting_client") check.retaken.add("selfie");
       attempt.photoUsed = true;
     } else {
@@ -242,6 +264,10 @@ export function createStubIdentityClient({
           retaken: new Set(),
           awaitingDecision: false,
           readsBeforeDecision: 0,
+          refusedUp: false,
+          failedSelfie: false,
+          guidedSelfie: guided,
+          poses: [],
         };
       } else if (check.documentType !== documentType || check.documentCountry !== country) {
         if (check.status !== "draft") throw new IdentityError("cannot_change");
@@ -262,9 +288,32 @@ export function createStubIdentityClient({
         throw new IdentityError("photo_not_needed");
       }
       if (file.size <= 0 || file.size > 10 * 1024 * 1024) throw new IdentityError("photo_not_accepted");
+      if (kind === "selfie" && held.guidedSelfie && !held.failedSelfie && held.details?.documentNumber.endsWith("6")) {
+        held.failedSelfie = true;
+        throw new IdentityError("unavailable");
+      }
       if (!held.photos.includes(kind)) held.photos.push(kind);
-      if (kind === "selfie") held.liveSelfie = false;
+      if (kind === "selfie") {
+        held.liveSelfie = false;
+        // A new selfie retires the frames taken with the old one, so a set is taken together.
+        held.poses = [];
+      }
       if (held.status === "awaiting_client") held.retaken.add(kind);
+      return view(held);
+    },
+
+    async sendPose(pose: Pose, file) {
+      await pause();
+      if (!guided) throw new IdentityError("not_found");
+      const held = editable();
+      if (!selfieEditable(held)) throw new IdentityError("cannot_change");
+      if (!held.photos.includes("selfie")) throw new IdentityError("retake", { problems: ["selfie_first"] });
+      if (file.size <= 0 || file.size > 10 * 1024 * 1024) throw new IdentityError("photo_not_accepted");
+      if (pose === "up" && !held.refusedUp) {
+        held.refusedUp = true;
+        throw new IdentityError("retake", { problems: ["turn_more"] });
+      }
+      if (!held.poses.includes(pose)) held.poses.push(pose);
       return view(held);
     },
 

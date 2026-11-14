@@ -12,11 +12,14 @@ import { useClaimClient } from "@/claim/ClaimProvider";
 import { handInIdCheck } from "@/claim/handInIdCheck";
 import { ClaimError } from "@/claim/types";
 import { useIdentity } from "@/identity/IdentityProvider";
+import { FaceReading } from "@/identity/guidance";
+import { GuidedCapture } from "@/identity/GuidedCapture";
 import { LiveSelfie } from "@/identity/LiveSelfie";
 import { Frame } from "@/identity/PhotoFrame";
 import { StepTop } from "@/identity/Parts";
 import { checkPhoto, photoProblemCopy } from "@/identity/photo";
 import { choosePhoto, PickResult, takePhoto } from "@/identity/pickPhoto";
+import { posesMissing } from "@/identity/poses";
 import { hrefFor, stepAfter } from "@/identity/steps";
 import {
   describeIdentityError,
@@ -116,7 +119,8 @@ export default function TakePhoto() {
   const afterUpload = async (updated: IdentityCheck) => {
     if (updated.status === "awaiting_client") {
       markRetaken(updated.id, kind);
-      router.replace("/id-check");
+      // A new guided selfie needs its head turns again before it can be sent.
+      router.replace(kind === "selfie" && posesMissing(updated).length > 0 ? "/id-check/poses" : "/id-check");
       return;
     }
     const next = stepAfter(kind, updated);
@@ -154,8 +158,30 @@ export default function TakePhoto() {
   const top = retake ? (
     <BackButton fallback="/id-check" />
   ) : (
-    <StepTop step={kind} documentType={check.documentType} fallback="/id-check" />
+    <StepTop step={kind} documentType={check.documentType} guided={check.guidedSelfie} fallback="/id-check" />
   );
+
+  if (selfie && check.guidedSelfie) {
+    // The guided selfie: the live camera finds the face and takes it when it is right.
+    const sendSelfie = async (file: PhotoFile, _reading: FaceReading | null) => {
+      await afterUpload(await client.sendPhoto("selfie", file));
+    };
+    return (
+      <>
+        <Stack.Screen options={{ title }} />
+        <GuidedCapture
+          pose={null}
+          title="Take a selfie"
+          how="Look straight at the camera in good light. Next come four quick head turns."
+          top={top}
+          opposite={null}
+          send={sendSelfie}
+          testID="selfie"
+          above={retake && check.clientMessage ? <Notice tone="warning">{check.clientMessage}</Notice> : null}
+        />
+      </>
+    );
+  }
 
   if (selfie && !camera && !photo) {
     return (
