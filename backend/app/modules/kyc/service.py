@@ -796,6 +796,25 @@ async def screening_subject(
     )
 
 
+_APPROVED_CLIENTS = text(
+    "SELECT client_id FROM kyc_checks WHERE status = 'approved' "
+    "AND (CAST(:after AS text) IS NULL OR client_id > CAST(:after AS text)) "
+    "ORDER BY client_id LIMIT :limit"
+)
+
+
+async def approved_client_ids(session: AsyncSession, *, after: str | None, limit: int) -> list[str]:
+    """Approved clients, including those carried over from Finvest 1.0, by client id.
+
+    One page at a time: pass the last id of the previous page as `after`. For the screening
+    module's sweep, in a worker transaction.
+    """
+    if not 1 <= limit <= 1000:
+        raise ValueError("A page holds 1 to 1000 clients")
+    rows = await session.execute(_APPROVED_CLIENTS, {"after": after, "limit": limit})
+    return list(rows.scalars())
+
+
 @dataclass(frozen=True, slots=True)
 class Identity:
     """What a client's check says about who they are, for a card that names them."""
