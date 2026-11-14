@@ -181,3 +181,10 @@ def totals_by_currency(amounts: Iterable[Money]) -> dict[Currency, Money]:
     for amount in amounts:
         totals[amount.currency] = totals.get(amount.currency, Money.zero(amount.currency)) + amount
     return totals
+
+
+def at_maturity_wording(choice: str | None) -> str:
+    """What happens when a fixed term ends, as the client chose. Rolling over is the default."""
+    if choice == "pay_out":
+        return "Pay out to you"
+    return "Roll over into a new investment"

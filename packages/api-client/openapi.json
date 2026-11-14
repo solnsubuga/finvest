@@ -5318,7 +5318,8 @@
               "monthly_statement",
               "requested_statement",
               "receipt",
-              "tax_certificate"
+              "tax_certificate",
+              "investment_note"
             ],
             "title": "Kind",
             "type": "string"

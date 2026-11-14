@@ -23,6 +23,7 @@ from app.infrastructure.jobs import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.closures.pending import refuse_if_closing
+from app.modules.documents.events import NOTE_ON_START
 from app.modules.investments.catalogue import invalid, product_from_row, product_row, rates_for
 from app.modules.investments.domain.interest import (
     ClientReturns,
@@ -443,7 +444,8 @@ async def start_investment(
             "principal_minor": investment.amount.minor,
             "currency": currency.value,
         },
-        consumers=[],
+        # Documents issues the note that confirms the investment started.
+        consumers=[NOTE_ON_START],
         now=now,
     )
     await audit.record(
