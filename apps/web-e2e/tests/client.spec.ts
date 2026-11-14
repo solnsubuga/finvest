@@ -46,7 +46,7 @@ test("a new client signs up with a texted code and a password", async ({ page })
   await expect(page.getByText("4 of 4")).toBeVisible();
   await id(page, "offer-not-now").click();
 
-  await expect(page.getByText("Welcome to Finvest")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("a wrong password does not sign in", async ({ page }) => {
@@ -65,13 +65,13 @@ test("a client signs in with the password and an authenticator code", async ({ p
   await id(page, "code-input").fill("000000");
   await id(page, "code-submit").click();
   await expect(page.getByText("That code is not right. Check it and try again.")).toBeVisible();
-  await expect(page.getByText("Welcome, Amara")).toHaveCount(0);
+  await expect(page.getByTestId("home")).toHaveCount(0);
   // A wrong code clears the field for the next try.
   await expect(id(page, "code-input")).toHaveValue("");
   await id(page, "code-input").fill(DEMO_CODE);
   await id(page, "code-submit").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("a client pays for an investment by mobile money from their own number", async ({
@@ -80,7 +80,7 @@ test("a client pays for an investment by mobile money from their own number", as
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   // The phone's tab bar and the wide sidebar both name it Invest.
   await page
     .getByRole("link", { name: "Invest", exact: true })
@@ -104,7 +104,7 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   // The phone's tab bar and the wide sidebar both name it Profile.
   await page
     .getByRole("link", { name: "Profile", exact: true })
@@ -148,7 +148,7 @@ test("a PIN that is too simple is refused, and two that differ start again", asy
   await typePin(page, "48152");
   await expect(page.getByText("Those PINs did not match. Choose your PIN again.")).toBeVisible();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("the app locks in the background and opens with the PIN, after a wrong one", async ({ page }) => {
@@ -156,17 +156,17 @@ test("the app locks in the background and opens with the PIN, after a wrong one"
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
   await expect(page.getByText("Enter your PIN to open the app on this phone")).toBeVisible();
-  await expect(page.getByText("Welcome, Amara")).toHaveCount(0);
+  await expect(page.getByTestId("home")).toHaveCount(0);
   await typePin(page, "90817");
   await expect(
     page.getByText("That PIN is not right. 4 tries left before this phone is signed out."),
   ).toBeVisible();
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 });
 
 test("five wrong PINs sign the phone out, and the client logs in again", async ({ page }) => {
@@ -174,7 +174,7 @@ test("five wrong PINs sign the phone out, and the client logs in again", async (
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
   for (let tries = 5; tries > 1; tries -= 1) {

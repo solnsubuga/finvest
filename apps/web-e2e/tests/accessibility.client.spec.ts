@@ -104,7 +104,7 @@ test("every main screen after sign-in meets WCAG 2.1 AA", async ({ page }) => {
   await expect(page.getByText("Type your PIN again")).toBeVisible();
   expect(await violations(page), "type the PIN again").toEqual([]);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   const found: string[] = [];
   for (const path of SIGNED_IN) {
     await visit(page, path);
@@ -123,7 +123,7 @@ test("the PIN lock, its reset and the sign out after wrong PINs meet WCAG 2.1 AA
   await page.getByTestId("use-passkey").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
   await expect(page.getByText("Enter your PIN to open the app on this phone")).toBeVisible();
@@ -152,7 +152,7 @@ test("confirming a new payout account with the PIN meets WCAG 2.1 AA", async ({ 
   await page.getByTestId("use-passkey").click();
   await typePin(page, DEMO_PIN);
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Welcome, Amara")).toBeVisible();
+  await expect(page.getByTestId("home")).toBeVisible();
   await visit(page, "/payouts/add");
   await page.getByTestId("phone-input").fill("701 555 012");
   await page.getByTestId("holder-name-input").fill("Amara Nakato");
