@@ -40,6 +40,9 @@ describe("the Documents screen", () => {
     expect(screen.getByText("October 2026")).toBeTruthy();
     expect(screen.getByText("1 Aug 2026 to 13 Nov 2026")).toBeTruthy();
     expect(screen.getByText("Receipt RC-Pq30vNa2")).toBeTruthy();
+    expect(screen.getByText("Tax certificates")).toBeTruthy();
+    expect(screen.getByText("Tax year 2025-26")).toBeTruthy();
+    expect(screen.getByText(/1 Jul 2025 to 30 Jun 2026\. Shows the tax withheld/)).toBeTruthy();
     await fireEvent.press(screen.getByLabelText("Download October 2026"));
     // The download finishes after the press returns, so wait for it.
     await waitFor(() => expect(client.downloaded).toEqual(["demo-monthly-1"]));
@@ -99,6 +102,8 @@ describe("the Documents screen", () => {
     expect(await screen.findByTestId("statements-empty")).toBeTruthy();
     expect(screen.getByTestId("receipts-empty")).toBeTruthy();
     expect(screen.getByText("Get a statement")).toBeTruthy();
+    // A client with no certificate yet sees no empty section for one.
+    expect(screen.queryByText("Tax certificates")).toBeNull();
   });
 
   it("offers to try again when the list cannot load", async () => {

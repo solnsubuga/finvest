@@ -1,6 +1,6 @@
 import { kampalaToday } from "@/autoinvest/schedule";
 
-import { monthLabel, periodProblem } from "./periods";
+import { monthLabel, periodProblem, taxYearLabel } from "./periods";
 import { DocumentItem, DocumentsClient, DocumentsError } from "./types";
 
 /**
@@ -82,7 +82,22 @@ function seed(today: string, now: Date): DocumentItem[] {
       notFinalFrom: null,
     }),
   );
-  return [requested, ...monthly, ...receipts];
+  // The last tax year that has ended, 1 July to 30 June, issued on 2 July.
+  const [year, month] = today.split("-").map(Number);
+  const starts = (year ?? 1970) - ((month ?? 1) >= 7 ? 1 : 2);
+  const certificate: DocumentItem = {
+    id: "demo-tax-certificate-1",
+    kind: "tax_certificate",
+    status: "ready",
+    dateFrom: `${starts}-07-01`,
+    dateTo: `${starts + 1}-06-30`,
+    requestedAt: morning(`${starts + 1}-07-02`),
+    finishedAt: morning(`${starts + 1}-07-02`),
+    fileName: `Finvest tax certificate ${taxYearLabel(`${starts}-07-01`)}.pdf`,
+    byteSize: 41_000,
+    notFinalFrom: null,
+  };
+  return [requested, ...monthly, certificate, ...receipts];
 }
 
 export function createStubDocumentsClient(phone: string | null, options: Options = {}) {
