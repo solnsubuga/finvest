@@ -90,11 +90,13 @@ async def running_api(
     iotec_wallet: WalletBalances | None = None,
     identity_sealer: Sealer | None = None,
     payout_names: bool = True,
+    early_withdrawal_open: bool = False,
 ) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={
             "client_allowed_origins": [CLIENT_ORIGIN],
             "staff_allowed_origins": [STAFF_ORIGIN],
+            "early_withdrawal_open": early_withdrawal_open,
         }
     )
     clock = FakeClock()

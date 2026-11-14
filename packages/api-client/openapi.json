@@ -9633,6 +9633,18 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Destination Id",
             "type": "string"
+          },
+          "pin_confirmation": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Confirmation"
           }
         },
         "required": [
@@ -18116,6 +18128,18 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Destination Id",
             "type": "string"
+          },
+          "pin_confirmation": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Confirmation"
           }
         },
         "required": [
@@ -24776,7 +24800,7 @@
     },
     "/client/investments/{investment_id}/pay-out": {
       "post": {
-        "description": "Send on the money of a matured investment that is waiting for a destination.\n\nSafe to repeat without an idempotency key: the payout's key is\n`maturity:<investment id>:<destination id>`, so the same destination asked twice is the\nsame payout.",
+        "description": "Send on the money of a matured investment that is waiting for a destination.\n\nSafe to repeat without an idempotency key: the payout's key is\n`maturity:<investment id>:<destination id>`, so the same destination asked twice is the\nsame payout.\n\n428 `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a\nfresh confirmation for `withdrawal`. It is used up only if the money is sent.",
         "operationId": "pay_out_matured_client_investments__investment_id__pay_out_post",
         "parameters": [
           {
@@ -24859,6 +24883,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "summary": "Pay Out Matured",
@@ -25213,7 +25247,7 @@
     },
     "/client/investments/{investment_id}/withdraw": {
       "post": {
-        "description": "Ask to withdraw a running investment early. It pays `value_minor` from the investment\nas shown: interest stops now. The money is sent once the dealing desk has funded it.\n\nRefused with `conflict` while early withdrawal is switched off, before anything is saved.",
+        "description": "Ask to withdraw a running investment early. It pays `value_minor` from the investment\nas shown: interest stops now. The money is sent once the dealing desk has funded it.\n\nRefused with `conflict` while early withdrawal is switched off, before anything is saved.\n\n428 `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a\nfresh confirmation for `withdrawal`. It is used up only if the request is saved, and a\nreplay of the same idempotency key asks for none.",
         "operationId": "withdraw_early_client_investments__investment_id__withdraw_post",
         "parameters": [
           {
@@ -25314,6 +25348,16 @@
               }
             },
             "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
           }
         },
         "summary": "Withdraw Early",
