@@ -31287,7 +31287,7 @@
     },
     "/staff/reconciliation/statements": {
       "get": {
-        "description": "One pot's statements in a range of days, at most 100, oldest first.",
+        "description": "One pot's statements in a range of days, at most 100, oldest first. 422\n`date_range_reversed` when `date_to` is before `date_from`.",
         "operationId": "list_statements_staff_reconciliation_statements_get",
         "parameters": [
           {

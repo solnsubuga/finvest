@@ -97,6 +97,15 @@ async def test_staff_import_a_statement_and_list_it(api: Api) -> None:
         params={**POT, "date_from": day.isoformat(), "date_to": day.isoformat()},
     )
     assert [each["id"] for each in listed.json()] == [body["id"]]
+    reversed_range = await api.http.get(
+        "/staff/reconciliation/statements",
+        params={
+            **POT,
+            "date_from": day.isoformat(),
+            "date_to": (day - timedelta(days=1)).isoformat(),
+        },
+    )
+    assert (reversed_range.status_code, code(reversed_range)) == (422, "date_range_reversed")
 
 
 async def test_a_statement_is_refused_whole_with_the_row_that_is_wrong(api: Api) -> None:

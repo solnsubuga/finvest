@@ -237,8 +237,14 @@ async def list_statements(
     date_from: date,
     date_to: date,
 ) -> list[StatementOut]:
-    """One pot's statements in a range of days, at most 100, oldest first."""
+    """One pot's statements in a range of days, at most 100, oldest first. 422
+    `date_range_reversed` when `date_to` is before `date_from`."""
     pot = _pot(source, account_reference)
+    if date_to < date_from:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["query", "date_to"], code="date_range_reversed")],
+        )
     async with database.actor_transaction(staff.actor) as session:
         found = await statements.list_statements(
             session, pot.source, pot.account_reference, date_from=date_from, date_to=date_to

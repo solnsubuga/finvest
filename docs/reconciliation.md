@@ -123,7 +123,7 @@ In `backend/app/modules/reconciliation/api.py`. Everything needs `reconciliation
 | Route | What it does |
 | --- | --- |
 | `GET /staff/reconciliation/pots` | Every pot closed each day, with its last statement day and closing balance, so staff know which day comes next and what it must open at |
-| `GET /staff/reconciliation/statements?source&account_reference&date_from&date_to` | One pot's statements in a range, oldest first, at most 100 |
+| `GET /staff/reconciliation/statements?source&account_reference&date_from&date_to` | One pot's statements in a range, oldest first, at most 100. 422 `date_range_reversed` when `date_to` is before `date_from` |
 | `POST /staff/reconciliation/statements` | Multipart: `source`, `account_reference`, `statement_date`, `opening_balance` and `closing_balance` as the statement prints them, `format`, and the CSV `file` (at most 2 MiB). 201 with the statement. 422 names the problem and, for a row, its number (`["body", "file", row]`), never its contents; 409 `statement_already_imported`, `statement_day_out_of_order`, `statement_opening_balance_differs` or `statement_day_not_over` |
 | `GET /staff/reconciliation/days/{day}` | Each pot at the end of the day: statement, ledger, open exceptions with their lines and movements, and what is unexplained. A line with no pair lists the movements of the same direction and amount within three days as `suggested_movements`. While the day is open, `blockers` lists every reason it cannot be prepared yet; once prepared or closed, `close` says who signed |
 | `POST /staff/reconciliation/days/{day}/refresh` | Brings in the ledger's movements up to the day and pairs what the records and references pair. Safe to run again |
