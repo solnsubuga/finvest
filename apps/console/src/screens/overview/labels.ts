@@ -14,6 +14,7 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   // The subject is the currency, such as "UGX". The details are shown on Settings.
   bank_account_change: { label: "Bank account clients pay into", path: at("/settings") },
   report_schedule: { label: "Scheduled report", path: at("/reports") },
+  month_close: { label: "Close the month", path: at("/finance") },
   ledger_correction: { label: "Ledger correction", path: at("/finance") },
   pot_transfer: { label: "Transfer between pots", path: at("/reconciliation") },
   bank_transfer_match: { label: "Bank transfer match", path: at("/reconciliation") },

@@ -10,20 +10,22 @@ is recorded, with an audit event, so the screen can say what was sent last.
 """
 
 from datetime import date, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.finance import books
+from app.modules.finance import books, month_close
 from app.modules.finance.domain.books import BadMonth, month_end, month_label, parse_month
 from app.modules.finance.domain.journal import MAX_DAYS, ExportRefused
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession, staff_names
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
-from app.shared.contracts import Contract
+from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
 from app.shared.money import Currency, Money
 
@@ -101,6 +103,101 @@ def _clock(request: Request) -> Clock:
 
 AppClock = Annotated[Clock, Depends(_clock)]
 FinanceStaff = Annotated[StaffSession, Depends(require_permission("finance.view"))]
+# Closing a month needs a passkey or app code from the last few minutes.
+FinanceApprover = Annotated[StaffSession, Depends(require_confirmed("finance.view"))]
+Reason = Annotated[str, Field(min_length=1, max_length=500)]
+
+
+class SignedLineOut(Contract):
+    currency: Currency
+    code: str
+    kind: str
+    opening: int
+    debits: int
+    credits: int
+    closing: int
+
+
+class MonthCloseOut(Contract):
+    id: PushId
+    month: str  # YYYY-MM
+    status: Literal["proposed", "approved", "declined", "withdrawn"]
+    # The books by code and currency as they stood when it was proposed, in minor units.
+    books: list[SignedLineOut]
+    books_sha256: str
+    reason: str
+    proposed_by: PushId
+    proposed_by_name: str | None
+    proposed_at: datetime
+    decided_by: PushId | None
+    decided_by_name: str | None
+    decided_at: datetime | None
+    decision_reason: str | None
+    yours: bool
+
+
+class MonthToCloseOut(Contract):
+    month: str  # YYYY-MM
+    closed_through: date | None
+    # Null when it can be proposed now. Otherwise month_not_ended, close_months_in_order,
+    # days_not_closed, books_do_not_balance or close_already_proposed.
+    refusal: str | None
+
+
+class MonthClosesOut(Contract):
+    last_closed: str | None
+    next: MonthToCloseOut
+    closes: list[MonthCloseOut]
+
+
+class ProposeCloseIn(Contract):
+    month: Annotated[str, Field(pattern=r"^[0-9]{4}-[0-9]{2}$")]
+    reason: Reason
+
+
+class DecideCloseIn(Contract):
+    reason: Reason
+
+
+def _close_out(
+    view: month_close.MonthCloseView, names: dict[str, str], staff: StaffSession
+) -> MonthCloseOut:
+    return MonthCloseOut(
+        id=view.id,
+        month=month_label(view.month),
+        status=view.status,
+        books=[
+            SignedLineOut(
+                currency=Currency(line.currency),
+                code=line.code,
+                kind=line.kind,
+                opening=line.opening,
+                debits=line.debits,
+                credits=line.credits,
+                closing=line.closing,
+            )
+            for line in view.books
+        ],
+        books_sha256=view.books_sha256,
+        reason=view.reason,
+        proposed_by=view.proposed_by,
+        proposed_by_name=names.get(view.proposed_by),
+        proposed_at=view.proposed_at,
+        decided_by=view.decided_by,
+        decided_by_name=names.get(view.decided_by) if view.decided_by else None,
+        decided_at=view.decided_at,
+        decision_reason=view.decision_reason,
+        yours=view.proposed_by == staff.staff_id,
+    )
+
+
+async def _one_close(
+    session: AsyncSession, view: month_close.MonthCloseView, staff: StaffSession
+) -> MonthCloseOut:
+    names = await staff_names(
+        session, {view.proposed_by, *([view.decided_by] if view.decided_by else [])}
+    )
+    return _close_out(view, names, staff)
 
 
 def _amount(money: Money) -> AmountOut:
@@ -251,5 +348,106 @@ def create_router() -> APIRouter:
                 "Cache-Control": "no-store",
             },
         )
+
+    @router.get("/month-closes", summary="The month to close next, and the latest closes")
+    async def month_closes(
+        request: Request, staff: FinanceStaff, clock: AppClock
+    ) -> MonthClosesOut:
+        today = business_date(clock.now())
+        database: Database = request.app.state.database
+        async with database.actor_transaction(staff.actor) as session:
+            last = await month_close.last_closed_month(session)
+            offered = month_close.next_month(last, today)
+            ready = await month_close.readiness(session, offered, today)
+            found = await month_close.recent(session)
+            names = await staff_names(
+                session,
+                {p for c in found for p in (c.proposed_by, c.decided_by) if p is not None},
+            )
+        refusal = ready.refusal
+        if refusal is None and any(c.status == "proposed" for c in found):
+            refusal = "close_already_proposed"
+        return MonthClosesOut(
+            last_closed=month_label(last) if last is not None else None,
+            next=MonthToCloseOut(
+                month=month_label(offered), closed_through=ready.closed_through, refusal=refusal
+            ),
+            closes=[_close_out(c, names, staff) for c in found],
+        )
+
+    @router.post("/month-closes", status_code=201, summary="Propose closing a month")
+    async def propose_month_close(
+        request: Request,
+        body: ProposeCloseIn,
+        staff: FinanceStaff,
+        clock: AppClock,
+        idempotency_key: IdempotencyKey,
+    ) -> MonthCloseOut:
+        try:
+            month = parse_month(body.month)
+        except BadMonth:
+            raise _refused("month", "bad_month") from None
+        database: Database = request.app.state.database
+        async with database.actor_transaction(staff.actor) as session:
+            view = await month_close.propose(
+                session,
+                staff,
+                month,
+                reason=body.reason,
+                idempotency_key=idempotency_key,
+                clock=clock,
+            )
+            return await _one_close(session, view, staff)
+
+    @router.post("/month-closes/{close_id}/approve", summary="Close the month")
+    async def approve_month_close(
+        request: Request,
+        close_id: PushId,
+        body: DecideCloseIn,
+        staff: FinanceApprover,
+        clock: AppClock,
+        idempotency_key: IdempotencyKey,
+    ) -> MonthCloseOut:
+        database: Database = request.app.state.database
+        async with database.actor_transaction(staff.actor) as session:
+            view = await month_close.approve(
+                session,
+                staff,
+                close_id,
+                reason=body.reason,
+                idempotency_key=idempotency_key,
+                clock=clock,
+            )
+            return await _one_close(session, view, staff)
+
+    @router.post("/month-closes/{close_id}/decline", summary="Send a month close back")
+    async def decline_month_close(
+        request: Request,
+        close_id: PushId,
+        body: DecideCloseIn,
+        staff: FinanceStaff,
+        clock: AppClock,
+    ) -> MonthCloseOut:
+        database: Database = request.app.state.database
+        async with database.actor_transaction(staff.actor) as session:
+            view = await month_close.decline(
+                session, staff, close_id, reason=body.reason, clock=clock
+            )
+            return await _one_close(session, view, staff)
+
+    @router.post("/month-closes/{close_id}/withdraw", summary="Take back your month close")
+    async def withdraw_month_close(
+        request: Request,
+        close_id: PushId,
+        body: DecideCloseIn,
+        staff: FinanceStaff,
+        clock: AppClock,
+    ) -> MonthCloseOut:
+        database: Database = request.app.state.database
+        async with database.actor_transaction(staff.actor) as session:
+            view = await month_close.withdraw(
+                session, staff, close_id, reason=body.reason, clock=clock
+            )
+            return await _one_close(session, view, staff)
 
     return router

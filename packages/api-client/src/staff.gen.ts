@@ -107,7 +107,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "report_schedule"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "report_schedule", "month_close"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -1017,6 +1017,11 @@ export const DecideChange = z.object({
 });
 export type DecideChange = z.infer<typeof DecideChange>;
 
+export const DecideCloseIn = z.object({
+  reason: z.string(),
+});
+export type DecideCloseIn = z.infer<typeof DecideCloseIn>;
+
 export const DecideIn = z.object({
   reason: z.string(),
 });
@@ -1603,6 +1608,49 @@ export const MonitoringRulesOut = z.object({
 });
 export type MonitoringRulesOut = z.infer<typeof MonitoringRulesOut>;
 
+export const SignedLineOut = z.object({
+  closing: z.number().int(),
+  code: z.string(),
+  credits: z.number().int(),
+  currency: Currency,
+  debits: z.number().int(),
+  kind: z.string(),
+  opening: z.number().int(),
+});
+export type SignedLineOut = z.infer<typeof SignedLineOut>;
+
+export const MonthCloseOut = z.object({
+  books: z.array(SignedLineOut),
+  books_sha256: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decided_by_name: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  id: z.string(),
+  month: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  proposed_by_name: z.string().nullable(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+  yours: z.boolean(),
+});
+export type MonthCloseOut = z.infer<typeof MonthCloseOut>;
+
+export const MonthToCloseOut = z.object({
+  closed_through: z.string().nullable(),
+  month: z.string(),
+  refusal: z.string().nullable(),
+});
+export type MonthToCloseOut = z.infer<typeof MonthToCloseOut>;
+
+export const MonthClosesOut = z.object({
+  closes: z.array(MonthCloseOut),
+  last_closed: z.string().nullable(),
+  next: MonthToCloseOut,
+});
+export type MonthClosesOut = z.infer<typeof MonthClosesOut>;
+
 export const MonthOut = z.object({
   due_on: z.string(),
   month: z.string(),
@@ -1982,6 +2030,12 @@ export const ProposeChange = z.object({
   staff_id: z.string().nullable().optional(),
 });
 export type ProposeChange = z.infer<typeof ProposeChange>;
+
+export const ProposeCloseIn = z.object({
+  month: z.string(),
+  reason: z.string(),
+});
+export type ProposeCloseIn = z.infer<typeof ProposeCloseIn>;
 
 export const ProposeIn = z.object({
   outcome: z.enum(["paid", "failed"]),
@@ -4015,6 +4069,67 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: null,
+  },
+  "GET /staff/finance/month-closes": {
+    method: "GET",
+    path: "/staff/finance/month-closes",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MonthClosesOut,
+  },
+  "POST /staff/finance/month-closes": {
+    method: "POST",
+    path: "/staff/finance/month-closes",
+    params: z.object({}),
+    query: z.object({}),
+    body: ProposeCloseIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: MonthCloseOut,
+  },
+  "POST /staff/finance/month-closes/{close_id}/approve": {
+    method: "POST",
+    path: "/staff/finance/month-closes/{close_id}/approve",
+    params: z.object({
+    close_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideCloseIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: MonthCloseOut,
+  },
+  "POST /staff/finance/month-closes/{close_id}/decline": {
+    method: "POST",
+    path: "/staff/finance/month-closes/{close_id}/decline",
+    params: z.object({
+    close_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideCloseIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: MonthCloseOut,
+  },
+  "POST /staff/finance/month-closes/{close_id}/withdraw": {
+    method: "POST",
+    path: "/staff/finance/month-closes/{close_id}/withdraw",
+    params: z.object({
+    close_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DecideCloseIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: MonthCloseOut,
   },
   "GET /staff/goal-groups": {
     method: "GET",

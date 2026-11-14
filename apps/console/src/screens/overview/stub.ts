@@ -34,6 +34,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
   bank_account_change: { view: "settings.view", decide: "bank_accounts.change" },
   report_schedule: { view: "reports.view", decide: "reports.view" },
+  month_close: { view: "finance.view", decide: "finance.view" },
 };
 
 interface Reader {
