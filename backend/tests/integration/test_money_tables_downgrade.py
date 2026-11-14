@@ -7,8 +7,8 @@ complaints register, the goals, the email delivery records, the unclaimed accoun
 complaint outcomes, the suppression lifts, the client locks, the announcements, the team
 changes, Finvest's own money in the buffer, the payments of tax to URA, the payments moved to
 the right client, next of kin, the answers to the investing questions, the requests to close an
-account, the journals sent to the accounting system or who set the bank account clients pay
-into."""
+account, the journals sent to the accounting system, who set the bank account clients pay into or
+the deposits taken back as mistakes."""
 
 import os
 from collections.abc import Iterator
@@ -878,6 +878,19 @@ ROWS = {
         "'UGX', 'Example Bank', 'Finvest Clients', '9030001234567', 'Trust account', "
         "'-Nabc0000000000000S1', now())",
         "refusing to drop bank accounts that hold records",
+    ),
+    "0261_payment_deposit_reversals": (
+        # The guard admits only staff proposing in their own name, for a confirmed deposit.
+        "ALTER TABLE payment_deposit_reversals DISABLE TRIGGER payment_deposit_reversals_guard; "
+        "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
+        "currency, amount_minor, status, created_at, updated_at) VALUES ('-Nabc0000000000000A1', "
+        "'-Nabc0000000000000B1', 'investment', '-Nabc0000000000000C1', 'bank_transfer', 'bank', "
+        "'UGX', 1000, 'in_review', now(), now()); "
+        "INSERT INTO payment_deposit_reversals (id, deposit_id, client_id, investment_id, "
+        "currency, amount_minor, reason, proposed_by, proposed_at) VALUES "
+        "('-Nabc0000000000000D1', '-Nabc0000000000000A1', '-Nabc0000000000000B1', "
+        "'-Nabc0000000000000C1', 'UGX', 1000, 'Never arrived', '-Nabc0000000000000S1', now())",
+        "refusing to drop the record of reversed deposits",
     ),
     "0224_identity_recovery_asks": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
