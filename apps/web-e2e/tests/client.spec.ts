@@ -40,10 +40,14 @@ test("a new client signs up with a texted code and a password", async ({ page })
   await id(page, "password-confirm-input").fill("green matooke sunday");
   await id(page, "password-submit").click();
 
-  await expect(page.getByText("3 of 4")).toBeVisible();
+  // The link to confirm the email is sent, and confirming it can wait.
+  await expect(page.getByText("3 of 5")).toBeVisible();
+  await expect(page.getByText("Check your email").last()).toBeVisible();
+  await id(page, "email-step-later").click();
+  await expect(page.getByText("4 of 5")).toBeVisible();
   await createPin(page);
   // The browser can make a passkey, so sign up ends by offering one.
-  await expect(page.getByText("4 of 4")).toBeVisible();
+  await expect(page.getByText("5 of 5")).toBeVisible();
   await id(page, "offer-not-now").click();
 
   await expect(page.getByTestId("home")).toBeVisible();
