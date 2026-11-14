@@ -487,6 +487,24 @@ async def summary(session: AsyncSession, clock: Clock) -> Summary:
     )
 
 
+_IN_PERIOD = text(
+    f"SELECT {_COLUMNS} FROM complaints "  # noqa: S608 - constant column list
+    "WHERE (received_at >= :since AND received_at < :until) "
+    "OR (closed_at >= :since AND closed_at < :until) "
+    "OR (received_at < :until AND (closed_at IS NULL OR closed_at >= :until)) "
+    "ORDER BY received_at, id"
+)
+
+
+async def in_period(
+    session: AsyncSession, *, since: datetime, until: datetime, today: date
+) -> list[ComplaintView]:
+    """Every complaint received, closed or still open in the period from `since` up to
+    `until`: what a period's return to the regulator counts. Staff only."""
+    rows = await session.execute(_IN_PERIOD, {"since": since, "until": until})
+    return [_view(row, today) for row in rows.all()]
+
+
 def _same_complaint(saved: Row[Any], client_id: str, new: NewComplaint) -> None:
     """A repeated key answers with the complaint it logged, but only for the same complaint.
 
