@@ -11,6 +11,14 @@ import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { AccountsSection } from "./Accounts.tsx";
 import { notConnectedReviewQueueApi, type ReviewQueueApi } from "./api.ts";
+import { EverythingSection } from "./Everything.tsx";
+import {
+  createHttpWholeQueueApi,
+  createStubWholeQueueApi,
+  notConnectedWholeQueueApi,
+  type QueueGroup,
+  type WholeQueueApi,
+} from "./everything.ts";
 import { HeldSection } from "./Held.tsx";
 import { createHttpReviewQueueApi } from "./http.ts";
 import {
@@ -24,18 +32,20 @@ import { createStubReviewQueueApi, type StubCase } from "./stub.ts";
 import { createHttpTransfersApi, createStubTransfersApi, notConnectedTransfersApi, type TransfersApi } from "./transfers.ts";
 import { TransfersSection } from "./Transfers.tsx";
 
-type Tab = "accounts" | "held" | "transfers" | "organisations";
+type Tab = "all" | "accounts" | "held" | "transfers" | "organisations";
 
-const SUMMARY =
-  "Only what the system could not clear on its own: payout accounts to check, large withdrawals to release, large investments sent between clients, and company and group accounts to open.";
+const GROUPS: readonly QueueGroup[] = ["deposits", "identity", "accounts", "withdrawals", "transfers"];
+
+const SUMMARY = "Only what the system could not clear on its own, longest waiting first.";
 
 function tabOf(value: string | null, canReviewOrganisations: boolean): Tab {
-  if (value === "held" || value === "transfers") return value;
-  return value === "organisations" && canReviewOrganisations ? "organisations" : "accounts";
+  if (value === "accounts" || value === "held" || value === "transfers") return value;
+  return value === "organisations" && canReviewOrganisations ? "organisations" : "all";
 }
 
 export function ReviewQueueScreen({
   api,
+  whole = notConnectedWholeQueueApi,
   transfers = notConnectedTransfersApi,
   directory,
   me,
@@ -47,6 +57,8 @@ export function ReviewQueueScreen({
   newKey = () => crypto.randomUUID(),
 }: {
   api: ReviewQueueApi;
+  /** Everything waiting, in one list. */
+  whole?: WholeQueueApi;
   transfers?: TransfersApi;
   /** Company and group account applications, shown only to someone with `organisations.review`. */
   organisations?: OrganisationsApi;
@@ -62,13 +74,17 @@ export function ReviewQueueScreen({
 }) {
   const [params, setParams] = useSearchParams();
   const tab = tabOf(params.get("tab"), canReviewOrganisations);
+  const shownGroup = params.get("group");
+  const group = GROUPS.find((g) => g === shownGroup) ?? null;
   const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({});
   const countAccounts = useCallback((count: number) => setCounts((known) => ({ ...known, accounts: count })), []);
   const countHeld = useCallback((count: number) => setCounts((known) => ({ ...known, held: count })), []);
   const countTransfers = useCallback((count: number) => setCounts((known) => ({ ...known, transfers: count })), []);
   const countOrganisations = useCallback((count: number) => setCounts((known) => ({ ...known, organisations: count })), []);
+  const countAll = useCallback((count: number) => setCounts((known) => ({ ...known, all: count })), []);
 
   const tabs: { id: Tab; label: string }[] = [
+    { id: "all", label: "Everything waiting" },
     { id: "accounts", label: "Payout accounts" },
     { id: "held", label: "Held payouts" },
     { id: "transfers", label: "Held transfers" },
@@ -87,7 +103,7 @@ export function ReviewQueueScreen({
               role="tab"
               aria-selected={tab === id}
               onClick={() => {
-                if (id !== tab) setParams(id === "accounts" ? {} : { tab: id });
+                if (id !== tab) setParams(id === "all" ? {} : { tab: id });
               }}
               className={cn(
                 "h-11 cursor-pointer rounded-pill px-4 text-sm",
@@ -101,7 +117,16 @@ export function ReviewQueueScreen({
         </div>
       </div>
 
-      {tab === "accounts" ? (
+      {tab === "all" ? (
+        <EverythingSection
+          api={whole}
+          directory={directory}
+          now={now}
+          group={group}
+          onGroup={(chosen) => setParams(chosen ? { group: chosen } : {})}
+          onCount={countAll}
+        />
+      ) : tab === "accounts" ? (
         <AccountsSection
           api={api}
           directory={directory}
@@ -109,7 +134,7 @@ export function ReviewQueueScreen({
           canDecide={canDecide}
           now={now}
           selectedId={params.get("account")}
-          onSelect={(id) => setParams({ account: id })}
+          onSelect={(id) => setParams({ tab: "accounts", account: id })}
           onCount={countAccounts}
         />
       ) : tab === "transfers" ? (
@@ -158,8 +183,9 @@ export default function ReviewQueuePage() {
   const { session } = useAuth();
   // A sample queue under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and
   // `?sample=error` show those states. Otherwise the real API.
-  const [{ api, transfers, directory, organisations }] = useState<{
+  const [{ api, whole, transfers, directory, organisations }] = useState<{
     api: ReviewQueueApi;
+    whole: WholeQueueApi;
     transfers: TransfersApi;
     directory: Directory;
     organisations: OrganisationsApi;
@@ -168,6 +194,7 @@ export default function ReviewQueuePage() {
       const me = { id: session.staffId, name: session.name };
       return {
         api: createStubReviewQueueApi(me.id, Date.now, stubCase()),
+        whole: createStubWholeQueueApi(me.id, Date.now, stubCase()),
         transfers: createStubTransfersApi(me.id, Date.now, stubCase()),
         directory: createStubDirectory(me),
         organisations: createStubOrganisationsApi(me.id, Date.now, stubCase()),
@@ -175,11 +202,12 @@ export default function ReviewQueuePage() {
     }
     const base = apiBaseUrl();
     if (!base) {
-      return { api: notConnectedReviewQueueApi, transfers: notConnectedTransfersApi, directory: emptyDirectory, organisations: notConnectedOrganisationsApi };
+      return { api: notConnectedReviewQueueApi, whole: notConnectedWholeQueueApi, transfers: notConnectedTransfersApi, directory: emptyDirectory, organisations: notConnectedOrganisationsApi };
     }
     const http = createHttp(base);
     return {
       api: createHttpReviewQueueApi(http),
+      whole: createHttpWholeQueueApi(http),
       transfers: createHttpTransfersApi(http),
       directory: createHttpDirectory(http),
       organisations: createHttpOrganisationsApi(http),
@@ -188,6 +216,7 @@ export default function ReviewQueuePage() {
   return (
     <ReviewQueueScreen
       api={api}
+      whole={whole}
       transfers={transfers}
       directory={directory}
       organisations={organisations}
