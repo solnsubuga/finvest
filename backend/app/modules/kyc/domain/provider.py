@@ -40,6 +40,15 @@ class CheckOutcome:
 
 
 @dataclass(frozen=True, slots=True)
+class PhotoRef:
+    """Where a photo is stored, and its digest, which reading it back checks."""
+
+    storage_key: str
+    sha256: str
+    content_type: str
+
+
+@dataclass(frozen=True, slots=True)
 class ProviderRequest:
     """One submission. The key is the same on every retry of the same submission."""
 
@@ -47,8 +56,8 @@ class ProviderRequest:
     document_type: DocumentType
     document_country: str
     details: IdentityDetails
-    # Storage keys, not bytes: the adapter fetches or signs links for what it needs.
-    photos: Mapping[PhotoKind, str] = field(default_factory=dict)
+    # Where the current photos are, not their bytes: the adapter fetches what it needs.
+    photos: Mapping[PhotoKind, PhotoRef] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)

@@ -4,15 +4,17 @@ The test database is shared, so a worker here may also pick up submissions other
 waiting. Each test looks only at its own check.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import text
 
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.kyc import service as kyc
-from app.modules.kyc.domain.checks import CheckStatus
+from app.modules.kyc.domain.checks import CheckStatus, PhotoKind
 from app.modules.kyc.domain.provider import (
     Accepted,
     Pending,
@@ -21,12 +23,13 @@ from app.modules.kyc.domain.provider import (
     ProviderUncertain,
     Refused,
 )
+from app.modules.kyc.iotec import IotecVerifyProvider
 from app.modules.kyc.jobs import ProviderJobs, sweep_unanswered
 from app.modules.kyc.providers import ManualProvider
 from app.shared.actors import SYSTEM
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
-from tests.support.kyc import SEALER, FakeProvider, ready_draft
+from tests.support.kyc import SEALER, SHA256, FakeProvider, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 
@@ -118,7 +121,10 @@ async def test_a_submission_is_sent_read_and_given_to_staff_as_passed(
     assert sends(provider, key) == 1
     sent = next(r for r in provider.submitted if r.idempotency_key == key)
     assert sent.details == view.details
-    assert set(sent.photos.values()) == {photo.storage_key for photo in view.photos}
+    assert {photo.storage_key for photo in sent.photos.values()} == {
+        photo.storage_key for photo in view.photos
+    }
+    assert {photo.sha256 for photo in sent.photos.values()} == {SHA256}
     assert await jobs_for(worker_database, key) == {
         kyc.SEND_CHECK: ("succeeded", None),
         kyc.READ_RESULT: ("succeeded", None),
@@ -258,3 +264,62 @@ async def test_a_send_for_a_check_that_moved_on_does_nothing(
     await work(worker_database, fake_clock, provider)
     assert sends(provider, key) == 0
     assert (await check(app_database, check_id)).review_flags == ("provider_no_answer",)
+
+
+@dataclass
+class PhotoShelf:
+    """Hands back a photo for any key it is asked for, and notes the digest it was given."""
+
+    asked: list[tuple[str, str]] = field(default_factory=list)
+
+    async def read(self, key: str, *, sha256: str) -> bytes:
+        self.asked.append((key, sha256))
+        return b"\xff\xd8\xff photo"
+
+
+async def test_iotec_verify_runs_its_three_checks_through_the_worker(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    ids = {
+        "/api/idv/verify-person-information": "11111111-1111-4111-8111-111111111111",
+        "/api/face-match": "22222222-2222-4222-8222-222222222222",
+        "/api/aml-screening": "33333333-3333-4333-8333-333333333333",
+    }
+    answers = {
+        ids["/api/idv/verify-person-information"]: {
+            "status": "Completed",
+            "matchingStatus": "True",
+            "cardStatus": "Valid",
+        },
+        ids["/api/face-match"]: {
+            "status": "Completed",
+            "faceMatchStatus": "Success",
+            "isIdentical": True,
+            "confidence": 0.97,
+        },
+        ids["/api/aml-screening"]: {"status": "Completed", "verificationStatus": "HasHits"},
+    }
+
+    def iotec(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(200, json={"id": ids[request.url.path], "status": "Pending"})
+        return httpx.Response(200, json=answers[request.url.path.rsplit("/", 1)[1]])
+
+    shelf = PhotoShelf()
+    provider = IotecVerifyProvider(
+        client_id="client-1",
+        api_key=SecretStr("IO-key"),
+        storage=shelf,  # type: ignore[arg-type]
+        client=httpx.AsyncClient(transport=httpx.MockTransport(iotec)),
+    )
+    check_id, _ = await hand_in(app_database, fake_clock, provider)
+    await work(worker_database, fake_clock, provider, automatic_approval=True)
+
+    view = await check(app_database, check_id)
+    assert view.status is CheckStatus.NEEDS_REVIEW
+    assert view.review_flags == ("screening_fail",)
+    assert view.provider_reference == ("iotec:idv={},face={},aml={}".format(*ids.values()))
+    photos = {photo.kind: photo.storage_key for photo in view.photos}
+    assert sorted(shelf.asked) == sorted(
+        [(photos[PhotoKind.SELFIE], SHA256), (photos[PhotoKind.FRONT], SHA256)]
+    )

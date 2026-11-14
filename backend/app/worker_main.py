@@ -17,6 +17,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.push import PushSettings
 from app.infrastructure.settings import Settings
 from app.infrastructure.sms import SmsSettings
+from app.infrastructure.storage import StorageSettings
 from app.modules.autoinvest.jobs import AutoinvestJobs
 from app.modules.dealing.jobs import DealingJobs
 from app.modules.documents.jobs import DocumentJobs
@@ -83,7 +84,8 @@ def handlers(
             ProviderJobs(
                 database,
                 identity.sealer(),
-                identity.provider(),
+                # The provider reads the photos it sends from private storage.
+                identity.provider(StorageSettings().storage()),
                 clock,
                 automatic_approval=identity.identity_automatic_approval,
             ).handlers()
