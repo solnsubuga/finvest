@@ -18067,8 +18067,19 @@
         "title": "Unread",
         "type": "object"
       },
+      "UpcomingKind": {
+        "enum": [
+          "maturity",
+          "autoinvest_run",
+          "goal_saving",
+          "goal_date"
+        ],
+        "title": "UpcomingKind",
+        "type": "string"
+      },
       "UpcomingView": {
         "additionalProperties": false,
+        "description": "One thing coming up. `amount_minor` is, by `kind`: what a maturity pays back after tax,\nwhat a run or a goal saving asks for, or a goal's target.",
         "properties": {
           "amount_minor": {
             "title": "Amount Minor",
@@ -18084,27 +18095,87 @@
               }
             ]
           },
+          "goal_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Id"
+          },
+          "goal_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Name"
+          },
           "investment_id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Investment Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Investment Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/UpcomingKind"
           },
           "on": {
             "format": "date",
             "title": "On",
             "type": "string"
           },
+          "plan_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Id"
+          },
           "product_name": {
-            "title": "Product Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
           }
         },
         "required": [
+          "kind",
           "on",
           "investment_id",
+          "plan_id",
+          "goal_id",
           "product_name",
+          "goal_name",
           "at_maturity",
           "amount_minor"
         ],
