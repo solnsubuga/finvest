@@ -47,6 +47,7 @@ from app.modules.kyc import service as kyc
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.ledger.domain.errors import InsufficientFunds
+from app.modules.migration import switch
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments import service
 from app.modules.payments.domain.deposits import DepositStatus, Method, Purpose
@@ -468,9 +469,9 @@ async def get_reassignment(
         to_client=to_client,
         line=line,
         reference_names_to_client=line is not None
-        and reference_names(line.reference, to_client.account_number),
+        and reference_names(line.reference, *await _numbers(session, to_client)),
         reference_names_from_client=line is not None
-        and reference_names(line.reference, from_client.account_number),
+        and reference_names(line.reference, *await _numbers(session, from_client)),
         refusal=problem,
     )
 
@@ -641,6 +642,12 @@ async def _party(session: AsyncSession, client_id: str) -> Party:
         return Party(client_id, None, None)
     name = " ".join(f"{holder.given_names} {holder.surname}".split())
     return Party(client_id, name or None, holder.account_number)
+
+
+async def _numbers(session: AsyncSession, party: Party) -> tuple[str | None, str | None]:
+    """The numbers a client may write on a transfer: their Finvest account number and, for a
+    client carried over from Finvest 1.0, their old one."""
+    return party.account_number, await switch.legacy_account_number(session, party.client_id)
 
 
 async def _deposit(session: AsyncSession, deposit_id: str) -> Deposit:

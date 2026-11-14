@@ -15,7 +15,9 @@ from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.sealing import Sealer
 from app.modules.identity.service import create_unclaimed_client
-from app.shared.actors import Actor
+from app.modules.migration import switch as switching
+from app.shared.actors import SYSTEM, Actor
+from app.shared.push_ids import push_id
 from tests.integration.test_identity import HASHER, STAFF_ORIGIN
 from tests.integration.test_migration_api import AS_OF, Console, code
 from tests.support import database as harness
@@ -112,7 +114,10 @@ async def table(database: Database, sql: str, **values: Any) -> list[Any]:
 
 
 async def test_one_person_proposes_the_switch_and_another_approves_it(
-    console: Console, migrator_database: Database
+    console: Console,
+    app_database: Database,
+    worker_database: Database,
+    migrator_database: Database,
 ) -> None:
     files = sheets(2)
     await cleared(console, files, 2)
@@ -150,7 +155,8 @@ async def test_one_person_proposes_the_switch_and_another_approves_it(
 
     carried = await table(
         migrator_database,
-        "SELECT c.legacy_client_ref, c.carried_by, i.status, i.password_hash "
+        "SELECT c.legacy_client_ref, c.client_id, c.carried_by, c.legacy_account_number, i.status, "
+        "i.password_hash "
         "FROM migration_carried_clients AS c JOIN identity_clients AS i ON i.id = c.client_id "
         "ORDER BY c.legacy_client_ref",
     )
@@ -159,6 +165,12 @@ async def test_one_person_proposes_the_switch_and_another_approves_it(
         ("2", approver, "unclaimed"),
     ]
     assert all(row.password_hash is None for row in carried)
+    # The old account number is kept, so a transfer that still quotes it can be matched.
+    assert [row.legacy_account_number for row in carried] == ["11", "12"]
+    for database, actor in ((app_database, Actor("staff", approver)), (worker_database, SYSTEM)):
+        async with database.actor_transaction(actor) as session:
+            assert await switching.legacy_account_number(session, carried[0].client_id) == "11"
+            assert await switching.legacy_account_number(session, push_id()) is None
 
     # Once approved, the switch is never proposed again.
     await console.sign_in("operations")

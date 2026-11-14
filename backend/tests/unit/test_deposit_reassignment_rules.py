@@ -138,9 +138,19 @@ def test_a_reason_is_trimmed_and_must_say_something_short() -> None:
         ("", "1234567890", False),
         ("1234567890", None, False),
         ("1234567890", "", False),
+        # An old Finvest 1.0 number, however short, must still be long enough to mean something.
+        ("FV1-00042 June", "FV1-00042", True),
+        ("Ref 12345 school fees", "12345", False),
     ],
 )
 def test_a_reference_names_an_account_number_whatever_the_bank_did_to_spaces(
     reference: str, account: str | None, names: bool
 ) -> None:
     assert reference_names(reference, account) is names
+
+
+def test_a_reference_names_the_client_by_either_number() -> None:
+    assert reference_names("old acc CL7731-22", "1234567890", "CL7731-22")
+    assert reference_names("FV 1234567890", "1234567890", None)
+    assert not reference_names("FV 9999999999", "1234567890", "CL7731-22")
+    assert not reference_names("FV 1234567890")

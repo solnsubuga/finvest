@@ -80,7 +80,12 @@ _INSERT_DECISION = text(
 )
 _INSERT_CARRIED = text(
     "INSERT INTO migration_carried_clients (legacy_client_ref, switch_id, client_id, carried_by, "
-    "carried_at) VALUES (:ref, :switch_id, :client_id, :carried_by, :carried_at)"
+    "carried_at, legacy_account_number) "
+    "VALUES (:ref, :switch_id, :client_id, :carried_by, :carried_at, :account_number)"
+)
+
+_LEGACY_ACCOUNT_NUMBER = text(
+    "SELECT legacy_account_number FROM migration_carried_clients WHERE client_id = :client_id"
 )
 
 
@@ -271,6 +276,13 @@ async def open_sheets(session: AsyncSession, sealer: Sealer, switch_id: str) -> 
     )
 
 
+async def legacy_account_number(session: AsyncSession, client_id: str) -> str | None:
+    """The client's Finvest 1.0 account number, kept as a bank reference, or None if they were
+    not carried over or the sheet gave none. Readable in a staff or worker transaction."""
+    value: str | None = await session.scalar(_LEGACY_ACCOUNT_NUMBER, {"client_id": client_id})
+    return value
+
+
 # Internals --------------------------------------------------------------------------------------
 
 
@@ -341,6 +353,7 @@ async def _create_accounts(
                 "client_id": client_id,
                 "carried_by": _id(staff),
                 "carried_at": now,
+                "account_number": client.legacy_account_number,
             },
         )
     if taken:

@@ -39,7 +39,7 @@ One format covers Finvest 1.0 exports and records kept by hand. It is two sheets
 | `id_number` | If verified | |
 | `id_expires_on` | No | An expired document means the client redoes the ID check when they claim. |
 | `id_verified` | Yes | `yes` if Finvest 1.0 checked this person's identity document, otherwise `no`. |
-| `legacy_account_number` | No | The old account number, kept as a bank reference. |
+| `legacy_account_number` | No | The old account number, kept as a bank reference. The switch stores it with the client in `migration_carried_clients`, and staff checking a reassignment see when a statement line's reference carries it. Each number is used once. |
 | `next_of_kin_name`, `next_of_kin_phone` | No | |
 
 ### Investments sheet
@@ -120,7 +120,7 @@ The switch is proposed by one member of staff and approved by a different one, t
 
 - **Proposing.** Operations send the two sheets of the latest trial again. They must be the same files byte for byte, checked by fingerprint, and nothing may block the switch. The trial's "as of" day must be over, because interest is opened up to that day. Every client must have a phone number, because the phone is how a client claims the account. A client without one holds the switch until staff add the number to the sheet and run the trial again. Only one proposal waits at a time.
 - **Keeping the sheets.** The sheets are kept sealed with the identity data key in `migration_switch_files`, for the approval and for the worker that carries the investments over. The worker removes them when it is done. No other migration table holds anything from a sheet.
-- **Approving.** Finance check everything again: the same trial is still the latest, nothing blocks it, and the sheets read the same with today's products and tax rates. The approval then creates every client's account, with no password, in the approver's transaction. It records each Finvest 1.0 reference with its new account in `migration_carried_clients`. Either every client gets an account or none does. A phone number that already has an account in Finvest 2.0 refuses the whole approval, names the clients sheet rows, and keeps nothing. A rejection needs a reason, and the switch can then be proposed again.
+- **Approving.** Finance check everything again: the same trial is still the latest, nothing blocks it, and the sheets read the same with today's products and tax rates. The approval then creates every client's account, with no password, in the approver's transaction. It records each Finvest 1.0 reference and old account number with its new account in `migration_carried_clients`; `switch.legacy_account_number` reads the old number back for other modules. Either every client gets an account or none does. A phone number that already has an account in Finvest 2.0 refuses the whole approval, names the clients sheet rows, and keeps nothing. A rejection needs a reason, and the switch can then be proposed again.
 - **What the database holds it to.** The decision is by someone other than the proposer. At most one switch is ever approved. A client is carried over only in the transaction that approved the switch, by the person who approved it. Each of these tables is insert-only, except that the worker deletes the sealed sheets.
 
 The overview shows the newest proposal under `switch`, with its state, who decided it and how many accounts it created. Orders still awaiting payment are counted by the trial and never opened: the client places the order again after claiming.

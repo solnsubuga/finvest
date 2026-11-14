@@ -109,6 +109,10 @@ def refusal(facts: Facts) -> Refusal | None:
     return None
 
 
+# Old Finvest 1.0 numbers can be short. Finvest account numbers are ten digits.
+MIN_REFERENCE_DIGITS = 6
+
+
 def clean_text(value: str) -> str | None:
     """A reason or note, trimmed, or None if it is empty or too long."""
     cleaned = " ".join(value.split())
@@ -117,14 +121,18 @@ def clean_text(value: str) -> str | None:
     return cleaned
 
 
-def reference_names(reference: str, account_number: str | None) -> bool:
-    """Whether a statement line's reference carries this client's Finvest account number.
+def reference_names(reference: str, *account_numbers: str | None) -> bool:
+    """Whether a statement line's reference carries one of this client's account numbers: their
+    Finvest account number, or the Finvest 1.0 one a carried-over client may still write.
 
     Clients are asked to write their account number on a transfer. Banks cut and change
-    references, so this is a hint shown to staff, never a rule.
+    references, so this is a hint shown to staff, never a rule. A number shorter than
+    `MIN_REFERENCE_DIGITS` letters and digits would be found inside too many references to mean
+    anything, so it never matches.
     """
-    if not account_number:
-        return False
     squeeze = "".join(ch for ch in reference.upper() if ch.isalnum())
-    wanted = "".join(ch for ch in account_number.upper() if ch.isalnum())
-    return bool(wanted) and wanted in squeeze
+    for account_number in account_numbers:
+        wanted = "".join(ch for ch in (account_number or "").upper() if ch.isalnum())
+        if len(wanted) >= MIN_REFERENCE_DIGITS and wanted in squeeze:
+            return True
+    return False
