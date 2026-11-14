@@ -44,7 +44,7 @@ function sampleStranded(now: Date, me: string): StrandedPayout[] {
     outcome: "failed",
     statementLineId: null,
     statementId: "-OdStatement000000004",
-    reason: "No ioTec line carries this payout on any day from the send to the 4th. Checked each statement.",
+    reason: "No ioTec line carries this payout on any day from the send to three days after it. Checked each statement.",
     proposedBy: by,
     proposedAt: ago(minutes, now),
   });

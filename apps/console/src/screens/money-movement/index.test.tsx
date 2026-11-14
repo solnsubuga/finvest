@@ -56,7 +56,7 @@ describe("money movement screen", () => {
     expect(screen.getByText(/A colleague proposed/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Your reason"), "Checked every statement");
     await user.click(screen.getByRole("button", { name: "Approve as second person" }));
-    expect(await screen.findByText("Settled. The client has been told.")).toBeInTheDocument();
+    expect(await screen.findByText("Settled.")).toBeInTheDocument();
     expect(within(stranded()).queryByRole("button", { name: /UGX 5,000,000/ })).not.toBeInTheDocument();
   });
 
@@ -82,6 +82,21 @@ describe("money movement screen", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("We could not reach Finvest.");
     await user.click(screen.getByRole("button", { name: "Approve as second person" }));
     expect(approve.mock.calls.map((call) => call[0])).toEqual(["key-1", "key-1"]);
+  });
+
+  it("treats an unnamed conflict as a definite refusal: a new key, and the list reloads", async () => {
+    const api = createStubPayoutsApi(ME, 0);
+    const approve = vi.spyOn(api, "approve").mockRejectedValueOnce(new PayoutsError("refused"));
+    const reload = vi.spyOn(api, "listStranded");
+    const user = renderScreen(api);
+    await screen.findByRole("list", { name: "Payouts never answered for" });
+    await user.click(within(stranded()).getByRole("button", { name: /UGX 5,000,000/ }));
+    await user.type(screen.getByLabelText("Your reason"), "Checked");
+    await user.click(screen.getByRole("button", { name: "Approve as second person" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Finvest refused this as things now stand.");
+    expect(reload).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole("button", { name: "Approve as second person" }));
+    expect(approve.mock.calls.map((call) => call[0])).toEqual(["key-1", "key-2"]);
   });
 
   it("says when the person did not confirm it is them", async () => {

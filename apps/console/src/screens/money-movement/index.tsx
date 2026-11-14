@@ -216,7 +216,7 @@ export function MoneyMovementScreen({ api, me, canSettle, newKey = () => crypto.
 
 const DONE: Record<SettleCommand["action"], string> = {
   propose: "Proposed. A different person must now approve it.",
-  approve: "Settled. The client has been told.",
+  approve: "Settled.",
   decline: "Declined. The payout is waiting for a new proposal.",
   withdraw: "Withdrawn. The payout is waiting for a new proposal.",
 };
@@ -224,6 +224,7 @@ const DONE: Record<SettleCommand["action"], string> = {
 // Refusals that mean the list on screen is out of date.
 const REFRESH: ReadonlySet<string> = new Set([
   "not_found",
+  "refused",
   "payout_not_stranded",
   "resolution_already_proposed",
   "resolution_already_decided",

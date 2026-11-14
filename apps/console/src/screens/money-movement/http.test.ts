@@ -117,6 +117,7 @@ describe("payouts that need a person, over HTTP", () => {
       [refusal(403, "forbidden", "proposed_by_you"), "You proposed this, so a different person must decide it."],
       [refusal(403, "confirm_it_is_you"), "you did not confirm it is you"],
       [refusal(404, "not_found"), "no longer exists"],
+      [refusal(409, "conflict", "something_new"), "Finvest refused this as things now stand."],
     ];
     for (const [response, words] of cases) {
       const fetch = vi.fn<typeof globalThis.fetch>(() => response);

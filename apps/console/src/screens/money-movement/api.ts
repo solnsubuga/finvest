@@ -71,11 +71,12 @@ export interface PayoutsApi {
   withdraw(resolutionId: string, reason: string): Promise<void>;
 }
 
-/** Refusals the screen words for staff. Anything else reads as "could not reach Finvest". */
+/** Refusals the screen words for staff. An unnamed conflict reads as `refused`; anything else as "could not reach Finvest". */
 export type PayoutsErrorCode =
   | "not_connected"
   | "unavailable"
   | "forbidden"
+  | "refused"
   | "not_found"
   | "invalid"
   | "not_confirmed"
@@ -104,6 +105,7 @@ const MESSAGES: Record<PayoutsErrorCode, string> = {
   not_connected: "The console is not connected to Finvest yet.",
   unavailable: "We could not reach Finvest. Try again in a moment.",
   forbidden: "Your role cannot do this.",
+  refused: "Finvest refused this as things now stand. The list has been refreshed.",
   not_found: "This payout or proposal no longer exists. The list has been refreshed.",
   invalid: "Finvest did not accept what was entered. Check the reason and the IDs.",
   not_confirmed: "Nothing was done, because you did not confirm it is you.",

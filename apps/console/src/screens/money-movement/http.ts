@@ -112,6 +112,10 @@ export function toPayoutsError(error: unknown): PayoutsError {
       return new PayoutsError("not_confirmed");
     case "forbidden":
       return new PayoutsError("forbidden");
+    // A refusal of the current state that this screen does not name yet. It is a definite
+    // answer, not a lost one.
+    case "conflict":
+      return new PayoutsError("refused");
     default:
       return new PayoutsError("unavailable");
   }
