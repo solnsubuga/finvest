@@ -18,6 +18,9 @@ import {
   type WordingText,
   type WordingsApi,
 } from "./api.ts";
+import { AccountCodesSection } from "./AccountCodes.tsx";
+import { createHttpAccountCodesApi, notConnectedAccountCodesApi, type AccountCodesApi } from "./accountCodes.ts";
+import { createStubAccountCodesApi } from "./accountCodesStub.ts";
 import { AnnouncementsSection } from "./Announcements.tsx";
 import { BankAccountsSection } from "./BankAccounts.tsx";
 import { notConnectedBankAccountsApi, type BankAccountsApi } from "./bankAccounts.ts";
@@ -45,9 +48,22 @@ interface SettingsScreenProps {
   canSend: boolean;
   /** `bank_accounts.change`: propose and decide the account clients pay into. The API checks it again. */
   canChangeBankAccount: boolean;
+  codes?: AccountCodesApi;
+  /** `account_codes.change`: propose and decide accounting system codes. The API checks it again. */
+  canChangeCodes?: boolean;
 }
 
-export function SettingsScreen({ api, announcements, bankAccounts, directory, canChange, canSend, canChangeBankAccount }: SettingsScreenProps) {
+export function SettingsScreen({
+  api,
+  announcements,
+  bankAccounts,
+  directory,
+  canChange,
+  canSend,
+  canChangeBankAccount,
+  codes = notConnectedAccountCodesApi,
+  canChangeCodes = false,
+}: SettingsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -133,6 +149,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
           Loading settings
         </p>
         <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
       </>
     );
   }
@@ -155,6 +172,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
           </Button>
         </section>
         <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
       </>
     );
   }
@@ -229,6 +247,7 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
         )}
       </section>
       <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
     </>
   );
 }
@@ -236,11 +255,12 @@ export function SettingsScreen({ api, announcements, bankAccounts, directory, ca
 export default function SettingsPage() {
   const { session } = useAuth();
   // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
-  const [{ api, announcements, bankAccounts, directory }] = useState<{
+  const [{ api, announcements, bankAccounts, directory, codes }] = useState<{
     api: WordingsApi;
     announcements: AnnouncementsApi;
     bankAccounts: BankAccountsApi;
     directory: Directory;
+    codes: AccountCodesApi;
   }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
@@ -253,6 +273,7 @@ export default function SettingsPage() {
           announcements: notConnectedAnnouncementsApi,
           bankAccounts: notConnectedBankAccountsApi,
           directory: createStubDirectory(me),
+          codes: notConnectedAccountCodesApi,
         };
       }
       const seed: BankAccountsSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : "sample";
@@ -261,6 +282,7 @@ export default function SettingsPage() {
         announcements: createStubAnnouncementsApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
         bankAccounts: createStubBankAccountsApi(me, Date.now, seed),
         directory: createStubDirectory(me),
+        codes: createStubAccountCodesApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
       };
     }
     const base = apiBaseUrl();
@@ -270,6 +292,7 @@ export default function SettingsPage() {
         announcements: notConnectedAnnouncementsApi,
         bankAccounts: notConnectedBankAccountsApi,
         directory: emptyDirectory,
+        codes: notConnectedAccountCodesApi,
       };
     }
     const http = createHttp(base);
@@ -278,6 +301,7 @@ export default function SettingsPage() {
       announcements: createHttpAnnouncementsApi(http),
       bankAccounts: createHttpBankAccountsApi(http),
       directory: createHttpDirectory(http),
+      codes: createHttpAccountCodesApi(http),
     };
   });
   return (
@@ -289,6 +313,8 @@ export default function SettingsPage() {
       canChange={session ? can(session, "wordings.change") : false}
       canSend={session ? can(session, "announcements.send") : false}
       canChangeBankAccount={session ? can(session, "bank_accounts.change") : false}
+      codes={codes}
+      canChangeCodes={session ? can(session, "account_codes.change") : false}
     />
   );
 }

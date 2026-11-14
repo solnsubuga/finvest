@@ -4,7 +4,7 @@ Sanctions and politically exposed person (PEP) screening, transaction monitoring
 
 ## In short
 
-- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The call at hand-in lands with the identity checks thread's next PR; until then a newly approved client's first screen comes from the nightly sweep.
+- Every client is screened when they hand in their identity check, again every 30 days once approved, and before a payout unless they were screened clear in the last 24 hours. The identity check asks for the screen in the hand-in's own transaction (`Reason.ONBOARDING`, keyed by the check and its submission), once a provider is set up; with none, it asks for nothing, so a pending screen never holds a new client's payouts. Staff see the client's standing on the identity check (`screening` on the staff check): anything but `clear` is a reason to look before approving.
 - The provider is behind a port, so it can be swapped. The owner chose Sigma360. Until its account exists, no provider is set up and every screen is recorded as **not run**; the Compliance screen says screening is off.
 - A screen that finds a listed entity that may be the client opens a **case**. Two members of staff close it: one proposes the outcome, a different one approves it.
 - An entity already on a case for the client (still open, ruled out, accepted as a PEP, or confirmed as sanctioned) is recognised the next time and opens no new case.
@@ -114,12 +114,13 @@ What the database enforces: `screening_payout_clearance(client, at)` holds the r
 
 Migration `0182_transaction_monitoring`. The rules are `domain/monitoring.py`: pure, whole numbers only, and in Uganda shillings. Dollar transactions are recorded but no rule reads them, while the dollar product is paused.
 
-`monitoring_transactions` is screening's own record of each confirmed deposit and each payout asked for: the client, the amount, and when. The rules read a client's earlier ones from it, so screening never reads another module's tables for history.
+`monitoring_transactions` is screening's own record of each confirmed deposit, each payout asked for and each transfer between clients: the client, the amount, and when. The rules read a client's earlier ones from it, so screening never reads another module's tables for history.
 
 | What | How it arrives | When it counts from |
 | --- | --- | --- |
 | A deposit | Screening consumes `payments.deposit_confirmed` (`screening.monitor_deposit`) and reads the deposit from payments | When it was confirmed |
 | A payout | Payouts calls `contract.watch_payout` when a payout is created, which queues `screening.monitor_payout`; the worker reads the payout from payouts | When it was asked for |
+| A transfer between clients | Investments calls `contract.watch_transfer` in the worker transaction that makes the transfer, which queues `screening.monitor_transfer`; the worker reads it with `investments.transfers.for_monitoring` and records it twice, `transfer_sent` for the sender and `transfer_received` for the recipient (migration `0183_monitoring_transfers`). A transfer that was not made records nothing | When it was made |
 
 Each job carries only an ID. A transaction is recorded once, whatever the job does twice, and one client's transactions are recorded one at a time, so two deposits confirmed together see each other.
 
@@ -130,6 +131,8 @@ Each job carries only an ID. A transaction is recorded once, whatever the job do
 | Many deposits | `many_deposits` | The 5th deposit within 24 hours | Client and day |
 | Unusual deposit | `unusual_deposit` | A deposit of UGX 5,000,000 or more that is at least 5 times the client's median deposit over the last 180 days, once they have 3 earlier deposits in that time | Deposit |
 | Quick withdrawal | `quick_withdrawal` | A payout of at least half of what came in during the last 7 days, when that was UGX 5,000,000 or more | Payout |
+
+Money received by transfer counts as a deposit in the four deposit rules, and money sent by transfer counts as a payout in the quick withdrawal rule, since a transfer moves the same value between clients as paying in and taking out would. A case whose transactions include a transfer lists those IDs under `transfer_ids` in its detail, so staff know to look them up among transfers rather than deposits or payouts.
 
 The owner kept all thresholds as built on 2026-11-14 ([decisions.md](decisions.md)), and counsel reviews them later. UGX 20,000,000 follows the Financial Intelligence Authority's large cash transaction threshold, which that review confirms. The median, not the mean, is the usual deposit, so one big deposit does not hide the next.
 
@@ -175,7 +178,7 @@ All under `/staff/compliance`. Reading needs `compliance.view` (Admin, Complianc
 | `GET /summary` | Whether screening is on, open cases, proposals waiting, screens in the last 30 days, and cases closed since 1 January (Kampala) as `report_to_fia` |
 | `GET /rules` | The monitoring thresholds and the rescreening interval, read from `domain/monitoring.py` and `domain/standing.py` so the screen never shows a copy that has gone stale |
 | `GET /cases?status=open&source=` | Cases, open ones oldest first. A monitoring case carries `amount`: the payment that raised it, or for split deposits their total |
-| `GET /cases.csv` | The register: every case newest first, with the client's account number and name, how it closed and when, as a CSV file. Each export is an audit event, `compliance.register_exported`. More than 10,000 cases is `422 too_many_cases`. |
+| `POST /cases.csv` | The register, a POST because each export is recorded: every case newest first, with the client's account number and name, how it closed and when, as a CSV file. Each export is an audit event, `compliance.register_exported`. More than 10,000 cases is `422 too_many_cases`. |
 | `GET /cases/{id}` | One case, the screen and its matches, every proposal, where the client stands, and what the reader may do |
 | `POST /cases/{id}/proposals` | Propose an outcome. `409 proposal_waiting` or `case_closed`; `422 outcome_does_not_fit_case`. |
 | `POST /proposals/{id}/approve` | Close the case. Needs a recent second step. The proposer gets `403`. |

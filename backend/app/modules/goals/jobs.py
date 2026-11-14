@@ -20,8 +20,8 @@ from app.infrastructure.jobs import (
     PermanentJobError,
     enqueue,
 )
-from app.modules.goals import groups, reminders, service
-from app.modules.goals.events import FOLLOW_ROLLOVER_KIND
+from app.modules.goals import groups, reminders, saving_rules, service
+from app.modules.goals.events import FOLLOW_ROLLOVER_KIND, LINK_PLAN_RUN_KIND
 from app.shared.clock import Clock
 
 # The scheduler asks for this once a day, after interest and maturities.
@@ -40,6 +40,7 @@ class GoalJobs:
     def handlers(self) -> dict[str, JobHandler | Handler]:
         return {
             FOLLOW_ROLLOVER_KIND: self.follow_rollover,
+            LINK_PLAN_RUN_KIND: self.link_plan_run,
             REFRESH_GROUPS_KIND: self.refresh_groups,
             SEND_REMINDERS_KIND: self.send_reminders,
         }
@@ -57,6 +58,30 @@ class GoalJobs:
                 session, investment_id=old, new_investment_id=new, clock=self._clock
             )
             return {"followed": followed}
+
+        await context.apply(effect)
+
+    async def link_plan_run(self, job: ClaimedJob, context: JobContext) -> None:
+        """An automatic investing run asked for its investment. If the plan is a goal's saving
+        rule, the investment is a saving towards that goal."""
+        data = job.payload.get("data")
+        data = data if isinstance(data, Mapping) else {}
+        plan_id, investment_id = data.get("plan_id"), data.get("investment_id")
+        client_id = data.get("client_id")
+        if not all(isinstance(value, str) for value in (plan_id, investment_id, client_id)):
+            raise PermanentJobError(code="plan_run_missing")
+        assert isinstance(plan_id, str) and isinstance(investment_id, str)
+        assert isinstance(client_id, str)
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            linked = await saving_rules.link_plan_run(
+                session,
+                plan_id=plan_id,
+                client_id=client_id,
+                investment_id=investment_id,
+                clock=self._clock,
+            )
+            return {"linked": linked}
 
         await context.apply(effect)
 

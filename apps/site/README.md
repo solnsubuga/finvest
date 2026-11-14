@@ -69,6 +69,7 @@ Some statements are written out in full because the page needs them, but the own
 - The help centre's questions are in `src/data/help.ts`. The search box filters the questions on the page and needs no server.
 - The contact form sends nothing itself, because the site has no server and stores nothing. It opens the visitor's own email app with the message addressed to support, and says so under the button.
 - The legal pages are in `src/data/legal.ts`. They hold headings and a line on what each section will cover. The wording comes from Finvest's lawyers, and each page carries a notice saying so.
+- Each legal page has a "Download as PDF" link to `/legal/<slug>.pdf`. The PDFs are made at build time by `src/pages/legal/[doc].pdf.ts` with pdf-lib (`src/lib/legal-pdf.ts`), from the same structure and with the same notice, so the link works without JavaScript.
 
 ## Layout
 

@@ -141,6 +141,14 @@ export default function GoalDetail() {
           <DetailList rows={facts(goal)} />
 
           {open ? (
+            <TextLink
+              label="Change name, target or date"
+              onPress={() => router.push(`/goals/edit/${goalId}`)}
+              testID="goal-edit"
+            />
+          ) : null}
+
+          {open ? (
             confirmClose ? (
               <View style={styles.confirm} testID="close-confirm">
                 <Txt weight="bold">Close this goal?</Txt>

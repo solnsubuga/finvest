@@ -9,6 +9,7 @@ import {
   type ComplaintsApi,
   type HistoryItem,
   type PendingOutcome,
+  type RejectedOutcome,
   type Register,
   type Status,
 } from "./api.ts";
@@ -55,6 +56,7 @@ interface Stored {
   complaint: Complaint;
   history: HistoryItem[];
   pending: PendingOutcome | null;
+  rejected?: RejectedOutcome | null;
   clientKey: string | null;
 }
 
@@ -238,10 +240,11 @@ export function createStubComplaintsApi(
 
   const stored = seed === "empty" ? [] : samples;
   const isOverdue = (complaint: Complaint) => complaint.status !== "closed" && today() > complaint.dueOn;
-  const copy = ({ complaint, history, pending }: Stored): ComplaintDetail => ({
+  const copy = ({ complaint, history, pending, rejected }: Stored): ComplaintDetail => ({
     complaint: { ...complaint, overdue: isOverdue(complaint) },
     history: history.map((item) => ({ ...item })),
     pendingOutcome: pending ? { ...pending } : null,
+    lastRejected: rejected ? { ...rejected } : null,
   });
   const loggedBy = (item: Stored) => {
     const logged = item.history.find((event) => event.action === "logged");
@@ -373,6 +376,7 @@ export function createStubComplaintsApi(
     proposeOutcome: (complaintId, closing) =>
       change(complaintId, (item) => {
         if (item.pending) throw new ComplaintsError("conflict");
+        item.rejected = null;
         item.pending = {
           id: id("sample-proposal"),
           outcome: closing.outcome,
@@ -393,6 +397,17 @@ export function createStubComplaintsApi(
         if (decision === "confirmed" && loggedBy(item) === me.id) throw new ComplaintsError("forbidden");
         const note = decision === "rejected" || (reason ?? "").trim() ? clean(reason ?? "", MAX_NOTE) : null;
         item.pending = null;
+        item.rejected =
+          decision === "rejected"
+            ? {
+                outcome: pending.outcome,
+                resolution: pending.resolution,
+                clientAccepted: pending.clientAccepted,
+                decidedBy: me.id,
+                decidedAt: new Date(now()).toISOString(),
+                reason: note ?? "",
+              }
+            : null;
         if (decision !== "confirmed") {
           record(item, { action: decision, fromStatus: null, toStatus: null, note });
           return;

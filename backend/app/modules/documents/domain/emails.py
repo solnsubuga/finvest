@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from app.modules.documents.domain import formatting
+from app.modules.documents.domain.investment_notes import EndedNote, Ending, InvestmentNote
 from app.modules.documents.domain.receipts import Receipt
 from app.modules.documents.domain.statements import Period, StatementKind
 from app.shared import email_layout as layout
@@ -211,6 +212,113 @@ def tax_certificate_email(
         layout.page(
             preheader=f"Your withholding tax certificate is attached as a PDF. {detail}.",
             title=f"Your {tax_year} tax certificate",
+            body=body,
+            links=links,
+        ),
+    )
+
+
+def investment_note_email(
+    *,
+    first_name: str,
+    note: InvestmentNote,
+    file_name: str,
+    links: layout.Links = layout.PRODUCTION,
+) -> Rendered:
+    """The email the note confirming an investment started is attached to. Like a statement
+    email it carries no figures: they are in the PDF."""
+    detail = f"Account {formatting.account_number(note.account_number)}"
+    started = f"Your {note.product_name} started on {formatting.day(note.start_date)}"
+    if note.maturity_date is not None:
+        when = f"{started} and matures on {formatting.day(note.maturity_date)}."
+    else:
+        when = f"{started} and earns interest every day until you withdraw it."
+    lines = [
+        f"Hello {first_name},",
+        f"{when} The attached note confirms what you invested, the yearly rate after tax and "
+        "what you get back.",
+    ]
+    closing = [
+        "You can follow how it is doing in the app, and find this note again under Documents.",
+    ]
+    body = (
+        layout.paragraphs(lines)
+        + layout.attachment(file_name, f"{detail} · {LOCKED}")
+        + layout.paragraphs([HOW_TO_OPEN])
+        + layout.button("Open Documents", links.in_app(DOCUMENTS_PATH))
+        + layout.paragraphs(closing)
+    )
+    text = "\n\n".join(
+        [
+            *lines,
+            f"Attached: {file_name} ({detail}, {LOCKED.lower()})",
+            HOW_TO_OPEN,
+            f"Open Documents: {links.in_app(DOCUMENTS_PATH)}",
+            *closing,
+        ]
+    )
+    return Rendered(
+        f"Your Finvest investment note: {note.product_name}",
+        text + "\n\n" + layout.FOOTER_TEXT,
+        layout.page(
+            preheader=f"Your {note.product_name} has started. The note is attached as a PDF.",
+            title="Your investment has started",
+            body=body,
+            links=links,
+        ),
+    )
+
+
+def ended_note_email(
+    *,
+    first_name: str,
+    note: EndedNote,
+    file_name: str,
+    links: layout.Links = layout.PRODUCTION,
+) -> Rendered:
+    """The email the note confirming an investment ended is attached to. No figures."""
+    detail = f"Account {formatting.account_number(note.account_number)}"
+    day = formatting.day(note.ended_on)
+    if note.ending is Ending.WITHDRAWN:
+        happened = f"Your {note.product_name} was withdrawn early on {day}, as you asked."
+        title = "Your investment was withdrawn"
+    else:
+        happened = f"Your {note.product_name} matured on {day}."
+        title = "Your investment has matured"
+    where = {
+        Ending.PAID_OUT: "The money is on its way to the account you chose.",
+        Ending.ROLLED_OVER: "It was rolled over into a new investment, as you chose.",
+        Ending.WAITING: "Choose in the app where we should send the money.",
+        Ending.WITHDRAWN: "The money is paid to the account you chose once it is sent.",
+    }[note.ending]
+    lines = [
+        f"Hello {first_name},",
+        f"{happened} {where} The attached note confirms what it earned after tax and what it "
+        "came to.",
+    ]
+    closing = ["You can find this note again under Documents in the app."]
+    body = (
+        layout.paragraphs(lines)
+        + layout.attachment(file_name, f"{detail} · {LOCKED}")
+        + layout.paragraphs([HOW_TO_OPEN])
+        + layout.button("Open Documents", links.in_app(DOCUMENTS_PATH))
+        + layout.paragraphs(closing)
+    )
+    text = "\n\n".join(
+        [
+            *lines,
+            f"Attached: {file_name} ({detail}, {LOCKED.lower()})",
+            HOW_TO_OPEN,
+            f"Open Documents: {links.in_app(DOCUMENTS_PATH)}",
+            *closing,
+        ]
+    )
+    return Rendered(
+        f"Your Finvest investment note: {note.product_name} ended",
+        text + "\n\n" + layout.FOOTER_TEXT,
+        layout.page(
+            preheader=f"{happened} The note is attached as a PDF.",
+            title=title,
             body=body,
             links=links,
         ),

@@ -22,13 +22,20 @@ export function toInsights(view: InsightsView, asked: Currency): Insights {
     })),
     investedNow: money(view.invested_now_minor),
     earnedSoFar: money(view.earned_so_far_minor),
-    upcoming: view.upcoming.map((item) => ({
-      on: item.on,
-      investmentId: item.investment_id,
-      productName: item.product_name,
-      atMaturity: item.at_maturity,
-      amount: money(item.amount_minor),
-    })),
+    // Maturities only, until the screen shows automatic runs and goal dates too.
+    upcoming: view.upcoming.flatMap((item) =>
+      item.kind === "maturity" && item.investment_id && item.product_name
+        ? [
+            {
+              on: item.on,
+              investmentId: item.investment_id,
+              productName: item.product_name,
+              atMaturity: item.at_maturity,
+              amount: money(item.amount_minor),
+            },
+          ]
+        : [],
+    ),
   };
 }
 

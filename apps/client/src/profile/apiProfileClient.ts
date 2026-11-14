@@ -14,7 +14,6 @@ export function toNextOfKin(view: NextOfKinView): NextOfKin {
       relationship: p.relationship,
       phone: p.phone,
       idNumber: p.id_number,
-      shareBps: p.share_bps,
     })),
     updatedAt: view.updated_at,
   };
@@ -95,7 +94,6 @@ function body(person: Person) {
     relationship: person.relationship,
     phone: person.phone,
     id_number: person.idNumber,
-    share_bps: person.shareBps,
   };
 }
 
