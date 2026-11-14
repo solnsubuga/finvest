@@ -664,8 +664,7 @@ async def test_a_saving_that_rolls_over_stays_in_its_goal(
         WorkerConfig(),
         at(old.maturity_date, hour=10),
     )
-    while await runner.run_once():
-        pass
+    await drain(runner, worker_database)
     async with worker_database.actor_transaction(SYSTEM) as session:
         status = await session.scalar(
             text(
@@ -880,8 +879,7 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
         WorkerConfig(),
         at(DAY, hour=5),
     )
-    while await runner.run_once():
-        pass
+    await drain(runner, worker_database)
     async with worker_database.actor_transaction(SYSTEM) as session:
         # Follow this run's own chain of pages: each full page queues the next under
         # "after:<its job id>". Goals that other tests make meanwhile can fall between this
@@ -938,3 +936,28 @@ async def test_goals_with_no_date_or_closed_are_not_reminded(
         await goals.close_goal(session, client, closed.id, clock=NOW)
     await remind(worker_database, next_due(DAY, DAY) - timedelta(days=2))
     assert await told(worker_database, client) == []
+
+
+async def drain(runner: Worker, database: Database) -> None:
+    """Run every job the runner can, until none of its kinds is still waiting.
+
+    A claim skips past jobs that have expired by the runner's clock, which earlier tests leave
+    behind, and can come back empty while live jobs remain behind them. So an empty claim alone
+    does not mean the queue is done.
+    """
+    kinds = sorted(runner.handlers)
+    now = runner.clock.now()
+    for _ in range(1_000):
+        if await runner.run_once():
+            continue
+        async with database.actor_transaction(SYSTEM) as session:
+            waiting = await session.scalar(
+                text(
+                    "SELECT count(*) FROM jobs WHERE kind = ANY(CAST(:kinds AS text[])) "
+                    "AND status = 'pending' AND run_at <= :now"
+                ),
+                {"kinds": kinds, "now": now},
+            )
+        if not waiting:
+            return
+    raise AssertionError("jobs kept waiting")
