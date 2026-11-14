@@ -194,10 +194,9 @@ async def certificate_figures(
                 investment_ids=references,
             )
     tins = await kyc.tax_numbers(session, sealer, [client_id])
-    given = " ".join(holder.given_names.split())
     return certificate(
         client_id=client_id,
-        holder_name=f"{given} {' '.join(holder.surname.split())}".strip(),
+        holder_name=holder.name,
         account_number=holder.account_number,
         tin=tins.get(client_id),
         tax_year=tax_year,

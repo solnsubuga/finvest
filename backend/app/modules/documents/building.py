@@ -49,7 +49,7 @@ class NotReady(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Holder:
-    name: str  # "Amara NAKATO", given names then surname as on the ID
+    name: str  # "Amara Nakato": given names then surname, in proper case
     first_name: str
     account_number: str
 
@@ -58,12 +58,7 @@ async def holder(session: AsyncSession, client_id: str) -> Holder:
     found = await kyc.account_holder(session, client_id)
     if found is None:
         raise NotReady("The client has no approved account")
-    given = " ".join(found.given_names.split())
-    return Holder(
-        name=f"{given} {' '.join(found.surname.split())}".strip(),
-        first_name=given.split(" ")[0] if given else found.surname,
-        account_number=found.account_number,
-    )
+    return Holder(name=found.name, first_name=found.first_name, account_number=found.account_number)
 
 
 async def statement(

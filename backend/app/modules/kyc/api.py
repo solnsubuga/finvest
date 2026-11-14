@@ -21,6 +21,7 @@ from app.modules.identity.api import CurrentClient, require_confirmed, require_p
 from app.modules.identity.service import StaffSession
 from app.modules.kyc import liveness, poses, service
 from app.modules.kyc import phone_names as phone_lookups
+from app.modules.kyc.domain import names
 from app.modules.kyc.domain.checks import (
     CheckStatus,
     DocumentType,
@@ -300,7 +301,8 @@ def _client_check(view: service.CheckView, *, guided: bool = False) -> ClientChe
 
 
 def _name(surname: str | None, given_names: str | None) -> str | None:
-    return f"{given_names} {surname.title()}" if surname and given_names else None
+    """ "Amara Nakato", for staff lists. The raw values stay in `surname` and `given_names`."""
+    return names.full_name(surname, given_names) if surname and given_names else None
 
 
 async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> StaffCheck:

@@ -226,7 +226,7 @@ async def test_the_daily_run_lands_on_the_months_return_with_name_number_and_tin
         ugx(gross),
         ugx(tax),
         TIN,
-        "NAKATO Amara",
+        "Amara Nakato",
     )
     assert line.account_number is not None and len(line.account_number) == 10
     assert found.tins_shown
@@ -278,7 +278,7 @@ async def test_a_certificate_has_each_investment_that_earned_in_the_tax_year(
     await withhold(worker_database, first, year.first_day - timedelta(days=1), 9_999, 1_499)
     async with worker_database.actor_transaction(SYSTEM) as session:
         made = await service.certificate_figures(session, SEALER, str(amara.id), year)
-    assert (made.holder_name, made.tin, made.tax_year) == ("Amara NAKATO", TIN, year)
+    assert (made.holder_name, made.tin, made.tax_year) == ("Amara Nakato", TIN, year)
     assert {(line.investment_id, line.gross, line.tax, line.net) for line in made.lines} == {
         (first.id, ugx(31_164), ugx(4_674), ugx(26_490)),
         (second.id, ugx(900), ugx(135), ugx(765)),

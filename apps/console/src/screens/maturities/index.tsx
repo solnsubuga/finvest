@@ -11,7 +11,7 @@ import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { createHttpClientsApi } from "../clients/http.ts";
-import type { Investment } from "../investments/api.ts";
+import { choiceLabel, type Investment } from "../investments/api.ts";
 import type { Correction } from "../investments/corrections/api.ts";
 import { createHttpCorrectionsApi } from "../investments/corrections/http.ts";
 import { createStubCorrectionsApi } from "../investments/corrections/stub.ts";
@@ -283,7 +283,7 @@ function NotClosed({ investments, cards, today }: { investments: readonly Invest
                 {late} {late === 1 ? "day" : "days"} ago
               </div>
             </td>
-            <td className={CELL}>{investment.atMaturity === "pay_out" ? "Pay out" : investment.atMaturity === "pay_interest" ? "Pay the interest" : "Roll over"}</td>
+            <td className={CELL}>{investment.atMaturity ? choiceLabel(investment) : "Roll over"}</td>
           </tr>
         );
       })}

@@ -5,7 +5,7 @@ import { banksOrNone, nameOf } from "@/payouts/banks";
 import { accountLabel } from "@/payouts/format";
 import type { Bank } from "@/payouts/types";
 
-import { Amount, AtMaturity, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Portfolio, Product, Quote, Transfer } from "./types";
+import { Amount, Currency, Investment, InvestingClient, InvestingError, PayoutAccount, Portfolio, Product, Quote, Transfer } from "./types";
 
 /**
  * The investing screens' contract, answered by the real API (`/client/products`,
@@ -54,7 +54,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     amount: money(view.amount_minor, currency),
     ratePercent: view.client_rate_percent,
     termDays: view.term_days,
-    atMaturity: shownChoice(view.at_maturity),
+    atMaturity: view.at_maturity,
     payoutDestinationId: view.payout_destination_id,
     canChangeMaturity: view.can_change_maturity,
     payBy: view.pay_by,
@@ -74,6 +74,7 @@ export function toInvestment(view: ClientInvestmentOut): Investment {
     withdrawalRequestedAt: view.withdrawal_requested_at,
     canSend: view.can_send ?? false,
     lockedUntil: view.withdrawal_locked_until ?? null,
+    interestGoal: view.interest_goal_id ? { id: view.interest_goal_id, name: view.interest_goal_name ?? "your goal" } : null,
   };
 }
 
@@ -121,7 +122,7 @@ export function toPortfolio(view: PortfolioView): Portfolio {
           investmentId: view.next_maturity.investment_id,
           productName: view.next_maturity.product_name,
           on: view.next_maturity.on,
-          atMaturity: shownChoice(view.next_maturity.at_maturity),
+          atMaturity: view.next_maturity.at_maturity,
           termDays: view.next_maturity.term_days,
           daysEarned: view.next_maturity.days_earned,
           daysLeft: view.next_maturity.days_left,
@@ -210,6 +211,8 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
       return new InvestingError(CONFLICT[call]);
     case "validation_failed": {
       const codes = error.fields.map((field) => field.code);
+      // The goal chosen for the interest, which shares the code `not_usable` with accounts.
+      if (error.fields.some((field) => field.field === "goal_id" || field.field.endsWith(".goal_id"))) return new InvestingError("goal_not_usable");
       const refusal = codes.map((code) => SEND_REFUSALS[code]).find((found) => found !== undefined);
       if ((call === "send" || call === "lookup") && refusal) return new InvestingError(refusal);
       if (
@@ -313,7 +316,7 @@ export function createApiInvestingClient(): InvestingClient {
           toInvestment(
             await api("PUT /client/investments/{investment_id}/at-maturity", {
               params: { investment_id: choice.investmentId },
-              body: { at_maturity: choice.atMaturity, destination_id: choice.destinationId },
+              body: { at_maturity: choice.atMaturity, destination_id: choice.destinationId, ...(choice.goalId ? { goal_id: choice.goalId } : {}) },
             }),
           ),
         "maturity",
@@ -370,9 +373,4 @@ export function createApiInvestingClient(): InvestingClient {
         "cancel",
       ),
   };
-}
-
-/** The app does not offer saving interest to a goal yet. Until it does, such a term is shown as rolling over, which its principal does. */
-function shownChoice(choice: AtMaturity | "interest_to_goal" | null): AtMaturity | null {
-  return choice === "interest_to_goal" ? "roll_over" : choice;
 }

@@ -15,3 +15,20 @@ export function initials(name: string): string {
     .join("")
     .toUpperCase();
 }
+
+function properWord(word: string): string {
+  if (word !== word.toUpperCase() && word !== word.toLowerCase()) return word;
+  return word
+    .split(/([-'])/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join("");
+}
+
+/**
+ * A name from an identity document as people read it: given names first, in proper case.
+ * "NAKATO", "AMARA" becomes "Amara Nakato". A word that already mixes capitals ("McDonald") is
+ * kept. The same rule as the API's (backend kyc/domain/names.py).
+ */
+export function shownName(surname: string, givenNames: string): string {
+  return `${givenNames} ${surname}`.split(/\s+/).filter(Boolean).map(properWord).join(" ");
+}

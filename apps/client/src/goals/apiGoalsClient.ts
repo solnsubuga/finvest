@@ -42,6 +42,8 @@ export function toSaving(view: SavingView, currency: Money["currency"]): Saving 
     payBy: view.pay_by,
     startDate: view.start_date,
     maturityDate: view.maturity_date,
+    source: view.interest_from_investment_id ? "interest" : "saving",
+    fromProductName: view.interest_from_product_name ?? null,
   };
 }
 
@@ -68,6 +70,18 @@ export function toGoal(view: GoalView): Goal {
     payday: view.payday,
     lockedUntil: view.locked_until ?? null,
     unlockRequestedAt: view.unlock_requested_at ?? null,
+    interestComing: (view.interest_coming ?? []).flatMap((coming) =>
+      coming.maturity_date && coming.interest_minor !== null
+        ? [
+            {
+              investmentId: coming.investment_id,
+              productName: coming.product_name,
+              on: coming.maturity_date,
+              amount: { currency: view.currency, minor: coming.interest_minor },
+            },
+          ]
+        : [],
+    ),
   };
 }
 

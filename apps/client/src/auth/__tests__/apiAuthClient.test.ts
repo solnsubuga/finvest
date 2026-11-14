@@ -86,7 +86,7 @@ describe("the sign-in client for the real API", () => {
     expect(seen[0]!.body).toEqual({ phone: "+256772123456", email: null });
     const ticket = await client.confirmSignupCode(challenge.challengeId, "123456");
     const session = await client.completeSignup(ticket.ticket, "a-long-unusual-phrase");
-    expect(session).toEqual({ phone: "+256772123456", displayName: null, restricted: false, email: null, emailVerified: false, pinSet: false, locked: false, confirmedUntil: null });
+    expect(session).toEqual({ phone: "+256772123456", displayName: null, firstName: null, restricted: false, email: null, emailVerified: false, pinSet: false, locked: false, confirmedUntil: null });
     expect(await readToken()).toBe("phone-token");
     await expect(client.restoreSession()).resolves.toEqual(session);
     expect(seen.at(-1)!.auth).toBe("Bearer phone-token");
@@ -251,6 +251,14 @@ describe("the sign-in client for the real API", () => {
     expect(session.restricted).toBe(Date.now() < Date.parse("2026-11-14T10:00:00Z"));
     expect(toSession({ phone: "+256", restricted_until: "2026-11-14T10:00:00Z" }, Date.parse("2026-11-14T09:00:00Z")).restricted).toBe(true);
     expect(toSession({ phone: "+256", restricted_until: "2026-11-14T10:00:00Z" }, Date.parse("2026-11-14T11:00:00Z")).restricted).toBe(false);
+  });
+
+  it("carries the verified name from the session, and none before approval", () => {
+    expect(toSession({ phone: "+256772123456", restricted_until: null, display_name: "Amara Nakato", first_name: "Amara" })).toMatchObject({
+      displayName: "Amara Nakato",
+      firstName: "Amara",
+    });
+    expect(toSession({ phone: "+256772123456", restricted_until: null })).toMatchObject({ displayName: null, firstName: null });
   });
 
   it("starts signed out when the stored session has ended, and forgets the token", async () => {

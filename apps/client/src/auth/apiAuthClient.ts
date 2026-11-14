@@ -76,14 +76,17 @@ type SessionView = {
   pin_set?: boolean;
   locked?: boolean;
   confirmed_until?: string | null;
+  display_name?: string | null;
+  first_name?: string | null;
 };
 
 export function toSession(view: SessionView, now: number = Date.now()): Session {
   const until = view.restricted_until ? Date.parse(view.restricted_until) : NaN;
   return {
     phone: view.phone,
-    // The name is known only after the identity check, which the session does not carry yet.
-    displayName: null,
+    // The name on the approved ID, already in proper case. Null until the check is approved.
+    displayName: view.display_name ?? null,
+    firstName: view.first_name ?? null,
     restricted: Number.isFinite(until) && until > now,
     email: view.email ?? null,
     emailVerified: Boolean(view.email && view.email_verified),

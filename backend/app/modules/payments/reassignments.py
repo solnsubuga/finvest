@@ -639,8 +639,7 @@ async def _party(session: AsyncSession, client_id: str) -> Party:
     holder = await kyc.account_holder(session, client_id)
     if holder is None:
         return Party(client_id, None, None)
-    name = " ".join(f"{holder.given_names} {holder.surname}".split())
-    return Party(client_id, name or None, holder.account_number)
+    return Party(client_id, holder.name or None, holder.account_number)
 
 
 async def _deposit(session: AsyncSession, deposit_id: str) -> Deposit:

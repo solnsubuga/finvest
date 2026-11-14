@@ -62,12 +62,14 @@ export const atMaturityLabel: Record<AtMaturity, string> = {
   roll_over: "Roll over",
   pay_out: "Pay out",
   pay_interest: "Pay me the interest",
+  interest_to_goal: "Save the interest to a goal",
 };
 
 export const atMaturityDetail: Record<AtMaturity, string> = {
   roll_over: "Start a new term with everything, at the rate on that day.",
   pay_out: "Send everything to your mobile money or bank account.",
   pay_interest: "Keep what you put in invested for another term, and send the interest to your mobile money or bank account. Every term, until you change it.",
+  interest_to_goal: "Keep what you put in invested for another term, and save the interest towards one of your goals. Every term, until you change it.",
 };
 
 export const statusLabel: Record<InvestmentStatus, string> = {

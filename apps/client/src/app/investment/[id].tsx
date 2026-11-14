@@ -98,7 +98,11 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
   }
   if (investment.interestAtMaturity && investment.totalAtMaturity && investment.status !== "matured" && toMaturity) {
     rows.push({ label: "Interest at maturity, after tax", value: formatAmount(investment.interestAtMaturity) });
-    if (investment.atMaturity === "pay_interest") {
+    if (investment.atMaturity === "interest_to_goal") {
+      // What was put in starts another term, and the interest starts a saving in the goal.
+      rows.push({ label: `Saved to ${investment.interestGoal?.name ?? "your goal"}`, value: formatAmount(investment.interestAtMaturity) });
+      rows.push({ label: "Stays invested", value: formatAmount(investment.amount) });
+    } else if (investment.atMaturity === "pay_interest") {
       // The interest is paid out and what was put in starts another term.
       rows.push({ label: "Paid to you", value: formatAmount(investment.interestAtMaturity) });
       rows.push({ label: "Stays invested", value: formatAmount(investment.amount) });

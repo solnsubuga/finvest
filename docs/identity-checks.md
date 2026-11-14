@@ -66,6 +66,14 @@ The document number, date of birth and TIN are encrypted before they are saved (
 
 `verified_name(session, client_id)` gives other modules the name on an approved client's document, and nothing before approval.
 
+## How a name is shown
+
+The check keeps the surname and given names exactly as printed on the document, usually in capitals ("NAKATO", "AMARA JOY"). That is the KYC record: screening, the phone name check and the client's data export use it as it is, and payouts compare it in a way that forgives case and order. Everywhere a person reads the name it is shown given names first, in proper case: "Amara Joy Nakato" (`app/modules/kyc/domain/names.py`). Only a word written all in capitals or all in small letters is re-cased, so "McDonald" stays as written.
+
+- `verified_name`, `identities` and `AccountHolder.name` give the shown name: the console's client pages, closures, organisations, screening and payouts, statements, receipts, the tax certificate and reassignments.
+- `GET /client/session` carries `display_name` ("Amara Nakato") and `first_name` ("Amara") once the check is approved, null before (`kyc.own_name`). The app greets the client by them on Home, in the wide sidebar and on the PIN screen.
+- The staff review screen shows the raw `surname` and `given_names` beside the shown `name`.
+
 Handing a check in also asks the screening module for a sanctions and PEP screen in the same transaction, once a screening provider is set up ([screening.md](screening.md)). The staff check carries the client's standing as `screening` (`clear`, `possible_match`, `confirmed_match`, `unavailable`, `pending`, `not_run`, or null if never screened). Anything but `clear` is a reason to look before approving. The decision stays with the one reviewer, and a possible match is decided on the screening case by two people.
 
 `screening_subject(session, sealer, client_id)` gives the screening module who to screen: the names, date of birth, document type and issuing country on a check that has been handed in or approved, and never the ID number. It returns nothing for a draft or a rejected check. While staff have sent a check back for photos, it gives the details as they stand. Nationality is not recorded. The issuing country is the nationality for a passport, but for a national ID it only shows the client lives in Uganda. Only the worker and staff can read it, because a client cannot read another client's check.
@@ -88,13 +96,13 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 | Provider | Status |
 | --- | --- |
 | `manual` | Built, and the default. It checks nothing, so every client goes to a person. Nobody is approved by a check that did not happen. |
-| `regula` | Built: Regula, run on Finvest's own servers, below. The owner's choice (2026-11-14). Off until `FINVEST_IDENTITY_PROVIDER=regula` and its addresses are set. |
+| `regula` | Built: Regula's cloud, below (the owner's choice, 2026-11-14); it can move onto Finvest's own servers by changing two addresses. The owner's choice (2026-11-14). Off until `FINVEST_IDENTITY_PROVIDER=regula` and its addresses are set. |
 | `iotec` | Built: ioTec Verify, below. Kept for now, but not to be used: the owner chose Regula, with no ID number lookup at NIRA. |
 | `development-stub` | Built, for a developer's own machine. It checks nothing: everyone "passes", except a document number ending in 0, whose selfie comes back unsure. Its answers go to a person, and the settings refuse to combine it with automatic approval, so it can never approve a client. It is refused at start-up where `FINVEST_ENVIRONMENT` is `production`, because staff would see passes for checks nobody ran. |
 
 ### Regula
 
-`app/modules/kyc/regula.py`. Regula's Document Reader and Face services run as containers on Finvest's own servers, so ID photos and selfies never leave them. There is no API key: the services are reached only on the private network, and each needs a Regula licence file. One submission is two requests, each answered straight away:
+`app/modules/kyc/regula.py`. Regula's Document Reader and Face services run in Regula's cloud, by the owner's choice (2026-11-14), so ID photos and selfies are sent to Regula over https. The same code runs against Regula installed on Finvest's own servers, by pointing the two addresses there. The cloud addresses and how they are signed in to come with Regula's contract: Regula's public `api.regulaforensics.com` and `faceapi.regulaforensics.com` are demo services, and the settings refuse them, with their nightly ones, in production. One submission is two requests, each answered straight away:
 
 | Check | Regula request | Pass | Fail | Otherwise |
 | --- | --- | --- | --- | --- |
@@ -103,7 +111,7 @@ The module talks to an `IdentityProvider` port (`domain/provider.py`) with three
 
 - Neither request changes anything at Regula, so sending again is harmless. A timeout, a dropped connection, a 5xx, 429 or 403 (a missing or expired licence) is deferred and the worker tries again. A refusal (400 or 422) of the document request refuses the submission (`regula_refused`), and it goes to a person. A refused face match is left out.
 - Both verdicts are kept in the reference the worker saves (`regula:<tag>:doc=pass,face=pass@96`), and the result is read back from it. The reference holds no details. The tag sent to Regula is a hash of the submission's key.
-- The addresses are `FINVEST_REGULA_DOCUMENT_READER_URL` and `FINVEST_REGULA_FACE_URL`, such as `http://regula-docreader:8080`. The settings take https anywhere, or plain http only to a container name, localhost or a private address: never plain http over the internet.
+- The addresses are `FINVEST_REGULA_DOCUMENT_READER_URL` and `FINVEST_REGULA_FACE_URL`: Regula's cloud addresses from the contract, or, self-hosted, such as `http://regula-docreader:8080`. The settings take https anywhere, or plain http only to a container name, localhost or a private address: never plain http over the internet. Still to confirm with Regula: how the cloud signs requests in (the Document Reader specification has a licence in the request body, `systemInfo.license`, and no API key header).
 - Liveness stays the camera selfie with Regula for now: `liveness` is not run, so nobody is approved with no person until Regula's liveness is built ([Not built yet](#not-built-yet)). Face confirmations are off with Regula for the same reason.
 - To confirm on a running Regula: the `/api` prefix on both paths, that `similarity` comes back in percent as the specification says (a fraction would always be below 90 and go to a person, never pass), and the text field types for the Ugandan national ID's NIN. Anything not recognised is `unsure`, never a pass.
 - Nothing Regula sends back is logged or kept beyond the verdicts and the similarity, because it carries the client's details.
