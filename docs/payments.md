@@ -165,21 +165,17 @@ Seeing reversals needs `reconciliation.view`. Proposing and deciding need `depos
 
 The client is not told by message yet, and a start job queued by the original confirmation, if it runs after the reversal, fails for want of money and shows among the failed jobs.
 
-**The money has moved on**, for example the investment has started, so a reversal would overdraw the account. Staff propose a forward entry `payment.deposit_correction`:
+**The money has left**, for example the investment matured and was paid out or a refund went out, so there is nothing to reverse. The amount is recorded as owed by the client, then cleared once (`receivables.py`, `domain/receivables.py`, `receivable_routes.py`, migration 0262). Each step is proposed by one member of staff with a reason (`POST /staff/payments/receivables` with `kind`), and approved by a different one with a passkey or app code from the last ten minutes. The approval posts the entry in that same transaction, so a step is never approved and not yet done. Steps show in the approvals inbox as `deposit_receivable`.
 
-| Debit | Credit |
-| --- | --- |
-| Asset `receivables.deposit_correction`, owned by the client, reference the deposit ID | The cash account the deposit debited, because that money never arrived |
+| Step | Entry type | Debit | Credit |
+| --- | --- | --- | --- |
+| `open` | `payment.deposit_correction` | Asset `receivables.deposit_correction`, owned by the client, reference the deposit ID | The wallet or bank account the deposit's entry debited, because that money never arrived |
+| `recover`, the money arrives late | `payment.receivable_recovered` | That same wallet or bank account | The receivable |
+| `write_off` | `payment.receivable_written_off` | Expense `losses.deposit_correction` | The receivable |
 
-The receivable shows that the client owes the amount. It is cleared in exactly one of three ways, each with two staff:
+Every entry has source `payment.receivable` and the step's ID, key `deposit-receivable:<ID>`, and is for the deposit's whole amount. Opening is refused with `unwind_first` while the investment runs and with `reverse_instead` while the whole amount still waits for it. A receivable is opened once and cleared once, and one step waits for a second person at a time. If the wallet or bank account no longer holds the amount, opening is refused with `insufficient_funds`, a matter for finance first. The database holds each person to their part and checks each applied step's entry line by line. `GET /staff/payments/receivables/outstanding` lists every receivable not yet cleared, and `receivables.outstanding` is there for the daily close to report them until they are zero.
 
-| How | Debit | Credit |
-| --- | --- | --- |
-| The investment is unwound | The client's holding | The receivable |
-| The money does arrive late | The cash account | The receivable |
-| It is written off | Expense `losses.deposit_correction` | The receivable |
-
-An open receivable is reported by the daily close until it is zero.
+Clearing a receivable by unwinding the investment, as first sketched, is not built. A running investment is never put to a receivable: it is unwound and the deposit reversed instead.
 
 ### A transfer credited to the wrong client
 

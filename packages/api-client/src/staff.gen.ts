@@ -113,7 +113,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "account_closure", "compliance_case", "bank_account_change", "deposit_reversal"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "account_closure", "compliance_case", "bank_account_change", "deposit_reversal", "deposit_receivable"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -2548,6 +2548,45 @@ export const StatementOut = z.object({
 });
 export type StatementOut = z.infer<typeof StatementOut>;
 
+export const StepOut = z.object({
+  amount: MoneyView,
+  client_id: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  deposit_id: z.string(),
+  entry_id: z.string().nullable(),
+  id: z.string(),
+  kind: z.enum(["open", "recover", "write_off"]),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "applied", "sent_back", "withdrawn"]),
+});
+export type StepOut = z.infer<typeof StepOut>;
+
+export const StepDetailOut = z.object({
+  can_decide: z.boolean(),
+  method: z.string(),
+  owed: MoneyView,
+  refusal: z.enum(["not_confirmed", "not_for_an_investment", "already_reversed", "not_a_payment", "unwind_first", "reverse_instead", "already_open", "not_open", "already_cleared"]).nullable(),
+  step: StepOut,
+  yours: z.boolean(),
+});
+export type StepDetailOut = z.infer<typeof StepDetailOut>;
+
+export const StepProposeIn = z.object({
+  deposit_id: z.string(),
+  kind: z.enum(["open", "recover", "write_off"]),
+  reason: z.string(),
+});
+export type StepProposeIn = z.infer<typeof StepProposeIn>;
+
+export const StepSendBackIn = z.object({
+  note: z.string(),
+});
+export type StepSendBackIn = z.infer<typeof StepSendBackIn>;
+
 export const StrandedPayoutOut = z.object({
   amount: MoneyView,
   client_id: z.string(),
@@ -4358,6 +4397,94 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: ReassignmentDetailOut,
+  },
+  "GET /staff/payments/receivables": {
+    method: "GET",
+    path: "/staff/payments/receivables",
+    params: z.object({}),
+    query: z.object({
+    status: z.enum(["proposed", "applied", "sent_back", "withdrawn"]).nullable().optional(),
+    deposit_id: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StepOut),
+  },
+  "POST /staff/payments/receivables": {
+    method: "POST",
+    path: "/staff/payments/receivables",
+    params: z.object({}),
+    query: z.object({}),
+    body: StepProposeIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: StepDetailOut,
+  },
+  "GET /staff/payments/receivables/outstanding": {
+    method: "GET",
+    path: "/staff/payments/receivables/outstanding",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StepOut),
+  },
+  "GET /staff/payments/receivables/{step_id}": {
+    method: "GET",
+    path: "/staff/payments/receivables/{step_id}",
+    params: z.object({
+    step_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: StepDetailOut,
+  },
+  "POST /staff/payments/receivables/{step_id}/approve": {
+    method: "POST",
+    path: "/staff/payments/receivables/{step_id}/approve",
+    params: z.object({
+    step_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: StepDetailOut,
+  },
+  "POST /staff/payments/receivables/{step_id}/send-back": {
+    method: "POST",
+    path: "/staff/payments/receivables/{step_id}/send-back",
+    params: z.object({
+    step_id: z.string(),
+  }),
+    query: z.object({}),
+    body: StepSendBackIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: StepDetailOut,
+  },
+  "POST /staff/payments/receivables/{step_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payments/receivables/{step_id}/withdraw",
+    params: z.object({
+    step_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: StepDetailOut,
   },
   "GET /staff/payments/reversals": {
     method: "GET",

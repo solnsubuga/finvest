@@ -39,6 +39,7 @@ Kind = Literal[
     "compliance_case",
     "bank_account_change",
     "deposit_reversal",
+    "deposit_receivable",
 ]
 
 
@@ -88,6 +89,8 @@ SOURCES: dict[Kind, Source] = {
     "bank_account_change": Source("settings.view", "bank_accounts.change"),
     # Taking back a payment credited by mistake, decided as reassignments are.
     "deposit_reversal": Source("reconciliation.view", "deposit_reassignments.change"),
+    # Recording, recovering or writing off what a client owes for a mistaken payment.
+    "deposit_receivable": Source("reconciliation.view", "deposit_reassignments.change"),
 }
 
 

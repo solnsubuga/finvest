@@ -32,6 +32,7 @@ DECISIONS = {
     "POST /staff/payments/bank-transfers/{payment_id}/approve",
     "POST /staff/payments/reassignments/{reassignment_id}/approve",
     "POST /staff/payments/reversals/{reversal_id}/approve",
+    "POST /staff/payments/receivables/{step_id}/approve",
     "POST /staff/payout-destinations/{destination_id}/approve",
     "POST /staff/payout-resolutions/{resolution_id}/approve",
     "POST /staff/payout-releases/{release_id}/approve",

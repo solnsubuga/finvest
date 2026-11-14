@@ -21,7 +21,13 @@ from app.modules.investments.domain.rates import ProposalStatus
 from app.modules.ledger import corrections
 from app.modules.migration import service as migration
 from app.modules.notifications import announcements, suppression_lifts, wording_store
-from app.modules.payments import bank_accounts, bank_transfers, reassignments, reversals
+from app.modules.payments import (
+    bank_accounts,
+    bank_transfers,
+    reassignments,
+    receivables,
+    reversals,
+)
 from app.modules.payouts import destinations, resolutions, reviews
 from app.modules.reconciliation import day_close, transfers
 from app.modules.screening import service as screening
@@ -84,6 +90,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _bank_accounts(session)
     if "deposit_reversal" in kinds:
         found += await _reversals(session)
+    if "deposit_receivable" in kinds:
+        found += await _receivables(session)
     return inbox(found, staff.staff_id, staff.permissions)
 
 
@@ -331,6 +339,20 @@ async def _reversals(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("deposit_reversal", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
         for r in await reversals.proposals_awaiting_approval(session)
+    ]
+
+
+async def _receivables(session: AsyncSession) -> list[Waiting]:
+    # The subject is the step and the deposit's ID, never a name or an amount.
+    return [
+        Waiting(
+            "deposit_receivable",
+            s.id,
+            f"{s.kind.value} {s.deposit_id}",
+            s.proposed_by,
+            s.proposed_at,
+        )
+        for s in await receivables.proposals_awaiting_approval(session)
     ]
 
 
