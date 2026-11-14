@@ -84,6 +84,17 @@ Under `/client/autoinvest/plans`, for the signed-in client only. Amounts are int
 
 `phone` defaults to the number on the account, and any other number is refused on `phone`. A client whose identity check is not approved gets `forbidden` (403). The eleventh open plan, or resuming a stopped plan, gets `conflict` (409). Another client's plan is `not_found` (404). An amount, day or product that no run could be paid for gets `validation_failed` (422) with the field.
 
+## Staff routes
+
+The console's Automatic Investing screen reads two routes, both needing `automatic_investing.view` (admin, operations and finance). They only read: a run asks a client for money, so staff never start, retry or change one.
+
+| Route | What it gives |
+| --- | --- |
+| `GET /staff/autoinvest/plans/counts` | How many plans are active and paused. |
+| `GET /staff/autoinvest/runs?date_from=&date_to=&status=&before_id=&limit=` | Runs due in the range (at most 92 days), newest first, 200 a page, each with its plan's terms now and the client's ID. `next_before_id` reads the next page. Every read is an audit event (`autoinvest.runs_viewed`). |
+
+The console names each client through `/staff/clients/cards`; this module never reads the identity tables.
+
 ## Not built yet
 
-Asking for the investment and the payment for each run, and settling its outcome, wait for the investing module's maturity migration and the payments module's bank transfer change, and arrive in the next pull request. Until then the scheduler does not run `autoinvest.open_due_runs`, so no run is opened in a deployed system. Also not built: staff routes for the console, telling the client about a failed or missed run (it waits for notifications), approving a new plan with the app PIN (it waits for devices and PINs), pausing a client's plans when their phone number changes. The client app screens run on a demo until they are wired to these routes.
+Asking for the investment and the payment for each run, and settling its outcome, wait for the investing module's maturity migration and the payments module's bank transfer change, and arrive in the next pull request. Until then the scheduler does not run `autoinvest.open_due_runs`, so no run is opened in a deployed system. Also not built: telling the client about a failed or missed run (it waits for notifications), approving a new plan with the app PIN (it waits for devices and PINs), pausing a client's plans when their phone number changes. The client app screens run on a demo until they are wired to these routes.

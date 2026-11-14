@@ -29,6 +29,7 @@ from app.modules.autoinvest.plans import (
     stop_plan,
 )
 from app.modules.autoinvest.runs import Opened, open_due_runs
+from app.modules.autoinvest.staff import PlanCounts, StaffRun, plan_counts, staff_runs
 
 __all__ = [
     "MAX_OPEN_PLANS",
@@ -37,11 +38,13 @@ __all__ = [
     "Frequency",
     "Opened",
     "Plan",
+    "PlanCounts",
     "PlanStatus",
     "PlanTerms",
     "Run",
     "RunStatus",
     "Schedule",
+    "StaffRun",
     "change_plan",
     "client_plan",
     "client_plans",
@@ -50,7 +53,9 @@ __all__ = [
     "list_runs",
     "open_due_runs",
     "pause_plan",
+    "plan_counts",
     "plan_runs",
     "resume_plan",
+    "staff_runs",
     "stop_plan",
 ]

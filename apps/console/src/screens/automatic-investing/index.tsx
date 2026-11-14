@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { Panel, PanelRow, Pill } from "@/screens/migration/Checks.tsx";
 import { autoinvestErrorMessage, notConnectedAutoinvestApi, RUN_STATUSES, type AutoinvestApi, type Overview, type Run, type RunStatus } from "./api.ts";
 import { formatDay, formatShillings, NETWORK_LABELS, runNote, scheduleLabel, STATUS_LABELS } from "./labels.ts";
+import { createHttpAutoinvestApi } from "./http.ts";
 import { createStubAutoinvestApi, type StubCase } from "./stub.ts";
 
 function stubCase(): StubCase {
@@ -13,8 +16,17 @@ function stubCase(): StubCase {
   return sample === "empty" || sample === "error" ? sample : "sample";
 }
 
-/** Sample runs under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and `?sample=error` show those states. */
-const defaultApi: AutoinvestApi = isStubAuth() ? createStubAutoinvestApi(150, stubCase()) : notConnectedAutoinvestApi;
+/**
+ * Sample runs under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and `?sample=error` show those states.
+ * Otherwise the real routes, or "not connected" in a build that names no API.
+ */
+function defaultApi(): AutoinvestApi {
+  if (isStubAuth()) return createStubAutoinvestApi(150, stubCase());
+  const base = apiBaseUrl();
+  if (!base) return notConnectedAutoinvestApi;
+  const http = createHttp(base);
+  return createHttpAutoinvestApi(http, createHttpDirectory(http));
+}
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: Overview };
 type Filter = RunStatus | "all";
@@ -34,7 +46,7 @@ function today(now: Date): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(now);
 }
 
-export function AutomaticInvestingScreen({ api = defaultApi, now = () => new Date() }: { api?: AutoinvestApi; now?: () => Date }) {
+export function AutomaticInvestingScreen({ api, now = () => new Date() }: { api: AutoinvestApi; now?: () => Date }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [filter, setFilter] = useState<Filter>("all");
   const day = today(now());
@@ -163,6 +175,11 @@ function Ready({
           ) : (
             <RunsTable runs={shown} />
           )}
+          {overview.cut ? (
+            <p role="status" className="m-0 text-md font-bold text-warning-text">
+              This week has more runs than the screen can show, so the oldest are left out. Tell an engineer.
+            </p>
+          ) : null}
         </section>
         <aside className="flex min-w-0 flex-[2_1_280px] flex-col gap-4">
           <Panel title="How a run works">
@@ -228,5 +245,6 @@ function RunsTable({ runs }: { runs: readonly Run[] }) {
 }
 
 export default function AutomaticInvestingPage() {
-  return <AutomaticInvestingScreen />;
+  const [api] = useState(defaultApi);
+  return <AutomaticInvestingScreen api={api} />;
 }
