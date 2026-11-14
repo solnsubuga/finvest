@@ -74,6 +74,7 @@ describe("compliance over the API", () => {
     const download = vi.fn<typeof fetch>().mockResolvedValue(new Response("Case ID\r\n", { status: 200, headers: { "Content-Type": "text/csv" } }));
     const register = await createHttpComplianceApi(createHttp("https://api.example", download)).exportRegister();
     expect(download.mock.calls[0]?.[0]).toBe("https://api.example/staff/compliance/cases.csv");
+    expect(download.mock.calls[0]?.[1]?.method).toBe("POST");
     expect(register.filename).toMatch(/^finvest-compliance-register-\d{4}-\d{2}-\d{2}\.csv$/);
   });
 

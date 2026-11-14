@@ -703,7 +703,7 @@ export const MapVersionOut = z.object({
 });
 export type MapVersionOut = z.infer<typeof MapVersionOut>;
 
-export const System = z.enum(["quickbooks", "xero", "sage"]);
+export const System = z.enum(["quickbooks", "xero", "sage", "zoho"]);
 export type System = z.infer<typeof System>;
 
 export const SystemMapOut = z.object({
@@ -1147,7 +1147,7 @@ export const EventPage = z.object({
 });
 export type EventPage = z.infer<typeof EventPage>;
 
-export const Format = z.enum(["csv", "quickbooks", "xero", "sage"]);
+export const Format = z.enum(["csv", "quickbooks", "xero", "sage", "zoho"]);
 export type Format = z.infer<typeof Format>;
 
 export const ExportOut = z.object({

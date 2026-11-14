@@ -118,7 +118,7 @@ async def test_a_map_takes_two_people_and_is_then_used_for_the_systems_journal(
     # Nothing changes for exports until a second person approves.
     _, finance = await signed_in_staff(api, "finance")
     formats = (await api.http.get("/staff/finance", headers=finance)).json()["formats"]
-    assert [f["format"] for f in formats] == ["csv", "quickbooks", "xero", "sage"]
+    assert [f["format"] for f in formats] == ["csv", "quickbooks", "xero", "sage", "zoho"]
 
     own = await api.http.post(
         f"{BASE}/proposals/{map_id}/decision",

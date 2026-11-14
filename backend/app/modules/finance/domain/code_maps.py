@@ -26,6 +26,8 @@ _ACCOUNT_RULES: dict[System, re.Pattern[str]] = {
     System.QUICKBOOKS: re.compile(r"^[^\x00-\x1f\x7f]{1,100}$"),
     System.XERO: re.compile(r"^[A-Za-z0-9._-]{1,10}$"),
     System.SAGE: re.compile(r"^[0-9]{1,8}$"),
+    # Zoho Books names an account by its name, as QuickBooks does.
+    System.ZOHO: re.compile(r"^[^\x00-\x1f\x7f]{1,100}$"),
 }
 _LEDGER_CODE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z0-9_]+)*$")
 _TAX_RATE = re.compile(r"^[^\x00-\x1f\x7f]{1,50}$")

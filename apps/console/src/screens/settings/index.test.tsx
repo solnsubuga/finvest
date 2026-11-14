@@ -143,7 +143,9 @@ describe("settings: client messages", () => {
 
   it("says when client messages are not connected", async () => {
     renderSettings({ api: notConnectedWordingsApi });
-    expect(await screen.findByRole("alert")).toHaveTextContent("Client messages are not connected to the Finvest service yet.");
+    // Each section says so for itself: the accounting system codes are not connected here either.
+    const alerts = await screen.findAllByRole("alert");
+    expect(alerts.map((alert) => alert.textContent)).toContainEqual(expect.stringContaining("Client messages are not connected to the Finvest service yet."));
   });
 });
 

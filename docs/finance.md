@@ -34,7 +34,7 @@ The net is income less costs and can be negative. A reversal can make one code's
 
 ## The daily journal for the accounting system
 
-`GET /staff/finance/journal.csv?currency=UGX&date_from=2026-11-12&date_to=2026-11-12` gives one journal per day, one line per account code that moved that day:
+`POST /staff/finance/journal.csv` with `{"currency": "UGX", "date_from": "2026-11-12", "date_to": "2026-11-12", "format": "csv"}` gives one journal per day, one line per account code that moved that day. It is a POST because every export is recorded, and a GET could be repeated by a browser or a proxy. The Finvest CSV looks like this:
 
 ```
 Date,Journal,Account code,Account name,Kind,Currency,Debit,Credit
@@ -56,13 +56,47 @@ The export moves no money and changes no client fact, so one member of staff wit
 
 Nothing is sent to the accounting system from Finvest: staff download the file and import it there by hand. The screen shows the last day downloaded and offers the next closed days not yet downloaded: from the day after the last one, or the last closed day if nothing was ever downloaded, up to 31 days at a time. It also lists the last five exports, each with Download again, because the server records an export as it answers and a file lost on the way would otherwise be gone from the screen. Downloading again is recorded as another export.
 
-Which accounting system Finvest uses is not decided, so the file is a plain CSV that most systems import. Mapping Finvest's codes to the accountant's chart is done on import until the system is chosen.
+### Each accounting system's own file
+
+`format` picks the file. `csv` is the Finvest CSV above. The others are the journal import files of the common accounting systems, written in `backend/app/modules/finance/domain/formats.py`:
+
+| `format` | System | Columns | How a journal is grouped | The account is |
+| --- | --- | --- | --- | --- |
+| `quickbooks` | QuickBooks Online, journal entry import | `Journal No.`, `Journal Date`, `Account Name`, `Debits`, `Credits`, `Description` | Same `Journal No.` | The account's name, a sub-account as `Parent:Child` |
+| `xero` | Xero, manual journal import | Xero's template: `*Narration`, `*Date`, `Description`, `*AccountCode`, `*TaxRate`, `*Amount` and the tracking columns | Same narration and date | Xero's account code. `*Amount` is positive for a debit, negative for a credit. `*TaxRate` comes from the map. |
+| `sage` | Sage Accounting, journal import | `Reference`, `Date`, `Description`, `Nominal Code`, `Details`, `Include on VAT/Tax Return?`, `Debit`, `Credit` | A new `Reference` starts a journal | The nominal code, a number. Never on the VAT return. |
+| `zoho` | Zoho Books, manual journal import | `Journal Date`, `Journal Number`, `Reference Number`, `Notes`, `Status`, `Currency`, `Account`, `Description`, `Debit`, `Credit` | Same `Journal Number`. Zoho Books matches the columns on its Map Fields step. | The account's name. Each journal comes in as a `Draft` for the accountant to publish. |
+
+In every system's file:
+
+* The journal reference is the same `FINVEST-<currency>-<YYYYMMDD>`, so the system can refuse a day it already has.
+* Each Finvest code's movement that day is one line, net: a debit when it was debited more than credited, a credit otherwise. A code whose debits and credits that day were equal is left out, since the systems refuse a line of nothing. Each day still balances.
+* Dates are day first, `12/11/2026`, as the systems use for an organisation in Uganda.
+* The line's description is the Finvest account's name and code, such as `Trust bank account (bank.trust)`.
+* Only shillings. Each system keeps its books in one base currency and takes another only with an exchange rate Finvest does not have. A dollar journal for a system is 422 `currency_not_supported`; download it as the Finvest CSV.
+
+The file headers follow each system's published import template. The first import into each system should still be checked by the accountant, as the import screens let the columns be matched by hand where a system names them differently.
+
+### Account code maps
+
+A system's file names the system's accounts, so each system has an account code map: for each Finvest ledger code, the account it is posted to there. A map lives in the console's Settings under Accounting system codes and is kept in `finance_code_maps` and `finance_code_map_lines` (migration 0290).
+
+* One member of staff proposes a whole map for one system, with a reason, and a different one approves or rejects it with a note. Only the proposer can withdraw it. PostgreSQL refuses the proposer deciding their own, a decided map changing, accounts being added by anyone but the proposer or after the proposal is decided, and any row being removed.
+* One proposal waits per system at a time. Exports keep using the map in use until a new one is approved.
+* Seeing the maps needs `settings.view`. Proposing and deciding need `account_codes.change`, held by the admin role only for now. Deciding also needs a passkey or app code from the last ten minutes.
+* Each step is an audit event: `finance.code_map_proposed` with how many codes it adds, changes and removes, then `finance.code_map_approved`, `_rejected` or `_withdrawn`. The accounts themselves are in the map, kept for good.
+* A code must be one the ledger has. A Xero code is up to 10 letters or numbers, a Sage nominal code up to 8 digits, and a QuickBooks or Zoho Books account name up to 100 characters on one line. Xero also needs the name of the tax rate written on every line, `Tax Exempt` to start with.
+* A map need not name every code. An export for a system that meets a code its approved map does not name is refused with 409 `conflict` and one field per code, `["codes", "<code>"]`, `not_mapped`, so the journal never lands on a guessed account. The Finance screen names the codes and sends the person to Settings.
+* Each export records its format and the map it used, in `finance_journal_exports`. The database refuses an export that names a map not approved for its own system.
 
 ## Routes
 
 | Route | What it does |
 | --- | --- |
-| `GET /staff/finance?currency=UGX&month=2026-11` | The month's books, income and costs, `closed_through`, `sent_through`, `next_export` and the recent exports. `month` defaults to this month; a future month is 422 `month_in_future`. |
-| `GET /staff/finance/journal.csv?currency=&date_from=&date_to=` | The daily journal file, recorded as an export |
+| `GET /staff/finance?currency=UGX&month=2026-11` | The month's books, income and costs, `closed_through`, `sent_through`, `next_export`, the recent exports with their format, and `formats`: each file the journal can be downloaded as, whether its system has an approved map, the ledger codes the map does not name, and its currencies. `month` defaults to this month; a future month is 422 `month_in_future`. |
+| `POST /staff/finance/journal.csv` | The daily journal file in the chosen format, recorded as an export |
+| `GET /staff/finance/account-codes` | Every ledger code, and each system's map in use, the proposal waiting and the last five decisions. `settings.view`. |
+| `POST /staff/finance/account-codes/{system}/proposals` | Proposes a whole map, `{accounts, tax_rate, reason}`. A blank account leaves a code without one. `account_codes.change`. |
+| `POST /staff/finance/account-codes/proposals/{id}/decision` | `approved` or `rejected` by someone else, `withdrawn` by the proposer, with a reason. `account_codes.change`, confirmed in the last ten minutes. |
 
-Both need `finance.view` (finance and admin).
+The first two need `finance.view` (finance and admin).

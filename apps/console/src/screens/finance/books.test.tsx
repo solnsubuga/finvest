@@ -33,10 +33,12 @@ describe("books", () => {
 
   it("downloads the closed days not yet downloaded and then lists them", async () => {
     const { user, save } = renderBooks();
-    const button = await screen.findByRole("button", { name: "Download 11 Nov 2026 to 12 Nov 2026" });
+    // The last file was for QuickBooks, so the next one is too until another is picked.
+    expect(await screen.findByRole("combobox", { name: /File for/ })).toHaveValue("quickbooks");
+    const button = await screen.findByRole("button", { name: "Download 11 Nov 2026 to 12 Nov 2026 for QuickBooks Online" });
     await user.click(button);
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0]![0].filename).toBe("finvest-journal-ugx-2026-11-11-to-2026-11-12.csv");
+    expect(save.mock.calls[0]![0].filename).toBe("finvest-journal-quickbooks-ugx-2026-11-11-to-2026-11-12.csv");
     await screen.findByText("Every closed day has been downloaded. The next one can be once it is closed on the Reconciliation screen.");
     expect(screen.getByText("Journal downloaded through").parentElement).toHaveTextContent("12 Nov 2026");
     expect(screen.getAllByText(/by Amina/)).toHaveLength(1);
@@ -54,8 +56,10 @@ describe("books", () => {
     const again = await screen.findAllByRole("button", { name: /^Download again/ });
     await user.click(again[0]!);
     await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
-    const [, days] = exportJournal.mock.calls[0]!;
+    const [, days, format] = exportJournal.mock.calls[0]!;
     expect(days.dateTo >= days.dateFrom).toBe(true);
+    // Again in the format it was first downloaded in.
+    expect(format).toBe("quickbooks");
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not be saved\. Download it again from the list below\./);
     expect(screen.getAllByRole("button", { name: /^Download again/ }).length).toBeGreaterThan(again.length);
   });
@@ -83,6 +87,40 @@ describe("books", () => {
     await screen.findByRole("table", { name: "Books for October 2026" });
     expect(getBooks).toHaveBeenLastCalledWith("UGX", "2026-10");
     expect(screen.getByText("Income in October 2026")).toBeInTheDocument();
+  });
+
+  it("offers each accounting system and says when one cannot be downloaded yet", async () => {
+    const { user, save } = renderBooks();
+    const picker = await screen.findByRole("combobox", { name: /File for/ });
+    expect(within(picker).getAllByRole("option").map((option) => option.textContent)).toEqual([
+      "Finvest CSV",
+      "QuickBooks Online",
+      "Xero",
+      "Sage Accounting (not set up)",
+      "Zoho Books (not set up)",
+    ]);
+    await user.selectOptions(picker, "sage");
+    expect(screen.getByText(/No Sage Accounting account codes are approved yet/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Download 11/ })).toBeDisabled();
+    await user.selectOptions(picker, "xero");
+    expect(screen.getByText(/1 account has no Xero account yet: fees\.provider\.iotec/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Download 11 .* for Xero$/ }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This account has no account in the accounting system yet: fees.provider.iotec. An admin names them under Settings, Accounting system codes.",
+    );
+    await user.selectOptions(picker, "csv");
+    await user.click(screen.getByRole("button", { name: "Download 11 Nov 2026 to 12 Nov 2026" }));
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0]![0].filename).toBe("finvest-journal-ugx-2026-11-11-to-2026-11-12.csv");
+  });
+
+  it("keeps dollar journals to the Finvest CSV", async () => {
+    const save = vi.fn();
+    render(<BooksSection api={createStubBooksApi(ME, { today: TODAY })} currency="USD" today={TODAY} save={save} />);
+    const picker = await screen.findByRole("combobox", { name: /File for/ });
+    expect(picker).toHaveValue("csv");
+    await userEvent.setup().selectOptions(picker, "quickbooks");
+    expect(screen.getByText(/QuickBooks Online takes the journal in shillings only/)).toBeInTheDocument();
   });
 
   it("shows a refused download without losing the screen", async () => {
@@ -113,15 +151,23 @@ describe("books over HTTP", () => {
       sent_through: null,
       next_export: { date_from: "2026-11-12", date_to: "2026-11-12" },
       exports: [],
+      formats: [{ format: "xero", name: "Xero", ready: true, unmapped: [], currencies: ["UGX"] }],
     });
     const download = vi.fn().mockResolvedValue(new Blob(["x"]));
     const api = createHttpBooksApi({ request, download } as unknown as Http);
     const books = await api.getBooks("UGX", "2026-11");
     expect(request).toHaveBeenCalledWith("GET", "/staff/finance?currency=UGX&month=2026-11");
     expect(books.nextExport).toEqual({ dateFrom: "2026-11-12", dateTo: "2026-11-12" });
-    const file = await api.exportJournal("USD", { dateFrom: "2026-11-12", dateTo: "2026-11-12" });
-    expect(download).toHaveBeenCalledWith("/staff/finance/journal.csv?currency=USD&date_from=2026-11-12&date_to=2026-11-12");
+    expect(books.formats).toEqual([{ format: "xero", name: "Xero", ready: true, unmapped: [], currencies: ["UGX"] }]);
+    const file = await api.exportJournal("USD", { dateFrom: "2026-11-12", dateTo: "2026-11-12" }, "csv");
+    // A POST, because the server records each export.
+    expect(download).toHaveBeenCalledWith("/staff/finance/journal.csv", {
+      method: "POST",
+      body: { currency: "USD", date_from: "2026-11-12", date_to: "2026-11-12", format: "csv" },
+    });
     expect(file.filename).toBe("finvest-journal-usd-2026-11-12.csv");
+    const xero = await api.exportJournal("UGX", { dateFrom: "2026-11-12", dateTo: "2026-11-12" }, "xero");
+    expect(xero.filename).toBe("finvest-journal-xero-ugx-2026-11-12.csv");
     expect(journalFilename("UGX", { dateFrom: "2026-11-01", dateTo: "2026-11-03" })).toBe("finvest-journal-ugx-2026-11-01-to-2026-11-03.csv");
   });
 
@@ -131,6 +177,16 @@ describe("books over HTTP", () => {
     expect(toBooksError(new ApiError("validation_failed", 422, fields("too_many_days"))).code).toBe("too_many_days");
     expect(toBooksError(new ApiError("validation_failed", 422, fields("bad_month"))).code).toBe("invalid");
     expect(toBooksError(new ApiError("forbidden", 403)).code).toBe("forbidden");
+    const unmapped = toBooksError(
+      new ApiError("conflict", 409, [
+        { field_path: ["codes", "bank.trust"], code: "not_mapped" },
+        { field_path: ["codes", "iotec.wallet"], code: "not_mapped" },
+      ]),
+    );
+    expect([unmapped.code, unmapped.codes]).toEqual(["codes_not_mapped", ["bank.trust", "iotec.wallet"]]);
+    expect(toBooksError(new ApiError("validation_failed", 422, [{ field_path: ["format"], code: "currency_not_supported" }])).code).toBe(
+      "currency_not_supported",
+    );
     expect(toBooksError(new ApiError("internal_error", 500)).code).toBe("unavailable");
     expect(toBooksError(new Error("network")).code).toBe("unavailable");
   });

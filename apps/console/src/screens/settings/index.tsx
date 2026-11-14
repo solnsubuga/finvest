@@ -18,6 +18,9 @@ import {
   type WordingText,
   type WordingsApi,
 } from "./api.ts";
+import { AccountCodesSection } from "./AccountCodes.tsx";
+import { createHttpAccountCodesApi, notConnectedAccountCodesApi, type AccountCodesApi } from "./accountCodes.ts";
+import { createStubAccountCodesApi } from "./accountCodesStub.ts";
 import { AnnouncementsSection } from "./Announcements.tsx";
 import { notConnectedAnnouncementsApi, type AnnouncementsApi } from "./announcements.ts";
 import { createStubAnnouncementsApi } from "./announcementsStub.ts";
@@ -38,9 +41,12 @@ interface SettingsScreenProps {
   canChange: boolean;
   /** `announcements.send`: propose and decide announcements. The API checks it again. */
   canSend: boolean;
+  codes?: AccountCodesApi;
+  /** `account_codes.change`: propose and decide accounting system codes. The API checks it again. */
+  canChangeCodes?: boolean;
 }
 
-export function SettingsScreen({ api, announcements, directory, canChange, canSend }: SettingsScreenProps) {
+export function SettingsScreen({ api, announcements, directory, canChange, canSend, codes = notConnectedAccountCodesApi, canChangeCodes = false }: SettingsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -125,6 +131,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
           Loading settings
         </p>
         <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
       </>
     );
   }
@@ -146,6 +153,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
           </Button>
         </section>
         <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
       </>
     );
   }
@@ -219,6 +227,7 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
         )}
       </section>
       <AnnouncementsSection api={announcements} directory={directory} canChange={canSend} />
+        <AccountCodesSection api={codes} canChange={canChangeCodes} />
     </>
   );
 }
@@ -226,24 +235,30 @@ export function SettingsScreen({ api, announcements, directory, canChange, canSe
 export default function SettingsPage() {
   const { session } = useAuth();
   // Sample messages under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
-  const [{ api, announcements, directory }] = useState<{ api: WordingsApi; announcements: AnnouncementsApi; directory: Directory }>(() => {
+  const [{ api, announcements, directory, codes }] = useState<{ api: WordingsApi; announcements: AnnouncementsApi; directory: Directory; codes: AccountCodesApi }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
       // Under the stub, `?sample=offline` shows the screen as if Finvest could not be reached, and `?sample=empty` with no announcements.
       const sample = new URLSearchParams(window.location.search).get("sample");
       if (sample === "offline") {
-        return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: createStubDirectory(me) };
+        return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: createStubDirectory(me), codes: notConnectedAccountCodesApi };
       }
       return {
         api: createStubWordingsApi(me),
         announcements: createStubAnnouncementsApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
         directory: createStubDirectory(me),
+        codes: createStubAccountCodesApi(me, Date.now, sample === "empty" ? "empty" : "sample"),
       };
     }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: emptyDirectory };
+    if (!base) return { api: notConnectedWordingsApi, announcements: notConnectedAnnouncementsApi, directory: emptyDirectory, codes: notConnectedAccountCodesApi };
     const http = createHttp(base);
-    return { api: createHttpWordingsApi(http), announcements: createHttpAnnouncementsApi(http), directory: createHttpDirectory(http) };
+    return {
+      api: createHttpWordingsApi(http),
+      announcements: createHttpAnnouncementsApi(http),
+      directory: createHttpDirectory(http),
+      codes: createHttpAccountCodesApi(http),
+    };
   });
   return (
     <SettingsScreen
@@ -252,6 +267,8 @@ export default function SettingsPage() {
       directory={directory}
       canChange={session ? can(session, "wordings.change") : false}
       canSend={session ? can(session, "announcements.send") : false}
+      codes={codes}
+      canChangeCodes={session ? can(session, "account_codes.change") : false}
     />
   );
 }

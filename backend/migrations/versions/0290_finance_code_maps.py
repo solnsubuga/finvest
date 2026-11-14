@@ -5,7 +5,7 @@ Revision ID: 0290_finance_code_maps
 Revises: 0222_identity_recovery_requests
 
 The daily journal can be downloaded as Finvest's generic CSV or as the journal import file of
-QuickBooks Online, Xero or Sage Accounting. Those three name their own accounts, so each has an
+QuickBooks Online, Xero, Sage Accounting or Zoho Books. Those four name their own accounts, so each has an
 account code map: which of the system's accounts each Finvest ledger code is posted to.
 
 * `finance_code_maps` holds every proposed map, one row per proposal for one system. One member
@@ -49,7 +49,7 @@ CREATE TABLE finance_code_maps (
     decided_at timestamptz,
     decision_reason varchar(500),
     CONSTRAINT pk_finance_code_maps PRIMARY KEY (id),
-    CONSTRAINT ck_finance_code_maps_system CHECK (system IN ('quickbooks', 'xero', 'sage')),
+    CONSTRAINT ck_finance_code_maps_system CHECK (system IN ('quickbooks', 'xero', 'sage', 'zoho')),
     CONSTRAINT ck_finance_code_maps_tax_rate CHECK (
         (system = 'xero') = (tax_rate IS NOT NULL) AND (tax_rate IS NULL OR btrim(tax_rate) <> '')),
     CONSTRAINT ck_finance_code_maps_reason CHECK (btrim(reason) <> ''),
@@ -89,7 +89,7 @@ ALTER TABLE finance_journal_exports
     ADD COLUMN code_map_id push_id;
 ALTER TABLE finance_journal_exports
     ADD CONSTRAINT ck_finance_journal_exports_format
-        CHECK (format IN ('csv', 'quickbooks', 'xero', 'sage')),
+        CHECK (format IN ('csv', 'quickbooks', 'xero', 'sage', 'zoho')),
     ADD CONSTRAINT ck_finance_journal_exports_code_map
         CHECK ((format = 'csv') = (code_map_id IS NULL)),
     ADD CONSTRAINT fk_finance_journal_exports_code_map FOREIGN KEY (code_map_id)

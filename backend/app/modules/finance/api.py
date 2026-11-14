@@ -6,9 +6,9 @@ ledger is closed, and the journals already sent to the accounting system.
 
 `POST /staff/finance/journal.csv` is the daily journal for closed days, added up by account
 code, as a file for the accounting system: Finvest's generic CSV, or the journal import of
-QuickBooks Online, Xero or Sage Accounting. It moves no money, so one person exports it. Each
-export is recorded, with an audit event, so the screen can say what was sent last. It is a POST
-because it records.
+QuickBooks Online, Xero, Sage Accounting or Zoho Books. It moves no money, so one person
+exports it. Each export is recorded, with an audit event, so the screen can say what was sent
+last. It is a POST because it records.
 
 `/staff/finance/account-codes` is each accounting system's account code map, on the console's
 Settings screen. A change takes two people: one proposes a whole map, a different one approves.
@@ -440,6 +440,7 @@ ACCOUNT_LABELS = {
     System.QUICKBOOKS: "Account name",
     System.XERO: "Account code",
     System.SAGE: "Nominal code",
+    System.ZOHO: "Account name",
 }
 
 
