@@ -144,7 +144,7 @@ Deploys follow Fidiba. A push to the source branch deploys its environment, and 
 | Deploy Staging | `main` | `dev` |
 | Deploy Production | `release` | `prod`, so it waits for your approval |
 
-A workflow does nothing until its environment is listed in the repository variable `DEPLOY_ENVIRONMENTS` by its GitHub name (`prod` while staging is on hold, `dev,prod` later). Add an environment only after Provision has applied it.
+Production deploys once a `release` branch exists: create it from `main` only after Provision has applied production. Staging deploys only while `STAGING_ENABLED` is `true`. A deploy that runs before its environment is provisioned fails before it reaches any host, because the settings Provision writes are missing.
 
 ### Staging on hold
 
@@ -158,7 +158,7 @@ The CI rehearsal still runs a whole deployment on the runner on every infrastruc
 
 Without staging, a release goes from `main` to production by updating the `release` branch, so check a change in the rehearsal and in review before you push `release`.
 
-To switch staging on: set the repository variable `STAGING_ENABLED` to `true`, create the `dev` GitHub environment and its settings (above), run Provision for `staging`, then add `dev` to `DEPLOY_ENVIRONMENTS`. To switch it off again, first destroy its resources (ask the infrastructure thread), then set `STAGING_ENABLED` back.
+To switch staging on: set the repository variable `STAGING_ENABLED` to `true`, create the `dev` GitHub environment and its settings (above), then run Provision for `staging`. Until it has applied, a push to `main` starts a staging deploy that fails for lack of those settings before it reaches a server. To switch it off again, first destroy its resources (ask the infrastructure thread), then set `STAGING_ENABLED` back.
 
 Each run:
 
