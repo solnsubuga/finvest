@@ -89,7 +89,7 @@ describe("review queue: company and group accounts", () => {
   it("approves a colleague's check after asking once more, and shows the account number", async () => {
     const { user } = renderScreen({ entry: "/review-queue?tab=organisations&organisation=-NstubOrg00000000002" });
     const review = await panel("Nakato Traders Ltd");
-    expect(within(review).getByText(/Grace Auma/)).toBeInTheDocument();
+    expect(within(review).getByText(/Ruth Namata/)).toBeInTheDocument();
     await user.type(within(review).getByLabelText("Note"), "URSB record matches.");
     await user.click(within(review).getByRole("button", { name: "Approve and open the account" }));
     const asked = within(review).getByRole("alertdialog", { name: "Confirm" });
