@@ -326,8 +326,8 @@ Seeing needs `money_movement.view` (admin, operations and finance). Every step n
 | Route | What it does |
 | --- | --- |
 | `GET /staff/payouts/bank/waiting?currency=UGX` | Queued bank payouts in no prepared or approved batch, oldest first, at most 200 |
-| `GET /staff/payout-bank-batches?status=prepared&status=approved` | Batches in those statuses, newest first, at most 100, each with its payouts and total |
-| `GET /staff/payout-bank-batches/{id}` | One batch |
+| `GET /staff/payout-bank-batches?status=prepared&status=approved` | Batches in those statuses, newest first, at most 100, each with its payouts and total. A prepared batch also carries `items`: each payout's amount, client, bank, account holder and masked account, for the second person to check |
+| `GET /staff/payout-bank-batches/{id}` | One batch, with its `items` |
 | `POST /staff/payout-bank-batches` | `{currency, payout_ids, reason}`. 201, prepared. 422 `batch_payouts_invalid` for a payout named twice; 409 `payout_not_bank`, `payout_not_queued` or `payout_in_another_batch` |
 | `POST /staff/payout-bank-batches/{id}/approve` | `{reason}`. Sends every payout in it. 403 `prepared_by_you`; 409 `batch_already_decided` |
 | `POST /staff/payout-bank-batches/{id}/decline` | `{reason}`. 403 `prepared_by_you`; 409 `batch_already_decided` |

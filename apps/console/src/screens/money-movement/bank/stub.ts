@@ -1,5 +1,7 @@
+import { SAMPLE_CLIENTS } from "@/directory/stub.ts";
 import {
   BankPayoutsError,
+  type BatchItem,
   type Amount,
   type BankPayout,
   type BankPayoutsApi,
@@ -25,16 +27,32 @@ function ago(minutes: number, now: Date): string {
   return new Date(now.getTime() - minutes * 60_000).toISOString();
 }
 
+const BANKS = ["Stanbic Bank", "Centenary Bank", "Absa Bank Uganda", "dfcu Bank"];
+
 function payout(id: number, minor: number, minutes: number, now: Date, currency: Currency = "UGX"): BankPayout {
   const created = ago(minutes, now);
+  const client = SAMPLE_CLIENTS[id % SAMPLE_CLIENTS.length]!;
   return {
     id: `-OdBankPay00000000${String(id).padStart(2, "0")}`,
-    clientId: `-OdClient000000000${String(id).padStart(2, "0")}`,
+    clientId: client.clientId,
     destinationId: `-OdDest00000000000${String(id).padStart(2, "0")}`,
     amount: money(minor, currency),
     status: "queued",
     businessDate: created.slice(0, 10),
     createdAt: created,
+  };
+}
+
+/** The masked account each sample payout goes to, as the backend gives it for a batch. */
+function itemOf(of: BankPayout): BatchItem {
+  const n = Number(of.id.slice(-2));
+  return {
+    payoutId: of.id,
+    clientId: of.clientId,
+    amount: of.amount,
+    bankName: BANKS[n % BANKS.length] ?? null,
+    maskedAccount: `•••• ${String(4000 + n * 137).slice(-4)}`,
+    holderName: SAMPLE_CLIENTS.find((client) => client.clientId === of.clientId)?.name ?? "Sample client",
   };
 }
 
@@ -72,7 +90,7 @@ function sample(now: Date, me: string): State {
       {
         id: "-OdBankBatch00000001",
         currency: "UGX",
-        reason: "Tuesday afternoon bank payouts",
+        reason: "Bank payouts asked for since this morning",
         status: "prepared",
         preparedBy: BANK_COLLEAGUE,
         preparedAt: ago(40, now),
@@ -81,11 +99,12 @@ function sample(now: Date, me: string): State {
         decisionReason: null,
         payoutIds: inBatch.map((each) => each.id),
         total: money(5_000_000),
+        items: null,
       },
       {
         id: "-OdBankBatch00000002",
         currency: "UGX",
-        reason: "Monday bank payouts",
+        reason: "Bank payouts from the start of the week",
         status: "approved",
         preparedBy: me,
         preparedAt: ago(3 * 24 * 60 + 30, now),
@@ -94,6 +113,7 @@ function sample(now: Date, me: string): State {
         decisionReason: "Checked each account against the client's approved destination",
         payoutIds: sentOnes.slice(0, 2).map((each) => each.id),
         total: money(7_350_000),
+        items: null,
       },
     ],
     sent: [
@@ -141,7 +161,21 @@ export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStu
     listWaiting: (currency) =>
       wait(() => state.payouts.filter((each) => each.status === "queued" && each.amount.currency === currency && !inLiveBatch(each.id))),
     listBatches: () =>
-      wait(() => state.batches.filter((each) => each.status === "prepared" || each.status === "approved").sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))),
+      wait(() =>
+        state.batches
+          .filter((each) => each.status === "prepared" || each.status === "approved")
+          .sort((a, b) => b.preparedAt.localeCompare(a.preparedAt))
+          .map((each) => ({
+            ...each,
+            items:
+              each.status === "prepared"
+                ? each.payoutIds.flatMap((id) => {
+                    const found = state.payouts.find((one) => one.id === id);
+                    return found ? [itemOf(found)] : [];
+                  })
+                : null,
+          })),
+      ),
     prepare: (_key, currency, payoutIds, reason) =>
       wait(() => {
         if (payoutIds.length === 0 || payoutIds.length > 200) refuse("batch_payouts_invalid");
@@ -164,6 +198,7 @@ export function createStubBankPayoutsApi(me: string, delay = 150, which: BankStu
           decisionReason: null,
           payoutIds,
           total: money(chosen.reduce((sum, each) => sum + each.amount.minor, 0), currency),
+          items: null,
         });
       }),
     approve: (_key, id, reason) =>

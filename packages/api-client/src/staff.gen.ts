@@ -251,12 +251,23 @@ export const BatchIn = z.object({
 });
 export type BatchIn = z.infer<typeof BatchIn>;
 
+export const BatchItemOut = z.object({
+  amount: MoneyView,
+  bank_name: z.string().nullable(),
+  client_id: z.string(),
+  holder_name: z.string(),
+  masked_account: z.string(),
+  payout_id: z.string(),
+});
+export type BatchItemOut = z.infer<typeof BatchItemOut>;
+
 export const BatchOut = z.object({
   currency: z.enum(["UGX", "USD"]),
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
   decision_reason: z.string().nullable(),
   id: z.string(),
+  items: z.array(BatchItemOut).nullable().optional(),
   payout_ids: z.array(z.string()),
   prepared_at: z.string(),
   prepared_by: z.string(),

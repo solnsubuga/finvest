@@ -30,6 +30,16 @@ export interface BankPayout {
 
 export type BatchStatus = "prepared" | "approved" | "declined" | "withdrawn";
 
+/** One payout in a batch, as the second person checks it. The account is masked. */
+export interface BatchItem {
+  payoutId: string;
+  clientId: string;
+  amount: Amount;
+  bankName: string | null;
+  maskedAccount: string;
+  holderName: string;
+}
+
 export interface Batch {
   id: string;
   currency: Currency;
@@ -42,6 +52,8 @@ export interface Batch {
   decisionReason: string | null;
   payoutIds: string[];
   total: Amount;
+  /** Each payout with its masked account. The list gives them for a prepared batch only. */
+  items: BatchItem[] | null;
 }
 
 export type Outcome = "paid" | "failed";

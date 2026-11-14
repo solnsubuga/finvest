@@ -109,6 +109,19 @@ class BatchView:
 
 
 @dataclass(frozen=True, slots=True)
+class BatchItem:
+    """One payout in a batch, as the second person checks it: the amount, and the approved
+    account it goes to, masked."""
+
+    payout_id: str
+    client_id: str
+    amount: Money
+    bank_name: str | None
+    masked_account: str
+    holder_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class SettlementView:
     id: str
     payout_id: str
@@ -384,6 +397,27 @@ async def get_batch(session: AsyncSession, batch_id: str) -> BatchView:
     if row is None:
         raise ApplicationError("not_found")
     return await _batch_view(session, row)
+
+
+async def batch_items(session: AsyncSession, batch: BatchView) -> list[BatchItem]:
+    """Each payout in the batch with its account masked, for the person deciding it. Account
+    numbers in full are only in the transfer file."""
+    items: list[BatchItem] = []
+    for payout_id in batch.payout_ids:
+        payout = await payouts.get_payout(session, payout_id)
+        destination = await destinations.get_destination(session, payout.destination_id)
+        bank = find_bank(destination.bank_code or "")
+        items.append(
+            BatchItem(
+                payout_id=payout.id,
+                client_id=payout.client_id,
+                amount=payout.amount,
+                bank_name=None if bank is None else bank.name,
+                masked_account=destination.masked_account,
+                holder_name=destination.holder_name,
+            )
+        )
+    return items
 
 
 async def batches(

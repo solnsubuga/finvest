@@ -4,6 +4,9 @@ import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
+import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { formatExact, formatMoment } from "@/screens/reconciliation/format.ts";
@@ -300,12 +303,13 @@ function defaultApi(me: string): PayoutsApi {
 }
 
 /** Bank payouts and returns, the same way: samples under the stub, the real routes otherwise. */
-function defaultBankApis(me: string): { bank: BankPayoutsApi; returns: ReturnsApi } {
-  if (isStubAuth()) return { bank: createStubBankPayoutsApi(me, 150, stubCase()), returns: createStubReturnsApi(me, 150, stubCase()) };
+function defaultBankApis(me: string): { bank: BankPayoutsApi; returns: ReturnsApi; directory: Directory } {
+  if (isStubAuth())
+    return { bank: createStubBankPayoutsApi(me, 150, stubCase()), returns: createStubReturnsApi(me, 150, stubCase()), directory: createStubDirectory() };
   const base = apiBaseUrl();
-  if (!base) return { bank: notConnectedBankPayoutsApi, returns: notConnectedReturnsApi };
+  if (!base) return { bank: notConnectedBankPayoutsApi, returns: notConnectedReturnsApi, directory: emptyDirectory };
   const http = createHttp(base);
-  return { bank: createHttpBankPayoutsApi(http), returns: createHttpReturnsApi(http) };
+  return { bank: createHttpBankPayoutsApi(http), returns: createHttpReturnsApi(http), directory: createHttpDirectory(http) };
 }
 
 export default function MoneyMovementPage() {
@@ -317,8 +321,8 @@ export default function MoneyMovementPage() {
   return (
     <>
       <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false} />
-      <BankPayouts api={bank.bank} me={me} canChange={canPayBank} />
-      <Returns api={bank.returns} me={me} canChange={canPayBank} />
+      <BankPayouts api={bank.bank} me={me} canChange={canPayBank} directory={bank.directory} />
+      <Returns api={bank.returns} me={me} canChange={canPayBank} directory={bank.directory} />
     </>
   );
 }

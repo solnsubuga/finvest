@@ -900,6 +900,57 @@
         "title": "BatchIn",
         "type": "object"
       },
+      "BatchItemOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "bank_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bank Name"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "holder_name": {
+            "title": "Holder Name",
+            "type": "string"
+          },
+          "masked_account": {
+            "title": "Masked Account",
+            "type": "string"
+          },
+          "payout_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Payout Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payout_id",
+          "client_id",
+          "amount",
+          "bank_name",
+          "masked_account",
+          "holder_name"
+        ],
+        "title": "BatchItemOut",
+        "type": "object"
+      },
       "BatchOut": {
         "additionalProperties": false,
         "properties": {
@@ -954,6 +1005,20 @@
             "pattern": "^[-0-9A-Z_a-z]{20}$",
             "title": "Id",
             "type": "string"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/BatchItemOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
           },
           "payout_ids": {
             "items": {
@@ -35257,7 +35322,7 @@
     },
     "/staff/payout-bank-batches": {
       "get": {
-        "description": "Batches in these statuses, newest first, at most 100.",
+        "description": "Batches in these statuses, newest first, at most 100. A prepared batch carries its\n`items`, for the second person to check; open one to see the items of any other.",
         "operationId": "list_batches_staff_payout_bank_batches_get",
         "parameters": [
           {

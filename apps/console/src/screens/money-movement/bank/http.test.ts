@@ -70,6 +70,31 @@ describe("bank payouts over HTTP", () => {
     expect(declined?.settlement).toBeNull();
   });
 
+  it("reads a batch with its payouts, accounts masked", async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      reply(200, [
+        {
+          id: "-NbatchA000000000001",
+          currency: "UGX",
+          reason: "Today",
+          status: "prepared",
+          prepared_by: "-Nstaff000000000000B",
+          prepared_at: "2026-11-14T08:00:00Z",
+          decided_by: null,
+          decided_at: null,
+          decision_reason: null,
+          payout_ids: [PAYOUT.id],
+          total: PAYOUT.amount,
+          items: [{ payout_id: PAYOUT.id, client_id: PAYOUT.client_id, amount: PAYOUT.amount, bank_name: "Stanbic Bank", masked_account: "•••• 4821", holder_name: "Sarah Nakato" }],
+        },
+      ]),
+    );
+    const [batch] = await api(fetch).listBatches();
+    expect(batch?.items).toEqual([
+      { payoutId: PAYOUT.id, clientId: PAYOUT.client_id, amount: PAYOUT.amount, bankName: "Stanbic Bank", maskedAccount: "•••• 4821", holderName: "Sarah Nakato" },
+    ]);
+  });
+
   it("prepares a batch with an idempotency key", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => reply(201, {}));
     await api(fetch).prepare("key-1", "UGX", [PAYOUT.id], "Wednesday");
