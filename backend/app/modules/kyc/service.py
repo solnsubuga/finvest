@@ -18,6 +18,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.jobs import JobRequest, enqueue
+from app.infrastructure.jobs.outbox import Consumer, publish
 from app.infrastructure.sealing import Sealer, associated_data
 from app.modules.account_numbers.domain.numbers import AccountType
 from app.modules.account_numbers.service import issue_account_number
@@ -53,6 +54,10 @@ from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
 
 RESOURCE = "kyc_check"
+# Published when a check is approved or rejected, by staff or by the worker. Other modules that
+# need to hear, such as migration for a client claiming an account, add their consumer here.
+DECIDED_TOPIC = "kyc.check_decided"
+DECIDED_CONSUMERS: tuple[Consumer, ...] = ()
 # The worker's jobs (app/modules/kyc/jobs.py). One send per submission, whatever is retried.
 SEND_CHECK = "kyc.send_check"
 READ_RESULT = "kyc.read_result"
@@ -799,6 +804,7 @@ async def reject(
         },
     )
     await _tell(session, row, "kyc_rejected", row.id, clock)
+    await _publish_decision(session, row, approved=False, clock=clock)
     await _audit(session, staff, "approval", "kyc.check.rejected", row.id, clock, reason=reason)
     return await _view_by_id(session, sealer, row.id)
 
@@ -971,7 +977,22 @@ async def _approve(
         return False
     # A check is approved once, so its ID is the key.
     await _tell(session, row, "kyc_approved", row.id, clock)
+    await _publish_decision(session, row, approved=True, clock=clock)
     return True
+
+
+async def _publish_decision(
+    session: AsyncSession, row: Row[Any], *, approved: bool, clock: Clock
+) -> None:
+    """Publish `kyc.check_decided` in the decision's transaction. A check is decided once."""
+    await publish(
+        session,
+        topic=DECIDED_TOPIC,
+        idempotency_key=row.id,
+        payload={"client_id": row.client_id, "check_id": row.id, "approved": approved},
+        consumers=DECIDED_CONSUMERS,
+        now=clock.now(),
+    )
 
 
 async def _tell(
