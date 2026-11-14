@@ -6,9 +6,15 @@ How a signed-in client changes their password, app PIN, mobile number and email 
 
 Every change needs a passkey or the authenticator app used on this session in the last ten minutes. A texted or emailed code never counts, and neither does the code that proved the number at sign up, because whoever holds the SIM could have it. A log in with a passkey or the app counts from when it happened. A session that logged in with a code confirms again with `POST /client/session/confirmation/passkey` (after `/passkey/options`) or `POST /client/session/confirmation/authenticator`, which record `reverified_at` on the session, as staff do before an approval. A client with only SMS codes sets up a passkey or the app first, or asks support to change their number with the existing two-person change.
 
-This is the owner's choice on a decision card. The design canvas also shows a selfie for a password or number change. That step comes later, in its own change.
+This is the owner's choice on a decision card. A password or number change also needs a live selfie on the same session in the last ten minutes, as the design canvas shows ("Passkey + selfie"), when the client has a face on file: the selfie of their approved identity check, or of the claim staff matched for a client carried over from Finvest 1.0. A client with no face on file, or with liveness off, changes with the passkey or app alone. An email change needs the passkey or app only. See [identity-checks.md](identity-checks.md#face-confirmations).
 
-A refusal is 403 `confirm_it_is_you`. The app shows Confirm it is you and then sends the same change again by itself.
+A refusal is 403 `confirm_it_is_you` (passkey or app first) or 403 `confirm_with_selfie`. The app shows Confirm it is you, takes the selfie when asked, and then sends the same change again by itself. So it can ask before sending, `GET /client/session` gives `confirmed_at` and `confirmed_until` (when the passkey or app was last used on this session, and until when that counts), and `GET /client/session/confirmation/selfie` gives `needed`, `confirmed`, `attempts_left` and the latest attempt.
+
+| Route | Selfie |
+| --- | --- |
+| `GET /client/session/confirmation/selfie` | Whether this session needs a selfie for a password or number change, whether it has one, why a new one cannot start (`no_selfie_on_file`, `too_many_attempts`), and the latest attempt. |
+| `POST /client/session/confirmation/selfie` | Starts an attempt (201). Read it until it is `open`, open its `url`, then read it until it ends. 422 with `no_selfie_on_file` or `too_many_attempts` (5 a day). 503 when liveness is off. |
+| `GET /client/session/confirmation/selfie/{id}` | One of the client's own attempts: `status`, `url` while open, `failure_code`, `expires_at`, and `counts_until` once passed. |
 
 | Route | Change |
 | --- | --- |

@@ -1,5 +1,12 @@
 """Identity provider adapters. The provider is not chosen yet; see docs/identity-checks.md."""
 
+from app.modules.kyc.domain.face_confirmations import (
+    MatchAnswer,
+    MatchNotRun,
+    MatchPending,
+    MatchRefused,
+    MatchSent,
+)
 from app.modules.kyc.domain.liveness import Live, NotLive, NotStarted, Started, StillOpen
 from app.modules.kyc.domain.provider import (
     Accepted,
@@ -7,6 +14,7 @@ from app.modules.kyc.domain.provider import (
     CheckOutcome,
     Completed,
     Pending,
+    PhotoRef,
     ProviderRequest,
     Refused,
     Verdict,
@@ -84,3 +92,19 @@ class DevelopmentStubLiveness:
 
     async def result(self, request_id: str) -> StillOpen | Live | NotLive:
         return Live(photo=STUB_CAPTURE, content_type="image/jpeg")
+
+
+class DevelopmentStubFaceMatcher:
+    """Pretends to compare two faces, for local development only. It checks nothing.
+
+    Every comparison matches, so a face confirmation can be tried end to end. Paired only with
+    `DevelopmentStubLiveness`, so it is refused in production and never confirms a real change.
+    """
+
+    name = "development-stub"
+
+    async def send(self, key: str, live: PhotoRef, on_file: PhotoRef) -> MatchSent | MatchRefused:
+        return MatchSent(request_id=key)
+
+    async def result(self, request_id: str) -> MatchPending | MatchAnswer | MatchNotRun:
+        return MatchAnswer(score=97, identical=True)

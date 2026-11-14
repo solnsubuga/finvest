@@ -15,6 +15,8 @@ from app.infrastructure.storage import FileStorage
 from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.service import IdentityService
+from app.modules.kyc.domain.face_confirmations import FaceMatcher
+from app.modules.kyc.domain.liveness import LivenessProvider
 from app.modules.reconciliation.domain.wallet import WalletBalances
 from app.shared.actors import Actor
 from app.shared.push_ids import push_id
@@ -89,6 +91,8 @@ async def running_api(
     storage: FileStorage | None = None,
     iotec_wallet: WalletBalances | None = None,
     identity_sealer: Sealer | None = None,
+    identity_liveness: LivenessProvider | None = None,
+    face_matcher: FaceMatcher | None = None,
     payout_names: bool = True,
     early_withdrawal_open: bool = False,
 ) -> AsyncIterator[Api]:
@@ -108,6 +112,8 @@ async def running_api(
         storage=storage,
         iotec_wallet=iotec_wallet,
         identity_sealer=identity_sealer,
+        identity_liveness=identity_liveness,
+        face_matcher=face_matcher,
         payout_names=payout_names,
     )
     transport = httpx.ASGITransport(app=app, raise_app_exceptions=False, client=("127.0.0.1", 1))

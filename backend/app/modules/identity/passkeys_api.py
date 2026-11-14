@@ -16,6 +16,7 @@ from app.modules.identity.api import (
     StaffSessionView,
     caller_address,
     check_origin,
+    client_view,
     set_session_cookie,
     staff_view,
 )
@@ -150,13 +151,7 @@ async def client_signed_in(
         token=None if browser else issued.token,
         idle_expires_at=issued.idle_expires_at,
         absolute_expires_at=issued.absolute_expires_at,
-        session=ClientSessionView(
-            client_id=session.client_id,
-            phone=session.phone,
-            restricted_until=session.restricted_until,
-            email=session.email,
-            email_verified=session.email_verified,
-        ),
+        session=client_view(session),
     )
 
 
