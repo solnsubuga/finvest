@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # honoured for an unsafe request only when its Origin is one of them.
     client_allowed_origins: list[str] = Field(default_factory=list)
     staff_allowed_origins: list[str] = Field(default_factory=list)
+    # The client app's own origin, which links in messages point to: a claim link, an email
+    # check. It must be one of the allowed client origins. Unset, it is the allowed client origin
+    # when exactly one is set, and no link is sent when there are several.
+    client_app_origin: str | None = None
     # Passkeys (WebAuthn). The site a passkey belongs to: `finvestug.com` for clients, so one
     # passkey works on the web and in the phone apps, and the console's own host for staff.
     # Unset turns passkeys off for that audience.
@@ -136,6 +140,22 @@ class Settings(BaseSettings):
         if {"ssl", "sslmode", "sslrootcert"} & url.query.keys():
             raise ValueError("Configure TLS with FINVEST_DATABASE_SSL_MODE")
         return SecretStr(url.render_as_string(hide_password=False))
+
+    @model_validator(mode="after")
+    def client_app_is_allowed(self) -> Self:
+        if self.client_app_origin is not None and (
+            self.client_app_origin not in self.client_allowed_origins
+        ):
+            raise ValueError("The client app origin is one of the allowed client origins")
+        return self
+
+    def client_app(self) -> str | None:
+        """Where links to the client app point, or None when nothing says which origin."""
+        if self.client_app_origin is not None:
+            return self.client_app_origin
+        if len(self.client_allowed_origins) == 1:
+            return self.client_allowed_origins[0]
+        return None
 
     @model_validator(mode="after")
     def root_cert_needs_tls(self) -> Self:

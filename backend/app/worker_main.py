@@ -74,7 +74,7 @@ def handlers(
                 database,
                 identity.sealer(),
                 clock,
-                settings.client_allowed_origins[0] if settings.client_allowed_origins else None,
+                settings.client_app(),
             ).handlers()
         )
     if identity.identity_provider != "manual":

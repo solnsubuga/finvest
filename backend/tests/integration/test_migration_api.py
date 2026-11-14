@@ -129,14 +129,19 @@ async def test_the_checks_run_from_a_trial_to_a_sign_off_by_two_people(console: 
         }
     ]
     assert seen["blockers"] == ["totals_not_entered", "difference_not_signed_off"]
-    assert seen["allowed"] == ["run_trial", "propose_switch"]
+    assert seen["allowed"] == ["run_trial", "propose_switch", "propose_resolution"]
     # Nothing in the answer comes from a cell of the spreadsheet.
     assert "Nakato" not in ran.text and "+256" not in ran.text
 
     finance = await console.sign_in("finance")
     entered = await console.put("/control-totals", totals(11_643))
     assert entered.status_code == 200
-    assert entered.json()["allowed"] == ["enter_totals", "sign_off", "decide_switch"]
+    assert entered.json()["allowed"] == [
+        "enter_totals",
+        "sign_off",
+        "decide_switch",
+        "decide_resolution",
+    ]
     # The totals are shown for checking, and are not used until someone else confirms them.
     entry = entered.json()["totals"]
     assert (entry["entered_by"], entry["confirmed_by"]) == (finance, None)
@@ -191,9 +196,11 @@ async def test_the_checks_run_from_a_trial_to_a_sign_off_by_two_people(console: 
     assert state["allowed"] == [
         "run_trial",
         "propose_switch",
+        "propose_resolution",
         "enter_totals",
         "sign_off",
         "decide_switch",
+        "decide_resolution",
     ]
 
 

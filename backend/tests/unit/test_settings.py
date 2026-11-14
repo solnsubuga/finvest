@@ -90,6 +90,18 @@ def test_allowed_origins_are_exact() -> None:
             Settings(database_url=URL, staff_allowed_origins=[bad])
 
 
+def test_links_point_to_the_client_app_origin_that_is_named() -> None:
+    app, local = "https://app.finvestug.com", "http://localhost:8081"
+    assert Settings(database_url=URL, client_allowed_origins=[app]).client_app() == app
+    # With several allowed and none named, no link says which one it is.
+    assert Settings(database_url=URL, client_allowed_origins=[local, app]).client_app() is None
+    named = Settings(database_url=URL, client_allowed_origins=[local, app], client_app_origin=app)
+    assert named.client_app() == app
+    assert Settings(database_url=URL).client_app() is None
+    with pytest.raises(ValidationError):
+        Settings(database_url=URL, client_allowed_origins=[local], client_app_origin=app)
+
+
 def test_trusted_proxies_are_addresses_and_never_everyone() -> None:
     assert Settings(database_url=URL, trusted_proxies=["10.0.0.5", "172.16.0.0/12"])
     for bad in ["caddy", "0.0.0.0/0", "::/0"]:

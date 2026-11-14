@@ -7454,8 +7454,12 @@
       },
       "NotCarriedView": {
         "additionalProperties": false,
-        "description": "A client the worker could not carry over. Staff resolve it by hand.",
+        "description": "A client the worker could not carry over, and where resolving them stands.",
         "properties": {
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
           "code": {
             "title": "Code",
             "type": "string"
@@ -7463,11 +7467,59 @@
           "legacy_client_ref": {
             "title": "Legacy Client Ref",
             "type": "string"
+          },
+          "noted_at": {
+            "format": "date-time",
+            "title": "Noted At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By"
+          },
+          "resolution_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution Id"
+          },
+          "state": {
+            "enum": [
+              "noted",
+              "retry_proposed",
+              "close_proposed",
+              "retrying"
+            ],
+            "title": "State",
+            "type": "string"
           }
         },
         "required": [
           "legacy_client_ref",
-          "code"
+          "code",
+          "attempt",
+          "noted_at",
+          "state",
+          "resolution_id",
+          "proposed_by"
         ],
         "title": "NotCarriedView",
         "type": "object"
@@ -7771,7 +7823,9 @@
                 "enter_totals",
                 "sign_off",
                 "propose_switch",
-                "decide_switch"
+                "decide_switch",
+                "propose_resolution",
+                "decide_resolution"
               ],
               "type": "string"
             },
@@ -10681,6 +10735,140 @@
           "decision_reason"
         ],
         "title": "ResolutionOut",
+        "type": "object"
+      },
+      "ResolutionRequest": {
+        "additionalProperties": false,
+        "description": "What to do about a noted client, and why. The reason is kept with the audit record.",
+        "properties": {
+          "action": {
+            "enum": [
+              "retry",
+              "close"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "legacy_client_ref": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Legacy Client Ref",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "legacy_client_ref",
+          "action",
+          "reason"
+        ],
+        "title": "ResolutionRequest",
+        "type": "object"
+      },
+      "ResolutionView": {
+        "additionalProperties": false,
+        "description": "A proposal to retry or close a client the worker could not carry over.",
+        "properties": {
+          "action": {
+            "enum": [
+              "retry",
+              "close"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "legacy_client_ref": {
+            "title": "Legacy Client Ref",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "proposed",
+              "approved",
+              "rejected"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "switch_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Switch Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "switch_id",
+          "legacy_client_ref",
+          "attempt",
+          "action",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "state",
+          "decided_by",
+          "decision_reason"
+        ],
+        "title": "ResolutionView",
         "type": "object"
       },
       "ResultIn": {
@@ -34099,6 +34287,112 @@
         ]
       }
     },
+    "/staff/migration/switch/resolutions/{resolution_id}/decision": {
+      "post": {
+        "description": "Approve or reject retrying or closing a client, as someone other than the proposer.\n\nAn approval has the worker retry the client, or, once nobody is waiting, remove the sealed\nsheets.",
+        "operationId": "decide_resolution_staff_migration_switch_resolutions__resolution_id__decision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resolution_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Resolution Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decide Resolution",
+        "tags": [
+          "migration"
+        ]
+      }
+    },
     "/staff/migration/switch/{switch_id}/decision": {
       "post": {
         "description": "Approve or reject the switch someone else proposed.\n\nAn approval checks everything again and creates every client's account, all or none. It is\nrefused with `phone_taken`, naming the clients sheet rows, when a number already has an\naccount.",
@@ -34200,6 +34494,112 @@
           }
         },
         "summary": "Decide Switch",
+        "tags": [
+          "migration"
+        ]
+      }
+    },
+    "/staff/migration/switch/{switch_id}/resolutions": {
+      "post": {
+        "description": "Ask a second person to approve retrying or closing a client the worker could not carry.\n\nPut the cause right first: a retry runs the same checks again. Refused with `conflict` while\na proposal for that client awaits a decision or once one was approved.",
+        "operationId": "propose_resolution_staff_migration_switch__switch_id__resolutions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "switch_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Switch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolutionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResolutionView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose Resolution",
         "tags": [
           "migration"
         ]
