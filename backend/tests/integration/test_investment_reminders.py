@@ -19,8 +19,6 @@ from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
 
-DAY = today()
-
 
 @pytest.fixture(autouse=True)
 async def clean(migrator_database: Database) -> AsyncIterator[None]:
@@ -38,11 +36,11 @@ async def maturing_in(worker_database: Database, days: int) -> investments.Inves
             client_id=push_id(),
             product_code="TREA-91",
             principal=ugx(1_000_000),
-            start_date=DAY - timedelta(days=91 - days),
+            start_date=today() - timedelta(days=91 - days),
             annual_rate_bps=1300,
             tax_bps=1500,
-            interest_through=DAY - timedelta(days=1),
-            opened_on=DAY,
+            interest_through=today() - timedelta(days=1),
+            opened_on=today(),
             legacy_reference=f"FV1-INV-{push_id()[-8:].encode().hex()}",
             opening_account=AccountSpec(
                 "migration.opening_balances",
@@ -58,7 +56,9 @@ async def remind(worker_database: Database, *, limit: int = reminders.BATCH) -> 
     told, after = 0, ""
     while True:
         async with worker_database.actor_transaction(SYSTEM) as session:
-            batch = await reminders.remind_batch(session, DAY, PRESENT, after=after, limit=limit)
+            batch = await reminders.remind_batch(
+                session, today(), PRESENT, after=after, limit=limit
+            )
         told += batch.told
         if batch.last_id is None:
             return told

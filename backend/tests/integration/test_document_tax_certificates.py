@@ -19,10 +19,11 @@ from app.modules.documents.service import DocumentKind, DocumentStatus, Document
 from app.modules.identity import service as identity_service
 from app.modules.identity.service import ClientContact
 from app.modules.tax import service as tax
+from app.modules.tax.domain.periods import TaxYear
 from app.shared.actors import SYSTEM, Actor
 from app.shared.push_ids import push_id
 from tests.integration.test_documents import FakeEmail, closed
-from tests.integration.test_tax import LAST_MONTH, TIN, approved_client, running, withhold
+from tests.integration.test_tax import TIN, approved_client, last_month, running, withhold
 from tests.support.clock import FakeClock
 from tests.support.investments import at
 from tests.support.kyc import SEALER
@@ -30,11 +31,26 @@ from tests.support.ledger import ugx
 
 pytestmark = pytest.mark.integration
 
-YEAR = tax.tax_year_of(LAST_MONTH)
-YEAR_PERIOD = Period(YEAR.first_day, YEAR.last_day)
-INSIDE = max(LAST_MONTH, YEAR.first_day)
-# The day after the year ends, when the June run builds its certificates.
-ISSUED = at(date(YEAR.starts + 1, 7, 2))
+# Dates are read when a test asks, not when this file is imported, so a run that crosses
+# midnight in Kampala still agrees with the database about which day it is.
+
+
+def tax_year() -> TaxYear:
+    """The tax year last month fell in."""
+    return tax.tax_year_of(last_month())
+
+
+def year_period() -> Period:
+    return Period(tax_year().first_day, tax_year().last_day)
+
+
+def inside() -> date:
+    return max(last_month(), tax_year().first_day)
+
+
+def issued() -> FakeClock:
+    """The day after the year ends, when the June run builds its certificates."""
+    return at(date(tax_year().starts + 1, 7, 2))
 
 
 @pytest.fixture(autouse=True)
@@ -50,13 +66,13 @@ async def run_jobs(
     sealer: Sealer | None = SEALER,
     email: FakeEmail | None = None,
     kinds: tuple[str, ...] | None = None,
-    clock: FakeClock = ISSUED,
+    clock: FakeClock = issued(),
 ) -> int:
     jobs = DocumentJobs(
         worker_database,
         clock,
         email=email or FakeEmail(),
-        closed_through=closed(YEAR.last_day),
+        closed_through=closed(tax_year().last_day),
         sealer=sealer,
     )
     handlers = {k: h for k, h in jobs.handlers().items() if kinds is None or k in kinds}
@@ -74,9 +90,9 @@ async def ask_certificate(worker_database: Database, client: Actor) -> DocumentV
             session,
             client_id=client.id,
             kind=DocumentKind.TAX_CERTIFICATE,
-            key=YEAR.label,
-            period=YEAR_PERIOD,
-            now=ISSUED.now(),
+            key=tax_year().label,
+            period=year_period(),
+            now=issued().now(),
         )
 
 
@@ -92,7 +108,7 @@ async def test_a_certificate_is_built_from_the_tax_figures_listed_and_downloaded
 ) -> None:
     client = await approved_client(app_database, tin=TIN)
     investment = await running(app_database, worker_database, client)
-    await withhold(worker_database, investment, INSIDE, 31_164, 4_674)
+    await withhold(worker_database, investment, inside(), 31_164, 4_674)
     drawn: list[tax.Certificate] = []
     original = pdf.tax_certificate_pdf
 
@@ -114,7 +130,7 @@ async def test_a_certificate_is_built_from_the_tax_figures_listed_and_downloaded
 
     built = await document(worker_database, asked.id)
     assert built.status is DocumentStatus.READY
-    assert built.file_name == f"Finvest tax certificate {YEAR.label}.pdf"
+    assert built.file_name == f"Finvest tax certificate {tax_year().label}.pdf"
     (certificate,) = drawn
     assert certificate.tin == TIN
     assert [(line.investment_id, line.tax) for line in certificate.lines] == [
@@ -127,7 +143,7 @@ async def test_a_certificate_is_built_from_the_tax_figures_listed_and_downloaded
     assert file.content.startswith(b"%PDF-")
     # The email carries the PDF and no figure.
     (message,) = email.sent
-    assert message.subject == f"Your Finvest tax certificate for {YEAR.label}"
+    assert message.subject == f"Your Finvest tax certificate for {tax_year().label}"
     assert [a.file_name for a in message.attachments] == [built.file_name]
     assert "UGX" not in message.text and "UGX" not in message.html
 
@@ -149,7 +165,7 @@ async def test_a_worker_without_the_identity_key_holds_certificates_back(
 ) -> None:
     client = await approved_client(app_database, tin=TIN)
     investment = await running(app_database, worker_database, client)
-    await withhold(worker_database, investment, INSIDE, 1_000, 150)
+    await withhold(worker_database, investment, inside(), 1_000, 150)
     asked = await ask_certificate(worker_database, client)
     await run_jobs(worker_database, sealer=None)
     assert (await document(worker_database, asked.id)).status is DocumentStatus.PENDING
@@ -171,7 +187,7 @@ async def test_the_june_run_asks_for_each_clients_certificate_for_the_year(
 ) -> None:
     client = await approved_client(app_database)
     await running(app_database, worker_database, client)
-    june = f"{YEAR.last_day:%Y-%m}"
+    june = f"{tax_year().last_day:%Y-%m}"
     async with worker_database.actor_transaction(SYSTEM) as session:
         await enqueue(
             session,
@@ -181,7 +197,7 @@ async def test_the_june_run_asks_for_each_clients_certificate_for_the_year(
                 payload={"data": {"month": june, "after": ""}},
                 queue=own_queue,
             ),
-            now=ISSUED.now(),
+            now=issued().now(),
         )
     # Only the run itself: building every client's documents is covered elsewhere.
     await run_jobs(worker_database, kinds=(service.MONTHLY_KIND,))
@@ -196,8 +212,8 @@ async def test_the_june_run_asks_for_each_clients_certificate_for_the_year(
             )
         ).all()
     assert [tuple(row) for row in rows] == [
-        ("monthly_statement", june, YEAR.last_day.replace(day=1), YEAR.last_day),
-        ("tax_certificate", YEAR.label, YEAR.first_day, YEAR.last_day),
+        ("monthly_statement", june, tax_year().last_day.replace(day=1), tax_year().last_day),
+        ("tax_certificate", tax_year().label, tax_year().first_day, tax_year().last_day),
     ]
 
 
@@ -217,5 +233,5 @@ async def test_the_database_holds_a_certificate_to_one_tax_year(
                     kind=DocumentKind.TAX_CERTIFICATE,
                     key=label,
                     period=Period(start, end),
-                    now=ISSUED.now(),
+                    now=issued().now(),
                 )

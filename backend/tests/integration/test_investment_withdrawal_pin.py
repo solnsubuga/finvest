@@ -14,14 +14,21 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
 from tests.support.http import CLIENT_ORIGIN, Api, running_api
-from tests.support.investments import PRESENT, approved_destination, at, pay, request, today
+from tests.support.investments import (
+    PRESENT,
+    approved_destination,
+    at,
+    days_on,
+    pay,
+    request,
+    today,
+)
 from tests.support.kyc import verify
 
 pytestmark = pytest.mark.integration
 
 PIN = "48151"
 # Past a new payout account's first day's safety wait, which starts at the real time.
-LATER = at(today() + timedelta(days=2)).current
 
 
 @pytest.fixture
@@ -75,7 +82,7 @@ async def test_a_phone_with_a_pin_confirms_an_early_withdrawal_with_it(
     api: Api, app_database: Database, worker_database: Database
 ) -> None:
     client, investment_id, destination_id = await running(api, app_database, worker_database)
-    api.clock.current = LATER
+    api.clock.current = days_on(2).current
     await on_the_phone_with_a_pin(api, client)
     route = f"/client/investments/{investment_id}/withdraw"
     body = {"destination_id": destination_id}
@@ -119,7 +126,7 @@ async def test_a_confirmation_for_another_action_does_not_withdraw(
     api: Api, app_database: Database, worker_database: Database
 ) -> None:
     client, investment_id, destination_id = await running(api, app_database, worker_database)
-    api.clock.current = LATER
+    api.clock.current = days_on(2).current
     await on_the_phone_with_a_pin(api, client)
     answer = await api.http.post(
         "/client/pin/confirm", json={"pin": PIN, "action": "payout_account"}
@@ -137,7 +144,7 @@ async def test_a_browser_withdraws_early_without_a_pin(
     api: Api, app_database: Database, worker_database: Database
 ) -> None:
     client, investment_id, destination_id = await running(api, app_database, worker_database)
-    api.clock.current = LATER
+    api.clock.current = days_on(2).current
     # The client has a PIN on their phone, which a browser never asks for.
     await on_the_phone_with_a_pin(api, client)
     issued = await api.identity.issue_session(client, second_step="passkey", transport="cookie")

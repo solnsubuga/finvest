@@ -37,8 +37,17 @@ AMOUNT = ugx(200_000)
 # The database takes an investment only at the real time, so a run is due today: its weekly
 # plan was set up a week ago. The prompt hours are lifted for these tests (`daytime`), except
 # where a test sets its own clock to check them.
-DUE_DAY = business_date(datetime.now(UTC))
-SET_UP = DUE_DAY - timedelta(days=7)
+# Dates are read when a test asks, not when this file is imported, so a run that crosses
+# midnight in Kampala still agrees with the database about which day it is.
+
+
+def due_day() -> date:
+    return business_date(datetime.now(UTC))
+
+
+def set_up() -> date:
+    """When the plan was made, a week before it is due."""
+    return due_day() - timedelta(days=7)
 
 
 def now() -> FakeClock:
@@ -82,7 +91,7 @@ async def plan_for(
 ) -> tuple[Actor, autoinvest.Plan, str]:
     """An approved client with a weekly plan due today, paid from their own number."""
     number = msisdn or phone()
-    client = await approved_client(app_database, at(SET_UP))
+    client = await approved_client(app_database, at(set_up()))
     assert client.id is not None
     contacts.phones[client.id] = number
     async with app_database.actor_transaction(client) as session:
@@ -92,13 +101,13 @@ async def plan_for(
             autoinvest.PlanTerms(
                 product_code="TREA-91",
                 amount=AMOUNT,
-                schedule=autoinvest.Schedule(autoinvest.Frequency.WEEKLY, DUE_DAY.isoweekday()),
+                schedule=autoinvest.Schedule(autoinvest.Frequency.WEEKLY, due_day().isoweekday()),
                 network=Network.MTN,
                 phone=number,
             ),
             idempotency_key=key(),
             account_phone=number,
-            clock=at(SET_UP),
+            clock=at(set_up()),
         )
     return client, plan, number
 
@@ -200,7 +209,7 @@ async def test_a_due_run_asks_for_its_investment_and_payment_and_is_paid_once(
     assert (await run_of(worker_database, plan)).status is autoinvest.RunStatus.REQUESTED
     async with worker_database.actor_transaction(SYSTEM) as session:
         await investments.start_investment(
-            session, investment.id, confirmed_on=DUE_DAY, clock=clock
+            session, investment.id, confirmed_on=due_day(), clock=clock
         )
     await settle(worker_database, clock)
     paid = await run_of(worker_database, plan)
@@ -230,7 +239,7 @@ async def test_a_failed_payment_is_tried_once_more_the_next_day_on_the_same_inve
     await settle(worker_database, clock)
     failed = await run_of(worker_database, plan)
     assert (failed.status, failed.code) == (autoinvest.RunStatus.FAILED, "insufficient_funds")
-    assert failed.retry_on == DUE_DAY + timedelta(days=1)
+    assert failed.retry_on == due_day() + timedelta(days=1)
     assert await told(worker_database, client) == [requests.RUN_RETRYING]
 
     # The next day the same run asks again, for the same investment, with a new prompt.
@@ -321,7 +330,7 @@ async def test_an_investment_the_product_refuses_fails_the_run_for_a_retry(
             )
     assert await ask(worker_database, run.id, clock) == "failed"
     failed = await run_of(worker_database, plan)
-    assert (failed.code, failed.retry_on) == ("investment_conflict", DUE_DAY + timedelta(days=1))
+    assert (failed.code, failed.retry_on) == ("investment_conflict", due_day() + timedelta(days=1))
     assert failed.investment_id is None
 
 
@@ -329,9 +338,9 @@ async def test_nothing_is_asked_for_outside_the_prompt_hours(
     app_database: Database, worker_database: Database, contacts: Contacts
 ) -> None:
     _, plan, _ = await plan_for(app_database, contacts)
-    await open_runs(worker_database, at(DUE_DAY))
+    await open_runs(worker_database, at(due_day()))
     run = await run_of(worker_database, plan)
-    assert await ask(worker_database, run.id, at(DUE_DAY, 21)) == "outside_hours"
+    assert await ask(worker_database, run.id, at(due_day(), 21)) == "outside_hours"
     assert (await run_of(worker_database, plan)).status is autoinvest.RunStatus.DUE
 
 
@@ -339,11 +348,11 @@ async def test_a_run_whose_request_was_lost_is_missed_a_day_later_and_the_client
     app_database: Database, worker_database: Database, contacts: Contacts
 ) -> None:
     client, plan, _ = await plan_for(app_database, contacts)
-    await open_runs(worker_database, at(DUE_DAY))
+    await open_runs(worker_database, at(due_day()))
     run = await run_of(worker_database, plan)
-    await settle(worker_database, at(DUE_DAY, 19))
+    await settle(worker_database, at(due_day(), 19))
     assert (await run_of(worker_database, plan)).status is autoinvest.RunStatus.DUE
-    later = FakeClock(at(DUE_DAY).now() + requests.STRANDED_AFTER + timedelta(minutes=1))
+    later = FakeClock(at(due_day()).now() + requests.STRANDED_AFTER + timedelta(minutes=1))
     await settle(worker_database, later)
     missed = await run_of(worker_database, plan)
     assert (missed.id, missed.status, missed.code) == (run.id, autoinvest.RunStatus.MISSED, "late")
@@ -357,12 +366,12 @@ async def test_a_due_day_long_past_is_missed_and_the_client_told_once(
 ) -> None:
     client, plan, _ = await plan_for(app_database, contacts)
     # The system was down from the due day for five days.
-    clock = at(DUE_DAY + timedelta(days=5))
+    clock = at(due_day() + timedelta(days=5))
     await open_runs(worker_database, clock)
     await open_runs(worker_database, clock)
     missed = await run_of(worker_database, plan)
     assert (missed.due_on, missed.status, missed.code) == (
-        DUE_DAY,
+        due_day(),
         autoinvest.RunStatus.MISSED,
         "late",
     )

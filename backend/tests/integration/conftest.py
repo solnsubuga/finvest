@@ -61,13 +61,13 @@ async def application_database(
 
 
 KAMPALA = ZoneInfo("Africa/Kampala")
-# Longer than any one test that asks for clear_of_midnight takes.
+# Longer than any one test takes.
 MIDNIGHT_MARGIN = timedelta(seconds=90)
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def clear_of_midnight() -> None:
-    """Start the test only when it can finish before midnight in Kampala.
+    """Start each test only when it can finish before midnight in Kampala.
 
     The database decides "today" from its own clock, and a test reads the same day in Python.
     A test that started just before midnight would see two different days, so this waits until

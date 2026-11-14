@@ -25,7 +25,7 @@ from tests.support.clock import AsyncBarrier
 from tests.support.investments import PRESENT, today
 from tests.support.ledger import staff as new_staff
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("clear_of_midnight")]
+pytestmark = pytest.mark.integration
 
 REASON = "The client lost the email and asked for it again"
 
@@ -49,7 +49,7 @@ async def noted(
     app_database: Database, worker_database: Database, email: FakeEmail
 ) -> tuple[Actor, str]:
     """A client whose investment's note was built and emailed today. Returns the note's ID."""
-    client, investment = await invested(app_database, worker_database, on=today())
+    client, investment = await invested(app_database, worker_database)
     assert client.id is not None
     async with worker_database.actor_transaction(SYSTEM) as session:
         await enqueue(

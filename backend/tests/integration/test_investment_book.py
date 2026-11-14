@@ -11,7 +11,7 @@ from app.shared.money import Currency, Money
 from tests.support.investments import PRESENT, at, started, today
 from tests.support.ledger import ugx
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("clear_of_midnight")]
+pytestmark = pytest.mark.integration
 
 
 def owed_for(rows: list[investments.ProductOwed], code: str) -> tuple[int, int, int]:

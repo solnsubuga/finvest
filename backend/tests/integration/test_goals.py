@@ -2,7 +2,9 @@
 investments, the fences the database holds and the races."""
 
 import asyncio
+from collections.abc import Callable
 from datetime import date, timedelta
+from types import EllipsisType
 
 import pytest
 from sqlalchemy import text
@@ -31,11 +33,15 @@ from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
+
+def year_on() -> date:
+    """A year from today in Kampala, read when asked rather than at import, so a run that crosses
+    midnight still agrees with the database."""
+    return add_months(today(), 12)
+
+
 # The database refuses an investment that is not created now, so these run at the real time.
-DAY = today()
 NOW = PRESENT
-YEAR_ON = add_months(DAY, 12)
-SOONER_THAN_EVERY_TERM = DAY + timedelta(days=40)
 
 
 def refused(error: pytest.ExceptionInfo[ApplicationError]) -> tuple[str, list[tuple[str, str]]]:
@@ -50,10 +56,12 @@ async def new_goal(
     *,
     name: str = "School fees, Term 1",
     target: Money | None = None,
-    target_date: date | None = YEAR_ON,
+    target_date: date | EllipsisType | None = ...,
     category: GoalCategory = GoalCategory.SCHOOL_FEES,
     idempotency_key: str | None = None,
 ) -> goals.ClientGoal:
+    if target_date is ...:
+        target_date = year_on()
     async with database.actor_transaction(client) as session:
         return await goals.create_goal(
             session,
@@ -98,7 +106,7 @@ async def started_saving(
         investment = await investments.get_investment(session, saving.id)
     await pay(worker_database, investment, amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, saving.id, confirmed_on=DAY, clock=NOW)
+        await investments.start_investment(session, saving.id, confirmed_on=today(), clock=NOW)
     return saving.id
 
 
@@ -131,7 +139,7 @@ async def test_the_plan_before_saving_matches_the_goal_once_saved(app_database: 
     client = await approved_client(app_database, NOW)
     async with app_database.actor_transaction(client) as session:
         preview = await goals.client_plan(
-            session, target=ugx(2_000_000), target_date=YEAR_ON, clock=NOW
+            session, target=ugx(2_000_000), target_date=year_on(), clock=NOW
         )
     goal = await new_goal(app_database, client)
     assert preview == goal.plan
@@ -142,7 +150,7 @@ async def test_a_plan_for_a_date_sooner_than_every_term_is_none(app_database: Da
     async with app_database.actor_transaction(client) as session:
         assert (
             await goals.client_plan(
-                session, target=ugx(2_000_000), target_date=SOONER_THAN_EVERY_TERM, clock=NOW
+                session, target=ugx(2_000_000), target_date=today() + timedelta(days=40), clock=NOW
             )
             is None
         )
@@ -151,7 +159,7 @@ async def test_a_plan_for_a_date_sooner_than_every_term_is_none(app_database: Da
 async def test_a_goal_sooner_than_every_term_is_refused(app_database: Database) -> None:
     client = await approved_client(app_database, NOW)
     with pytest.raises(ApplicationError) as error:
-        await new_goal(app_database, client, target_date=SOONER_THAN_EVERY_TERM)
+        await new_goal(app_database, client, target_date=today() + timedelta(days=40))
     assert refused(error) == ("validation_failed", [("target_date", "sooner_than_every_term")])
 
 
@@ -175,18 +183,29 @@ async def test_a_goal_with_no_date_uses_the_shortest_term_and_has_no_plan(
 @pytest.mark.parametrize(
     ("name", "target", "target_date", "problem"),
     [
-        ("  ", 2_000_000, YEAR_ON, ("name", "name_empty")),
-        ("x" * 61, 2_000_000, YEAR_ON, ("name", "name_too_long")),
-        ("Land", 2_000_000, DAY, ("target_date", "date_not_in_future")),
-        ("Land", 2_000_000, DAY + timedelta(days=3661), ("target_date", "date_too_far")),
+        ("  ", 2_000_000, year_on, ("name", "name_empty")),
+        ("x" * 61, 2_000_000, year_on, ("name", "name_too_long")),
+        ("Land", 2_000_000, today, ("target_date", "date_not_in_future")),
+        (
+            "Land",
+            2_000_000,
+            lambda: today() + timedelta(days=3661),
+            ("target_date", "date_too_far"),
+        ),
     ],
 )
 async def test_a_goal_that_breaks_a_rule_is_refused(
-    app_database: Database, name: str, target: int, target_date: date, problem: tuple[str, str]
+    app_database: Database,
+    name: str,
+    target: int,
+    target_date: Callable[[], date],
+    problem: tuple[str, str],
 ) -> None:
     client = await approved_client(app_database, NOW)
     with pytest.raises(ApplicationError) as error:
-        await new_goal(app_database, client, name=name, target=ugx(target), target_date=target_date)
+        await new_goal(
+            app_database, client, name=name, target=ugx(target), target_date=target_date()
+        )
     assert refused(error) == ("validation_failed", [problem])
 
 
@@ -225,7 +244,7 @@ async def test_two_taps_at_once_set_up_one_goal(app_database: Database) -> None:
                 name="Land",
                 category=GoalCategory.LAND_OR_HOME,
                 target=ugx(20_000_000),
-                target_date=add_months(DAY, 24),
+                target_date=add_months(today(), 24),
                 clock=NOW,
             )
             return goal.id
@@ -392,7 +411,7 @@ async def test_a_goal_can_be_changed_and_its_product_follows_the_new_date(
             name="  Plot   in Wakiso ",
             category=GoalCategory.LAND_OR_HOME,
             target=ugx(5_000_000),
-            target_date=date.fromordinal(DAY.toordinal() + 182),
+            target_date=date.fromordinal(today().toordinal() + 182),
             clock=NOW,
         )
     assert changed.name == "Plot in Wakiso"
@@ -811,8 +830,8 @@ async def test_a_reached_goal_is_told_once(
     client = await approved_client(app_database, NOW)
     goal = await new_goal(app_database, client, name="New roof", target=ugx(1_000_000))
     await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
-    await remind(worker_database, DAY)
-    await remind(worker_database, DAY + timedelta(days=1))
+    await remind(worker_database, today())
+    await remind(worker_database, today() + timedelta(days=1))
     seen = await told(worker_database, client)
     assert [(event, k, link) for event, k, link, _ in seen] == [
         ("goal_reached", f"goal-reached:{goal.id}:1000000", "goal")
@@ -827,7 +846,7 @@ async def test_a_raised_target_is_told_again_when_it_is_reached(
     client = await approved_client(app_database, NOW)
     goal = await new_goal(app_database, client, name="New roof", target=ugx(1_000_000))
     await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
-    await remind(worker_database, DAY)
+    await remind(worker_database, today())
     async with app_database.actor_transaction(client) as session:
         await goals.update_goal(
             session,
@@ -840,11 +859,11 @@ async def test_a_raised_target_is_told_again_when_it_is_reached(
             clock=NOW,
         )
     # Not reached yet: nothing new.
-    await remind(worker_database, DAY + timedelta(days=1))
+    await remind(worker_database, today() + timedelta(days=1))
     assert len(await told(worker_database, client)) == 1
     await started_saving(app_database, worker_database, client, goal.id, ugx(1_000_000))
-    await remind(worker_database, DAY + timedelta(days=2))
-    await remind(worker_database, DAY + timedelta(days=3))
+    await remind(worker_database, today() + timedelta(days=2))
+    await remind(worker_database, today() + timedelta(days=3))
     seen = await told(worker_database, client)
     assert [k for event, k, _, _ in seen if event == "goal_reached"] == [
         f"goal-reached:{goal.id}:1000000",
@@ -872,13 +891,13 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
             JobRequest(
                 kind=SEND_REMINDERS_KIND, idempotency_key=first_key, payload={"after": first[:-1]}
             ),
-            now=at(DAY, hour=5).now(),
+            now=at(today(), hour=5).now(),
         )
     runner = Worker(
         worker_database,
-        GoalJobs(worker_database, at(DAY, hour=5)).handlers(),
+        GoalJobs(worker_database, at(today(), hour=5)).handlers(),
         WorkerConfig(),
-        at(DAY, hour=5),
+        at(today(), hour=5),
     )
     await run_due(runner)
     async with worker_database.actor_transaction(SYSTEM) as session:
@@ -913,7 +932,7 @@ async def test_a_saving_due_in_three_days_is_reminded_once(
 ) -> None:
     client = await approved_client(app_database, NOW)
     goal = await new_goal(app_database, client, name="School fees 2027")
-    due = next_due(DAY, DAY)
+    due = next_due(today(), today())
     # Too early: more than three days before.
     await remind(worker_database, due - timedelta(days=4))
     assert await told(worker_database, client) == []
@@ -935,5 +954,5 @@ async def test_goals_with_no_date_or_closed_are_not_reminded(
     closed = await new_goal(app_database, client, name="Car")
     async with app_database.actor_transaction(client) as session:
         await goals.close_goal(session, client, closed.id, clock=NOW)
-    await remind(worker_database, next_due(DAY, DAY) - timedelta(days=2))
+    await remind(worker_database, next_due(today(), today()) - timedelta(days=2))
     assert await told(worker_database, client) == []

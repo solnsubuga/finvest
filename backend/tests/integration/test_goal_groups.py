@@ -2,7 +2,7 @@
 value the worker records, and the fences the database holds."""
 
 import asyncio
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import text
@@ -26,10 +26,15 @@ from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
+
+def year_on() -> date:
+    """A year from today in Kampala, read when asked rather than at import, so a run that crosses
+    midnight still agrees with the database."""
+    return add_months(today(), 12)
+
+
 # The database refuses an investment that is not created now, so these run at the real time.
-DAY = today()
 NOW = PRESENT
-YEAR_ON = add_months(DAY, 12)
 
 
 async def new_group(
@@ -49,7 +54,7 @@ async def new_group(
             name="Land in Mukono",
             category=GoalCategory.LAND_OR_HOME,
             target=target or ugx(10_000_000),
-            target_date=YEAR_ON,
+            target_date=year_on(),
             display_name=display_name,
             own_target=own_target or ugx(5_000_000),
             clock=NOW,
@@ -103,7 +108,7 @@ async def started_saving(
         investment = await investments.get_investment(session, saving.id)
     await pay(worker_database, investment, amount, NOW)
     async with worker_database.actor_transaction(SYSTEM) as session:
-        await investments.start_investment(session, saving.id, confirmed_on=DAY, clock=NOW)
+        await investments.start_investment(session, saving.id, confirmed_on=today(), clock=NOW)
 
 
 # Setting up and joining -------------------------------------------------------------------------
@@ -122,7 +127,7 @@ async def test_the_one_who_sets_a_group_up_is_its_first_member_with_a_goal_of_th
     assert group.progress.value == ugx(0)
     assert group.progress.standing is Standing.ON_TRACK
     own = await _goal(app_database, owner, group.own_goal_id)
-    assert (own.name, own.target, own.target_date) == ("Land in Mukono", ugx(5_000_000), YEAR_ON)
+    assert (own.name, own.target, own.target_date) == ("Land in Mukono", ugx(5_000_000), year_on())
 
 
 async def test_a_retry_returns_the_same_group(app_database: Database) -> None:
@@ -263,7 +268,7 @@ async def test_the_owner_changes_the_group_and_no_members_goal_changes(
     )
     assert changed.progress.standing is Standing.NO_DATE
     mine = await _goal(app_database, member, joined.own_goal_id)
-    assert (mine.name, mine.target_date) == ("Land in Mukono", YEAR_ON)
+    assert (mine.name, mine.target_date) == ("Land in Mukono", year_on())
 
 
 async def test_a_member_renames_themself_and_leaves_and_keeps_their_goal(
@@ -385,7 +390,7 @@ async def test_the_group_counts_each_members_running_investments_as_the_worker_r
         seen = await read(app_database, client, group.id)
         assert seen.progress.value == ugx(1_500_000)
         assert seen.progress.percent == 15
-        assert seen.others_as_of == DAY
+        assert seen.others_as_of == today()
 
     async with app_database.actor_transaction(new_staff()) as session:
         found = await groups.staff_group(session, new_staff(), group.id, NOW)
@@ -523,7 +528,7 @@ async def _new_goal(database: Database, client: Actor) -> str:
             name="Mine",
             category=GoalCategory.OTHER,
             target=ugx(1_000_000),
-            target_date=YEAR_ON,
+            target_date=year_on(),
             clock=NOW,
         )
     return made.id
