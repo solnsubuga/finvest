@@ -268,7 +268,7 @@ export function createStubOrganisationsApi(
             ],
             check: {
               by: "-NstubStaff000000007",
-              byName: "Grace Auma",
+              byName: "Ruth Namata",
               at: iso(90),
               note: "Certificate matches URSB 80020001234567. Resolution names both directors.",
             },
