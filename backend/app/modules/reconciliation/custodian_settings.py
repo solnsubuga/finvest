@@ -5,7 +5,7 @@ from typing import Literal, Self
 from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.modules.reconciliation.claude_reader import MODEL, ClaudeStatementReader
+from app.modules.reconciliation.claude_reader import ClaudeStatementReader
 from app.modules.reconciliation.custodian_reading import DevelopmentStubReader
 from app.modules.reconciliation.domain.custodian import StatementReader
 
@@ -20,7 +20,9 @@ class CustodianReaderSettings(BaseSettings):
     # machine and demos.
     custodian_reader: Literal["none", "claude", "development-stub"] = "none"
     anthropic_api_key: SecretStr | None = None
-    custodian_reader_model: str = MODEL
+    # Which Claude model reads, set where deployed. Required with `claude`, so no model id
+    # lives in the code.
+    custodian_reader_model: str | None = None
     # `staging` or `production` where deployed (infra/README.md). Unset on a developer's machine.
     environment: str | None = None
 
@@ -33,6 +35,8 @@ class CustodianReaderSettings(BaseSettings):
             self.anthropic_api_key is None or not self.anthropic_api_key.get_secret_value()
         ):
             raise ValueError("The Claude reader needs FINVEST_ANTHROPIC_API_KEY")
+        if self.custodian_reader == "claude" and not self.custodian_reader_model:
+            raise ValueError("The Claude reader needs FINVEST_CUSTODIAN_READER_MODEL")
         return self
 
     @property
@@ -42,6 +46,7 @@ class CustodianReaderSettings(BaseSettings):
     def reader(self) -> StatementReader | None:
         if self.custodian_reader == "claude":
             assert self.anthropic_api_key is not None  # checked above
+            assert self.custodian_reader_model  # checked above
             return ClaudeStatementReader(
                 api_key=self.anthropic_api_key, model=self.custodian_reader_model
             )

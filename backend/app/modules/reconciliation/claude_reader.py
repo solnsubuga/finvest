@@ -31,7 +31,6 @@ from app.modules.reconciliation.domain.custodian import (
     check_reading,
 )
 
-MODEL = "claude-opus-5-5"
 # A statement of a few hundred holdings fits well inside this. Streaming keeps a long answer
 # from timing out.
 MAX_TOKENS = 64_000
@@ -133,7 +132,7 @@ class ClaudeStatementReader:
         self,
         *,
         api_key: SecretStr,
-        model: str = MODEL,
+        model: str,
         timeout: float = 600.0,
         client: anthropic.AsyncAnthropic | None = None,
     ) -> None:

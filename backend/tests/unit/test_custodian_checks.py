@@ -260,10 +260,14 @@ def test_the_stub_never_runs_in_production() -> None:
     with pytest.raises(ValidationError):
         CustodianReaderSettings(custodian_reader="development-stub", environment="production")
     with pytest.raises(ValidationError):
-        CustodianReaderSettings(custodian_reader="claude")
+        CustodianReaderSettings(custodian_reader="claude", custodian_reader_model="a-model")
+    with pytest.raises(ValidationError):
+        CustodianReaderSettings(custodian_reader="claude", anthropic_api_key=SecretStr("sk-test"))
     assert CustodianReaderSettings().reader() is None
     configured = CustodianReaderSettings(
-        custodian_reader="claude", anthropic_api_key=SecretStr("sk-test")
+        custodian_reader="claude",
+        anthropic_api_key=SecretStr("sk-test"),
+        custodian_reader_model="a-model",
     )
     assert isinstance(configured.reader(), ClaudeStatementReader)
     assert "sk-test" not in repr(configured.reader())
@@ -317,12 +321,12 @@ class FakeMessages:
 
 def message(text: str | None, stop_reason: str = "end_turn") -> Any:
     content = [] if text is None else [SimpleNamespace(type="text", text=text)]
-    return SimpleNamespace(stop_reason=stop_reason, content=content, model="claude-opus-5-5")
+    return SimpleNamespace(stop_reason=stop_reason, content=content, model="a-model")
 
 
 def reader(messages: FakeMessages) -> ClaudeStatementReader:
     client = SimpleNamespace(beta=SimpleNamespace(messages=messages))
-    return ClaudeStatementReader(api_key=SecretStr(""), client=client)  # type: ignore[arg-type]
+    return ClaudeStatementReader(api_key=SecretStr(""), model="a-model", client=client)  # type: ignore[arg-type]
 
 
 async def test_the_claude_reader_copies_rows_and_never_works_out_amounts() -> None:
@@ -331,9 +335,9 @@ async def test_the_claude_reader_copies_rows_and_never_works_out_amounts() -> No
     reading = await reader(messages).read(pdf, key="-Ncheck0000000000001")
     assert reading.amount_scale is AmountScale.THOUSAND
     assert reading.rows[0].face_value == "1,250,000"
-    assert reading.reader == "claude:claude-opus-5-5"
+    assert reading.reader == "claude:a-model"
     call = messages.calls[0]
-    assert call["model"] == claude_reader.MODEL
+    assert call["model"] == "a-model"
     assert call["output_config"]["format"]["schema"] == claude_reader.SCHEMA
     assert call["output_config"]["effort"] == "high"
     assert call["fallbacks"] == "default"

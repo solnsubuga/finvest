@@ -98,7 +98,7 @@ class CheckOut(Contract):
     file_bytes: int
     uploaded_by: PushId
     uploaded_at: datetime
-    # Which model read it, such as `claude:claude-opus-5-5`, or the stub.
+    # Which model read it, such as `claude:<model>`, or the stub.
     reader: str | None
     read_at: datetime | None
     # The date the statement itself gives, which may differ from `statement_date`.
