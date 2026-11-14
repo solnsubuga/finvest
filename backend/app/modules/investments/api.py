@@ -26,6 +26,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.settings import Settings
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
+from app.modules.identity.pins_api import Pins
 from app.modules.identity.service import StaffSession
 from app.modules.investments import service
 from app.modules.investments.domain.interest import ClientReturns
@@ -110,13 +111,20 @@ class MaturityChoice(Contract):
     destination_id: PushId | None = None
 
 
+# From POST /client/pin/confirm with action `withdrawal`. The phone app sends it once it has
+# a PIN; a browser never needs it.
+PinConfirmation = Annotated[str | None, Field(max_length=200)]
+
+
 class PayOutRequest(Contract):
     destination_id: PushId
+    pin_confirmation: PinConfirmation = None
 
 
 class WithdrawalRequest(Contract):
     # One of the client's approved payout destinations.
     destination_id: PushId
+    pin_confirmation: PinConfirmation = None
 
 
 class ClientInvestmentOut(Contract):
@@ -638,11 +646,14 @@ async def choose_at_maturity(
     return _client_out(view, request)
 
 
-@client_router.post("/investments/{investment_id}/pay-out")
+@client_router.post(
+    "/investments/{investment_id}/pay-out", responses={428: {"model": ErrorEnvelope}}
+)
 async def pay_out_matured(
     request: Request,
     client: CurrentClient,
     clock: AppClock,
+    pins: Pins,
     investment_id: str,
     body: PayOutRequest,
 ) -> ClientInvestmentOut:
@@ -651,6 +662,9 @@ async def pay_out_matured(
     Safe to repeat without an idempotency key: the payout's key is
     `maturity:<investment id>:<destination id>`, so the same destination asked twice is the
     same payout.
+
+    428 `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a
+    fresh confirmation for `withdrawal`. It is used up only if the money is sent.
     """
     try:
         async with _transaction(request, client.actor) as session:
@@ -660,6 +674,9 @@ async def pay_out_matured(
                 investment_id,
                 destination_id=body.destination_id,
                 clock=clock,
+                confirm=lambda: pins.spend(
+                    client, "withdrawal", body.pin_confirmation, session=session
+                ),
             )
             view = await service.client_investment(session, client.actor, investment_id, clock)
     except payouts.PayoutRefused as refused:
@@ -670,11 +687,14 @@ async def pay_out_matured(
     return _client_out(view, request)
 
 
-@client_router.post("/investments/{investment_id}/withdraw")
+@client_router.post(
+    "/investments/{investment_id}/withdraw", responses={428: {"model": ErrorEnvelope}}
+)
 async def withdraw_early(
     request: Request,
     client: CurrentClient,
     clock: AppClock,
+    pins: Pins,
     key: IdempotencyKey,
     investment_id: str,
     body: WithdrawalRequest,
@@ -683,6 +703,10 @@ async def withdraw_early(
     as shown: interest stops now. The money is sent once the dealing desk has funded it.
 
     Refused with `conflict` while early withdrawal is switched off, before anything is saved.
+
+    428 `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a
+    fresh confirmation for `withdrawal`. It is used up only if the request is saved, and a
+    replay of the same idempotency key asks for none.
     """
     if not _withdrawals_open(request):
         raise ApplicationError("conflict")
@@ -694,6 +718,9 @@ async def withdraw_early(
             destination_id=body.destination_id,
             idempotency_key=key,
             clock=clock,
+            confirm=lambda: pins.spend(
+                client, "withdrawal", body.pin_confirmation, session=session
+            ),
         )
         view = await service.client_investment(session, client.actor, investment_id, clock)
     return _client_out(view, request)
