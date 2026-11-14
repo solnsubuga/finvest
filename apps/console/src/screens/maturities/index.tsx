@@ -331,29 +331,46 @@ function Held({ investments, cards, tools, payOuts, onProposed }: HeldProps) {
                 <div className="font-bold">{reason.label}</div>
                 <div className="text-sm leading-normal text-muted">{reason.action}</div>
                 <PayOutNote latest={latest} />
-                {(canSend || canMessage) && open?.id !== investment.id ? (
-                  <div className="mt-2.5 flex flex-wrap gap-2">
-                    {canMessage ? (
-                      <Button variant="secondary" aria-label={`Message ${nameOf(investment)}`} onClick={() => setOpen({ id: investment.id, mode: "message" })}>
-                        Message the client
-                      </Button>
-                    ) : null}
-                    {canSend ? (
-                      <Button
-                        variant="secondary"
-                        aria-label={`Send ${nameOf(investment)}'s money to another account`}
-                        onClick={() => setOpen({ id: investment.id, mode: "send" })}
-                      >
-                        Send to another account
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
+                <HeldButtons
+                  className="mt-2.5 hidden md:flex"
+                  name={nameOf(investment)}
+                  canMessage={canMessage}
+                  canSend={canSend}
+                  hidden={open?.id === investment.id}
+                  onOpen={(mode) => setOpen({ id: investment.id, mode })}
+                />
               </td>
             </tr>
           );
         })}
       </Table>
+      {/* On a phone the table scrolls sideways, so what can be done about each term is listed
+          under it instead, where it is on screen. */}
+      {tools && (tools.canMessage || tools.canSend) ? (
+        <ul aria-label="Follow up on held money" className="m-0 flex list-none flex-col gap-2 p-0 md:hidden">
+          {investments.map((investment) => {
+            const latest = payOuts.find((correction) => correction.investmentId === investment.id);
+            const waiting = latest?.status === "proposed" || latest?.status === "approved";
+            return (
+              <li key={investment.id} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-4">
+                <p className="m-0 text-md">
+                  <span className="font-bold">{nameOf(investment)}</span>,{" "}
+                  <span className="tabular-nums">{formatExact(proceeds(investment))}</span> waiting
+                </p>
+                <PayOutNote latest={latest} />
+                <HeldButtons
+                  className="flex"
+                  name={nameOf(investment)}
+                  canMessage={tools.canMessage}
+                  canSend={tools.canSend && !waiting}
+                  hidden={open?.id === investment.id}
+                  onOpen={(mode) => setOpen({ id: investment.id, mode })}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
       {/* Below the table, not inside it, so the form never scrolls sideways on a phone. */}
       {tools && open && chosen ? (
         <section aria-label={`For ${nameOf(chosen)}`} className="flex max-w-[720px] flex-col gap-3 rounded-xl border-2 border-ink bg-surface p-[19px]">
@@ -377,6 +394,34 @@ function Held({ investments, cards, tools, payOuts, onProposed }: HeldProps) {
         </section>
       ) : null}
     </>
+  );
+}
+
+interface HeldButtonsProps {
+  className: string;
+  name: string;
+  canMessage: boolean;
+  canSend: boolean;
+  /** While this term's form is open. */
+  hidden: boolean;
+  onOpen: (mode: HeldMode) => void;
+}
+
+function HeldButtons({ className, name, canMessage, canSend, hidden, onOpen }: HeldButtonsProps) {
+  if (hidden || !(canMessage || canSend)) return null;
+  return (
+    <div className={cn("flex-wrap gap-2", className)}>
+      {canMessage ? (
+        <Button variant="secondary" aria-label={`Message ${name}`} onClick={() => onOpen("message")}>
+          Message the client
+        </Button>
+      ) : null}
+      {canSend ? (
+        <Button variant="secondary" aria-label={`Send ${name}'s money to another account`} onClick={() => onOpen("send")}>
+          Send to another account
+        </Button>
+      ) : null}
+    </div>
   );
 }
 
