@@ -7,7 +7,7 @@ import { formatMoney } from "@/payments/format";
 import { formatDay } from "@/investing/format";
 import { colors, fontSizes } from "@/theme";
 
-import { accountLabel, accountProvider, accountStatusPill, payoutStatusCopy, Tone } from "./format";
+import { accountLabel, accountProvider, accountStatusPill, payoutCopy, Tone } from "./format";
 import { describePayoutsError, Payout, PayoutAccount } from "./types";
 
 const toneColors: Record<Tone, { background: string; text: string }> = {
@@ -57,7 +57,7 @@ export function AccountCard({ account, nowMs, onPress }: { account: PayoutAccoun
 
 /** One payout in the list: how much, where to, and how it stands. */
 export function PayoutCard({ payout, account, onPress }: { payout: Payout; account: PayoutAccount | undefined; onPress: () => void }) {
-  const copy = payoutStatusCopy[payout.status];
+  const copy = payoutCopy(payout);
   const where = account ? accountLabel(account) : payout.kind === "bank" ? "A bank account" : "Mobile money";
   return (
     <Pressable

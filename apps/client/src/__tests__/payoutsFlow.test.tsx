@@ -146,6 +146,23 @@ describe("payout accounts", () => {
     expect(await screen.findByTestId("payout-amount")).toHaveTextContent("UGX 512,400");
     expect(screen.getAllByText("On its way").length).toBeGreaterThan(0);
   });
+
+  it("sends a payout that came back again and opens the new one", async () => {
+    await signIn();
+    await open("/payouts/history");
+    await fireEvent.press(await screen.findByTestId("payout-demo-payout-returned"));
+    expect(await screen.findByText("Came back to us")).toBeTruthy();
+    expect(screen.getByText("A bank account you removed")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("payout-resend"));
+    expect(await screen.findByTestId("resend-amount")).toHaveTextContent("UGX 2,150,000");
+    // The new bank account is still in its first day, so the number is chosen for it.
+    expect(screen.getByTestId("account-demo-account-bank")).toBeDisabled();
+    expect(screen.getByTestId("account-demo-account-mtn")).toBeChecked();
+    await fireEvent.press(screen.getByTestId("resend-send"));
+    expect(await screen.findByTestId("payout-amount")).toHaveTextContent("UGX 2,150,000");
+    expect(screen.getAllByText("On its way").length).toBeGreaterThan(0);
+    expect(screen.queryByTestId("payout-resend")).toBeNull();
+  });
 });
 
 describe("the maturity choice", () => {

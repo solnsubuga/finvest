@@ -1,16 +1,17 @@
 import { useCallback } from "react";
 import { View } from "react-native";
-import { Stack, useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
+import { Button } from "@/components/Button";
 import { LoadFailed } from "@/components/Loading";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { formatDay } from "@/investing/format";
 import { formatDateTime, formatMoney } from "@/payments/format";
 import { DetailList, Loading } from "@/payments/Parts";
-import { accountLabel, payoutStatusCopy } from "@/payouts/format";
+import { accountLabel, payoutCopy } from "@/payouts/format";
 import { Pill, useFocusLoaded } from "@/payouts/Parts";
 import { usePayouts } from "@/payouts/PayoutsProvider";
 import { Payout, PayoutAccount } from "@/payouts/types";
@@ -49,7 +50,9 @@ export default function PayoutDetail() {
 }
 
 function Body({ payout, account }: Read) {
-  const copy = payoutStatusCopy[payout.status];
+  const router = useRouter();
+  const copy = payoutCopy(payout);
+  const returned = payout.returnedAt !== null;
   return (
     <View style={{ marginTop: 20, gap: 16 }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
@@ -58,13 +61,13 @@ function Body({ payout, account }: Read) {
       </View>
       <View style={{ backgroundColor: colors.black, borderRadius: 22, padding: 20, gap: 4 }}>
         <Txt size={fontSizes.sm} weight="semibold" color={colors.onBlackMuted}>
-          {payout.status === "paid" ? "You were paid" : "To you"}
+          {returned ? "Came back to us" : payout.status === "paid" ? "You were paid" : "To you"}
         </Txt>
         <Txt size={36} weight="extrabold" lineHeight={42} color={colors.white} style={{ letterSpacing: -0.8 }} testID="payout-amount">
           {formatMoney(payout.amount)}
         </Txt>
         <Txt size={fontSizes.sm} weight="semibold" color={colors.lime}>
-          {copy.label}
+          {returned ? "Waiting to be sent again" : copy.label}
         </Txt>
       </View>
       <DetailList
@@ -72,9 +75,17 @@ function Body({ payout, account }: Read) {
           { label: "To", value: account ? accountLabel(account) : payout.kind === "bank" ? "A bank account you removed" : "A mobile money number you removed" },
           { label: "Asked for", value: formatDay(payout.businessDate) },
           { label: "Started", value: formatDateTime(payout.createdAt) },
+          ...(payout.returnedAt ? [{ label: "Came back", value: formatDateTime(payout.returnedAt) }] : []),
         ]}
       />
-      <Notice tone={payout.status === "failed" ? "warning" : "neutral"}>{copy.detail}</Notice>
+      <Notice tone={payout.status === "failed" || returned ? "warning" : "neutral"}>{copy.detail}</Notice>
+      {returned ? (
+        <Button
+          label="Send it again"
+          onPress={() => router.push(`/payouts/payout/resend/${payout.id}`)}
+          testID="payout-resend"
+        />
+      ) : null}
     </View>
   );
 }
