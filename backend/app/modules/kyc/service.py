@@ -50,6 +50,8 @@ from app.modules.kyc.domain.provider import (
     decide,
 )
 from app.modules.notifications import contract as notifications
+from app.modules.screening import contract as screening
+from app.modules.screening.settings import ScreeningSettings
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
@@ -458,6 +460,18 @@ async def submit(
                 payload={"check_id": row.id, "submission": row.submission + 1},
                 max_age=SEND_WITHIN,
             ),
+            now=now,
+        )
+    if ScreeningSettings().screening_on:
+        # Sanctions and PEP screening, asked for with the hand-in so it cannot be handed in
+        # and never screened. Once for each submission; the screening module's worker sends
+        # it. With no provider set up nothing is asked: a screen would only wait to be
+        # recorded as not run, and meanwhile hold the client's payouts.
+        await screening.request_screening(
+            session,
+            client_id=row.client_id,
+            reason=screening.Reason.ONBOARDING,
+            idempotency_key=f"kyc:{submission_key(row.id, row.submission + 1)}",
             now=now,
         )
     await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
