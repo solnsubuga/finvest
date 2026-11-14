@@ -111,6 +111,17 @@ class CheckView:
     photos: tuple[PhotoView, ...]
     # `finvest1` when the check was carried over from Finvest 1.0, otherwise `finvest2`.
     source: str = "finvest2"
+    retake_requested_at: datetime | None = None
+
+    @property
+    def retaken(self) -> frozenset[PhotoKind]:
+        """The photos staff asked for that the client has already taken again."""
+        if self.retake_requested_at is None:
+            return frozenset()
+        asked = self.retake_requested_at
+        # Strictly later: a photo from the same instant as the request is the one staff saw.
+        fresh = {photo.kind for photo in self.photos if photo.created_at > asked}
+        return self.retake_photos & fresh
 
     @property
     def missing(self) -> list[str]:
@@ -385,9 +396,7 @@ async def submit(
     view = await _view(session, sealer, row)
     missing = view.missing
     if row.status == CheckStatus.AWAITING_CLIENT:
-        # Strictly later: a photo from the same instant as the request is the one staff saw.
-        fresh = {p.kind for p in view.photos if p.created_at > row.retake_requested_at}
-        missing += [kind.value for kind in PhotoKind if kind in view.retake_photos - fresh]
+        missing += [kind.value for kind in PhotoKind if kind in view.retake_photos - view.retaken]
     if missing:
         raise ApplicationError(
             "validation_failed",
@@ -1179,6 +1188,7 @@ async def _view(session: AsyncSession, sealer: Sealer, row: Row[Any]) -> CheckVi
         ),
         review_flags=tuple(row.review_flags),
         retake_photos=frozenset(PhotoKind(kind) for kind in row.retake_photos),
+        retake_requested_at=row.retake_requested_at,
         client_message=row.client_message,
         decided_at=row.decided_at,
         decided_by=row.decided_by,

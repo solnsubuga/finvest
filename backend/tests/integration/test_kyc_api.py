@@ -357,7 +357,7 @@ async def test_staff_ask_for_a_photo_escalate_and_reject(api: Api) -> None:
     )
     assert (asked.json()["status"], asked.json()["allowed"]) == ("awaiting_client", [])
     mine = (await api.http.get("/client/identity-check", headers=client)).json()["check"]
-    assert mine["retake_photos"] == ["selfie"]
+    assert (mine["retake_photos"], mine["retaken"]) == (["selfie"], [])
     assert mine["client_message"] == "Your selfie was too dark."
 
     api.clock.advance(minutes=1)
@@ -367,6 +367,9 @@ async def test_staff_ask_for_a_photo_escalate_and_reject(api: Api) -> None:
         "/client/identity-check/photos/selfie", files=photo(PNG, "image/png"), headers=client
     )
     assert retake.status_code == 200
+    # The app can tell from the check itself which asked-for photos are done.
+    mine = (await api.http.get("/client/identity-check", headers=client)).json()["check"]
+    assert (mine["retake_photos"], mine["retaken"]) == (["selfie"], ["selfie"])
     assert (await api.http.post("/client/identity-check/submit", headers=client)).status_code == 200
 
     escalated = await api.http.post(
