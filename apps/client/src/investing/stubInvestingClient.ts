@@ -525,12 +525,15 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       await pause();
       // Like the backend: a known key returns its transfer, and the same key for anything
       // else is refused.
-      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message, request.whole]);
+      const details = JSON.stringify([request.investmentId, request.toAccountNumber, request.amount, request.message, request.purpose, request.purposeNote, request.whole]);
       const known = sendKeys.get(request.idempotencyKey);
       if (known) {
         if (known.request !== details) throw new InvestingError("key_reused");
         return transfers.get(known.id) as Transfer;
       }
+      // Like the backend: words with "other", and only with it.
+      const note = request.purposeNote?.trim() || null;
+      if ((request.purpose === "other") !== (note !== null)) throw new InvestingError("invalid");
       const entry = stored.get(request.investmentId);
       if (!entry) throw new InvestingError("not_found");
       const shown = view(entry);

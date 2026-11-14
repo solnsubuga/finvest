@@ -116,12 +116,30 @@ export type Transfer = {
   failureCode: string | null;
 };
 
+/** Why a client sends an investment, kept for anti money laundering and shown only to Finvest. */
+export type TransferPurpose = "family_support" | "gift" | "loan_repayment" | "business" | "other";
+
+/** In the order the Send screen offers them, with the words it shows. */
+export const TRANSFER_PURPOSES: { value: TransferPurpose; label: string }[] = [
+  { value: "family_support", label: "Family support" },
+  { value: "gift", label: "A gift" },
+  { value: "loan_repayment", label: "Paying back a loan" },
+  { value: "business", label: "Business" },
+  { value: "other", label: "Something else" },
+];
+
+/** The longest few words a client gives with "Something else". */
+export const MAX_PURPOSE_NOTE = 140;
+
 export type SendInvestment = {
   investmentId: string;
   /** As `findRecipient` returned it. */
   toAccountNumber: string;
   amount: Amount;
   message: string | null;
+  purpose: TransferPurpose;
+  /** The client's own words, only with `other`, where they are needed. */
+  purposeNote: string | null;
   /**
    * Send everything. The server sends the value when it saves the request, so interest added
    * after the screen loaded `amount` is included rather than refused.

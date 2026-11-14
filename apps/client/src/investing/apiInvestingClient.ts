@@ -303,6 +303,8 @@ export function createApiInvestingClient(): InvestingClient {
                 amount_minor: request.amount.minor,
                 currency: request.amount.currency,
                 message: request.message,
+                purpose: request.purpose,
+                purpose_note: request.purposeNote,
                 whole: request.whole,
               },
               idempotencyKey: request.idempotencyKey,
