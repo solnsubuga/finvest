@@ -46,6 +46,7 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | --- | --- | --- | --- |
 | `payment_confirmed` | Payments | `amount`, `method` | Money |
 | `payment_failed` | Payments | `amount`, `method` | Money |
+| `payment_reversed` | Payments | `amount`, `method` | Money |
 | `payout_processing` | Payouts | `amount`, `destination` | Money |
 | `payout_sent` | Payouts | `amount`, `destination` | Money |
 | `payout_failed` | Payouts | `amount`, `destination` | Money |

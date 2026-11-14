@@ -85,6 +85,13 @@ DEFAULTS: dict[str, Wording] = {
         "the app.",
         "Finvest: your payment from {method} did not go through. No money was taken.",
     ),
+    "payment_reversed": Wording(
+        "Payment taken back",
+        "A payment from {method} was matched to your account by mistake, so we have taken it "
+        "back. If you think this is wrong, message us in the app.",
+        "Finvest: a payment from {method} was matched to your account by mistake and has been "
+        "taken back.",
+    ),
     "payout_processing": Wording(
         "Withdrawal is being processed",
         "Your withdrawal to {destination} is being processed. We will confirm when it is sent.",
