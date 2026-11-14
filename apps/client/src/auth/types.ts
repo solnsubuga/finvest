@@ -25,12 +25,12 @@ export type Session = {
   locked: boolean;
 };
 
-/** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
 /** Why someone cannot get in. There is no free text, so nothing personal is kept. */
 export type RecoveryReason = "lost_phone" | "new_number" | "no_codes" | "other";
 
 export type RecoveryAsk = { phone: string; contactPhone: string; reason: RecoveryReason };
 
+/** What checking a PIN said. Out of tries signs the phone out instead (`signed_out`). */
 export type PinCheck = { unlocked: boolean; triesLeft: number };
 
 export type AuthErrorCode =
