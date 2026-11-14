@@ -54,6 +54,37 @@ describe("the shell, from the first screen", () => {
     await screen.findByText("Welcome, Amara");
   });
 
+  it("logs in with a proved email and a code sent to that address", async () => {
+    await openApp();
+    await press("Log in");
+    await screen.findByText("Welcome back");
+    await fireEvent.press(screen.getByTestId("switch-identifier"));
+    expect(screen.getByText("Sign in with your email address and password.")).toBeTruthy();
+
+    await fireEvent.changeText(screen.getByTestId("email-input"), "joseph@example.com");
+    await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+    await screen.findByText("Confirm it is you");
+    expect(screen.getByText("By email to j••••@example.com")).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId("use-code"));
+    await screen.findByText(/We emailed a 6 digit code to j••••@example\.com/);
+    await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText(/You signed in with a code/);
+  });
+
+  it("refuses an email that was never proved, in words about the email", async () => {
+    await openApp();
+    await press("Log in");
+    await screen.findByText("Welcome back");
+    await fireEvent.press(screen.getByTestId("switch-identifier"));
+    await fireEvent.changeText(screen.getByTestId("email-input"), "amara@example.com");
+    await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+    await screen.findByText(/That email and password do not match/);
+  });
+
   it("shows one message for a wrong password and stays on the form", async () => {
     await openApp();
     await press("Log in");
@@ -79,7 +110,7 @@ describe("the shell, from the first screen", () => {
     await screen.findByText("Enter the code we sent you");
     await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
-    await screen.findByText(/You signed in with an SMS code/);
+    await screen.findByText(/You signed in with a code/);
   });
 
   it("signs a new client up and lands on the home screen", async () => {
@@ -153,7 +184,7 @@ describe("the shell, from the first screen", () => {
     await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
     await fireEvent.press(screen.getByTestId("code-submit"));
     await screen.findByText("Welcome, Amara");
-    expect(screen.queryByText(/You signed in with an SMS code/)).toBeNull();
+    expect(screen.queryByText(/You signed in with a code/)).toBeNull();
   });
 
   it("offers the authenticator first, and no passkey, to a client without a passkey", async () => {

@@ -241,16 +241,14 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     if optional(env, "FINVEST_IDENTITY_DATA_KEY"):
         api["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")
         worker["FINVEST_IDENTITY_DATA_KEY"] = optional(env, "FINVEST_IDENTITY_DATA_KEY")
-    # Signs Resend's delivery events as relayed by the hooks.fidiba.com router. The API checks it;
-    # nothing else needs it.
+    # The signing secret of the webhook in Finvest's own Resend account. The API checks each delivery
+    # event with it; nothing else needs it.
     if optional(env, "RESEND_HOOK_SECRET"):
         api["RESEND_HOOK_SECRET"] = optional(env, "RESEND_HOOK_SECRET")
     for name in (
         "FINVEST_EMAIL_BACKEND",
         "FINVEST_EMAIL_FROM",
         "FINVEST_EMAIL_RESEND_API_KEY",
-        # Tags each message so the router sends its events back to this environment.
-        "FINVEST_EMAIL_FIDIBA_ENVIRONMENT",
         # SMS goes out from the worker only (backend app/infrastructure/sms).
         "FINVEST_SMS_BACKEND",
         "FINVEST_SMS_IOTEC_CLIENT_ID",
@@ -260,11 +258,47 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         if optional(env, name):
             worker[name] = optional(env, name)
 
+    scheduler = {**database, "FINVEST_DATABASE_URL": urls["scheduler"]}
+    # ioTec Pay (backend payments and payouts, docs/payments.md) and ioTec Verify (identity checks,
+    # docs/identity-checks.md). Each setting goes only to the processes that read it.
+    for names, targets in (
+        # The scheduler reads which provider and currency to plan for, and holds no credentials.
+        (("FINVEST_PAYMENTS_PROVIDER", "FINVEST_IOTEC_CURRENCY_CODE"), (api, worker, scheduler)),
+        (
+            (
+                "FINVEST_IOTEC_CLIENT_ID",
+                "FINVEST_IOTEC_CLIENT_SECRET",
+                "FINVEST_IOTEC_WALLET_ID",
+                "FINVEST_IOTEC_TOKEN_URL",
+                "FINVEST_IOTEC_PAY_URL",
+                "FINVEST_IOTEC_TIMEOUT_SECONDS",
+                "FINVEST_IDENTITY_PROVIDER",
+                "FINVEST_IOTEC_VERIFY_CLIENT_ID",
+                "FINVEST_IOTEC_VERIFY_API_KEY",
+                "FINVEST_IOTEC_VERIFY_BASE_URL",
+            ),
+            (api, worker),
+        ),
+        # The worker reads the name a network holds for a payout number (ioTec Verify, with the
+        # FINVEST_IOTEC_VERIFY_* credentials above). The API reads the provider too, to tell whether
+        # a new number waits for that check or for proof.
+        (("FINVEST_PAYOUT_NAME_PROVIDER",), (api, worker)),
+        # Sanctions and PEP screening (docs/screening.md). The worker runs the screens; the API reads
+        # the provider to decide whether a payout waits for one.
+        (("FINVEST_SCREENING_PROVIDER",), (api, worker)),
+        # Checks ioTec's collection callbacks, which only the API receives.
+        (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
+    ):
+        for name in names:
+            if optional(env, name):
+                for target in targets:
+                    target[name] = single_line(name, optional(env, name))
+
     runtime = {
         "migrate": {**database, "FINVEST_DATABASE_URL": urls["migrate"]},
         "api": api,
         "worker": worker,
-        "scheduler": {**database, "FINVEST_DATABASE_URL": urls["scheduler"]},
+        "scheduler": scheduler,
     }
 
     release = {

@@ -14,7 +14,13 @@ jest.mock("@/identity/stubIdentityClient", () => {
   return {
     ...actual,
     createStubIdentityClient: (options: object) =>
-      actual.createStubIdentityClient({ ...options, delayMs: 0, now: () => Date.parse("2026-11-13T09:00:00Z") }),
+      // The camera selfie. The live check is covered in liveSelfieFlow.test.tsx.
+      actual.createStubIdentityClient({
+        ...options,
+        delayMs: 0,
+        liveness: false,
+        now: () => Date.parse("2026-11-13T09:00:00Z"),
+      }),
   };
 });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -9,6 +9,7 @@ import { LoadFailed, Loading } from "@/components/Loading";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
 import { useIdentity } from "@/identity/IdentityProvider";
+import { LiveSelfie } from "@/identity/LiveSelfie";
 import { StepTop } from "@/identity/Parts";
 import { checkPhoto, photoProblemCopy } from "@/identity/photo";
 import { choosePhoto, PickResult, takePhoto } from "@/identity/pickPhoto";
@@ -80,6 +81,9 @@ export default function TakePhoto() {
   const [photo, setPhoto] = useState<PhotoFile | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The selfie is a live check where one is offered; the camera is the fallback.
+  const [camera, setCamera] = useState(false);
+  const chooseCamera = useCallback(() => setCamera(true), []);
 
   if (!kind) return <Redirect href="/id-check" />;
   const selfie = kind === "selfie";
@@ -171,6 +175,21 @@ export default function TakePhoto() {
   ) : (
     <StepTop step={kind} documentType={check.documentType} fallback="/id-check" />
   );
+
+  if (selfie && !camera && !photo) {
+    return (
+      <>
+        <Stack.Screen options={{ title }} />
+        <LiveSelfie
+          check={check}
+          top={top}
+          frame={<Frame selfie />}
+          onCamera={chooseCamera}
+          onDone={afterUpload}
+        />
+      </>
+    );
+  }
 
   if (photo) {
     return (

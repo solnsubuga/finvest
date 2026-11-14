@@ -63,6 +63,7 @@ from app.modules.payouts.domain.sending import (
     destination_label,
     next_read,
 )
+from app.modules.payouts.events import RELEASE_SCREENED_KIND
 from app.modules.payouts.payouts import PayoutView
 from app.shared.actors import SYSTEM
 from app.shared.clock import Clock
@@ -464,3 +465,43 @@ def _payout_id(payload: Mapping[str, object]) -> str:
     if not isinstance(value, str):
         raise PermanentJobError(code="invalid_payload")
     return value
+
+
+def release_screened(database: Database, clock: Clock) -> dict[str, JobHandler | Handler]:
+    """Moves on a client's payouts waiting for screening once the client is screened clear.
+
+    Runs whatever the payout provider is: a payout waiting for screening must not wait on a
+    provider being set up. Calls no provider itself.
+    """
+
+    async def handler(job: ClaimedJob, context: JobContext) -> None:
+        data = job.payload.get("data")
+        client_id = data.get("client_id") if isinstance(data, dict) else None
+        if not isinstance(client_id, str):
+            raise PermanentJobError(code="invalid_payload")
+
+        async def release(session: AsyncSession) -> Mapping[str, object]:
+            moved = await payouts.release_screened(session, client_id, clock)
+            return {"released": len(moved)}
+
+        await context.apply(release)
+
+    async def retry(job: ClaimedJob, context: JobContext) -> None:
+        async def again(session: AsyncSession) -> Mapping[str, object]:
+            found = await payouts.retry_screening(session, clock)
+            for payout_id in found.still_waiting_long:
+                # Staff see it on the Compliance screen; this is for whoever watches the logs.
+                logger.warning(
+                    "payout_waiting_for_screening",
+                    payout_id=payout_id,
+                    error_code="screening_not_clear",
+                )
+            return {
+                "clients": found.clients,
+                "released": found.released,
+                "waiting_long": len(found.still_waiting_long),
+            }
+
+        await context.apply(again)
+
+    return {RELEASE_SCREENED_KIND: handler, payouts.RETRY_SCREENING_KIND: retry}

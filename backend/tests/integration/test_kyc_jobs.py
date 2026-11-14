@@ -29,18 +29,26 @@ from app.modules.kyc.providers import ManualProvider
 from app.shared.actors import SYSTEM
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
-from tests.support.kyc import SEALER, SHA256, FakeProvider, ready_draft
+from tests.support.kyc import SEALER, SHA256, FakeProvider, live_selfie, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
 
 
-async def hand_in(database: Database, clock: FakeClock, provider: object) -> tuple[str, str]:
-    """A client hands in a check. Returns its id and its key at the provider."""
+async def hand_in(
+    database: Database, clock: FakeClock, provider: object, *, live: Database | None = None
+) -> tuple[str, str]:
+    """A client hands in a check. Returns its id and its key at the provider.
+
+    With `live` (the worker's database), the selfie was taken with a liveness check that passed.
+    """
     client = new_client()
     async with database.actor_transaction(client) as session:
         await ready_draft(session, client, clock)
+    if live is not None:
+        await live_selfie(database, live, client, clock)
+    async with database.actor_transaction(client) as session:
         view = await kyc.submit(session, SEALER, client, provider, clock)  # type: ignore[arg-type]
     return view.id, kyc.submission_key(view.id, view.submission)
 
@@ -108,7 +116,7 @@ async def test_a_submission_is_sent_read_and_given_to_staff_as_passed(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     provider = FakeProvider()
-    check_id, key = await hand_in(app_database, fake_clock, provider)
+    check_id, key = await hand_in(app_database, fake_clock, provider, live=worker_database)
     assert await jobs_for(worker_database, key) == {kyc.SEND_CHECK: ("pending", None)}
 
     await work(worker_database, fake_clock, provider)
@@ -135,7 +143,7 @@ async def test_with_automatic_approval_on_a_clean_result_approves(
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     provider = FakeProvider()
-    check_id, _ = await hand_in(app_database, fake_clock, provider)
+    check_id, _ = await hand_in(app_database, fake_clock, provider, live=worker_database)
     await work(worker_database, fake_clock, provider, automatic_approval=True)
     view = await check(app_database, check_id)
     assert view.status is CheckStatus.APPROVED
@@ -184,7 +192,7 @@ async def test_after_an_uncertain_send_the_provider_is_asked_and_nothing_is_sent
     app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
     provider = LostAnswer()
-    check_id, key = await hand_in(app_database, fake_clock, provider)
+    check_id, key = await hand_in(app_database, fake_clock, provider, live=worker_database)
     await work(worker_database, fake_clock, provider)
     view = await check(app_database, check_id)
     # The provider held it, so the result was read as if the send had answered.
@@ -312,7 +320,7 @@ async def test_iotec_verify_runs_its_three_checks_through_the_worker(
         storage=shelf,  # type: ignore[arg-type]
         client=httpx.AsyncClient(transport=httpx.MockTransport(iotec)),
     )
-    check_id, _ = await hand_in(app_database, fake_clock, provider)
+    check_id, _ = await hand_in(app_database, fake_clock, provider, live=worker_database)
     await work(worker_database, fake_clock, provider, automatic_approval=True)
 
     view = await check(app_database, check_id)

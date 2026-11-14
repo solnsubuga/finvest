@@ -176,12 +176,10 @@ class PrepareRelease(unittest.TestCase):
         for service in ("worker", "scheduler", "migrate"):
             self.assertNotIn("RESEND_HOOK_SECRET", read_env(self.out / "runtime" / f"{service}.env"))
 
-    def test_fidiba_environment_tag_reaches_the_worker_only(self):
+    def test_fidiba_environment_tag_is_no_longer_passed(self):
+        # Finvest uses its own Resend account, so there is no router tag to send.
         pr.prepare(self.out, settings(FINVEST_EMAIL_FIDIBA_ENVIRONMENT="app_finvest_prod"))
-        self.assertEqual(
-            read_env(self.out / "runtime" / "worker.env")["FINVEST_EMAIL_FIDIBA_ENVIRONMENT"], "app_finvest_prod"
-        )
-        for service in ("api", "scheduler", "migrate"):
+        for service in ("api", "worker", "scheduler", "migrate"):
             self.assertNotIn("FINVEST_EMAIL_FIDIBA_ENVIRONMENT", read_env(self.out / "runtime" / f"{service}.env"))
 
     def test_email_hash_key_reaches_the_api_and_worker_only(self):
@@ -205,6 +203,43 @@ class PrepareRelease(unittest.TestCase):
         for service in ("api", "scheduler", "migrate"):
             found = read_env(self.out / "runtime" / f"{service}.env")
             self.assertFalse([name for name in sms if name in found])
+
+    def test_iotec_settings_reach_only_the_processes_that_read_them(self):
+        everywhere = {"FINVEST_PAYMENTS_PROVIDER": "iotec", "FINVEST_IOTEC_CURRENCY_CODE": "UGX"}
+        api_and_worker = {
+            "FINVEST_IOTEC_CLIENT_ID": "pay-client",
+            "FINVEST_IOTEC_CLIENT_SECRET": "s" * 32,
+            "FINVEST_IOTEC_WALLET_ID": "wallet",
+            "FINVEST_IOTEC_TOKEN_URL": "https://id.iotec.io/connect/token",
+            "FINVEST_IOTEC_PAY_URL": "https://pay.iotec.io",
+            "FINVEST_IOTEC_TIMEOUT_SECONDS": "30",
+            "FINVEST_IDENTITY_PROVIDER": "iotec",
+            "FINVEST_IOTEC_VERIFY_CLIENT_ID": "verify-client",
+            "FINVEST_IOTEC_VERIFY_API_KEY": "v" * 32,
+            "FINVEST_IOTEC_VERIFY_BASE_URL": "https://verify-api.iotec.io",
+            "FINVEST_PAYOUT_NAME_PROVIDER": "iotec",
+            "FINVEST_SCREENING_PROVIDER": "none",
+        }
+        api_only = {"FINVEST_IOTEC_CALLBACK_TOKEN": "c" * 43}
+        pr.prepare(self.out, settings(**everywhere, **api_and_worker, **api_only))
+        files = {s: read_env(self.out / "runtime" / f"{s}.env") for s in ("api", "worker", "scheduler", "migrate")}
+        for name, value in everywhere.items():
+            for service in ("api", "worker", "scheduler"):
+                self.assertEqual(files[service][name], value)
+        for name, value in api_and_worker.items():
+            self.assertEqual(files["api"][name], value)
+            self.assertEqual(files["worker"][name], value)
+            self.assertNotIn(name, files["scheduler"])
+        self.assertEqual(files["api"]["FINVEST_IOTEC_CALLBACK_TOKEN"], "c" * 43)
+        for service in ("worker", "scheduler"):
+            self.assertNotIn("FINVEST_IOTEC_CALLBACK_TOKEN", files[service])
+        self.assertFalse([name for name in files["migrate"] if "IOTEC" in name or "PROVIDER" in name])
+
+    def test_iotec_settings_are_left_out_when_unset(self):
+        pr.prepare(self.out, settings())
+        for service in ("api", "worker", "scheduler"):
+            found = read_env(self.out / "runtime" / f"{service}.env")
+            self.assertFalse([name for name in found if "IOTEC" in name or "PROVIDER" in name])
 
     def test_identity_data_key_reaches_the_api_and_worker_only(self):
         pr.prepare(self.out, settings(FINVEST_IDENTITY_DATA_KEY="d" * 43))

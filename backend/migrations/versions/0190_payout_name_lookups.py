@@ -1,7 +1,7 @@
 """Prove a mobile money number by the name its network holds, read through ioTec Verify.
 
 Revision ID: 0190_payout_name_lookups
-Revises: 0076_migration_carry_resolutions
+Revises: 0182_transaction_monitoring
 
 After the client enters the code texted to a mobile money number, the worker asks ioTec Verify
 for the name the network holds for it and compares it with the name on the client's verified ID.
@@ -32,7 +32,7 @@ from types import ModuleType
 from alembic import op
 
 revision: str = "0190_payout_name_lookups"
-down_revision: str | None = "0076_migration_carry_resolutions"
+down_revision: str | None = "0182_transaction_monitoring"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

@@ -54,11 +54,11 @@ How a lookup is sent, by the rules for provider calls:
 * A send that certainly never arrived (a connect failure, 401, 403 or 429) is tried once more at once, and then again by the job, up to five times.
 * A send that may have arrived is never sent again by the worker. ioTec Verify cannot look a request up by our reference, so the lookup is marked unanswered. The client may ask for a new one with `POST /client/payout-destinations/{id}/name-check`. That is a person asking, not a blind retry, and a lookup moves no money.
 * A number has at most three lookups, because each costs a fee. A lookup still unanswered an hour after it was asked for counts as unanswered.
-* A name found while the client's identity check is not yet approved is kept, and the number waits (`waiting_for_id`). Once the ID is approved, the client asks again and the worker decides from the same answer, without asking ioTec again.
+* A name found while the client's identity check is not yet approved is kept, and the number waits (`waiting_for_id`). Once the ID is approved, the client asks again and the worker decides from the same answer, without asking ioTec again. From that ask until the worker has decided, `name_check` is `checking`.
 
 The lookup's ID is the `referenceId` ioTec is sent and, once decided, the number's `proof_document_id`. Nothing is logged with the number or the name. Refusals from the network's answer are written to the audit trail as approvals made by the system, with the reason.
 
-Set `FINVEST_PAYOUT_NAME_PROVIDER=iotec` for the worker to read names, with the identity checks' ioTec Verify credentials (`FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY`, optional `FINVEST_IOTEC_VERIFY_BASE_URL`). With the default, `none`, numbers wait at `awaiting_proof` with their lookups queued.
+Set `FINVEST_PAYOUT_NAME_PROVIDER=iotec` for the worker to read names, with the identity checks' ioTec Verify credentials (`FINVEST_IOTEC_VERIFY_CLIENT_ID`, `FINVEST_IOTEC_VERIFY_API_KEY`, optional `FINVEST_IOTEC_VERIFY_BASE_URL`). With the default, `none`, the API asks for no lookups, because no worker would send them. A number waits at `awaiting_proof` with `name_check` `checking`, asking again is refused with `name_check_in_progress`, and none of its three lookups are used up. Once a provider is set, a waiting number with no lookup shows `not_answered`, so the client can ask for its first one. The API reads the same `FINVEST_PAYOUT_NAME_PROVIDER` at start-up, so set it for both processes.
 
 ### What the database enforces
 
@@ -106,12 +106,15 @@ A new version is inserted by the staff member who approves it, names a different
 
 An amount over the mobile money limit is refused with a code that tells the app to offer a bank account instead. Daily limits count every payout of the day that was not cancelled and did not fail. Amounts are never converted: a payout in another currency than the limits is refused.
 
+Every payout created is also read by screening's transaction monitoring (`screening.contract.watch_payout`, [screening.md](screening.md#transaction-monitoring)). A monitoring case does not hold the payout.
+
 ## The life of a payout
 
 The money leaves the client's holding when the payout is created and sits in a "payout in flight" ledger account for that client until the provider's answer is known.
 
 | Status | Meaning |
 | --- | --- |
+| Screening | Waiting for the client to be screened against sanctions and politically exposed person lists. Moves on by itself once they are clear; staff may decline it. The client sees it as processing. See [screening.md](screening.md#before-a-payout). |
 | Held | Waiting for staff to approve a large withdrawal |
 | Queued | Ready for the worker. Nothing has reached the provider. |
 | Sent | The provider accepted it and has not said how it ended |
@@ -175,7 +178,7 @@ Settle is refused by the ledger if the pot does not hold the money, because an a
 
 | Rule | How |
 | --- | --- |
-| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one, the worker reports the provider |
+| Status follows the table above | A trigger repeats the transition table per actor: a client may only cancel a held payout, staff may only approve or decline one (or decline one waiting for screening), the worker reports the provider and releases a payout from screening only for a client who is clear (migration 0181) |
 | A payout that may have left is never queued again | No actor has a step from sent or uncertain back to queued |
 | A finished payout never changes, and none is deleted | The same trigger, for every role including the table owner |
 | The terms never change | Client, destination, amount, currency, source and request key are fixed at creation |

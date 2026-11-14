@@ -80,28 +80,38 @@ describe("sign up", () => {
 
 describe("log in", () => {
   it("never opens a session from the password alone", async () => {
-    const challenge = await client().startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    const challenge = await client().startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     expect(challenge).not.toHaveProperty("session");
     expect(challenge.methods).toEqual(["passkey", "authenticator", "code"]);
   });
 
   it("gives the same answer for a wrong password and an unknown number", async () => {
     const auth = client();
-    expect(await codeOf(auth.startLogin(DEMO_PHONE, "wrong password"))).toBe("invalid_credentials");
-    expect(await codeOf(auth.startLogin(NEW_PHONE, DEMO_PASSWORD))).toBe("invalid_credentials");
+    expect(await codeOf(auth.startLogin({ phone: DEMO_PHONE }, "wrong password"))).toBe("invalid_credentials");
+    expect(await codeOf(auth.startLogin({ phone: NEW_PHONE }, DEMO_PASSWORD))).toBe("invalid_credentials");
+  });
+
+  it("logs in by email only with a proved address", async () => {
+    const auth = client();
+    // Joseph proved his address; Amara has not proved hers yet.
+    const challenge = await auth.startLogin({ email: "Joseph@Example.com" }, DEMO_PASSWORD);
+    expect(challenge).toMatchObject({ phone: null, email: "joseph@example.com" });
+    expect(await codeOf(auth.startLogin({ email: "amara@example.com" }, DEMO_PASSWORD))).toBe(
+      "invalid_email_credentials",
+    );
   });
 
   it("opens a full session with a passkey", async () => {
     const auth = client();
-    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     const session = await auth.verifyWithPasskey(challenge.loginId);
     expect(session).toEqual({ phone: DEMO_PHONE, displayName: "Amara Nakato", restricted: false, email: "amara@example.com", emailVerified: false });
   });
 
   it("opens a restricted session with a code", async () => {
     const auth = client();
-    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
-    await auth.sendLoginCode(challenge.loginId);
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
+    await auth.sendLoginCode(challenge.loginId, "sms");
     expect(await codeOf(auth.verifyWithCode(challenge.loginId, "000000"))).toBe("invalid_code");
     const session = await auth.verifyWithCode(challenge.loginId, DEMO_CODE);
     expect(session.restricted).toBe(true);
@@ -109,14 +119,14 @@ describe("log in", () => {
 
   it("offers only the methods the client has set up", async () => {
     const auth = client();
-    const challenge = await auth.startLogin(DEMO_PHONE_AUTHENTICATOR, DEMO_PASSWORD);
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE_AUTHENTICATOR }, DEMO_PASSWORD);
     expect(challenge.methods).toEqual(["authenticator", "code"]);
     expect(await codeOf(auth.verifyWithPasskey(challenge.loginId))).toBe("expired");
   });
 
   it("opens a full session with an authenticator app code", async () => {
     const auth = client();
-    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     expect(await codeOf(auth.verifyWithAuthenticator(challenge.loginId, "000000"))).toBe(
       "invalid_code",
     );
@@ -126,17 +136,17 @@ describe("log in", () => {
 
   it("lets the client switch method within one log in", async () => {
     const auth = client();
-    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     // Starts with the authenticator, gets it wrong, then uses an SMS code.
     await codeOf(auth.verifyWithAuthenticator(challenge.loginId, "000000"));
-    await auth.sendLoginCode(challenge.loginId);
+    await auth.sendLoginCode(challenge.loginId, "sms");
     const session = await auth.verifyWithCode(challenge.loginId, DEMO_CODE);
     expect(session.restricted).toBe(true);
   });
 
   it("uses a login only once", async () => {
     const auth = client();
-    const challenge = await auth.startLogin(DEMO_PHONE, DEMO_PASSWORD);
+    const challenge = await auth.startLogin({ phone: DEMO_PHONE }, DEMO_PASSWORD);
     await auth.verifyWithPasskey(challenge.loginId);
     expect(await codeOf(auth.verifyWithPasskey(challenge.loginId))).toBe("expired");
     expect(await codeOf(auth.verifyWithCode(challenge.loginId, DEMO_CODE))).toBe("expired");
@@ -151,7 +161,7 @@ describe("log in", () => {
     const ticket = await auth.confirmSignupCode(signup.challengeId, DEMO_CODE);
     await auth.completeSignup(ticket.ticket, "green matooke sunday");
 
-    const challenge = await auth.startLogin(NEW_PHONE, "green matooke sunday");
+    const challenge = await auth.startLogin({ phone: NEW_PHONE }, "green matooke sunday");
     expect(challenge.methods).toEqual(["code"]);
     expect(await codeOf(auth.verifyWithPasskey(challenge.loginId))).toBe("expired");
     expect(await codeOf(auth.verifyWithAuthenticator(challenge.loginId, DEMO_CODE))).toBe(
@@ -195,7 +205,7 @@ describe("setting up a second step", () => {
     await auth.addPasskey();
     expect(await auth.listSecondSteps()).toEqual(["passkey", "code"]);
     await auth.signOut();
-    const login = await auth.startLogin(NEW_PHONE, "green matooke sunday");
+    const login = await auth.startLogin({ phone: NEW_PHONE }, "green matooke sunday");
     expect(login.methods).toEqual(["passkey", "code"]);
     expect((await auth.verifyWithPasskey(login.loginId)).restricted).toBe(false);
   });
@@ -233,7 +243,7 @@ describe("setting up a second step", () => {
     await signUp(auth);
     await auth.startAuthenticatorSetup();
     await auth.signOut();
-    const login = await auth.startLogin(DEMO_PHONE_AUTHENTICATOR, DEMO_PASSWORD);
+    const login = await auth.startLogin({ phone: DEMO_PHONE_AUTHENTICATOR }, DEMO_PASSWORD);
     await auth.verifyWithCode(login.loginId, DEMO_CODE);
     expect(await codeOf(auth.confirmAuthenticatorSetup(DEMO_CODE))).toBe("expired");
   });

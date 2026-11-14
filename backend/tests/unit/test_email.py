@@ -1,5 +1,6 @@
 import base64
 import json
+import re
 
 import httpx
 import pytest
@@ -212,7 +213,7 @@ def test_the_enrolment_email_links_once_and_escapes_the_name() -> None:
     )
     assert "<script>" not in rendered.html
     assert "&lt;script&gt;" in rendered.html
-    assert rendered.html.count(f'<a href="{link}">') == 1
+    assert rendered.html.count(f'href="{link}"') == 1
     assert link in rendered.text
 
 
@@ -259,7 +260,7 @@ def test_the_claim_invitation_links_once_by_email_and_by_text() -> None:
 
     email = render("claim_invitation", variables, link_origins=client_app)
     assert email.subject == "Claim your account on the new Finvest"
-    assert email.html.count(f'<a href="{link}">') == 1
+    assert email.html.count(f'href="{link}"') == 1
     assert "72 hours" in email.text
 
     sms = render_sms("claim_invitation", variables, link_origins=client_app)
@@ -274,3 +275,57 @@ def test_a_link_in_a_text_message_must_point_to_a_finvest_site() -> None:
     for link in ("https://evil.example/claim#token", "https://app.finvestug.com.evil.example/c"):
         with pytest.raises(InvalidTemplate, match="Finvest site"):
             render_sms("claim_invitation", {"link": link, "hours": 72}, link_origins=client_app)
+
+
+EMAILED: dict[str, dict[str, object]] = {
+    "sign_in_code": {"code": "482913", "minutes": 10},
+    "password_reset_code": {"code": "482913", "minutes": 10},
+    "new_sign_in": {"device": "Chrome on Windows", "when": "13 Nov 2026, 15:32"},
+    "recovery_requested": {"when": "14 Nov 2026, 10:05"},
+    "phone_changed": {"ending": "456"},
+    "email_verification": {"link": "https://app.finvestug.com/email#abc", "hours": 24},
+    "claim_invitation": {"link": "https://app.finvestug.com/claim#abc", "hours": 72},
+    "staff_enrolment": {
+        "name": "Ada",
+        "link": "https://admin.finvestug.com/enrol#abc",
+        "hours": 24,
+    },
+    "client_notice": {"title": "Withdrawal sent", "body": "Your withdrawal has been sent."},
+}
+
+
+@pytest.mark.parametrize("template", sorted(EMAILED))
+def test_every_email_has_the_designed_look(template: str) -> None:
+    rendered = render(template, EMAILED[template])
+    # The black band with the wordmark, and the safety footer, in the HTML and the text.
+    assert 'background:#0D0D0D;padding:22px 28px">' in rendered.html
+    assert ">finvest</span>" in rendered.html
+    assert "Plus Jakarta Sans" in rendered.html
+    assert "Finvest will never ask for your password, PIN or a code" in rendered.html
+    assert "Finvest will never ask for your password, PIN or a code" in rendered.text
+    assert rendered.html.count("<h1 ") == 1
+    # Every link goes to a Finvest site: the app, the website or the link it was given.
+    links = set(re.findall(r'href="([^"]+)"', rendered.html))
+    allowed = {"https://finvestug.com", "https://app.finvestug.com", EMAILED[template].get("link")}
+    assert all(link in allowed or link.startswith("https://app.finvestug.com/") for link in links)
+    assert "<img" not in rendered.html
+
+
+def test_a_code_is_shown_large_with_what_to_do_if_it_was_not_you() -> None:
+    rendered = render("sign_in_code", EMAILED["sign_in_code"])
+    assert "letter-spacing:8px" in rendered.html
+    assert ">482913</div>" in rendered.html
+    assert "Did not try to sign in?" in rendered.html
+    assert "Works once, for 10 minutes" in rendered.text
+
+
+def test_a_notice_email_opens_the_app_and_escapes_its_words() -> None:
+    rendered = render(
+        "client_notice", {"title": "Payment <b>received</b>", "body": "From <i>MTN</i> & co."}
+    )
+    assert rendered.subject == "Payment <b>received</b>"
+    assert "<b>" not in rendered.html and "<i>" not in rendered.html
+    assert "Payment &lt;b&gt;received&lt;/b&gt;" in rendered.html
+    assert rendered.html.count('href="https://app.finvestug.com"') == 1
+    assert "Open Finvest: https://app.finvestug.com" in rendered.text
+    assert "under Notifications" in rendered.text

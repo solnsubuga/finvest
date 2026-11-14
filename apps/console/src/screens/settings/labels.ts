@@ -27,6 +27,8 @@ const EVENT_LABELS: Record<string, string> = {
   investment_withdrawal_requested: "Early withdrawal requested",
   investment_withdrawal_paid: "Early withdrawal sent",
   interest_earned: "Daily earnings",
+  goal_top_up_due: "Goal saving due soon",
+  goal_reached: "Goal reached",
   kyc_approved: "Identity check approved",
   kyc_retake_requested: "Identity photo needed again",
   kyc_rejected: "Identity check not approved",

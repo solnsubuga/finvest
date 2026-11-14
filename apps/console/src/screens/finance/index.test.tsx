@@ -7,6 +7,7 @@ import { formatAmount, parseAmount } from "./format.ts";
 import { createHttpTaxApi } from "./http.ts";
 import { FinanceScreen } from "./index.tsx";
 import { createStubTaxApi } from "./stub.ts";
+import { createStubBooksApi } from "./booksStub.ts";
 
 const ME = { id: "sample-me", name: "Amina" };
 const TODAY = "2026-11-13";
@@ -29,6 +30,17 @@ function monthRow(month: string): HTMLElement {
 const payment = (month: string) => screen.findAllByRole("article", { name: `Payment for ${month}` });
 
 describe("finance screen", () => {
+  it("shows the books above withholding tax, and both follow the currency", async () => {
+    const books = createStubBooksApi(ME, { today: TODAY });
+    const getBooks = vi.spyOn(books, "getBooks");
+    render(<FinanceScreen api={createStubTaxApi(ME, { today: TODAY })} booksApi={books} canPay today={() => TODAY} />);
+    await screen.findByRole("table", { name: "Books for November 2026" });
+    expect(screen.getByRole("heading", { name: "Withholding tax" })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "USD" }));
+    await screen.findByText(/Nothing is in the dollar books for November 2026 yet/);
+    expect(getBooks).toHaveBeenLastCalledWith("USD", "2026-11");
+  });
+
   it("shows each month against what was paid to URA and when it is due", async () => {
     renderFinance();
     await screen.findByRole("table", { name: "Withholding tax by month" });

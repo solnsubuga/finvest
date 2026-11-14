@@ -413,6 +413,9 @@ async def test_a_name_found_before_the_id_is_approved_is_decided_once_it_is(
     await api.as_client(owner)
     status, body = await ask_again(api, destination_id)
     assert status == 200, body
+    # The comparison is queued: the client sees it under way, not still waiting for the ID.
+    assert body["name_check"] == "checking"
+    assert (await client_view(api, destination_id))["name_check"] == "checking"
     await run_all(runner, api.clock)
     assert (await staff_view(api, destination_id)).status.value == "in_review"
     assert len(names.sent) == 1  # decided from the same answer: nothing sent again
@@ -545,3 +548,22 @@ async def test_a_bank_account_is_never_looked_up(api: Api) -> None:
     # A number still waiting for its code is not looked up either.
     status, body = await ask_again(api, view.id)
     assert status == 409 and problem(body) == "destination_not_awaiting_proof"
+
+
+async def test_with_no_provider_a_number_waits_and_uses_up_no_lookups(
+    test_database: TestDatabase, app_database: Database, worker_database: Database
+) -> None:
+    """Production before ioTec is switched on: nothing is asked, so nothing reaches the limit."""
+    async with running_api(
+        test_database, app_database, storage=MemoryStorage(), payout_names=False
+    ) as off:
+        off.clock.current = datetime.now(UTC)
+        _, destination_id, _ = await confirmed_number(off, worker_database)
+        assert await lookups(worker_database, destination_id) == []
+        for _ in range(4):
+            off.clock.advance(hours=2)
+            status, body = await ask_again(off, destination_id)
+            assert status == 409 and problem(body) == "name_check_in_progress"
+        assert (await client_view(off, destination_id))["name_check"] == "checking"
+        assert await lookups(worker_database, destination_id) == []
+        assert (await staff_view(off, destination_id)).status.value == "awaiting_proof"

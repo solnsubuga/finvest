@@ -6,6 +6,7 @@ import {
   IdentityClient,
   IdentityDetails,
   IdentityError,
+  LivenessAttempt,
   PhotoKind,
   requiredPhotos,
 } from "./types";
@@ -31,7 +32,23 @@ import {
  * The demo account with a passkey (+256 772 123 456) starts approved.
  */
 
-type StubOptions = { delayMs?: number; seeded?: boolean; now?: () => number };
+type StubOptions = {
+  delayMs?: number;
+  seeded?: boolean;
+  now?: () => number;
+  /** Offer a live check for the selfie, as the API does when a liveness provider is set. */
+  liveness?: boolean;
+};
+
+/** The demo's live check. It moves on by itself as it is read, as the worker would. */
+type StoredAttempt = LivenessAttempt & { readsLeft: number };
+
+/** Live checks per ID check, as in the backend's MAX_ATTEMPTS. */
+export const DEMO_LIVENESS_ATTEMPTS = 10;
+/** Reads of an open live check before the demo answers it. */
+const READS_UNTIL_ANSWER = 2;
+/** A placeholder page. The demo opens nothing real. */
+export const DEMO_LIVENESS_PAGE = "https://example.org/finvest-live-check-demo";
 
 type Stored = Omit<IdentityCheck, "missing"> & {
   /** Photos sent since staff asked for some again. */
@@ -68,6 +85,7 @@ function seededCheck(): Stored {
     },
     detailsConfirmed: true,
     photos: ["front", "back", "selfie"],
+    liveSelfie: true,
     retakePhotos: [],
     clientMessage: null,
     submittedAt: "2026-11-01T08:12:00Z",
@@ -117,8 +135,52 @@ function problems(details: IdentityDetails, today: string): { field: DetailField
 
 let nextId = 1;
 
-export function createStubIdentityClient({ delayMs = 400, seeded = false, now = Date.now }: StubOptions = {}): IdentityClient {
+export function createStubIdentityClient({
+  delayMs = 400,
+  seeded = false,
+  now = Date.now,
+  liveness = false,
+}: StubOptions = {}): IdentityClient {
   let check: Stored | null = seeded ? seededCheck() : null;
+  const attempts: StoredAttempt[] = [];
+
+  function selfieEditable(held: Stored): boolean {
+    return held.status === "draft" || (held.status === "awaiting_client" && held.retakePhotos.includes("selfie"));
+  }
+
+  /** The demo's stand-in for the provider: a number ending in 4 is not a live person. */
+  function advance(attempt: StoredAttempt): void {
+    if (attempt.status === "starting") {
+      attempt.status = "open";
+      attempt.url = DEMO_LIVENESS_PAGE;
+      return;
+    }
+    if (attempt.status !== "open") return;
+    if (attempt.readsLeft > 0) {
+      attempt.readsLeft -= 1;
+      return;
+    }
+    attempt.url = null;
+    if (check?.details?.documentNumber.endsWith("4")) {
+      attempt.status = "failed";
+      attempt.failureCode = "not_live";
+      return;
+    }
+    attempt.status = "passed";
+    if (check && selfieEditable(check)) {
+      if (!check.photos.includes("selfie")) check.photos.push("selfie");
+      check.liveSelfie = true;
+      if (check.status === "awaiting_client") check.retaken.add("selfie");
+      attempt.photoUsed = true;
+    } else {
+      attempt.failureCode = "check_moved_on";
+    }
+  }
+
+  function attemptView(attempt: StoredAttempt): LivenessAttempt {
+    const { readsLeft: _reads, ...rest } = attempt;
+    return { ...rest };
+  }
 
   const pause = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
@@ -172,6 +234,7 @@ export function createStubIdentityClient({ delayMs = 400, seeded = false, now = 
           details: null,
           detailsConfirmed: false,
           photos: [],
+          liveSelfie: false,
           retakePhotos: [],
           clientMessage: null,
           submittedAt: null,
@@ -200,6 +263,7 @@ export function createStubIdentityClient({ delayMs = 400, seeded = false, now = 
       }
       if (file.size <= 0 || file.size > 10 * 1024 * 1024) throw new IdentityError("photo_not_accepted");
       if (!held.photos.includes(kind)) held.photos.push(kind);
+      if (kind === "selfie") held.liveSelfie = false;
       if (held.status === "awaiting_client") held.retaken.add(kind);
       return view(held);
     },
@@ -229,6 +293,48 @@ export function createStubIdentityClient({ delayMs = 400, seeded = false, now = 
       held.awaitingDecision = true;
       held.readsBeforeDecision = 1;
       return view(held);
+    },
+
+    async getLiveness() {
+      await pause();
+      const latest = attempts[attempts.length - 1] ?? null;
+      if (latest) advance(latest);
+      let problem: string | null = null;
+      if (!liveness) problem = null;
+      else if (!check) problem = "no_check";
+      else if (!selfieEditable(check)) problem = "selfie_not_editable";
+      else if (attempts.length >= DEMO_LIVENESS_ATTEMPTS) problem = "too_many_attempts";
+      return {
+        available: liveness,
+        problem,
+        attemptsLeft: Math.max(0, DEMO_LIVENESS_ATTEMPTS - attempts.length),
+        latest: latest ? attemptView(latest) : null,
+      };
+    },
+
+    async startLiveness() {
+      await pause();
+      if (!liveness) throw new IdentityError("unavailable");
+      const held = editable();
+      if (!selfieEditable(held)) throw new IdentityError("cannot_change");
+      if (attempts.length >= DEMO_LIVENESS_ATTEMPTS) throw new IdentityError("liveness_used_up");
+      for (const waiting of attempts) {
+        if (waiting.status === "starting" || waiting.status === "open") {
+          waiting.status = "expired";
+          waiting.url = null;
+        }
+      }
+      const attempt: StoredAttempt = {
+        id: `demo-liveness-${nextId++}`,
+        status: "starting",
+        url: null,
+        failureCode: null,
+        photoUsed: false,
+        expiresAt: new Date(now() + 30 * 60 * 1000).toISOString(),
+        readsLeft: READS_UNTIL_ANSWER,
+      };
+      attempts.push(attempt);
+      return attemptView(attempt);
     },
   };
 }

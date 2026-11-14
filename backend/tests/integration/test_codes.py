@@ -329,6 +329,8 @@ async def test_a_code_finishes_sign_in_and_restricts_the_account(api: Api) -> No
         "restricted_until": "2026-01-02T00:00:00Z",
         "email": None,
         "email_verified": False,
+        "pin_set": False,
+        "locked": False,
     }
     assert COOKIES["client"] in verified.headers["set-cookie"]
 

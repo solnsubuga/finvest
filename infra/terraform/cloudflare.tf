@@ -50,7 +50,7 @@ resource "cloudflare_origin_ca_certificate" "this" {
 resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   count = length(var.admin_access_emails) > 0 ? 1 : 0
 
-  account_id = var.cloudflare_account_id
+  account_id = data.cloudflare_zone.this.account.id
   name       = "${local.name} staff"
   decision   = "allow"
 

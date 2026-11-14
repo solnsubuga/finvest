@@ -22,6 +22,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "complaints.manage", label: "Log and work complaints", under: "complaints.view" },
   { permission: "complaints.close", label: "Close complaints", under: "complaints.view" },
   { permission: "clients.lock", label: "Lock client accounts", under: "clients.view" },
+  { permission: "clients.close", label: "Close client accounts", under: "clients.view" },
   { permission: "client_phones.change", label: "Change a client's mobile number", under: "clients.view" },
   { permission: "email_suppressions.lift", label: "Lift email suppressions", under: "clients.view" },
   { permission: "bank_transfers.change", label: "Match bank transfers", under: "reconciliation.view" },

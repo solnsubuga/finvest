@@ -45,6 +45,7 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.outcomes import StatusReading
 from app.modules.payments.domain.provider import ProviderNotice
+from app.modules.screening.events import MONITOR_DEPOSIT
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -551,8 +552,8 @@ async def apply_move(
 async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
     """Tell other modules a deposit was confirmed at `now`, in the caller's transaction.
 
-    Investments and goals start from this event, and the client's receipt is asked for. It is
-    published once per deposit.
+    Investments and goals start from this event, the client's receipt is asked for, and
+    screening's transaction monitoring reads it. It is published once per deposit.
     """
     await publish(
         session,
@@ -565,7 +566,7 @@ async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: dateti
             # The business day of the ledger entry. An investment earns from this day.
             "confirmed_on": business_date(now).isoformat(),
         },
-        consumers=[START_ON_DEPOSIT, RECEIPT_ON_DEPOSIT],
+        consumers=[START_ON_DEPOSIT, RECEIPT_ON_DEPOSIT, MONITOR_DEPOSIT],
         now=now,
     )
 
@@ -679,3 +680,14 @@ def _deposit(row: Row[Any]) -> Deposit:
         sent_at=row.sent_at,
         settled_at=row.settled_at,
     )
+
+
+_OPEN_FOR_CLIENT = text(
+    "SELECT count(*) FROM payment_deposits WHERE client_id = :client_id "
+    "AND status NOT IN ('confirmed', 'failed')"
+)
+
+
+async def open_deposit_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's deposits have not ended, including any whose outcome is unclear."""
+    return int(await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id}) or 0)

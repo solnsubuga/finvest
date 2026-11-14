@@ -21,7 +21,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import MONTHLY_KIND
-from app.modules.goals.jobs import REFRESH_GROUPS_KIND
+from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
 from app.modules.investments.jobs import ACCRUE_KIND, CANCEL_UNPAID_KIND, MATURE_KIND
 from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.notifications.keyed_backfill import KEY_HASHES
@@ -30,6 +30,7 @@ from app.modules.payments import service as payments
 from app.modules.payments.settings import PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed
 from app.modules.payouts import payouts
+from app.modules.screening.service import RESCREEN_KIND
 from app.shared.business_day import KAMPALA
 from app.shared.clock import SystemClock
 
@@ -102,12 +103,28 @@ def schedules() -> list[Schedule]:
             kind=REFRESH_GROUPS_KIND,
             max_age=timedelta(days=1),
         ),
+        # Goal savings due in the next three days, and goals reached overnight, in the morning
+        # so no text arrives at night. A missed day is caught up the next morning.
+        Schedule(
+            name="goals.send_reminders",
+            trigger=CronTrigger(hour=8, minute=0, timezone=KAMPALA),
+            kind=SEND_REMINDERS_KIND,
+            max_age=timedelta(hours=10),
+        ),
         # Last month's statement for every client. It runs every morning and asks for a month
         # only once the ledger is closed through its last day; each client is asked once.
         Schedule(
             name="documents.monthly_statements",
             trigger=CronTrigger(hour=6, minute=0, timezone=KAMPALA),
             kind=MONTHLY_KIND,
+            max_age=timedelta(hours=20),
+        ),
+        # Screens again every approved client whose last screen is a month old, and gives up on
+        # screens the provider never answered. One run covers any day it missed.
+        Schedule(
+            name="screening.rescreen_due",
+            trigger=CronTrigger(hour=2, minute=15, timezone=KAMPALA),
+            kind=RESCREEN_KIND,
             max_age=timedelta(hours=20),
         ),
     ]
@@ -132,6 +149,16 @@ def schedules() -> list[Schedule]:
                 max_age=timedelta(minutes=5),
             )
         )
+    # Tries again for payouts waiting for screening, so one whose screen could not run is
+    # screened afresh once that screen is a day old. Calls no provider itself.
+    runs.append(
+        Schedule(
+            name="payouts.retry_screening",
+            trigger=CronTrigger(minute=23, timezone=UTC),
+            kind=payouts.RETRY_SCREENING_KIND,
+            max_age=timedelta(hours=1),
+        )
+    )
     # Clears the content of messages that were never sent, and old addresses and numbers.
     runs.append(
         Schedule(

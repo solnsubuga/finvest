@@ -754,3 +754,13 @@ def _goal(row: Row[Any]) -> Goal:
         updated_at=row.updated_at,
         closed_at=row.closed_at,
     )
+
+
+_OPEN_FOR_CLIENT = text(
+    "SELECT count(*) FROM goals WHERE client_id = :client_id AND status = 'active'"
+)
+
+
+async def open_goal_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's goals are still open."""
+    return int(await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id}) or 0)

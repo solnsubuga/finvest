@@ -171,24 +171,6 @@
         "title": "AmountOut",
         "type": "object"
       },
-      "AmountView": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "currency",
-          "minor"
-        ],
-        "title": "AmountView",
-        "type": "object"
-      },
       "AnnouncementList": {
         "additionalProperties": false,
         "properties": {
@@ -313,6 +295,77 @@
         "title": "AnnouncementView",
         "type": "object"
       },
+      "AnswersBody": {
+        "additionalProperties": false,
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "maxProperties": 6,
+            "title": "Answers",
+            "type": "object"
+          }
+        },
+        "required": [
+          "answers"
+        ],
+        "title": "AnswersBody",
+        "type": "object"
+      },
+      "AnswersView": {
+        "additionalProperties": false,
+        "properties": {
+          "answered_at": {
+            "format": "date-time",
+            "title": "Answered At",
+            "type": "string"
+          },
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Answers",
+            "type": "object"
+          },
+          "due_again_at": {
+            "format": "date-time",
+            "title": "Due Again At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "longest_term_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Longest Term Days"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/Profile"
+          }
+        },
+        "required": [
+          "id",
+          "answers",
+          "profile",
+          "longest_term_days",
+          "answered_at",
+          "due_again_at"
+        ],
+        "title": "AnswersView",
+        "type": "object"
+      },
       "Approval": {
         "additionalProperties": false,
         "properties": {
@@ -365,7 +418,9 @@
               "payout_resolution",
               "tax_remittance",
               "deposit_reassignment",
-              "payout_release"
+              "payout_release",
+              "account_closure",
+              "compliance_case"
             ],
             "title": "Kind",
             "type": "string"
@@ -430,6 +485,45 @@
           "items"
         ],
         "title": "ApprovalsOut",
+        "type": "object"
+      },
+      "ApproveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "ApproveIn",
+        "type": "object"
+      },
+      "AskBody": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "AskBody",
         "type": "object"
       },
       "AskForPhotosBody": {
@@ -520,7 +614,8 @@
         "enum": [
           "document_genuine",
           "selfie_match",
-          "screening"
+          "screening",
+          "liveness"
         ],
         "title": "AutomaticCheck",
         "type": "string"
@@ -1110,6 +1205,18 @@
         "title": "BillsOut",
         "type": "object"
       },
+      "Blocker": {
+        "enum": [
+          "investments_running",
+          "money_owed",
+          "deposits_in_progress",
+          "payouts_in_progress",
+          "goals_open",
+          "plans_live"
+        ],
+        "title": "Blocker",
+        "type": "string"
+      },
       "Body_add_photo_client_claim_check_photos__kind__put": {
         "properties": {
           "photo": {
@@ -1262,6 +1369,46 @@
         "title": "Body_upload_proof_client_payout_destinations__destination_id__proof_post",
         "type": "object"
       },
+      "BookLineOut": {
+        "additionalProperties": false,
+        "properties": {
+          "closing": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "credits": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "debits": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "opening": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "kind",
+          "opening",
+          "debits",
+          "credits",
+          "closing"
+        ],
+        "title": "BookLineOut",
+        "type": "object"
+      },
       "BufferLevel": {
         "enum": [
           "on_target",
@@ -1368,6 +1515,330 @@
           "movements"
         ],
         "title": "BufferScreenOut",
+        "type": "object"
+      },
+      "CaseDetailOut": {
+        "additionalProperties": false,
+        "properties": {
+          "can_decide": {
+            "title": "Can Decide",
+            "type": "boolean"
+          },
+          "can_propose": {
+            "title": "Can Propose",
+            "type": "boolean"
+          },
+          "case": {
+            "$ref": "#/components/schemas/CaseOut"
+          },
+          "detail": {
+            "additionalProperties": true,
+            "title": "Detail",
+            "type": "object"
+          },
+          "matches": {
+            "items": {
+              "$ref": "#/components/schemas/MatchOut"
+            },
+            "title": "Matches",
+            "type": "array"
+          },
+          "outcomes": {
+            "items": {
+              "enum": [
+                "not_a_match",
+                "pep_accepted",
+                "sanctioned",
+                "no_concern",
+                "report_to_fia"
+              ],
+              "type": "string"
+            },
+            "title": "Outcomes",
+            "type": "array"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/CaseProposalOut"
+            },
+            "title": "Proposals",
+            "type": "array"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "standing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StandingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "case",
+          "run",
+          "matches",
+          "detail",
+          "proposals",
+          "standing",
+          "outcomes",
+          "can_propose",
+          "can_decide",
+          "yours"
+        ],
+        "title": "CaseDetailOut",
+        "type": "object"
+      },
+      "CaseOut": {
+        "additionalProperties": false,
+        "properties": {
+          "client": {
+            "$ref": "#/components/schemas/ClientOut"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "opened_at": {
+            "format": "date-time",
+            "title": "Opened At",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_a_match",
+                  "pep_accepted",
+                  "sanctioned",
+                  "no_concern",
+                  "report_to_fia"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "source": {
+            "enum": [
+              "screening",
+              "monitoring"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "waiting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaseProposalOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "client",
+          "source",
+          "code",
+          "opened_at",
+          "status",
+          "outcome",
+          "closed_at",
+          "waiting"
+        ],
+        "title": "CaseOut",
+        "type": "object"
+      },
+      "CaseProposalOut": {
+        "additionalProperties": false,
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "not_a_match",
+              "pep_accepted",
+              "sanctioned",
+              "no_concern",
+              "report_to_fia"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "proposed_by_name": {
+            "title": "Proposed By Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "sent_back",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "outcome",
+          "reason",
+          "proposed_by",
+          "proposed_by_name",
+          "proposed_at",
+          "status",
+          "decided_by",
+          "decided_by_name",
+          "decided_at",
+          "decision_note"
+        ],
+        "title": "CaseProposalOut",
+        "type": "object"
+      },
+      "CaseProposeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "enum": [
+              "not_a_match",
+              "pep_accepted",
+              "sanctioned",
+              "no_concern",
+              "report_to_fia"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason"
+        ],
+        "title": "CaseProposeIn",
         "type": "object"
       },
       "CategoryChannels": {
@@ -2164,6 +2635,30 @@
         "title": "ClientClaimCheckEnvelope",
         "type": "object"
       },
+      "ClientClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "request": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClosureView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "standing": {
+            "$ref": "#/components/schemas/StandingView"
+          }
+        },
+        "required": [
+          "standing",
+          "request"
+        ],
+        "title": "ClientClosureView",
+        "type": "object"
+      },
       "ClientComplaint": {
         "additionalProperties": false,
         "description": "A complaint as its client sees it. Staff notes and the owner are not shown.",
@@ -2570,7 +3065,21 @@
       },
       "ClientLoginStart": {
         "additionalProperties": false,
+        "description": "The mobile number, or an email address the client has proved, with the password.",
         "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "maxLength": 254,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
           "password": {
             "maxLength": 1024,
             "minLength": 1,
@@ -2578,17 +3087,64 @@
             "type": "string"
           },
           "phone": {
-            "maxLength": 32,
-            "minLength": 1,
-            "title": "Phone",
-            "type": "string"
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           }
         },
         "required": [
-          "phone",
           "password"
         ],
         "title": "ClientLoginStart",
+        "type": "object"
+      },
+      "ClientOut": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "account_number"
+        ],
+        "title": "ClientOut",
         "type": "object"
       },
       "ClientPageView": {
@@ -2695,6 +3251,11 @@
           },
           "kind": {
             "$ref": "#/components/schemas/PhotoKind"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2703,6 +3264,46 @@
           "byte_size"
         ],
         "title": "ClientPhoto",
+        "type": "object"
+      },
+      "ClientScreeningOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/CaseOut"
+            },
+            "title": "Cases",
+            "type": "array"
+          },
+          "client": {
+            "$ref": "#/components/schemas/ClientOut"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunOut"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "standing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StandingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "client",
+          "standing",
+          "runs",
+          "cases"
+        ],
+        "title": "ClientScreeningOut",
         "type": "object"
       },
       "ClientSessionView": {
@@ -2731,9 +3332,19 @@
             "title": "Email Verified",
             "type": "boolean"
           },
+          "locked": {
+            "default": false,
+            "title": "Locked",
+            "type": "boolean"
+          },
           "phone": {
             "title": "Phone",
             "type": "string"
+          },
+          "pin_set": {
+            "default": false,
+            "title": "Pin Set",
+            "type": "boolean"
           },
           "restricted_until": {
             "anyOf": [
@@ -2841,6 +3452,91 @@
           "decided_by"
         ],
         "title": "CloseOut",
+        "type": "object"
+      },
+      "ClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "requested",
+              "prepared",
+              "closed",
+              "declined",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "reason",
+          "requested_at",
+          "decision_note",
+          "decided_at",
+          "cancelled_at"
+        ],
+        "title": "ClosureView",
         "type": "object"
       },
       "CodeAnswer": {
@@ -3544,6 +4240,27 @@
           "positions"
         ],
         "title": "DayOut",
+        "type": "object"
+      },
+      "DaysOut": {
+        "additionalProperties": false,
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "DaysOut",
         "type": "object"
       },
       "DecideAnnouncement": {
@@ -4608,9 +5325,11 @@
               "passkey_failed",
               "second_step_missing",
               "sign_in_again",
+              "app_locked",
               "confirm_it_is_you",
               "expired",
               "phone_taken",
+              "email_taken",
               "leaked_password",
               "forbidden",
               "conflict",
@@ -4877,6 +5596,64 @@
         "title": "ExceptionOut",
         "type": "object"
       },
+      "ExportOut": {
+        "additionalProperties": false,
+        "properties": {
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "debit_total": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "exported_at": {
+            "format": "date-time",
+            "title": "Exported At",
+            "type": "string"
+          },
+          "exported_by": {
+            "title": "Exported By",
+            "type": "string"
+          },
+          "exported_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exported By Name"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "lines": {
+            "title": "Lines",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "date_from",
+          "date_to",
+          "lines",
+          "debit_total",
+          "exported_by",
+          "exported_by_name",
+          "exported_at"
+        ],
+        "title": "ExportOut",
+        "type": "object"
+      },
       "Facets": {
         "additionalProperties": false,
         "properties": {
@@ -5021,6 +5798,93 @@
           "custodian_reference"
         ],
         "title": "FillOut",
+        "type": "object"
+      },
+      "FinanceScreenOut": {
+        "additionalProperties": false,
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/BookLineOut"
+            },
+            "title": "Accounts",
+            "type": "array"
+          },
+          "closed_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Through"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "date_from": {
+            "format": "date",
+            "title": "Date From",
+            "type": "string"
+          },
+          "date_to": {
+            "format": "date",
+            "title": "Date To",
+            "type": "string"
+          },
+          "exports": {
+            "items": {
+              "$ref": "#/components/schemas/ExportOut"
+            },
+            "title": "Exports",
+            "type": "array"
+          },
+          "income": {
+            "$ref": "#/components/schemas/IncomeOut"
+          },
+          "month": {
+            "title": "Month",
+            "type": "string"
+          },
+          "next_export": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DaysOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sent_through": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent Through"
+          }
+        },
+        "required": [
+          "currency",
+          "month",
+          "date_from",
+          "date_to",
+          "accounts",
+          "income",
+          "closed_through",
+          "sent_through",
+          "next_export",
+          "exports"
+        ],
+        "title": "FinanceScreenOut",
         "type": "object"
       },
       "Frequency": {
@@ -5371,6 +6235,29 @@
         "title": "Health",
         "type": "object"
       },
+      "HeldAmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "enum": [
+              "UGX",
+              "USD"
+            ],
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "HeldAmountOut",
+        "type": "object"
+      },
       "HeldPayoutOut": {
         "additionalProperties": false,
         "description": "A payout waiting for a member of staff, because it is above the review threshold.",
@@ -5623,6 +6510,66 @@
           "unread"
         ],
         "title": "InboxRow",
+        "type": "object"
+      },
+      "IncomeLineOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "amount"
+        ],
+        "title": "IncomeLineOut",
+        "type": "object"
+      },
+      "IncomeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_total": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "costs": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeLineOut"
+            },
+            "title": "Costs",
+            "type": "array"
+          },
+          "income": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeLineOut"
+            },
+            "title": "Income",
+            "type": "array"
+          },
+          "income_total": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "net": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "income",
+          "costs",
+          "income_total",
+          "cost_total",
+          "net"
+        ],
+        "title": "IncomeOut",
         "type": "object"
       },
       "InsightsView": {
@@ -6201,7 +7148,8 @@
               "statement",
               "security",
               "conversation",
-              "complaint"
+              "complaint",
+              "goal"
             ],
             "title": "Kind",
             "type": "string"
@@ -6213,6 +7161,118 @@
         ],
         "title": "LinkView",
         "type": "object"
+      },
+      "LivenessAttempt": {
+        "additionalProperties": false,
+        "description": "One liveness attempt. Open the `url` page while `status` is `open`.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "photo_used": {
+            "title": "Photo Used",
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/LivenessStatus"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "url",
+          "failure_code",
+          "photo_used",
+          "expires_at"
+        ],
+        "title": "LivenessAttempt",
+        "type": "object"
+      },
+      "LivenessState": {
+        "additionalProperties": false,
+        "description": "Whether the selfie step can use a liveness check, and the latest attempt.",
+        "properties": {
+          "attempts_left": {
+            "title": "Attempts Left",
+            "type": "integer"
+          },
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LivenessAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "problem": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problem"
+          }
+        },
+        "required": [
+          "available",
+          "problem",
+          "attempts_left",
+          "latest"
+        ],
+        "title": "LivenessState",
+        "type": "object"
+      },
+      "LivenessStatus": {
+        "enum": [
+          "starting",
+          "open",
+          "passed",
+          "failed",
+          "not_started",
+          "expired"
+        ],
+        "title": "LivenessStatus",
+        "type": "string"
       },
       "LockView": {
         "additionalProperties": false,
@@ -6694,6 +7754,54 @@
           }
         },
         "title": "MarkRead",
+        "type": "object"
+      },
+      "MatchOut": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "enum": [
+              "sanctions",
+              "pep",
+              "adverse_media",
+              "other"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "entity_id": {
+            "title": "Entity Id",
+            "type": "string"
+          },
+          "known": {
+            "title": "Known",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "strength": {
+            "title": "Strength",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entity_id",
+          "name",
+          "category",
+          "strength",
+          "sources",
+          "known"
+        ],
+        "title": "MatchOut",
         "type": "object"
       },
       "MaturitiesOut": {
@@ -7476,6 +8584,54 @@
         "title": "NewSaving",
         "type": "object"
       },
+      "NextOfKinBody": {
+        "additionalProperties": false,
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonBody"
+            },
+            "maxItems": 10,
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people"
+        ],
+        "title": "NextOfKinBody",
+        "type": "object"
+      },
+      "NextOfKinView": {
+        "additionalProperties": false,
+        "properties": {
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__kyc__profile_api__PersonView"
+            },
+            "title": "People",
+            "type": "array"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "people",
+          "updated_at"
+        ],
+        "title": "NextOfKinView",
+        "type": "object"
+      },
       "NotCarriedView": {
         "additionalProperties": false,
         "description": "A client the worker could not carry over, and where resolving them stands.",
@@ -7585,6 +8741,22 @@
           "reason"
         ],
         "title": "NotMatchedIn",
+        "type": "object"
+      },
+      "NoteBody": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "NoteBody",
         "type": "object"
       },
       "NoteIn": {
@@ -7706,6 +8878,20 @@
           "next_before"
         ],
         "title": "NotificationPage",
+        "type": "object"
+      },
+      "OptionView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "OptionView",
         "type": "object"
       },
       "OrderKind": {
@@ -8446,7 +9632,7 @@
         "properties": {
           "people": {
             "items": {
-              "$ref": "#/components/schemas/PersonView"
+              "$ref": "#/components/schemas/app__modules__identity__people_api__PersonView"
             },
             "title": "People",
             "type": "array"
@@ -8458,26 +9644,40 @@
         "title": "PeopleList",
         "type": "object"
       },
-      "PersonView": {
+      "PersonBody": {
         "additionalProperties": false,
         "properties": {
-          "id": {
-            "maxLength": 20,
-            "minLength": 20,
-            "pattern": "^[-0-9A-Z_a-z]{20}$",
-            "title": "Id",
+          "full_name": {
+            "maxLength": 150,
+            "title": "Full Name",
             "type": "string"
           },
-          "name": {
-            "title": "Name",
+          "id_number": {
+            "maxLength": 40,
+            "title": "Id Number",
             "type": "string"
+          },
+          "phone": {
+            "maxLength": 32,
+            "title": "Phone",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "share_bps": {
+            "title": "Share Bps",
+            "type": "integer"
           }
         },
         "required": [
-          "id",
-          "name"
+          "full_name",
+          "relationship",
+          "phone",
+          "id_number",
+          "share_bps"
         ],
-        "title": "PersonView",
+        "title": "PersonBody",
         "type": "object"
       },
       "PhoneChangeList": {
@@ -8608,6 +9808,42 @@
           "expires_at"
         ],
         "title": "PhotoLinks",
+        "type": "object"
+      },
+      "PinBody": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "maxLength": 16,
+            "minLength": 1,
+            "title": "Pin",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pin"
+        ],
+        "title": "PinBody",
+        "type": "object"
+      },
+      "PinChecked": {
+        "additionalProperties": false,
+        "description": "`unlocked` when the PIN was right. Otherwise the tries left before this device signs out.",
+        "properties": {
+          "tries_left": {
+            "title": "Tries Left",
+            "type": "integer"
+          },
+          "unlocked": {
+            "title": "Unlocked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "unlocked",
+          "tries_left"
+        ],
+        "title": "PinChecked",
         "type": "object"
       },
       "PlanCountsView": {
@@ -8991,6 +10227,15 @@
           "paused"
         ],
         "title": "ProductStatus",
+        "type": "string"
+      },
+      "Profile": {
+        "enum": [
+          "careful",
+          "balanced",
+          "long_term"
+        ],
+        "title": "Profile",
         "type": "string"
       },
       "ProgressView": {
@@ -9598,6 +10843,28 @@
         "title": "PushDeviceToken",
         "type": "object"
       },
+      "QuestionView": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/OptionView"
+            },
+            "title": "Options",
+            "type": "array"
+          }
+        },
+        "required": [
+          "code",
+          "options"
+        ],
+        "title": "QuestionView",
+        "type": "object"
+      },
       "Queue": {
         "additionalProperties": false,
         "properties": {
@@ -10147,6 +11414,129 @@
         "title": "ReceiptView",
         "type": "object"
       },
+      "RecoveryAsk": {
+        "additionalProperties": false,
+        "description": "The number on the account, a number to call now, and what happened. No free text.",
+        "properties": {
+          "contact_phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Contact Phone",
+            "type": "string"
+          },
+          "phone": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Phone",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "lost_phone",
+              "new_number",
+              "no_codes",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phone",
+          "contact_phone",
+          "reason"
+        ],
+        "title": "RecoveryAsk",
+        "type": "object"
+      },
+      "RecoveryClose": {
+        "additionalProperties": false,
+        "properties": {
+          "outcome": {
+            "enum": [
+              "number_changed",
+              "helped",
+              "not_the_client"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome"
+        ],
+        "title": "RecoveryClose",
+        "type": "object"
+      },
+      "RecoveryList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecoveryView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecoveryList",
+        "type": "object"
+      },
+      "RecoveryView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_phone": {
+            "title": "Account Phone",
+            "type": "string"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "contact_phone": {
+            "title": "Contact Phone",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "lost_phone",
+              "new_number",
+              "no_codes",
+              "other"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "client_id",
+          "account_phone",
+          "contact_phone",
+          "reason",
+          "created_at"
+        ],
+        "title": "RecoveryView",
+        "type": "object"
+      },
       "Refusal": {
         "additionalProperties": false,
         "properties": {
@@ -10239,6 +11629,19 @@
         ],
         "title": "Rejection",
         "type": "object"
+      },
+      "Relationship": {
+        "enum": [
+          "spouse",
+          "child",
+          "parent",
+          "sibling",
+          "other_relative",
+          "friend",
+          "other"
+        ],
+        "title": "Relationship",
+        "type": "string"
       },
       "ReleaseOut": {
         "additionalProperties": false,
@@ -11221,6 +12624,39 @@
         "title": "ReviewedPayoutOut",
         "type": "object"
       },
+      "RiskProfileView": {
+        "additionalProperties": false,
+        "properties": {
+          "due": {
+            "title": "Due",
+            "type": "boolean"
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswersView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionView"
+            },
+            "title": "Questions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "questions",
+          "latest",
+          "due"
+        ],
+        "title": "RiskProfileView",
+        "type": "object"
+      },
       "RoleView": {
         "additionalProperties": false,
         "properties": {
@@ -11239,6 +12675,7 @@
                 "complaints.close",
                 "clients.view",
                 "clients.lock",
+                "clients.close",
                 "money_movement.view",
                 "reconciliation.view",
                 "reconciliation.change",
@@ -11253,6 +12690,7 @@
                 "rates.view",
                 "rates.change",
                 "compliance.view",
+                "compliance_cases.change",
                 "team.view",
                 "team.change",
                 "reports.view",
@@ -11462,6 +12900,141 @@
           "allowed"
         ],
         "title": "RulesProposalOut",
+        "type": "object"
+      },
+      "RunOut": {
+        "additionalProperties": false,
+        "properties": {
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "match_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Count"
+          },
+          "new_match_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Match Count"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "provider_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Reference"
+          },
+          "reason": {
+            "enum": [
+              "onboarding",
+              "rescreen",
+              "payout",
+              "staff"
+            ],
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "clear",
+              "possible_match",
+              "unavailable",
+              "not_run",
+              "no_subject"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "requested_by",
+          "requested_at",
+          "status",
+          "finished_at",
+          "provider",
+          "provider_reference",
+          "failure_code",
+          "match_count",
+          "new_match_count"
+        ],
+        "title": "RunOut",
         "type": "object"
       },
       "RunStatus": {
@@ -11760,6 +13333,22 @@
           "note"
         ],
         "title": "SendBack",
+        "type": "object"
+      },
+      "SendBackIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "SendBackIn",
         "type": "object"
       },
       "SendLoginCode": {
@@ -12699,6 +14288,238 @@
           "decided_at"
         ],
         "title": "StaffClaimCheck",
+        "type": "object"
+      },
+      "StaffClosureList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StaffClosureView"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "StaffClosureList",
+        "type": "object"
+      },
+      "StaffClosureView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "can_approve": {
+            "title": "Can Approve",
+            "type": "boolean"
+          },
+          "can_decline": {
+            "title": "Can Decline",
+            "type": "boolean"
+          },
+          "can_prepare": {
+            "title": "Can Prepare",
+            "type": "boolean"
+          },
+          "cancelled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancelled At"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "prepared_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared At"
+          },
+          "prepared_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared By"
+          },
+          "prepared_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared By Name"
+          },
+          "prepared_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared Note"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "standing": {
+            "$ref": "#/components/schemas/StandingView"
+          },
+          "status": {
+            "enum": [
+              "requested",
+              "prepared",
+              "closed",
+              "declined",
+              "cancelled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "verified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Name"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "reason",
+          "requested_at",
+          "decision_note",
+          "decided_at",
+          "cancelled_at",
+          "client_id",
+          "verified_name",
+          "account_number",
+          "prepared_by",
+          "prepared_by_name",
+          "prepared_at",
+          "prepared_note",
+          "decided_by",
+          "decided_by_name",
+          "standing",
+          "can_prepare",
+          "can_approve",
+          "can_decline"
+        ],
+        "title": "StaffClosureView",
         "type": "object"
       },
       "StaffComplaint": {
@@ -13858,6 +15679,39 @@
         "title": "StaffMemberView",
         "type": "object"
       },
+      "StaffPersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id_number_masked": {
+            "title": "Id Number Masked",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "share_bps": {
+            "title": "Share Bps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "full_name",
+          "relationship",
+          "phone",
+          "id_number_masked",
+          "share_bps"
+        ],
+        "title": "StaffPersonView",
+        "type": "object"
+      },
       "StaffPhoto": {
         "additionalProperties": false,
         "properties": {
@@ -13870,6 +15724,11 @@
           },
           "kind": {
             "$ref": "#/components/schemas/PhotoKind"
+          },
+          "live": {
+            "default": false,
+            "title": "Live",
+            "type": "boolean"
           }
         },
         "required": [
@@ -13959,6 +15818,51 @@
           "next_rate"
         ],
         "title": "StaffProductOut",
+        "type": "object"
+      },
+      "StaffProfileView": {
+        "additionalProperties": false,
+        "properties": {
+          "next_of_kin": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/StaffPersonView"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Of Kin"
+          },
+          "next_of_kin_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Of Kin Updated At"
+          },
+          "risk": {
+            "items": {
+              "$ref": "#/components/schemas/AnswersView"
+            },
+            "title": "Risk",
+            "type": "array"
+          }
+        },
+        "required": [
+          "next_of_kin",
+          "next_of_kin_updated_at",
+          "risk"
+        ],
+        "title": "StaffProfileView",
         "type": "object"
       },
       "StaffRunList": {
@@ -14226,6 +16130,7 @@
                 "complaints.close",
                 "clients.view",
                 "clients.lock",
+                "clients.close",
                 "money_movement.view",
                 "reconciliation.view",
                 "reconciliation.change",
@@ -14240,6 +16145,7 @@
                 "rates.view",
                 "rates.change",
                 "compliance.view",
+                "compliance_cases.change",
                 "team.view",
                 "team.change",
                 "reports.view",
@@ -14316,6 +16222,111 @@
         ],
         "title": "Standing",
         "type": "string"
+      },
+      "StandingOut": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
+          "outcome": {
+            "enum": [
+              "clear",
+              "possible_match",
+              "confirmed_match",
+              "unavailable",
+              "pending",
+              "not_run"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "pep": {
+            "title": "Pep",
+            "type": "boolean"
+          },
+          "screened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screened At"
+          }
+        },
+        "required": [
+          "outcome",
+          "screened_at",
+          "case_id",
+          "pep"
+        ],
+        "title": "StandingOut",
+        "type": "object"
+      },
+      "StandingView": {
+        "additionalProperties": false,
+        "properties": {
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/Blocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "live_plans": {
+            "title": "Live Plans",
+            "type": "integer"
+          },
+          "open_deposits": {
+            "title": "Open Deposits",
+            "type": "integer"
+          },
+          "open_goals": {
+            "title": "Open Goals",
+            "type": "integer"
+          },
+          "open_payouts": {
+            "title": "Open Payouts",
+            "type": "integer"
+          },
+          "owed": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__closures__api__AmountView"
+            },
+            "title": "Owed",
+            "type": "array"
+          },
+          "running_investments": {
+            "title": "Running Investments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "running_investments",
+          "owed",
+          "open_deposits",
+          "open_payouts",
+          "open_goals",
+          "live_plans",
+          "blockers"
+        ],
+        "title": "StandingView",
+        "type": "object"
       },
       "StatementLineOut": {
         "additionalProperties": false,
@@ -14484,6 +16495,83 @@
           "resolution"
         ],
         "title": "StrandedPayoutOut",
+        "type": "object"
+      },
+      "SummaryOut": {
+        "additionalProperties": false,
+        "properties": {
+          "last_screened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Screened At"
+          },
+          "not_run_last_30_days": {
+            "title": "Not Run Last 30 Days",
+            "type": "integer"
+          },
+          "open_cases": {
+            "title": "Open Cases",
+            "type": "integer"
+          },
+          "open_monitoring_cases": {
+            "title": "Open Monitoring Cases",
+            "type": "integer"
+          },
+          "open_screening_cases": {
+            "title": "Open Screening Cases",
+            "type": "integer"
+          },
+          "payouts_waiting": {
+            "title": "Payouts Waiting",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "screened_last_30_days": {
+            "title": "Screened Last 30 Days",
+            "type": "integer"
+          },
+          "screening_on": {
+            "title": "Screening On",
+            "type": "boolean"
+          },
+          "unavailable_last_30_days": {
+            "title": "Unavailable Last 30 Days",
+            "type": "integer"
+          },
+          "waiting_for_second_person": {
+            "title": "Waiting For Second Person",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "screening_on",
+          "provider",
+          "open_cases",
+          "open_screening_cases",
+          "open_monitoring_cases",
+          "waiting_for_second_person",
+          "screened_last_30_days",
+          "unavailable_last_30_days",
+          "not_run_last_30_days",
+          "pending",
+          "last_screened_at",
+          "payouts_waiting"
+        ],
+        "title": "SummaryOut",
         "type": "object"
       },
       "SuppressionList": {
@@ -14943,14 +17031,14 @@
           },
           "interest_before_tax": {
             "items": {
-              "$ref": "#/components/schemas/AmountView"
+              "$ref": "#/components/schemas/app__modules__migration__api__AmountView"
             },
             "title": "Interest Before Tax",
             "type": "array"
           },
           "invested": {
             "items": {
-              "$ref": "#/components/schemas/AmountView"
+              "$ref": "#/components/schemas/app__modules__migration__api__AmountView"
             },
             "title": "Invested",
             "type": "array"
@@ -15377,6 +17465,58 @@
         "title": "Verdict",
         "type": "string"
       },
+      "WaitingPayoutOut": {
+        "additionalProperties": false,
+        "description": "A payout whose money is reserved and waiting for its client to be screened.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/HeldAmountOut"
+          },
+          "client": {
+            "$ref": "#/components/schemas/ClientOut"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "mobile_money",
+              "bank"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "standing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StandingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "client",
+          "kind",
+          "amount",
+          "created_at",
+          "standing"
+        ],
+        "title": "WaitingPayoutOut",
+        "type": "object"
+      },
       "WalletOut": {
         "additionalProperties": false,
         "description": "Finvest's ioTec wallet now, beside what the ledger says the ioTec pots hold now.\n\n`wallet_balance` and `difference` are null when ioTec is not connected or could not be\nread. A difference is expected while a payment is on its way or a fee is not yet posted.",
@@ -15708,6 +17848,25 @@
         "title": "PlanView",
         "type": "object"
       },
+      "app__modules__closures__api__AmountView": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_minor",
+          "currency"
+        ],
+        "title": "AmountView",
+        "type": "object"
+      },
       "app__modules__console__api__ComplaintSummary": {
         "additionalProperties": false,
         "properties": {
@@ -16012,6 +18171,69 @@
         "title": "PlanView",
         "type": "object"
       },
+      "app__modules__identity__people_api__PersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PersonView",
+        "type": "object"
+      },
+      "app__modules__kyc__profile_api__PersonView": {
+        "additionalProperties": false,
+        "properties": {
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "id_number": {
+            "title": "Id Number",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "relationship": {
+            "$ref": "#/components/schemas/Relationship"
+          },
+          "share_bps": {
+            "title": "Share Bps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "full_name",
+          "relationship",
+          "phone",
+          "id_number",
+          "share_bps"
+        ],
+        "title": "PersonView",
+        "type": "object"
+      },
       "app__modules__migration__api__Amount": {
         "additionalProperties": false,
         "properties": {
@@ -16030,6 +18252,24 @@
           "minor"
         ],
         "title": "Amount",
+        "type": "object"
+      },
+      "app__modules__migration__api__AmountView": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "minor"
+        ],
+        "title": "AmountView",
         "type": "object"
       },
       "app__modules__payments__routes__MatchIn": {
@@ -16404,6 +18644,244 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/client/account-closure": {
+      "get": {
+        "description": "What still stops the account closing, and the latest request to close it.",
+        "operationId": "my_closure_client_account_closure_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "My Closure",
+        "tags": [
+          "account closure"
+        ]
+      },
+      "post": {
+        "description": "Ask to close the account. Needs a sign-in from the last few minutes, and nothing blocking.\n\nA refusal lists what blocks it as `blockers` field problems.",
+        "operationId": "ask_to_close_client_account_closure_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Ask To Close",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/client/account-closure/{request_id}/cancellation": {
+      "post": {
+        "description": "Keep the account open after all, while staff have not decided.",
+        "operationId": "cancel_closure_client_account_closure__request_id__cancellation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Cancel Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
     "/client/authenticator": {
       "delete": {
         "operationId": "client_authenticator_remove_client_authenticator_delete",
@@ -18461,6 +20939,64 @@
         ]
       }
     },
+    "/client/data-export": {
+      "get": {
+        "description": "Everything Finvest holds about the signed-in client, as an attachment.\n\nIt holds the client's ID number and details, so it needs a sign-in from the last few\nminutes. Each download is written to the audit trail.",
+        "operationId": "export_client_data_export_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Download a copy of my data",
+        "tags": [
+          "client data"
+        ]
+      }
+    },
     "/client/documents": {
       "get": {
         "description": "The client's statements and receipts, newest first.",
@@ -18719,6 +21255,16 @@
             },
             "description": "Forbidden"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
           "410": {
             "content": {
               "application/json": {
@@ -18758,7 +21304,7 @@
     },
     "/client/email/verification/confirm": {
       "post": {
-        "description": "Spend the link from the email. It works on any device, without signing in.",
+        "description": "Spend the link from the email. It works on any device, without signing in.\n\n`email_taken` when another account proved the same address first.",
         "operationId": "confirm_email_client_email_verification_confirm_post",
         "requestBody": {
           "content": {
@@ -18793,6 +21339,16 @@
               }
             },
             "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
           },
           "410": {
             "content": {
@@ -20816,6 +23372,168 @@
         ]
       }
     },
+    "/client/identity-check/liveness": {
+      "get": {
+        "description": "Whether the selfie can be taken with a liveness check, and how the latest one stands.\n\nRead it again every few seconds while the latest attempt is `starting` or `open`.",
+        "operationId": "my_liveness_client_identity_check_liveness_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Liveness",
+        "tags": [
+          "identity checks"
+        ]
+      },
+      "post": {
+        "description": "Start a liveness attempt for the selfie. Any attempt still waiting is retired.\n\nThe attempt starts as `starting`. Read `GET /liveness` until it is `open`, then open its\npage. When it passes, the face it captured is the check's selfie.",
+        "operationId": "start_liveness_client_identity_check_liveness_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LivenessAttempt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Start Liveness",
+        "tags": [
+          "identity checks"
+        ]
+      }
+    },
     "/client/identity-check/photos/{kind}": {
       "put": {
         "description": "Send one photo as `multipart/form-data`. It replaces the one of the same kind.",
@@ -22522,7 +25240,7 @@
     },
     "/client/login/start": {
       "post": {
-        "description": "Check the mobile number and password. Never opens a session by itself.",
+        "description": "Check the mobile number or proved email, and the password. Never opens a session.",
         "operationId": "client_login_start_client_login_start_post",
         "requestBody": {
           "content": {
@@ -22589,6 +25307,158 @@
         "summary": "Client Login Start",
         "tags": [
           "client sign-in"
+        ]
+      }
+    },
+    "/client/next-of-kin": {
+      "get": {
+        "description": "The people the signed-in client has named, in their order.",
+        "operationId": "my_next_of_kin_client_next_of_kin_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextOfKinView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Next Of Kin",
+        "tags": [
+          "client profile"
+        ]
+      },
+      "put": {
+        "description": "Replace the whole list. Shares add up to 10,000 basis points, or the list is empty.",
+        "operationId": "save_next_of_kin_client_next_of_kin_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NextOfKinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextOfKinView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Save Next Of Kin",
+        "tags": [
+          "client profile"
         ]
       }
     },
@@ -24074,7 +26944,7 @@
     },
     "/client/payout-destinations/{destination_id}/name-check": {
       "post": {
-        "description": "Ask again for the name the network holds for a mobile money number.\n\nFor a number whose `name_check` is `not_answered`, or `waiting_for_id` once the client's\nID is approved. The answer comes later: the number stays `awaiting_proof` with\n`name_check` `checking` until it does. 409 `name_check_in_progress`,\n`name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or\n`name_check_not_for_this_account`.",
+        "description": "Ask again for the name the network holds for a mobile money number.\n\nFor a number whose `name_check` is `not_answered`, or `waiting_for_id` once the client's\nID is approved. The answer comes later: the number stays `awaiting_proof` with\n`name_check` `checking` until it does. 409 `name_check_in_progress`,\n`name_check_limit_reached`, `client_not_verified`, `destination_not_awaiting_proof` or\n`name_check_not_for_this_account`. Once a name that waited for the ID is being compared,\n`name_check` is `checking`. While no provider reads names, every ask is 409\n`name_check_in_progress`: the number waits and none of its lookups are used up.",
         "operationId": "check_name_again_client_payout_destinations__destination_id__name_check_post",
         "parameters": [
           {
@@ -24511,6 +27381,183 @@
         ]
       }
     },
+    "/client/pin": {
+      "put": {
+        "description": "Set or replace the PIN for this phone. Needs a log in from the last ten minutes.",
+        "operationId": "set_pin_client_pin_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Set Pin",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/pin/unlock": {
+      "post": {
+        "description": "Open a locked app. The fifth wrong PIN in a row signs this device out (401).",
+        "operationId": "unlock_client_pin_unlock_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PinBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PinChecked"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "423": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Locked"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Unlock",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
     "/client/products": {
       "get": {
         "operationId": "client_products_client_products_get",
@@ -24789,6 +27836,228 @@
         ]
       }
     },
+    "/client/recovery-requests": {
+      "post": {
+        "description": "Ask Finvest to call back. The same answer whether or not the number has an account.",
+        "operationId": "ask_for_recovery_client_recovery_requests_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Ask For Recovery",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/risk-profile": {
+      "get": {
+        "description": "The questions, the client's latest answers, and whether they are due again.",
+        "operationId": "my_risk_profile_client_risk_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "My Risk Profile",
+        "tags": [
+          "client profile"
+        ]
+      },
+      "put": {
+        "description": "Answer every question. Earlier answers are kept on the record.",
+        "operationId": "answer_risk_questions_client_risk_profile_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswersBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Answer Risk Questions",
+        "tags": [
+          "client profile"
+        ]
+      }
+    },
     "/client/second-steps": {
       "get": {
         "operationId": "client_second_steps_client_second_steps_get",
@@ -24872,6 +28141,7 @@
     },
     "/client/session": {
       "get": {
+        "description": "The signed-in client. A locked session answers too, so the app knows to ask for the PIN.",
         "operationId": "client_session_client_session_get",
         "responses": {
           "200": {
@@ -28376,6 +31646,537 @@
         ]
       }
     },
+    "/staff/clients/{client_id}/profile": {
+      "get": {
+        "description": "A client's next of kin, with ID numbers masked, and every set of risk answers.\n\nNext of kin are None when the identity data key is not configured.",
+        "operationId": "client_profile_staff_clients__client_id__profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffProfileView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Profile",
+        "tags": [
+          "client profile"
+        ]
+      }
+    },
+    "/staff/closures": {
+      "get": {
+        "description": "Every request to close an account that waits for staff, oldest first.",
+        "operationId": "open_closures_staff_closures_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Open Closures",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}": {
+      "get": {
+        "operationId": "closure_staff_closures__request_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}/approval": {
+      "post": {
+        "description": "Close the account of someone else's prepared request. It cannot be undone.",
+        "operationId": "approve_closure_staff_closures__request_id__approval_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}/decline": {
+      "post": {
+        "description": "Turn the request down. The client sees the note and the account stays open.",
+        "operationId": "decline_closure_staff_closures__request_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
+    "/staff/closures/{request_id}/preparation": {
+      "post": {
+        "description": "Check the request and pass it to a second member of staff to close.",
+        "operationId": "prepare_closure_staff_closures__request_id__preparation_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffClosureView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Prepare Closure",
+        "tags": [
+          "account closure"
+        ]
+      }
+    },
     "/staff/complaints": {
       "get": {
         "description": "The register with its figures. Open complaints come by deadline, the nearest first.",
@@ -29117,6 +32918,930 @@
         "summary": "Move Complaint",
         "tags": [
           "staff support"
+        ]
+      }
+    },
+    "/staff/compliance/cases": {
+      "get": {
+        "description": "Cases, at most 200: open ones oldest first, closed ones newest first.",
+        "operationId": "list_cases_staff_compliance_cases_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "screening",
+                    "monitoring"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CaseOut"
+                  },
+                  "title": "Response List Cases Staff Compliance Cases Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Cases",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/cases/{case_id}": {
+      "get": {
+        "description": "One case: what raised it, what the screen found, and every proposal to close it.",
+        "operationId": "get_case_staff_compliance_cases__case_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Case",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/cases/{case_id}/proposals": {
+      "post": {
+        "description": "Propose how to close an open case, with a reason. A different person decides.\n\n`409` with `proposal_waiting` if a proposal is already waiting, or `case_closed`. `422`\nwith `outcome_does_not_fit_case` for a monitoring outcome on a screening case or the\nother way round.",
+        "operationId": "propose_staff_compliance_cases__case_id__proposals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Case Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CaseProposeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Propose",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/clients/{client_id}": {
+      "get": {
+        "description": "A client's screening: where they stand, their screens newest first, and their cases.",
+        "operationId": "client_screening_staff_compliance_clients__client_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientScreeningOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Screening",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/clients/{client_id}/screenings": {
+      "post": {
+        "description": "Screen the client again now, for example after their name changed. One person's\nstep: it only reads lists. The same `Idempotency-Key` asks once.",
+        "operationId": "screen_again_staff_compliance_clients__client_id__screenings_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "client_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Client Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Screen Again",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/payouts": {
+      "get": {
+        "description": "Payouts waiting for their client to be screened, oldest first, at most 200. They move\non by themselves once the client is screened clear; staff may decline one from the\nreview queue's decline route.",
+        "operationId": "waiting_payouts_staff_compliance_payouts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/WaitingPayoutOut"
+                  },
+                  "title": "Response Waiting Payouts Staff Compliance Payouts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Waiting Payouts",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/proposals/{proposal_id}/approve": {
+      "post": {
+        "description": "Approve someone else's proposal: the case closes with its outcome. The proposer gets\n`403`. A `sanctioned` outcome holds the client's payouts from now on.",
+        "operationId": "approve_staff_compliance_proposals__proposal_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ApproveIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/proposals/{proposal_id}/send-back": {
+      "post": {
+        "description": "Decline someone else's proposal, with a note. The case stays open. The proposer gets\n`403`.",
+        "operationId": "send_back_staff_compliance_proposals__proposal_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBackIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Send Back",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/proposals/{proposal_id}/withdraw": {
+      "post": {
+        "description": "Take back your own proposal before anyone decides it. Anyone else gets `403`.",
+        "operationId": "withdraw_staff_compliance_proposals__proposal_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaseDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw",
+        "tags": [
+          "staff compliance"
+        ]
+      }
+    },
+    "/staff/compliance/summary": {
+      "get": {
+        "description": "What is waiting, and whether screening is running.",
+        "operationId": "compliance_summary_staff_compliance_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Compliance Summary",
+        "tags": [
+          "staff compliance"
         ]
       }
     },
@@ -31667,6 +36392,183 @@
         "summary": "Staff Enrolment Passkey Verify",
         "tags": [
           "staff sign-in"
+        ]
+      }
+    },
+    "/staff/finance": {
+      "get": {
+        "operationId": "get_finance_staff_finance_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          },
+          {
+            "in": "query",
+            "name": "month",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9]{4}-[0-9]{2}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FinanceScreenOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "The books by account code for a month, and the journals sent",
+        "tags": [
+          "finance"
+        ]
+      }
+    },
+    "/staff/finance/journal.csv": {
+      "get": {
+        "operationId": "export_journal_staff_finance_journal_csv_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date From",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Date To",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "The daily journal for closed days, by account code, for the accounting system",
+        "tags": [
+          "finance"
         ]
       }
     },
@@ -42198,6 +47100,147 @@
         "summary": "Import Statement",
         "tags": [
           "staff reconciliation"
+        ]
+      }
+    },
+    "/staff/recovery-requests": {
+      "get": {
+        "description": "Requests for a real account that nobody has closed yet, oldest first.",
+        "operationId": "open_recovery_requests_staff_recovery_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecoveryList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Open Recovery Requests",
+        "tags": [
+          "client numbers"
+        ]
+      }
+    },
+    "/staff/recovery-requests/{request_id}/close": {
+      "post": {
+        "description": "Close a request once the person was called back. The number changes separately.",
+        "operationId": "close_recovery_request_staff_recovery_requests__request_id__close_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Request Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecoveryClose"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Close Recovery Request",
+        "tags": [
+          "client numbers"
         ]
       }
     },

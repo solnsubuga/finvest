@@ -35,7 +35,7 @@ interface CheckJson extends QueueJson {
   document_number_masked: string | null;
   date_of_birth: string | null;
   document_expires_on: string | null;
-  photos: { id: string; kind: PhotoKind }[];
+  photos: { id: string; kind: PhotoKind; live?: boolean }[];
   automatic_checks: AutomaticCheck[];
   retake_photos: PhotoKind[];
   client_message: string | null;
@@ -71,7 +71,11 @@ export function toCheck(json: CheckJson, links: PhotoLinksJson | null): CheckDet
     documentNumberMasked: json.document_number_masked,
     dateOfBirth: json.date_of_birth,
     documentExpiresOn: json.document_expires_on,
-    photos: json.photos.map((photo) => ({ kind: photo.kind, url: urls.get(photo.id) ?? null })),
+    photos: json.photos.map((photo) => ({
+      kind: photo.kind,
+      url: urls.get(photo.id) ?? null,
+      live: photo.live === true,
+    })),
     automaticChecks: json.automatic_checks.map((item) => ({ check: item.check, verdict: item.verdict, score: item.score })),
     retakePhotos: json.retake_photos,
     clientMessage: json.client_message,

@@ -113,6 +113,28 @@ function samples(now: number): ClientPage[] {
       canLock: true,
     },
     {
+      account: account("-NstubClient00000077", "+256782555077", "p.mukasa@example.com", "active", "2026-08-19T09:30:00Z", { lastSignedInAt: ago(30) }),
+      verifiedName: "Peter Mukasa",
+      identityCheck: { id: "-NstubCheck000000077", status: "approved", submittedAt: "2026-08-19T09:50:00Z", decidedAt: "2026-08-19T13:00:00Z", accountNumber: "1004771205" },
+      owed: [],
+      destinations: [],
+      locks: [],
+      conversation: null,
+      complaints: [],
+      canLock: true,
+    },
+    {
+      account: account("-NstubClient00000063", "+256704630063", null, "active", "2026-09-02T12:00:00Z", { lastSignedInAt: ago(3) }),
+      verifiedName: "Ruth Akello",
+      identityCheck: { id: "-NstubCheck000000063", status: "approved", submittedAt: "2026-09-02T12:20:00Z", decidedAt: "2026-09-02T15:10:00Z", accountNumber: "1004630638" },
+      owed: [],
+      destinations: [],
+      locks: [],
+      conversation: null,
+      complaints: [],
+      canLock: true,
+    },
+    {
       account: account("-NstubClient00000099", "+256752000111", null, "unclaimed", "2026-11-01T06:00:00Z", { hasPasskey: false, lastSignedInAt: null }),
       verifiedName: null,
       identityCheck: null,
@@ -140,7 +162,11 @@ export interface StubAccess {
 
 const EVERYTHING: StubAccess = { canLock: true, seesSupport: true, seesComplaints: true };
 
-export function createStubClientsApi(me: Me, now: () => number = Date.now, access: StubAccess = EVERYTHING): ClientsApi {
+export function createStubClientsApi(
+  me: Me,
+  now: () => number = Date.now,
+  access: StubAccess = EVERYTHING,
+): ClientsApi & { closeAccount(id: string): void } {
   const pages = samples(now());
   let next = 10;
   const find = (id: string) => {
@@ -156,6 +182,11 @@ export function createStubClientsApi(me: Me, now: () => number = Date.now, acces
   };
 
   return {
+    /** The closures stub calls this once a closure is approved, as the API closes the account. */
+    closeAccount(id) {
+      const page = pages.find((item) => item.account.id === id);
+      if (page) page.account.status = "closed";
+    },
     async search(query) {
       await wait();
       const text = query.trim();
