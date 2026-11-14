@@ -96,6 +96,9 @@ class BulkOut(Contract):
     decision_reason: str | None
     payout_ids: list[PushId]
     total: MoneyView
+    line: BulkDebitLineOut | None = Field(
+        description="The bulk debit line itself, for the second person to check."
+    )
 
 
 def _line(line: StatementLineView) -> BulkDebitLineOut:
@@ -122,6 +125,7 @@ def _out(view: bulk_settlements.BulkView) -> BulkOut:
         decision_reason=view.decision_reason,
         payout_ids=list(view.payout_ids),
         total=_money(view.total),
+        line=_line(view.line) if view.line is not None else None,
     )
 
 

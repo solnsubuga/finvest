@@ -63,6 +63,9 @@ class BulkView:
     decision_reason: str | None
     payout_ids: tuple[str, ...]
     total: Money
+    # The statement line itself, so the second person sees what the bank took. None only if
+    # the line has left the reconciliation search window.
+    line: StatementLineView | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,6 +407,7 @@ async def _decide(
 async def _view(session: AsyncSession, row: Row[Any]) -> BulkView:
     batch = await bank_payouts.get_batch(session, row.batch_id)
     items = (await session.execute(_PAYOUTS_OF, {"id": row.id})).all()
+    total = Money(sum(int(item.amount_minor) for item in items), batch.currency)
     return BulkView(
         id=row.id,
         batch_id=row.batch_id,
@@ -416,7 +420,8 @@ async def _view(session: AsyncSession, row: Row[Any]) -> BulkView:
         decided_at=row.decided_at,
         decision_reason=row.decision_reason,
         payout_ids=tuple(item.payout_id for item in items),
-        total=Money(sum(int(item.amount_minor) for item in items), batch.currency),
+        total=total,
+        line=await _line(session, batch, row.statement_line_id, total),
     )
 
 
