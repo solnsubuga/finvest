@@ -285,7 +285,15 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         (("FINVEST_PAYOUT_NAME_PROVIDER",), (api, worker)),
         # Sanctions and PEP screening (docs/screening.md). The worker runs the screens; the API reads
         # the provider to decide whether a payout waits for one.
-        (("FINVEST_SCREENING_PROVIDER",), (api, worker)),
+        (
+            (
+                "FINVEST_SCREENING_PROVIDER",
+                "FINVEST_SIGMA360_API_KEY",
+                "FINVEST_SIGMA360_FILTER_SET_ID",
+                "FINVEST_SIGMA360_BASE_URL",
+            ),
+            (api, worker),
+        ),
         # Checks ioTec's collection callbacks, which only the API receives.
         (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
     ):
