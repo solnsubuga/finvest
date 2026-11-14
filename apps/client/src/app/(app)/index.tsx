@@ -140,7 +140,7 @@ export default function Home() {
   // loaded, Home stays quiet about it: Sign in and security reports the error.
   const onlySms = steps.status === "ready" && steps.methods.length === 1;
   const name = session?.displayName ?? null;
-  const firstName = name?.split(/\s+/)[0];
+  const firstName = session?.firstName ?? null;
   const hello = greeting();
 
   const [portfolio, retry] = useFocusLoaded(useCallback(() => investing.getPortfolio("UGX"), [investing]));

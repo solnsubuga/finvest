@@ -7,8 +7,13 @@
 
 export type Session = {
   phone: string;
-  /** Known only after the identity check, so it is absent for new sign-ups. */
+  /**
+   * The name on the client's approved ID, given names first and in proper case ("Amara Nakato").
+   * Null until the identity check is approved.
+   */
   displayName: string | null;
+  /** The first given name, to greet the client by ("Amara"). Null until approved. */
+  firstName: string | null;
   /**
    * True when the second step was a code sent by SMS or email. The server
    * then limits withdrawals to known accounts for 24 hours (docs/rules.md).
