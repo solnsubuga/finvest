@@ -492,17 +492,24 @@ class CodeService:
         )
 
     async def spend_phone_change_code(
-        self, session: AsyncSession, *, client_id: str, code_id: str, code: str
+        self,
+        session: AsyncSession,
+        *,
+        client_id: str,
+        session_id: str,
+        code_id: str,
+        code: str,
     ) -> bool:
         """Count a try and spend the code if it is right, in the caller's transaction.
 
-        The caller must commit even when this returns False, so the try is counted. Raises
-        `expired` when the code is spent, replaced or too old.
+        Only the session that asked for the code can spend it. The caller must commit even when
+        this returns False, so the try is counted. Raises `expired` when the code is spent,
+        replaced or too old.
         """
         row = await self._spend(
             session,
-            "id = :id AND actor_id = :actor AND purpose = 'phone_change'",
-            {"id": code_id, "actor": client_id},
+            "id = :id AND actor_id = :actor AND bound_to = :session AND purpose = 'phone_change'",
+            {"id": code_id, "actor": client_id, "session": session_id},
             code,
         )
         if row is None:
