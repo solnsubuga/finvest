@@ -48,13 +48,14 @@ SENDS_PER_ADDRESS = 20
 SENDS_PER_LOGIN = 3
 # Tries at finishing one claim in fifteen minutes, counting weak passwords as well as codes.
 CLAIM_COMPLETIONS = 10
-Purpose = Literal["signup", "login", "password_reset", "claim", "payout_account"]
+Purpose = Literal["signup", "login", "password_reset", "claim", "payout_account", "phone_change"]
 _TEMPLATES: dict[Purpose, Template] = {
     "signup": "signup_code",
     "login": "sign_in_code",
     "password_reset": "password_reset_code",
     "claim": "claim_code",
     "payout_account": "payout_account_code",
+    "phone_change": "phone_change_code",
 }
 # Codes sent in fifteen minutes for one payout account, and for all of one client's accounts.
 SENDS_PER_PAYOUT_ACCOUNT = 3
@@ -62,6 +63,8 @@ SENDS_PER_PAYOUT_CLIENT = 5
 # Codes for new payout accounts that one client may be sent in a day.
 PAYOUT_CODES_PER_DAY = 10
 PAYOUT_CODE_DAY = timedelta(days=1)
+# Codes to a new mobile number that one client may be sent in a day.
+PHONE_CHANGE_CODES_PER_DAY = 5
 
 logger = structlog.get_logger()
 
@@ -441,6 +444,69 @@ class CodeService:
         )
         if row is None:
             logger.info("code_refused", purpose="payout_account", error_code="invalid_code")
+            return False
+        return True
+
+    # A client moving their account to a new mobile number
+
+    async def send_phone_change_code(
+        self, session: AsyncSession, *, client_id: str, session_id: str, phone: str
+    ) -> str:
+        """Text a code to the new number, in the caller's transaction. Returns its ID.
+
+        The code belongs to the client and the session that asked. A new one for the same
+        session replaces the one before it. Sends are limited for the client and for the number
+        every fifteen minutes, and for the client every day.
+        """
+        now = self.clock.now()
+        today = (
+            await session.execute(
+                text(
+                    "SELECT count(*) AS sent, min(created_at) AS oldest FROM identity_codes "
+                    "WHERE purpose = 'phone_change' AND actor_id = :actor AND created_at > :since"
+                ),
+                {"actor": client_id, "since": now - PAYOUT_CODE_DAY},
+            )
+        ).one()
+        if today.sent >= PHONE_CHANGE_CODES_PER_DAY:
+            wait = today.oldest + PAYOUT_CODE_DAY - now
+            raise ApplicationError(
+                "rate_limited", retry_after_seconds=max(1, int(wait.total_seconds()) + 1)
+            )
+        await reserve_attempts(
+            self.database,
+            self.clock,
+            [
+                (throttle_key("phone-change-client", client_id), SENDS_PER_NUMBER),
+                (throttle_key("phone-change-number", phone), SENDS_PER_NUMBER),
+            ],
+        )
+        return await self._issue(
+            session,
+            "phone_change",
+            "sms",
+            recipient=phone,
+            phone=phone,
+            actor_id=client_id,
+            bound_to=session_id,
+        )
+
+    async def spend_phone_change_code(
+        self, session: AsyncSession, *, client_id: str, code_id: str, code: str
+    ) -> bool:
+        """Count a try and spend the code if it is right, in the caller's transaction.
+
+        The caller must commit even when this returns False, so the try is counted. Raises
+        `expired` when the code is spent, replaced or too old.
+        """
+        row = await self._spend(
+            session,
+            "id = :id AND actor_id = :actor AND purpose = 'phone_change'",
+            {"id": code_id, "actor": client_id},
+            code,
+        )
+        if row is None:
+            logger.info("code_refused", purpose="phone_change", error_code="invalid_code")
             return False
         return True
 

@@ -469,6 +469,16 @@ export const ConfirmCode = z.object({
 });
 export type ConfirmCode = z.infer<typeof ConfirmCode>;
 
+export const ConfirmWithPasskey = z.object({
+  credential: z.record(z.string(), z.unknown()),
+});
+export type ConfirmWithPasskey = z.infer<typeof ConfirmWithPasskey>;
+
+export const Confirmed = z.object({
+  confirmed_until: z.string(),
+});
+export type Confirmed = z.infer<typeof Confirmed>;
+
 export const DestinationOut = z.object({
   account: z.string(),
   bank_code: z.string().nullable(),
@@ -540,6 +550,16 @@ export const DocumentList = z.object({
   items: z.array(DocumentItem),
 });
 export type DocumentList = z.infer<typeof DocumentList>;
+
+export const EmailChange = z.object({
+  email: z.string(),
+});
+export type EmailChange = z.infer<typeof EmailChange>;
+
+export const EmailChanged = z.object({
+  email: z.string(),
+});
+export type EmailChanged = z.infer<typeof EmailChanged>;
 
 export const EmailConfirm = z.object({
   token: z.string(),
@@ -985,6 +1005,12 @@ export const PasskeyOptions = z.object({
 });
 export type PasskeyOptions = z.infer<typeof PasskeyOptions>;
 
+export const PasswordChange = z.object({
+  current_password: z.string(),
+  new_password: z.string(),
+});
+export type PasswordChange = z.infer<typeof PasswordChange>;
+
 export const PayOutRequest = z.object({
   destination_id: z.string(),
   pin_confirmation: z.string().nullable().optional(),
@@ -1037,6 +1063,26 @@ export const PayoutOut = z.object({
   status: z.enum(["in_review", "processing", "paid", "failed", "cancelled"]),
 });
 export type PayoutOut = z.infer<typeof PayoutOut>;
+
+export const PhoneChangeConfirm = z.object({
+  code: z.string(),
+});
+export type PhoneChangeConfirm = z.infer<typeof PhoneChangeConfirm>;
+
+export const PhoneChangeStart = z.object({
+  phone: z.string(),
+});
+export type PhoneChangeStart = z.infer<typeof PhoneChangeStart>;
+
+export const PhoneChangeStarted = z.object({
+  challenge_id: z.string(),
+});
+export type PhoneChangeStarted = z.infer<typeof PhoneChangeStarted>;
+
+export const PhoneChanged = z.object({
+  phone: z.string(),
+});
+export type PhoneChanged = z.infer<typeof PhoneChanged>;
 
 export const PinBody = z.object({
   pin: z.string(),
@@ -1754,6 +1800,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: null,
+  },
+  "PUT /client/email": {
+    method: "PUT",
+    path: "/client/email",
+    params: z.object({}),
+    query: z.object({}),
+    body: EmailChange,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: EmailChanged,
   },
   "POST /client/email/verification": {
     method: "POST",
@@ -2608,6 +2665,17 @@ export const operations = {
     status: 204,
     response: null,
   },
+  "PUT /client/password": {
+    method: "PUT",
+    path: "/client/password",
+    params: z.object({}),
+    query: z.object({}),
+    body: PasswordChange,
+    bodyKind: "json",
+    idempotent: false,
+    status: 204,
+    response: null,
+  },
   "POST /client/password/reset/complete": {
     method: "POST",
     path: "/client/password/reset/complete",
@@ -2793,6 +2861,30 @@ export const operations = {
     status: 201,
     response: PayoutOut,
   },
+  "POST /client/phone-change": {
+    method: "POST",
+    path: "/client/phone-change",
+    params: z.object({}),
+    query: z.object({}),
+    body: PhoneChangeStart,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: PhoneChangeStarted,
+  },
+  "POST /client/phone-change/{challenge_id}/confirmation": {
+    method: "POST",
+    path: "/client/phone-change/{challenge_id}/confirmation",
+    params: z.object({
+    challenge_id: z.string(),
+  }),
+    query: z.object({}),
+    body: PhoneChangeConfirm,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: PhoneChanged,
+  },
   "PUT /client/pin": {
     method: "PUT",
     path: "/client/pin",
@@ -2974,6 +3066,39 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ClientSessionView,
+  },
+  "POST /client/session/confirmation/authenticator": {
+    method: "POST",
+    path: "/client/session/confirmation/authenticator",
+    params: z.object({}),
+    query: z.object({}),
+    body: ConfirmCode,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: Confirmed,
+  },
+  "POST /client/session/confirmation/passkey": {
+    method: "POST",
+    path: "/client/session/confirmation/passkey",
+    params: z.object({}),
+    query: z.object({}),
+    body: ConfirmWithPasskey,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: Confirmed,
+  },
+  "POST /client/session/confirmation/passkey/options": {
+    method: "POST",
+    path: "/client/session/confirmation/passkey/options",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PasskeyOptions,
   },
   "GET /client/sessions": {
     method: "GET",
