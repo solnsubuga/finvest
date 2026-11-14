@@ -32,7 +32,9 @@ export type RejectionReason =
   | "proof_too_old"
   | "proof_wrong_account"
   | "proof_wrong_document"
-  | "suspected_fraud";
+  | "suspected_fraud"
+  // A mobile money number whose network holds no name for it, or has barred it.
+  | "network_name_unavailable";
 
 export type ProofKind = "bank_statement" | "bank_letter" | "bank_card";
 
