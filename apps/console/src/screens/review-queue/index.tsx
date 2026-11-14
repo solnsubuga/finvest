@@ -14,36 +14,50 @@ import { notConnectedReviewQueueApi, type ReviewQueueApi } from "./api.ts";
 import { HeldSection } from "./Held.tsx";
 import { createHttpReviewQueueApi } from "./http.ts";
 import { createStubReviewQueueApi, type StubCase } from "./stub.ts";
+import { createHttpTransfersApi, createStubTransfersApi, notConnectedTransfersApi, type TransfersApi } from "./transfers.ts";
+import { TransfersSection } from "./Transfers.tsx";
 
-type Tab = "accounts" | "held";
+type Tab = "accounts" | "held" | "transfers";
 
-const SUMMARY = "Only what the system could not clear on its own: payout accounts to check, and large withdrawals to release.";
+const SUMMARY =
+  "Only what the system could not clear on its own: payout accounts to check, large withdrawals to release, and large investments sent between clients.";
+
+function tabOf(value: string | null): Tab {
+  return value === "held" || value === "transfers" ? value : "accounts";
+}
 
 export function ReviewQueueScreen({
   api,
+  transfers = notConnectedTransfersApi,
   directory,
   me,
   canDecide,
+  canDecideTransfers = false,
   now = () => new Date(),
   newKey = () => crypto.randomUUID(),
 }: {
   api: ReviewQueueApi;
+  transfers?: TransfersApi;
   directory: Directory;
   me: string;
   /** Whether this person holds `payout_accounts.change`. */
   canDecide: boolean;
+  /** Whether this person holds `investment_transfers.change`. */
+  canDecideTransfers?: boolean;
   now?: () => Date;
   newKey?: () => string;
 }) {
   const [params, setParams] = useSearchParams();
-  const tab: Tab = params.get("tab") === "held" ? "held" : "accounts";
+  const tab = tabOf(params.get("tab"));
   const [counts, setCounts] = useState<Partial<Record<Tab, number>>>({});
   const countAccounts = useCallback((count: number) => setCounts((known) => ({ ...known, accounts: count })), []);
   const countHeld = useCallback((count: number) => setCounts((known) => ({ ...known, held: count })), []);
+  const countTransfers = useCallback((count: number) => setCounts((known) => ({ ...known, transfers: count })), []);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "accounts", label: "Payout accounts" },
     { id: "held", label: "Held payouts" },
+    { id: "transfers", label: "Held transfers" },
   ];
 
   return (
@@ -58,7 +72,7 @@ export function ReviewQueueScreen({
               role="tab"
               aria-selected={tab === id}
               onClick={() => {
-                if (id !== tab) setParams(id === "held" ? { tab: "held" } : {});
+                if (id !== tab) setParams(id === "accounts" ? {} : { tab: id });
               }}
               className={cn(
                 "h-11 cursor-pointer rounded-pill px-4 text-sm",
@@ -82,6 +96,18 @@ export function ReviewQueueScreen({
           selectedId={params.get("account")}
           onSelect={(id) => setParams({ account: id })}
           onCount={countAccounts}
+        />
+      ) : tab === "transfers" ? (
+        <TransfersSection
+          api={transfers}
+          directory={directory}
+          me={me}
+          canDecide={canDecideTransfers}
+          now={now}
+          newKey={newKey}
+          selectedId={params.get("transfer")}
+          onSelect={(id) => setParams({ tab: "transfers", transfer: id })}
+          onCount={countTransfers}
         />
       ) : (
         <HeldSection
@@ -109,17 +135,28 @@ export default function ReviewQueuePage() {
   const { session } = useAuth();
   // A sample queue under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and
   // `?sample=error` show those states. Otherwise the real API.
-  const [{ api, directory }] = useState<{ api: ReviewQueueApi; directory: Directory }>(() => {
+  const [{ api, transfers, directory }] = useState<{ api: ReviewQueueApi; transfers: TransfersApi; directory: Directory }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
-      return { api: createStubReviewQueueApi(me.id, Date.now, stubCase()), directory: createStubDirectory(me) };
+      return {
+        api: createStubReviewQueueApi(me.id, Date.now, stubCase()),
+        transfers: createStubTransfersApi(me.id, Date.now, stubCase()),
+        directory: createStubDirectory(me),
+      };
     }
     const base = apiBaseUrl();
-    if (!base) return { api: notConnectedReviewQueueApi, directory: emptyDirectory };
+    if (!base) return { api: notConnectedReviewQueueApi, transfers: notConnectedTransfersApi, directory: emptyDirectory };
     const http = createHttp(base);
-    return { api: createHttpReviewQueueApi(http), directory: createHttpDirectory(http) };
+    return { api: createHttpReviewQueueApi(http), transfers: createHttpTransfersApi(http), directory: createHttpDirectory(http) };
   });
   return (
-    <ReviewQueueScreen api={api} directory={directory} me={session?.staffId ?? ""} canDecide={session ? can(session, "payout_accounts.change") : false} />
+    <ReviewQueueScreen
+      api={api}
+      transfers={transfers}
+      directory={directory}
+      me={session?.staffId ?? ""}
+      canDecide={session ? can(session, "payout_accounts.change") : false}
+      canDecideTransfers={session ? can(session, "investment_transfers.change") : false}
+    />
   );
 }
