@@ -12,6 +12,7 @@ publishes `dealing.withdrawal_funded`, the worker creates the payout that sends 
 provider is called here: payouts sends it.
 """
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -91,17 +92,23 @@ async def request_withdrawal(
     destination_id: str,
     idempotency_key: str,
     clock: Clock,
+    confirm: Callable[[], Awaitable[None]] | None = None,
 ) -> Investment:
     """Ask to withdraw a running investment early, to one of the client's payout destinations.
 
     A retry with the same key returns the same answer. The same key for another destination is
     refused. `conflict` if the investment is not running, was already asked for, or matures
     today or earlier.
+
+    `confirm` is awaited first inside the command, so after the replay check: a replay asks
+    for nothing. The route passes the app PIN check, which raises to refuse.
     """
     if client.kind != "client" or client.id is None:
         raise ApplicationError("forbidden")
 
     async def command() -> Receipt:
+        if confirm is not None:
+            await confirm()
         investment = await _own_locked(session, client, investment_id)
         today = business_date(clock.now())
         if not can_withdraw_early(
