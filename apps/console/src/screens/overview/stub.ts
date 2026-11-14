@@ -29,7 +29,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   payout_account: { view: "review_queue.view", decide: "review_queue.view" },
   deposit_reassignment: { view: "reconciliation.view", decide: "deposit_reassignments.change" },
   tax_remittance: { view: "finance.view", decide: "tax_remittances.change" },
-  payout_resolution: { view: "reconciliation.view", decide: "reconciliation.view" },
+  payout_resolution: { view: "reconciliation.view", decide: "reconciliation.change" },
   payout_release: { view: "review_queue.view", decide: "payout_accounts.change" },
 };
 
