@@ -192,8 +192,7 @@ function NameCheckStep({ account, onChanged }: Omit<NextProps, "codeSent">) {
       try {
         onChanged(await client.getAccount(account.id));
       } catch {
-        // Still shown as comparing. Opening the screen again reads it afresh.
-        return;
+        // Could not read it: show the card again, so the client can ask once more.
       }
       setComparing(false);
     }, NAME_DECISION_READ_AGAIN_MS);
