@@ -298,9 +298,9 @@ ROWS = {
     "0088_dealing_auctions": (
         "BEGIN; SELECT set_config('finvest.actor_kind', 'staff', true); "
         "SELECT set_config('finvest.actor_id', '-Nabc0000000000000B1', true); "
-        "INSERT INTO dealing_auctions (id, product_code, auction_date, added_by, added_at) "
-        "VALUES ('-Nabc0000000000000A1', 'TREA-91', DATE '2026-11-18', '-Nabc0000000000000B1', "
-        "now()); COMMIT",
+        "INSERT INTO dealing_auctions (id, action, product_code, auction_date, proposed_by, "
+        "proposed_at) VALUES ('-Nabc0000000000000A1', 'add', 'TREA-91', DATE '2026-11-18', "
+        "'-Nabc0000000000000B1', now()); COMMIT",
         "refusing to drop the auction calendar",
     ),
     # The owner turns the guards off: a real funding from a sale needs a settled sale.

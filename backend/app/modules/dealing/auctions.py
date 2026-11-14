@@ -330,7 +330,7 @@ async def _audit(
             actor=AuditActor.staff(me),
             # An approval's reason is required by the audit trail; the note is optional here.
             reason=reason or (f"{step.replace('_', ' ')} by a second person" if decided else None),
-            details={"product_code": product_code, "auction_date": auction_date.isoformat()},
+            details={"product": product_code, "day": auction_date.isoformat()},
         ),
         clock,
     )

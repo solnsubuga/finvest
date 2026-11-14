@@ -2,7 +2,7 @@
 next auction.
 
 Revision ID: 0088_dealing_auctions
-Revises: 0401_goal_interest_savings
+Revises: 0371_kyc_pose_frames
 
 The Bank of Uganda publishes the dates of its Treasury bill auctions. Each row of
 `dealing_auctions` is one proposed change to the calendar, by a member of staff with
@@ -29,7 +29,7 @@ from collections.abc import Sequence
 from alembic import op
 
 revision: str = "0088_dealing_auctions"
-down_revision: str | None = "0401_goal_interest_savings"
+down_revision: str | None = "0371_kyc_pose_frames"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

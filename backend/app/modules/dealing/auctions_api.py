@@ -19,7 +19,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.dealing import auctions
 from app.modules.dealing.domain.auctions import Change, State, Status, Step
-from app.modules.identity.api import require_permission
+from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.shared.clock import Clock
 from app.shared.contracts import Contract
@@ -93,6 +93,8 @@ def _clock(request: Request) -> Clock:
 AppClock = Annotated[Clock, Depends(_clock)]
 DeskStaff = Annotated[StaffSession, Depends(require_permission("dealing_desk.view"))]
 Changer = Annotated[StaffSession, Depends(require_permission("dealing_orders.change"))]
+# Approving asks for a recent passkey or app code, as every other approval does.
+Approver = Annotated[StaffSession, Depends(require_confirmed("dealing_orders.change"))]
 
 
 def _cancellation(change: Change, allowed: list[Step]) -> CancellationOut:
@@ -246,7 +248,7 @@ async def _decide(
 
 @router.post("/changes/{change_id}/approve")
 async def approve_change(
-    request: Request, staff: Changer, clock: AppClock, key: IdempotencyKey, change_id: str
+    request: Request, staff: Approver, clock: AppClock, key: IdempotencyKey, change_id: str
 ) -> CalendarOut:
     return await _decide(request, staff, clock, key, change_id, "approve")
 

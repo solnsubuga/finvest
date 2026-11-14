@@ -707,6 +707,7 @@
               "dealing_result",
               "buffer_rules",
               "buffer_capital",
+              "auction_date",
               "rate_change",
               "product_change",
               "migration_totals",
@@ -992,32 +993,35 @@
       "AuctionOut": {
         "additionalProperties": false,
         "properties": {
-          "added_at": {
-            "format": "date-time",
-            "title": "Added At",
-            "type": "string"
-          },
-          "added_by": {
-            "title": "Added By",
-            "type": "string"
+          "allowed": {
+            "items": {
+              "enum": [
+                "approve",
+                "decline",
+                "withdraw",
+                "cancel"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed",
+            "type": "array"
           },
           "auction_date": {
             "format": "date",
             "title": "Auction Date",
             "type": "string"
           },
-          "cancel_reason": {
+          "cancellation": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/CancellationOut"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Cancel Reason"
+            ]
           },
-          "cancelled_at": {
+          "decided_at": {
             "anyOf": [
               {
                 "format": "date-time",
@@ -1027,9 +1031,9 @@
                 "type": "null"
               }
             ],
-            "title": "Cancelled At"
+            "title": "Decided At"
           },
-          "cancelled_by": {
+          "decided_by": {
             "anyOf": [
               {
                 "type": "string"
@@ -1038,7 +1042,18 @@
                 "type": "null"
               }
             ],
-            "title": "Cancelled By"
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
           },
           "id": {
             "title": "Id",
@@ -1047,17 +1062,41 @@
           "product_code": {
             "title": "Product Code",
             "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "waiting",
+              "standing",
+              "cancelling",
+              "cancelled",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "State",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "product_code",
           "auction_date",
-          "added_by",
-          "added_at",
-          "cancelled_by",
-          "cancelled_at",
-          "cancel_reason"
+          "state",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "cancellation",
+          "allowed"
         ],
         "title": "AuctionOut",
         "type": "object"
@@ -2808,6 +2847,98 @@
           "reason"
         ],
         "title": "CancelIn",
+        "type": "object"
+      },
+      "CancellationOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "enum": [
+                "approve",
+                "decline",
+                "withdraw",
+                "cancel"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "proposed",
+              "approved",
+              "declined",
+              "withdrawn"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note",
+          "allowed"
+        ],
+        "title": "CancellationOut",
         "type": "object"
       },
       "CaseAmountOut": {
@@ -6487,22 +6618,6 @@
           "approve"
         ],
         "title": "DecisionRequest",
-        "type": "object"
-      },
-      "DeclineIn": {
-        "additionalProperties": false,
-        "properties": {
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "reason"
-        ],
-        "title": "DeclineIn",
         "type": "object"
       },
       "DeskOut": {
@@ -27491,6 +27606,38 @@
         "title": "PositionOut",
         "type": "object"
       },
+      "app__modules__dealing__auctions_api__DeclineIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "DeclineIn",
+        "type": "object"
+      },
+      "app__modules__dealing__buffer_api__DeclineIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DeclineIn",
+        "type": "object"
+      },
       "app__modules__dealing__buffer_api__MovementOut": {
         "additionalProperties": false,
         "properties": {
@@ -28988,6 +29135,22 @@
           "target_working_days"
         ],
         "title": "ComplaintSummary",
+        "type": "object"
+      },
+      "app__modules__tax__api__DeclineIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DeclineIn",
         "type": "object"
       },
       "app__modules__tax__api__Step": {
@@ -47801,7 +47964,7 @@
         ]
       },
       "post": {
-        "operationId": "add_auction_staff_dealing_auctions_post",
+        "operationId": "propose_auction_staff_dealing_auctions_post",
         "parameters": [
           {
             "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
@@ -47894,7 +48057,317 @@
             "description": "Unprocessable Content"
           }
         },
-        "summary": "Add Auction",
+        "summary": "Propose Auction",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/auctions/changes/{change_id}/approve": {
+      "post": {
+        "operationId": "approve_change_staff_dealing_auctions_changes__change_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve Change",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/auctions/changes/{change_id}/decline": {
+      "post": {
+        "operationId": "decline_change_staff_dealing_auctions_changes__change_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__dealing__auctions_api__DeclineIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline Change",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/auctions/changes/{change_id}/withdraw": {
+      "post": {
+        "operationId": "withdraw_change_staff_dealing_auctions_changes__change_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Withdraw Change",
         "tags": [
           "dealing desk"
         ]
@@ -47902,7 +48375,7 @@
     },
     "/staff/dealing/auctions/{auction_id}/cancel": {
       "post": {
-        "operationId": "cancel_auction_staff_dealing_auctions__auction_id__cancel_post",
+        "operationId": "propose_cancellation_staff_dealing_auctions__auction_id__cancel_post",
         "parameters": [
           {
             "in": "path",
@@ -48004,7 +48477,7 @@
             "description": "Unprocessable Content"
           }
         },
-        "summary": "Cancel Auction",
+        "summary": "Propose Cancellation",
         "tags": [
           "dealing desk"
         ]
@@ -48330,7 +48803,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeclineIn"
+                "$ref": "#/components/schemas/app__modules__dealing__buffer_api__DeclineIn"
               }
             }
           },
@@ -72264,7 +72737,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/DeclineIn"
+                "$ref": "#/components/schemas/app__modules__tax__api__DeclineIn"
               }
             }
           },

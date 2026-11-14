@@ -170,7 +170,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "auction_date", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -221,15 +221,31 @@ export const AuctionIn = z.object({
 });
 export type AuctionIn = z.infer<typeof AuctionIn>;
 
+export const CancellationOut = z.object({
+  allowed: z.array(z.enum(["approve", "decline", "withdraw", "cancel"])),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: z.enum(["proposed", "approved", "declined", "withdrawn"]),
+});
+export type CancellationOut = z.infer<typeof CancellationOut>;
+
 export const AuctionOut = z.object({
-  added_at: z.string(),
-  added_by: z.string(),
+  allowed: z.array(z.enum(["approve", "decline", "withdraw", "cancel"])),
   auction_date: z.string(),
-  cancel_reason: z.string().nullable(),
-  cancelled_at: z.string().nullable(),
-  cancelled_by: z.string().nullable(),
+  cancellation: CancellationOut.nullable(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
   id: z.string(),
   product_code: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  state: z.enum(["waiting", "standing", "cancelling", "cancelled", "declined", "withdrawn"]),
 });
 export type AuctionOut = z.infer<typeof AuctionOut>;
 
@@ -1338,11 +1354,6 @@ export const DecisionRequest = z.object({
   reason: z.string().nullable().optional(),
 });
 export type DecisionRequest = z.infer<typeof DecisionRequest>;
-
-export const DeclineIn = z.object({
-  reason: z.string(),
-});
-export type DeclineIn = z.infer<typeof DeclineIn>;
 
 export const FillOut = z.object({
   amount: AmountOut,
@@ -3909,6 +3920,16 @@ export const DealingApiNoteIn = z.object({
 });
 export type DealingApiNoteIn = z.infer<typeof DealingApiNoteIn>;
 
+export const DealingAuctionsApiDeclineIn = z.object({
+  note: z.string(),
+});
+export type DealingAuctionsApiDeclineIn = z.infer<typeof DealingAuctionsApiDeclineIn>;
+
+export const DealingBufferApiDeclineIn = z.object({
+  reason: z.string(),
+});
+export type DealingBufferApiDeclineIn = z.infer<typeof DealingBufferApiDeclineIn>;
+
 export const DealingBufferApiNoteIn = z.object({
   note: z.string(),
 });
@@ -3982,6 +4003,11 @@ export const ReconciliationTransfersApiReasonIn = z.object({
   reason: z.string(),
 });
 export type ReconciliationTransfersApiReasonIn = z.infer<typeof ReconciliationTransfersApiReasonIn>;
+
+export const TaxApiDeclineIn = z.object({
+  reason: z.string(),
+});
+export type TaxApiDeclineIn = z.infer<typeof TaxApiDeclineIn>;
 
 /** Every route, by method and path, with what it takes and what it answers. */
 export const operations = {
@@ -4672,6 +4698,45 @@ export const operations = {
     status: 200,
     response: CalendarOut,
   },
+  "POST /staff/dealing/auctions/changes/{change_id}/approve": {
+    method: "POST",
+    path: "/staff/dealing/auctions/changes/{change_id}/approve",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: CalendarOut,
+  },
+  "POST /staff/dealing/auctions/changes/{change_id}/decline": {
+    method: "POST",
+    path: "/staff/dealing/auctions/changes/{change_id}/decline",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DealingAuctionsApiDeclineIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CalendarOut,
+  },
+  "POST /staff/dealing/auctions/changes/{change_id}/withdraw": {
+    method: "POST",
+    path: "/staff/dealing/auctions/changes/{change_id}/withdraw",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: CalendarOut,
+  },
   "POST /staff/dealing/auctions/{auction_id}/cancel": {
     method: "POST",
     path: "/staff/dealing/auctions/{auction_id}/cancel",
@@ -4729,7 +4794,7 @@ export const operations = {
     movement_id: z.string(),
   }),
     query: z.object({}),
-    body: DeclineIn,
+    body: DealingBufferApiDeclineIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,
@@ -7892,7 +7957,7 @@ export const operations = {
     remittance_id: z.string(),
   }),
     query: z.object({}),
-    body: DeclineIn,
+    body: TaxApiDeclineIn,
     bodyKind: "json",
     idempotent: true,
     status: 200,

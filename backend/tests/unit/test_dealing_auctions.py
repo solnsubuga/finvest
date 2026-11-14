@@ -243,5 +243,10 @@ def test_the_next_auction_is_the_earliest_standing_date_from_today() -> None:
 
 def test_a_product_with_only_past_waiting_or_cancelled_dates_has_no_next_auction() -> None:
     gone = change("g", DAY)
-    changes = [change("old", date(2026, 11, 4)), change("w", DAY, "proposed"), gone, cancel("c", gone)]
+    changes = [
+        change("old", date(2026, 11, 4)),
+        change("w", DAY, "proposed"),
+        gone,
+        cancel("c", gone),
+    ]
     assert next_auctions(changes, TODAY) == {}
