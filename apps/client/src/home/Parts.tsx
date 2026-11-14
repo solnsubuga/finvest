@@ -242,9 +242,11 @@ export function SetUpList({ steps }: { steps: SetUpStep[] }) {
           >
             <View style={{ flex: 1 }}>
               <Txt weight="bold">{step.title}</Txt>
-              <Txt size={13} lineHeight={18} color={colors.muted}>
-                {step.done ? "Done" : step.detail}
-              </Txt>
+              {step.done ? null : (
+                <Txt size={13} lineHeight={18} color={colors.muted}>
+                  {step.detail}
+                </Txt>
+              )}
             </View>
             {step.done ? (
               <View style={[styles.pill, styles.pillLime]}>

@@ -231,7 +231,7 @@ async function upToTheSelfie(page: Page) {
   await id(page, "code-submit").click();
   await createPin(page);
 
-  await id(page, "home-id-check").click();
+  await id(page, "set-up-id").click();
   await expect(page.getByText("Which ID will you use?")).toBeVisible();
   await shown(page, "document-continue").click();
 
