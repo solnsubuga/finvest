@@ -55,6 +55,12 @@ const DEMO_PAYABLE: Payable = {
 export const DEMO_CARD_DECLINED_ID = "demo-card-declined";
 export const DEMO_CARD_LIMIT_ID = "demo-card-limit";
 export const DEMO_CARDS_PAUSED_ID = "demo-cards-paused";
+/**
+ * Mobile money for this payable is paid on Pesapal's page, as when Settings choose Pesapal to
+ * collect it. The app's own return page stands in for Pesapal's, so it pays once the client
+ * comes back.
+ */
+export const DEMO_MOBILE_MONEY_ON_PAGE_ID = "demo-mobile-money-on-page";
 /** As the backend's default Settings: 3.5% on top, at most UGX 5,000,000 a card payment. */
 const DEMO_CARD_BASIS_POINTS = 350;
 const DEMO_CARD_MAX = 5_000_000;
@@ -67,6 +73,7 @@ const DEMO_CARD_PAYABLES: Record<string, Payable> = {
     amount: { currency: "UGX", minor: 8_000_000 },
   },
   [DEMO_CARDS_PAUSED_ID]: { ...DEMO_PAYABLE_BASE(), id: DEMO_CARDS_PAUSED_ID },
+  [DEMO_MOBILE_MONEY_ON_PAGE_ID]: { ...DEMO_PAYABLE_BASE(), id: DEMO_MOBILE_MONEY_ON_PAGE_ID },
 };
 
 function DEMO_PAYABLE_BASE(): Payable {
@@ -151,7 +158,14 @@ export function maskPhone(e164: string): string {
 
 type StoredTransfer = { submission: BankReceiptSubmission; id: string; submittedAtMs: number };
 
-type Stored = { request: MobileMoneyRequest; id: string; requestedAtMs: number; scenario: string };
+type Stored = {
+  request: MobileMoneyRequest;
+  id: string;
+  requestedAtMs: number;
+  scenario: string;
+  /** When the client came back from the stand-in for Pesapal's page. */
+  returnedAtMs: number | null;
+};
 
 export type StubOptions = {
   /** Artificial delay so loading states are visible. Tests pass 0. */
@@ -238,13 +252,23 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
   const pause = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
 
+  function onPageOutcome(stored: Stored): Outcome {
+    if (now() - stored.requestedAtMs < SENDING_MS) return { status: "sending", failure: null };
+    const back = stored.returnedAtMs;
+    if (back !== null && now() - back >= SENDING_MS * 2) return { status: "confirmed", failure: null };
+    return { status: "awaiting_approval", failure: null };
+  }
+
   function read(stored: Stored): Deposit {
     const elapsed = now() - stored.requestedAtMs;
-    const outcome = outcomeFor(stored.scenario, elapsed);
+    const onPage = stored.request.payableId === DEMO_MOBILE_MONEY_ON_PAGE_ID;
+    const outcome = onPage ? onPageOutcome(stored) : outcomeFor(stored.scenario, elapsed);
     const confirmed = outcome.status === "confirmed";
-    const confirmedAfter = stored.scenario === "04" ? CHECKING_MS : OUTCOME_MS;
+    const confirmedAtMs = onPage
+      ? (stored.returnedAtMs ?? 0) + SENDING_MS * 2
+      : stored.requestedAtMs + (stored.scenario === "04" ? CHECKING_MS : OUTCOME_MS);
     const payable = payableFor(stored.request.payableId) ?? DEMO_PAYABLE;
-    const confirmedAt = confirmed ? new Date(stored.requestedAtMs + confirmedAfter).toISOString() : null;
+    const confirmedAt = confirmed ? new Date(confirmedAtMs).toISOString() : null;
     if (confirmedAt) {
       markDemoPaid(payable.id, confirmedAt);
     }
@@ -260,6 +284,11 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       confirmedAt,
       networkReference: confirmed ? `DEMO-${stored.id.toUpperCase()}` : null,
       reference: `FV-DEMO-${stored.id}`,
+      onPage,
+      pageUrl:
+        onPage && outcome.status === "awaiting_approval"
+          ? `/pay/card/return?payment=${stored.id}&sandbox=1`
+          : null,
     };
   }
 
@@ -354,6 +383,7 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         id: `d${counter}`,
         requestedAtMs: now(),
         scenario: scenarioFor(request.payer),
+        returnedAtMs: null,
       };
       deposits.set(stored.id, stored);
       byKey.set(request.idempotencyKey, stored.id);
@@ -438,10 +468,10 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
 
     async cardReturned(paymentId) {
       await pause();
-      const stored = cardPayments.get(paymentId);
+      const stored = cardPayments.get(paymentId) ?? deposits.get(paymentId);
       if (!stored) throw new PaymentError("not_found");
       if (stored.returnedAtMs === null) stored.returnedAtMs = now();
-      return readCard(stored);
+      return cardPayments.has(paymentId) ? "card" : "mobile_money";
     },
 
     async getDeposit(depositId) {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -13,6 +14,7 @@ import {
   networkName,
   pendingApprovalsCode,
 } from "@/payments/format";
+import { openCardPage } from "@/payments/openCardPage";
 import { DetailList, Loading, Timeline } from "@/payments/Parts";
 import { Deposit } from "@/payments/types";
 import { useDeposit } from "@/payments/useDeposit";
@@ -24,8 +26,10 @@ import { colors } from "@/theme";
  */
 export default function DepositStatusScreen() {
   const router = useRouter();
-  const { depositId } = useLocalSearchParams<{ depositId: string }>();
+  const { depositId, returned } = useLocalSearchParams<{ depositId: string; returned?: string }>();
   const { deposit, missing, stale } = useDeposit(depositId);
+  // Set once the client has been sent to Pesapal's page, or is back from it.
+  const [opened, setOpened] = useState(returned === "1");
   const close = () => router.replace("/");
 
   if (deposit?.status === "confirmed") {
@@ -61,6 +65,24 @@ export default function DepositStatusScreen() {
       <Failed
         deposit={deposit}
         onRetry={() => router.replace(`/pay/${deposit.payable.id}`)}
+        onClose={close}
+      />
+    );
+  }
+
+  if (deposit.onPage && deposit.status !== "checking") {
+    return (
+      <OnPage
+        deposit={deposit}
+        opened={opened}
+        stale={stale}
+        onOpen={() => {
+          if (deposit.pageUrl) {
+            setOpened(true);
+            openCardPage(deposit.pageUrl);
+          }
+        }}
+        onAnotherWay={() => router.replace(`/pay/${deposit.payable.id}`)}
         onClose={close}
       />
     );
@@ -117,6 +139,109 @@ export default function DepositStatusScreen() {
             {`No prompt? Dial ${pendingApprovalsCode[deposit.network]} and look under pending approvals. You can close this screen. The payment carries on without it.`}
           </Txt>
         )}
+      </View>
+    </Screen>
+  );
+}
+
+/**
+ * Mobile money paid on Pesapal's page, when Settings choose Pesapal to collect it. Pesapal
+ * cannot prompt a phone by itself: the client picks the network on its page and approves the
+ * prompt it sends. Only a payment from the client's own number is added to the investment.
+ */
+function OnPage({
+  deposit,
+  opened,
+  stale,
+  onOpen,
+  onAnotherWay,
+  onClose,
+}: {
+  deposit: Deposit;
+  opened: boolean;
+  stale: boolean;
+  onOpen: () => void;
+  onAnotherWay: () => void;
+  onClose: () => void;
+}) {
+  const network = networkName[deposit.network];
+  const amount = formatMoney(deposit.amount);
+  const ready = deposit.pageUrl !== null;
+  if (!opened) {
+    return (
+      <Screen
+        signedIn
+        footer={
+          <>
+            <Button
+              label={ready ? "Open the secure page" : "Opening the secure page"}
+              onPress={onOpen}
+              loading={!ready}
+              testID="deposit-open-page"
+            />
+            <TextLink label="Pay another way" onPress={onAnotherWay} />
+          </>
+        }
+      >
+        <Stack.Screen options={{ title: "Pay on Pesapal's secure page" }} />
+        <View style={{ marginTop: 20, gap: 10 }} accessibilityLiveRegion="polite">
+          <Title>{"Pay on Pesapal's secure page"}</Title>
+          <Txt color={colors.muted}>{`${network}, ${amount} for your ${deposit.payable.title}.`}</Txt>
+        </View>
+        <View style={{ marginTop: 20, gap: 16 }}>
+          <Timeline
+            steps={[
+              { label: `Pesapal's page opens. Check that it says Finvest and ${amount}.`, state: "now" },
+              { label: `Choose ${network} and enter the number on your Finvest account.`, state: "later" },
+              { label: "Approve the prompt on your phone with your mobile money PIN.", state: "later" },
+              { label: "Your investment starts once Pesapal confirms it.", state: "later" },
+            ]}
+          />
+          <Notice tone="warning">
+            {`Pay from ${deposit.payer}, the number on your Finvest account. A payment from any other number is not added to your investment until our team has checked it.`}
+          </Notice>
+        </View>
+      </Screen>
+    );
+  }
+  return (
+    <Screen
+      signedIn
+      footer={
+        <>
+          {deposit.pageUrl ? (
+            <Button
+              label="Open the page again"
+              variant="secondary"
+              onPress={onOpen}
+              testID="deposit-open-again"
+            />
+          ) : null}
+          <TextLink label="Close" onPress={onClose} />
+        </>
+      }
+    >
+      <Stack.Screen options={{ title: "Confirming your payment" }} />
+      <View style={{ marginTop: 20, gap: 10 }} accessibilityLiveRegion="polite">
+        <Title>We are confirming your payment</Title>
+        <Txt color={colors.muted}>
+          {`Once you approve the ${network} prompt for ${amount}, Pesapal tells us and your ${deposit.payable.title} starts. This usually takes less than a minute.`}
+        </Txt>
+      </View>
+      <View style={{ marginTop: 20, gap: 16 }}>
+        {stale ? (
+          <Notice tone="neutral">We could not refresh this just now. Trying again.</Notice>
+        ) : null}
+        <Timeline
+          steps={[
+            { label: "Pesapal's page opened", state: "done", note: formatTime(deposit.requestedAt) },
+            { label: `Waiting for ${network} to confirm`, state: "now" },
+            { label: "Your investment starts", state: "later" },
+          ]}
+        />
+        <Txt size={13} color={colors.muted}>
+          You can close this screen. The payment carries on without it.
+        </Txt>
       </View>
     </Screen>
   );

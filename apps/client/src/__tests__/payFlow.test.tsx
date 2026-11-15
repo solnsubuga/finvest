@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
-import { DEMO_PAYABLE_ID } from "@/payments/stubPaymentsClient";
+import { DEMO_MOBILE_MONEY_ON_PAGE_ID, DEMO_PAYABLE_ID } from "@/payments/stubPaymentsClient";
 import { PaymentError } from "@/payments/types";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
@@ -69,6 +69,12 @@ jest.mock("@/support/stubSupportClient", () => {
 
 jest.mock("@/payments/pollInterval", () => ({ POLL_MS: 25 }));
 
+/** Pesapal's page, which the demo stands in for with the app's own return page. */
+const mockOpened: string[] = [];
+jest.mock("@/payments/openCardPage", () => ({
+  openCardPage: (url: string) => mockOpened.push(url),
+}));
+
 jest.mock("expo-font", () => ({
   ...jest.requireActual("expo-font"),
   useFonts: () => [true, null],
@@ -95,6 +101,7 @@ async function advance(ms: number) {
 
 beforeEach(() => {
   mockPay.mockClear();
+  mockOpened.length = 0;
   mockScenario.code = "00";
 });
 
@@ -141,6 +148,29 @@ describe("paying for an investment by mobile money", () => {
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
     await screen.findByTestId("home");
+  });
+
+  it("pays on Pesapal's page from the client's own number when Settings choose Pesapal", async () => {
+    await openPayScreen();
+    await act(async () => router.push(`/pay/${DEMO_MOBILE_MONEY_ON_PAGE_ID}`));
+    await screen.findByText("Pay UGX 1,000,000");
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+
+    await screen.findByText("Pay on Pesapal's secure page");
+    expect(screen.getByText(/Pay from \+256 77• ••• •56, the number on your Finvest account/)).toBeTruthy();
+    expect(screen.queryByText(/Dial \*165#/)).toBeNull();
+    await advance(2_000);
+    await screen.findByText("Open the secure page");
+    await fireEvent.press(screen.getByTestId("deposit-open-page"));
+    expect(mockOpened).toHaveLength(1);
+    await screen.findByText("We are confirming your payment");
+
+    // Back from the page: the return page sends mobile money to its own screen, not the card's.
+    await act(async () => router.replace(mockOpened[0]!));
+    await screen.findByText("We are confirming your payment");
+    await advance(4_000);
+    await screen.findByText("Completed");
+    expect(screen.getByText("Paid into 91 Day Treasury Bill")).toBeTruthy();
   });
 
   it("opens a complaint about this payment from its receipt, with the reference added", async () => {
