@@ -8,6 +8,8 @@ import { colors, fontSizes } from "@/theme";
 /** The website's legal pages. The API records the version current when the box is ticked. */
 const SITE = "https://finvestug.com";
 
+const ERROR_ID = "terms-error";
+
 /**
  * "I agree to the terms and the privacy notice": the tick box at sign-up and when claiming an
  * account moved over from paper records, with links to read both first. The server records
@@ -30,6 +32,8 @@ export function TermsAgreement({
       <Pressable
         accessibilityRole="checkbox"
         aria-checked={agreed}
+        aria-invalid={invalid}
+        aria-describedby={invalid ? ERROR_ID : undefined}
         onPress={() => onChange(!agreed)}
         style={styles.terms}
         testID="terms-checkbox"
@@ -55,6 +59,22 @@ export function TermsAgreement({
             : "I agree to the terms and the privacy notice."}
         </Txt>
       </Pressable>
+      {invalid ? (
+        // In words as well as red, and read out when it appears.
+        <Txt
+          nativeID={ERROR_ID}
+          size={fontSizes.xs}
+          weight="semibold"
+          color={colors.danger}
+          accessibilityLiveRegion="polite"
+          style={{ paddingLeft: 34 }}
+          testID="terms-error"
+        >
+          {adultLine
+            ? "Tick the box to agree to the terms and confirm you are 18 or older."
+            : "Tick the box to agree to the terms."}
+        </Txt>
+      ) : null}
       <View style={styles.links}>
         <TextLink
           label="Read the terms"

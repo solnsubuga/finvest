@@ -11,3 +11,9 @@ jest.mock("@/identity/camera/GuideCamera", () => jest.requireActual("@/testing/f
 // Tests have no Regula service either. `regulaSession` in fakeRegula ends a session.
 jest.mock("@/identity/regula/RegulaLiveness", () => jest.requireActual("@/testing/fakeRegula"));
 process.env.EXPO_PUBLIC_REGULA_FACE_URL = "https://face.regula.test";
+
+// Tests' picked files are names, not real files, so the app cannot read their first bytes and
+// keeps the name and size checks (src/payments/receipt.ts). receipt.test.ts reads bytes itself.
+jest.mock("@/payments/firstBytes", () => ({
+  readFirstBytes: jest.fn(async () => Promise.reject(new Error("no file in tests"))),
+}));

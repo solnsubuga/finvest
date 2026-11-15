@@ -101,6 +101,7 @@ export default function Pay() {
         payable ? (
           <Button
             label={`Pay ${formatMoney(payable.amount)}`}
+            variant="lime"
             onPress={pay}
             loading={busy}
             testID="pay-submit"

@@ -1,6 +1,7 @@
 import { formatDay, formatFileSize } from "../format";
 import {
   checkReceipt,
+  checkReceiptFile,
   groupDigits,
   kampalaToday,
   MAX_RECEIPT_BYTES,
@@ -100,5 +101,31 @@ describe("formatting", () => {
     expect(formatFileSize(100)).toBe("1 KB");
     expect(formatFileSize(1_500_000)).toBe("1.4 MB");
     expect(formatDay("2026-11-13")).toBe("13 Nov 2026");
+  });
+});
+
+describe("checkReceiptFile", () => {
+  const bytes = (...values: number[]) => async () => new Uint8Array(values);
+  const jpg = { uri: "blob:1", name: "slip.jpg", mimeType: "image/jpeg", size: 2048 };
+
+  it("takes a file that starts as its type does", async () => {
+    expect(await checkReceiptFile(jpg, bytes(0xff, 0xd8, 0xff, 0xe0))).toMatchObject({ name: "slip.jpg" });
+    expect(
+      await checkReceiptFile({ ...jpg, name: "s.png", mimeType: "image/png" }, bytes(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)),
+    ).toMatchObject({ mimeType: "image/png" });
+    expect(
+      await checkReceiptFile({ ...jpg, name: "s.pdf", mimeType: "application/pdf" }, bytes(0x25, 0x50, 0x44, 0x46, 0x2d, 0x31)),
+    ).toMatchObject({ mimeType: "application/pdf" });
+  });
+
+  it("refuses a text file renamed .jpg at once", async () => {
+    const text = Array.from("hello there", (letter) => letter.charCodeAt(0));
+    expect(await checkReceiptFile(jpg, bytes(...text))).toBe("not_what_it_says");
+    expect(await checkReceiptFile(jpg, bytes())).toBe("not_what_it_says");
+  });
+
+  it("keeps the name and size checks when the file cannot be read", async () => {
+    expect(await checkReceiptFile(jpg, async () => Promise.reject(new Error("no")))).toMatchObject({ name: "slip.jpg" });
+    expect(await checkReceiptFile({ ...jpg, name: "notes.docx", mimeType: "" }, bytes(0xff, 0xd8, 0xff))).toBe("wrong_type");
   });
 });
