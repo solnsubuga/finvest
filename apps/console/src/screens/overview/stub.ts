@@ -20,6 +20,7 @@ const SOURCES: Record<Kind, { view: Permission; decide: Permission }> = {
   rate_change: { view: "rates.view", decide: "rates.view" },
   product_change: { view: "products.view", decide: "products.change" },
   bond_change: { view: "products.view", decide: "products.change" },
+  bond_sale: { view: "dealing_desk.view", decide: "dealing_orders.change" },
   migration_totals: { view: "migration.view", decide: "migration.sign_off" },
   migration_sign_off: { view: "migration.view", decide: "migration.sign_off" },
   // The console has no `client_phones.change` yet, so the sample stands in with the client permissions.
