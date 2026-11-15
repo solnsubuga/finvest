@@ -24,6 +24,8 @@ The story clock moves with libfaketime (`stack/clock.sh`). It only goes forward,
 
 ## Running it
 
+Run this only on a disposable machine or container, never on a laptop with a PostgreSQL you care about. `stack/up.sh` needs root: it appends the local addresses to `/etc/hosts`, runs commands as `su postgres`, and drops and recreates the `finvest_video` database.
+
 Everything lives in `$WORK` (`/tmp/finvest-product-video` by default, see `stack/env.sh`). The stack needs PostgreSQL 16, libfaketime, poppler-utils, ffmpeg, Python 3 with Pillow, and the Playwright Chromium.
 
 ```sh
