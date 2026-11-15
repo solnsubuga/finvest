@@ -33,7 +33,7 @@ interface PageJson {
   account: AccountJson;
   verified_name: string | null;
   identity_check: { id: string; status: string; submitted_at: string | null; decided_at: string | null; account_number: string | null } | null;
-  owed: { account_code: string; account_reference: string | null; amount_minor: number; currency: string }[];
+  owed: { account_code: string; account_reference: string | null; product_name: string | null; matures_on: string | null; amount_minor: number; currency: string }[];
   destinations: {
     id: string;
     kind: string;
@@ -95,7 +95,14 @@ export function toPage(json: PageJson): ClientPage {
     // A currency this console does not know is left out rather than shown wrongly.
     owed: json.owed
       .filter((item) => CURRENCIES.has(item.currency))
-      .map((item) => ({ accountCode: item.account_code, accountReference: item.account_reference, minor: item.amount_minor, currency: item.currency as Currency })),
+      .map((item) => ({
+        accountCode: item.account_code,
+        accountReference: item.account_reference,
+        productName: item.product_name,
+        maturesOn: item.matures_on,
+        minor: item.amount_minor,
+        currency: item.currency as Currency,
+      })),
     destinations: json.destinations.map((item) => ({
       id: item.id,
       kind: item.kind,

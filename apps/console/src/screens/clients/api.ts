@@ -38,6 +38,10 @@ export interface IdentityCheck {
 export interface Owed {
   accountCode: string;
   accountReference: string | null;
+  /** The investment's product, when the line is held on one. */
+  productName: string | null;
+  /** YYYY-MM-DD, for a fixed term that has started. */
+  maturesOn: string | null;
   /** Whole units of the smallest denomination: shillings for UGX, cents for USD. */
   minor: number;
   currency: Currency;
