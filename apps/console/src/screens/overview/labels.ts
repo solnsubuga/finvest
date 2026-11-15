@@ -37,6 +37,7 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   rate_change: { label: "Rate change", path: at("/rates") },
   // The subject is the product code, or a new product's code. Every change waits on Products.
   product_change: { label: "Product change", path: at("/products") },
+  bond_change: { label: "Bond change", path: at("/products") },
   migration_totals: { label: "Migration totals", path: at("/migration") },
   migration_sign_off: { label: "Migration sign-off", path: at("/migration") },
   phone_change: { label: "Client's mobile number", path: (item) => `/clients?client=${encodeURIComponent(item.subject)}` },

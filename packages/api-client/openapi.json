@@ -767,6 +767,7 @@
               "auction_date",
               "rate_change",
               "product_change",
+              "bond_change",
               "migration_totals",
               "migration_sign_off",
               "phone_change",
@@ -2335,6 +2336,426 @@
           "file"
         ],
         "title": "Body_upload_staff_reconciliation_custodian_checks_post",
+        "type": "object"
+      },
+      "BondChangeAction": {
+        "enum": [
+          "create",
+          "price",
+          "pause",
+          "open"
+        ],
+        "title": "BondChangeAction",
+        "type": "string"
+      },
+      "BondChangeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/BondChangeAction"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BondChangeStatus"
+          },
+          "terms": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BondTermsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "code",
+          "terms",
+          "price",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note"
+        ],
+        "title": "BondChangeOut",
+        "type": "object"
+      },
+      "BondChangeStatus": {
+        "enum": [
+          "proposed",
+          "approved",
+          "sent_back",
+          "withdrawn"
+        ],
+        "title": "BondChangeStatus",
+        "type": "string"
+      },
+      "BondOut": {
+        "additionalProperties": false,
+        "description": "An issue as a client and the website see it. The coupon is after tax.",
+        "properties": {
+          "can_buy": {
+            "title": "Can Buy",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "coupon_percent": {
+            "title": "Coupon Percent",
+            "type": "string"
+          },
+          "coupons_left": {
+            "title": "Coupons Left",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_step_minor": {
+            "title": "Face Step Minor",
+            "type": "integer"
+          },
+          "isin": {
+            "title": "Isin",
+            "type": "string"
+          },
+          "issue_date": {
+            "format": "date",
+            "title": "Issue Date",
+            "type": "string"
+          },
+          "maturity_date": {
+            "format": "date",
+            "title": "Maturity Date",
+            "type": "string"
+          },
+          "minimum_face_minor": {
+            "title": "Minimum Face Minor",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_coupon_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Coupon Date"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BondStatus"
+          },
+          "years": {
+            "title": "Years",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "isin",
+          "name",
+          "currency",
+          "coupon_percent",
+          "issue_date",
+          "maturity_date",
+          "years",
+          "next_coupon_date",
+          "coupons_left",
+          "minimum_face_minor",
+          "face_step_minor",
+          "price",
+          "status",
+          "can_buy"
+        ],
+        "title": "BondOut",
+        "type": "object"
+      },
+      "BondPriceIn": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "price": {
+            "maximum": 1500000.0,
+            "minimum": 500000.0,
+            "title": "Price",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "price",
+          "reason"
+        ],
+        "title": "BondPriceIn",
+        "type": "object"
+      },
+      "BondQuoteOut": {
+        "additionalProperties": false,
+        "description": "What buying a face value costs today and pays to maturity, after tax.",
+        "properties": {
+          "accrued_minor": {
+            "title": "Accrued Minor",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "cost_minor": {
+            "title": "Cost Minor",
+            "type": "integer"
+          },
+          "coupon_minor": {
+            "title": "Coupon Minor",
+            "type": "integer"
+          },
+          "coupons_left": {
+            "title": "Coupons Left",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_minor": {
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "gain_minor": {
+            "title": "Gain Minor",
+            "type": "integer"
+          },
+          "next_coupon_date": {
+            "format": "date",
+            "title": "Next Coupon Date",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "integer"
+          },
+          "total_back_minor": {
+            "title": "Total Back Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "currency",
+          "face_minor",
+          "price",
+          "accrued_minor",
+          "cost_minor",
+          "coupon_minor",
+          "coupons_left",
+          "next_coupon_date",
+          "total_back_minor",
+          "gain_minor"
+        ],
+        "title": "BondQuoteOut",
+        "type": "object"
+      },
+      "BondStatus": {
+        "enum": [
+          "draft",
+          "live",
+          "paused"
+        ],
+        "title": "BondStatus",
+        "type": "string"
+      },
+      "BondStatusIn": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "to": {
+            "$ref": "#/components/schemas/BondStatus"
+          }
+        },
+        "required": [
+          "code",
+          "to",
+          "reason"
+        ],
+        "title": "BondStatusIn",
+        "type": "object"
+      },
+      "BondTermsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "coupon_bps": {
+            "title": "Coupon Bps",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_step_minor": {
+            "title": "Face Step Minor",
+            "type": "integer"
+          },
+          "isin": {
+            "title": "Isin",
+            "type": "string"
+          },
+          "issue_date": {
+            "format": "date",
+            "title": "Issue Date",
+            "type": "string"
+          },
+          "maturity_date": {
+            "format": "date",
+            "title": "Maturity Date",
+            "type": "string"
+          },
+          "minimum_face_minor": {
+            "title": "Minimum Face Minor",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tax_bps": {
+            "title": "Tax Bps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "isin",
+          "name",
+          "currency",
+          "coupon_bps",
+          "tax_bps",
+          "issue_date",
+          "maturity_date",
+          "minimum_face_minor",
+          "face_step_minor"
+        ],
+        "title": "BondTermsOut",
         "type": "object"
       },
       "BookLineOut": {
@@ -13336,6 +13757,103 @@
         "title": "Network",
         "type": "string"
       },
+      "NewBondIn": {
+        "additionalProperties": false,
+        "description": "A new issue with its first price. It is created as a draft once a second person\napproves. Opening it to clients is a change of its own.",
+        "properties": {
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "coupon_bps": {
+            "maximum": 5000.0,
+            "minimum": 1.0,
+            "title": "Coupon Bps",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_step_minor": {
+            "default": 100000,
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Face Step Minor",
+            "type": "integer"
+          },
+          "isin": {
+            "maxLength": 12,
+            "minLength": 12,
+            "pattern": "^[A-Z]{2}[A-Z0-9]{9}[0-9]$",
+            "title": "Isin",
+            "type": "string"
+          },
+          "issue_date": {
+            "format": "date",
+            "title": "Issue Date",
+            "type": "string"
+          },
+          "maturity_date": {
+            "format": "date",
+            "title": "Maturity Date",
+            "type": "string"
+          },
+          "minimum_face_minor": {
+            "default": 100000,
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Minimum Face Minor",
+            "type": "integer"
+          },
+          "name": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "price": {
+            "maximum": 1500000.0,
+            "minimum": 500000.0,
+            "title": "Price",
+            "type": "integer"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "tax_bps": {
+            "anyOf": [
+              {
+                "maximum": 9999.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Bps"
+          }
+        },
+        "required": [
+          "code",
+          "isin",
+          "name",
+          "currency",
+          "coupon_bps",
+          "issue_date",
+          "maturity_date",
+          "price",
+          "reason"
+        ],
+        "title": "NewBondIn",
+        "type": "object"
+      },
       "NewCheck": {
         "additionalProperties": false,
         "description": "What the first person read on the proof. The name is compared on the server.",
@@ -17812,6 +18330,29 @@
           "id"
         ],
         "title": "Proposed",
+        "type": "object"
+      },
+      "PublicBonds": {
+        "additionalProperties": false,
+        "properties": {
+          "bonds": {
+            "items": {
+              "$ref": "#/components/schemas/BondOut"
+            },
+            "title": "Bonds",
+            "type": "array"
+          },
+          "updated_on": {
+            "format": "date",
+            "title": "Updated On",
+            "type": "string"
+          }
+        },
+        "required": [
+          "updated_on",
+          "bonds"
+        ],
+        "title": "PublicBonds",
         "type": "object"
       },
       "PublicHolidaysProposal": {
@@ -23239,6 +23780,110 @@
         "title": "SignupTicketView",
         "type": "object"
       },
+      "StaffBondOut": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "coupon_bps": {
+            "title": "Coupon Bps",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_step_minor": {
+            "title": "Face Step Minor",
+            "type": "integer"
+          },
+          "isin": {
+            "title": "Isin",
+            "type": "string"
+          },
+          "issue_date": {
+            "format": "date",
+            "title": "Issue Date",
+            "type": "string"
+          },
+          "maturity_date": {
+            "format": "date",
+            "title": "Maturity Date",
+            "type": "string"
+          },
+          "minimum_face_minor": {
+            "title": "Minimum Face Minor",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price"
+          },
+          "priced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priced At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/BondStatus"
+          },
+          "tax_bps": {
+            "title": "Tax Bps",
+            "type": "integer"
+          },
+          "usual_tax_bps": {
+            "title": "Usual Tax Bps",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "years": {
+            "title": "Years",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "isin",
+          "name",
+          "currency",
+          "coupon_bps",
+          "tax_bps",
+          "issue_date",
+          "maturity_date",
+          "years",
+          "minimum_face_minor",
+          "face_step_minor",
+          "status",
+          "version",
+          "price",
+          "priced_at",
+          "usual_tax_bps"
+        ],
+        "title": "StaffBondOut",
+        "type": "object"
+      },
       "StaffChat": {
         "additionalProperties": false,
         "properties": {
@@ -25519,6 +26164,70 @@
           "risk"
         ],
         "title": "StaffProfileView",
+        "type": "object"
+      },
+      "StaffQuoteOut": {
+        "additionalProperties": false,
+        "properties": {
+          "accrued_minor": {
+            "title": "Accrued Minor",
+            "type": "integer"
+          },
+          "clean_minor": {
+            "title": "Clean Minor",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "cost_minor": {
+            "title": "Cost Minor",
+            "type": "integer"
+          },
+          "coupon_net_minor": {
+            "title": "Coupon Net Minor",
+            "type": "integer"
+          },
+          "coupons_left": {
+            "title": "Coupons Left",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_minor": {
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "next_coupon_date": {
+            "format": "date",
+            "title": "Next Coupon Date",
+            "type": "string"
+          },
+          "price": {
+            "title": "Price",
+            "type": "integer"
+          },
+          "total_back_minor": {
+            "title": "Total Back Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "currency",
+          "face_minor",
+          "price",
+          "clean_minor",
+          "accrued_minor",
+          "cost_minor",
+          "coupon_net_minor",
+          "coupons_left",
+          "next_coupon_date",
+          "total_back_minor"
+        ],
+        "title": "StaffQuoteOut",
         "type": "object"
       },
       "StaffRunList": {
@@ -32172,6 +32881,256 @@
         "summary": "Banks",
         "tags": [
           "client payouts"
+        ]
+      }
+    },
+    "/client/bonds": {
+      "get": {
+        "operationId": "client_bonds_client_bonds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BondOut"
+                  },
+                  "title": "Response Client Bonds Client Bonds Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Bonds",
+        "tags": [
+          "client bonds"
+        ]
+      }
+    },
+    "/client/bonds/{code}": {
+      "get": {
+        "operationId": "client_bond_client_bonds__code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Bond",
+        "tags": [
+          "client bonds"
+        ]
+      }
+    },
+    "/client/bonds/{code}/quote": {
+      "get": {
+        "operationId": "client_bond_quote_client_bonds__code__quote_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "face_minor",
+            "required": true,
+            "schema": {
+              "maximum": 1000000000000000,
+              "minimum": 1,
+              "title": "Face Minor",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondQuoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Bond Quote",
+        "tags": [
+          "client bonds"
         ]
       }
     },
@@ -45413,6 +46372,170 @@
         ]
       }
     },
+    "/public/bonds": {
+      "get": {
+        "operationId": "public_bonds_public_bonds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicBonds"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Public Bonds",
+        "tags": [
+          "public bonds"
+        ]
+      }
+    },
+    "/public/bonds/{code}/quote": {
+      "get": {
+        "operationId": "public_bond_quote_public_bonds__code__quote_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "face_minor",
+            "required": true,
+            "schema": {
+              "maximum": 1000000000000000,
+              "minimum": 1,
+              "title": "Face Minor",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondQuoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Public Bond Quote",
+        "tags": [
+          "public bonds"
+        ]
+      }
+    },
     "/public/products": {
       "get": {
         "operationId": "public_products_public_products_get",
@@ -46699,6 +47822,771 @@
         "summary": "Staff Runs",
         "tags": [
           "staff autoinvest"
+        ]
+      }
+    },
+    "/staff/bond-changes": {
+      "get": {
+        "operationId": "staff_bond_changes_staff_bond_changes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/BondChangeStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BondChangeOut"
+                  },
+                  "title": "Response Staff Bond Changes Staff Bond Changes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Bond Changes",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-changes/new-issue": {
+      "post": {
+        "description": "Propose a new issue. A second member of staff must approve it, and it starts as a draft.",
+        "operationId": "staff_propose_bond_staff_bond_changes_new_issue_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewBondIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Bond",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-changes/price": {
+      "post": {
+        "description": "Propose today's price for an issue. It is in force once a second person approves.",
+        "operationId": "staff_propose_bond_price_staff_bond_changes_price_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BondPriceIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Bond Price",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-changes/status": {
+      "post": {
+        "description": "Propose opening (`live`) or pausing (`paused`) an issue.",
+        "operationId": "staff_propose_bond_status_staff_bond_changes_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BondStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Bond Status",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-changes/{change_id}/approve": {
+      "post": {
+        "operationId": "staff_approve_bond_change_staff_bond_changes__change_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Approve Bond Change",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-changes/{change_id}/send-back": {
+      "post": {
+        "operationId": "staff_send_back_bond_change_staff_bond_changes__change_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Send Back Bond Change",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-changes/{change_id}/withdraw": {
+      "post": {
+        "operationId": "staff_withdraw_bond_change_staff_bond_changes__change_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Withdraw Bond Change",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bonds": {
+      "get": {
+        "description": "Every issue, drafts included, with its tax and the price in force.",
+        "operationId": "staff_bonds_staff_bonds_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StaffBondOut"
+                  },
+                  "title": "Response Staff Bonds Staff Bonds Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Bonds",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bonds/{code}/quote": {
+      "get": {
+        "description": "What a client buying this face value would pay today, with the clean amount.",
+        "operationId": "staff_bond_quote_staff_bonds__code__quote_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "face_minor",
+            "required": true,
+            "schema": {
+              "maximum": 1000000000000000,
+              "minimum": 1,
+              "title": "Face Minor",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaffQuoteOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Bond Quote",
+        "tags": [
+          "staff bonds"
         ]
       }
     },

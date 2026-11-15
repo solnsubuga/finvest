@@ -25,6 +25,7 @@ from app.infrastructure.storage import FileStorage, StorageSettings
 from app.modules.approvals import api as approvals_api
 from app.modules.audit import api as audit_api
 from app.modules.autoinvest import api as autoinvest_api
+from app.modules.bonds import api as bonds_api
 from app.modules.client_data import api as client_data_api
 from app.modules.closures import api as closures_api
 from app.modules.console import api as console_api
@@ -307,7 +308,11 @@ def create_app(
     app.include_router(migration_api.router)
     app.include_router(migration_claims_api.router)
     app.include_router(insights_api.router)
-    for router in (*investments_api.routers, *investment_transfers_api.routers):
+    for router in (
+        *investments_api.routers,
+        *investment_transfers_api.routers,
+        *bonds_api.routers,
+    ):
         app.include_router(router)
     for router in kyc_api.create_routers(
         identity_sealer, identity_provider, storage, identity_liveness, face_quality

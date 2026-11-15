@@ -128,6 +128,46 @@ export const BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.o
 });
 export type BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.infer<typeof BodyUploadProofClientPayoutDestinationsDestinationIdProofPost>;
 
+export const BondStatus = z.enum(["draft", "live", "paused"]);
+export type BondStatus = z.infer<typeof BondStatus>;
+
+export const Currency = z.enum(["UGX", "USD"]);
+export type Currency = z.infer<typeof Currency>;
+
+export const BondOut = z.object({
+  can_buy: z.boolean(),
+  code: z.string(),
+  coupon_percent: z.string(),
+  coupons_left: z.number().int(),
+  currency: Currency,
+  face_step_minor: z.number().int(),
+  isin: z.string(),
+  issue_date: z.string(),
+  maturity_date: z.string(),
+  minimum_face_minor: z.number().int(),
+  name: z.string(),
+  next_coupon_date: z.string().nullable(),
+  price: z.number().int().nullable(),
+  status: BondStatus,
+  years: z.number().int(),
+});
+export type BondOut = z.infer<typeof BondOut>;
+
+export const BondQuoteOut = z.object({
+  accrued_minor: z.number().int(),
+  code: z.string(),
+  cost_minor: z.number().int(),
+  coupon_minor: z.number().int(),
+  coupons_left: z.number().int(),
+  currency: Currency,
+  face_minor: z.number().int(),
+  gain_minor: z.number().int(),
+  next_coupon_date: z.string(),
+  price: z.number().int(),
+  total_back_minor: z.number().int(),
+});
+export type BondQuoteOut = z.infer<typeof BondQuoteOut>;
+
 export const CardOffer = z.object({
   amount: MoneyView,
   charge: MoneyView,
@@ -324,9 +364,6 @@ export const ClientComplaints = z.object({
   complaints: z.array(ClientComplaint),
 });
 export type ClientComplaints = z.infer<typeof ClientComplaints>;
-
-export const Currency = z.enum(["UGX", "USD"]);
-export type Currency = z.infer<typeof Currency>;
 
 export const InvestmentStatus = z.enum(["awaiting_payment", "active", "cancelled", "matured", "withdrawn", "unwound", "transferred"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
@@ -1685,6 +1722,45 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(BankOut),
+  },
+  "GET /client/bonds": {
+    method: "GET",
+    path: "/client/bonds",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BondOut),
+  },
+  "GET /client/bonds/{code}": {
+    method: "GET",
+    path: "/client/bonds/{code}",
+    params: z.object({
+    code: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BondOut,
+  },
+  "GET /client/bonds/{code}/quote": {
+    method: "GET",
+    path: "/client/bonds/{code}/quote",
+    params: z.object({
+    code: z.string(),
+  }),
+    query: z.object({
+    face_minor: z.number().int(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BondQuoteOut,
   },
   "GET /client/claim": {
     method: "GET",

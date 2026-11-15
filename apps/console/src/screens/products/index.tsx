@@ -17,6 +17,10 @@ import {
   KIND_LABELS,
   PRODUCT_STATUS_LABELS,
 } from "./format.ts";
+import { BondsError, bondsErrorMessage, type BondsApi } from "./bonds/api.ts";
+import { BondsSection, NewBondForm } from "./bonds/Bonds.tsx";
+import { connectedBondsApi } from "./bonds/http.ts";
+import { createStubBondsApi } from "./bonds/stub.ts";
 import { connectedCatalogueApi } from "./http.ts";
 import { EditProductForm, NewProductForm } from "./ProductForm.tsx";
 import { createStubCatalogueApi, sampleFrom } from "./stub.ts";
@@ -43,13 +47,16 @@ interface ProductsScreenProps {
   me?: string;
   /** Whether the person holds `products.change`. Without it the screen only shows products. */
   canChange?: boolean;
+  /** Bond issues, shown under the products. See docs/bonds.md. */
+  bondsApi?: BondsApi;
 }
 
 /**
  * The catalogue, and with `products.change` new products and edits sent for a second person.
- * `?new` opens the New product form and `?edit=CODE` the Edit form for one product.
+ * `?new` opens the New product form, `?edit=CODE` the Edit form for one product, and `?new-bond`
+ * the New bond form.
  */
-export function ProductsScreen({ api, me = "", canChange = false }: ProductsScreenProps) {
+export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: ProductsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -84,7 +91,7 @@ export function ProductsScreen({ api, me = "", canChange = false }: ProductsScre
       setRound((count) => count + 1);
       after?.();
     } catch (error) {
-      setFailed({ on, message: catalogueErrorMessage(error) });
+      setFailed({ on, message: error instanceof BondsError ? bondsErrorMessage(error) : catalogueErrorMessage(error) });
       if (error instanceof CatalogueError && (error.code === "conflict" || error.code === "not_found")) {
         const fresh = await fetchBook();
         if (fresh.state === "ready") setLoad(fresh);
@@ -137,6 +144,19 @@ export function ProductsScreen({ api, me = "", canChange = false }: ProductsScre
   );
 
   const editing = params.get("edit");
+  if (canChange && bondsApi && params.has("new-bond")) {
+    return (
+      <>
+        <Back />
+        <PageHeader title="New bond" summary="Enter a Bank of Uganda issue from the auction results. A second person approves it, and it starts as a draft." />
+        <NewBondForm
+          busy={busy === "new-bond"}
+          error={failed?.on === "new-bond" ? failed.message : null}
+          onSubmit={(draft) => void run("new-bond", () => bondsApi.proposeBond(draft), () => void navigate("/products"))}
+        />
+      </>
+    );
+  }
   if (canChange && params.has("new")) {
     return (
       <>
@@ -282,6 +302,7 @@ export function ProductsScreen({ api, me = "", canChange = false }: ProductsScre
           {shown ? <ClientView product={shown} canChange={canChange} /> : null}
         </div>
       )}
+      {bondsApi ? <BondsSection key={round} api={bondsApi} me={me} canChange={canChange} /> : null}
     </>
   );
 }
@@ -357,5 +378,8 @@ export default function ProductsPage() {
         })
       : connectedCatalogueApi(),
   );
-  return <ProductsScreen api={api} me={session?.staffId ?? ""} canChange={session ? can(session, "products.change") : false} />;
+  const [bondsApi] = useState<BondsApi>(() =>
+    isStubAuth() && session ? createStubBondsApi({ me: session.staffId, sample: sampleFrom(window.location.search) }) : connectedBondsApi(),
+  );
+  return <ProductsScreen api={api} bondsApi={bondsApi} me={session?.staffId ?? ""} canChange={session ? can(session, "products.change") : false} />;
 }
