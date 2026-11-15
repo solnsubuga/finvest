@@ -893,6 +893,7 @@ export const LoginPasskeyOptions = z.object({
 export type LoginPasskeyOptions = z.infer<typeof LoginPasskeyOptions>;
 
 export const LoginStarted = z.object({
+  email_codes: z.boolean().optional(),
   login_id: z.string(),
   methods: z.array(z.enum(["passkey", "authenticator", "code", "signup"])),
 });

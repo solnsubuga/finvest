@@ -315,13 +315,66 @@ async def test_a_proved_holder_answers_for_an_address_another_holds_unproved(api
     await api.identity.create_client(
         phone=f"+256{number}", email=email, password="another-long-passphrase"
     )
-    # Unproved, the newest holder answers for the address.
+    # Unproved, every holder is tried, so each logs in with their own password.
     assert (await login_by_email(api, email, "another-long-passphrase")).status_code == 200
+    assert (await login_by_email(api, email)).status_code == 200
     assert (await prove(api, email, first)).status_code == 204
     # Then the proved holder does, so the other account's password is refused.
     other = await login_by_email(api, email, "another-long-passphrase")
     assert (other.status_code, other.json()["error"]["code"]) == (401, "invalid_credentials")
     assert (await login_by_email(api, email)).status_code == 200
+
+
+async def test_a_newer_unproved_holder_cannot_shut_the_older_one_out(api: Api) -> None:
+    _, email, _ = await a_client(api)
+    assert email is not None
+    api.clock.advance(seconds=1)
+    await api.identity.create_client(
+        phone=f"+256{next(_numbers)}", email=email, password="another-long-passphrase"
+    )
+    older = await login_by_email(api, email)
+    assert older.status_code == 200
+    neither = await login_by_email(api, email, "not-the-password-at-all")
+    assert (neither.status_code, neither.json()["error"]["code"]) == (401, "invalid_credentials")
+
+
+async def sent_codes(api: Api, channel: str) -> list[str]:
+    async with api.worker.transaction() as session:
+        rows = await session.execute(
+            text(
+                "SELECT recipient FROM notification_messages "
+                "WHERE channel = :channel AND template = 'sign_in_code' ORDER BY id"
+            ),
+            {"channel": channel},
+        )
+        return [row.recipient for row in rows]
+
+
+async def test_sign_in_codes_are_emailed_only_to_a_proved_address(api: Api) -> None:
+    client_id, email, bearer = await a_client(api)
+    assert email is not None
+    async with api.worker.transaction() as session:
+        contact = await client_contact(session, client_id)
+    assert contact is not None
+    unproved = await login_by_email(api, email)
+    assert unproved.json()["email_codes"] is False
+    asked = await api.http.post(
+        "/client/login/code/send",
+        json={"login_id": unproved.json()["login_id"], "channel": "email"},
+    )
+    assert asked.status_code == 204
+    # Asked for by email, but texted, because the address is not proved.
+    assert email not in await sent_codes(api, "email")
+    assert contact.phone in await sent_codes(api, "sms")
+
+    assert (await prove(api, email, bearer)).status_code == 204
+    proved = await login_by_email(api, email)
+    assert proved.json()["email_codes"] is True
+    await api.http.post(
+        "/client/login/code/send",
+        json={"login_id": proved.json()["login_id"], "channel": "email"},
+    )
+    assert email in await sent_codes(api, "email")
 
 
 async def test_login_takes_a_phone_or_an_email_not_both(api: Api) -> None:

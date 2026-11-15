@@ -463,7 +463,9 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       }
       const loginId = nextId("login");
       logins.set(loginId, phone);
-      return { loginId, phone: byEmail ? null : phone, email, methods: methodsFor(account) };
+      // Like the API, a code is emailed only to a proved address.
+      const codeEmail = byEmail && account.emailVerified ? email : null;
+      return { loginId, phone: byEmail ? null : phone, email: codeEmail, methods: methodsFor(account) };
     },
 
     async verifyWithPasskey(loginId): Promise<Session> {

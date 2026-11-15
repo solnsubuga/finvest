@@ -10849,6 +10849,11 @@
         "additionalProperties": false,
         "description": "Step one passed. Nothing is open yet: finish with one of `methods`.",
         "properties": {
+          "email_codes": {
+            "default": false,
+            "title": "Email Codes",
+            "type": "boolean"
+          },
           "login_id": {
             "maxLength": 20,
             "minLength": 20,

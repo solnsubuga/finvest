@@ -38,11 +38,15 @@ class Api:
     identity: IdentityService
     clock: FakeClock
     worker: Database
+    owner: Database
 
 
 @pytest.fixture
 async def api(
-    test_database: TestDatabase, app_database: Database, worker_database: Database
+    test_database: TestDatabase,
+    app_database: Database,
+    worker_database: Database,
+    migrator_database: Database,
 ) -> AsyncIterator[Api]:
     settings = test_database.settings("finvest_app").model_copy(
         update={"client_allowed_origins": [ORIGIN]}
@@ -57,7 +61,7 @@ async def api(
     async with httpx.AsyncClient(
         transport=transport, base_url="https://api", headers=address
     ) as http:
-        yield Api(http, app.state.identity, clock, worker_database)
+        yield Api(http, app.state.identity, clock, worker_database, migrator_database)
 
 
 def a_phone() -> str:
@@ -444,12 +448,23 @@ async def test_a_code_for_one_sign_in_does_not_finish_another(api: Api) -> None:
     assert (response.status_code, code(response)) == (410, "expired")
 
 
-async def test_the_code_goes_by_email_only_when_the_client_has_an_address(api: Api) -> None:
+async def test_the_code_goes_by_email_only_to_a_proved_address(api: Api) -> None:
     address = f"client{next(_numbers)}@example.com"
-    phone, _ = await a_client(api, address)
+    phone, client_id = await a_client(api, address)
+    # Not proved: a stranger could own a mistyped address, so the code is texted.
     login_id = await start_login(api, phone)
     await api.http.post("/client/login/code/send", json={"login_id": login_id, "channel": "email"})
-    assert await texted(api, phone) == []
+    assert await texted(api, address) == []
+    assert len(await texted(api, phone)) == 1
+
+    async with api.owner.transaction() as session:
+        await session.execute(
+            text("UPDATE identity_clients SET email_verified_at = now() WHERE id = :id"),
+            {"id": client_id},
+        )
+    login_id = await start_login(api, phone)
+    await api.http.post("/client/login/code/send", json={"login_id": login_id, "channel": "email"})
+    assert len(await texted(api, phone)) == 1
     [emailed] = await texted(api, address)
     assert (
         await api.http.post(

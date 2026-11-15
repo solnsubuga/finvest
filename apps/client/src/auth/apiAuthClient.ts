@@ -150,7 +150,8 @@ export function createApiAuthClient(): AuthClient {
           return {
             loginId: result.login_id,
             phone: byEmail ? null : identifier.phone,
-            email: byEmail ? identifier.email.trim() : null,
+            // A code goes by email only to an address the client proved. Otherwise it is texted.
+            email: byEmail && result.email_codes ? identifier.email.trim() : null,
             methods: usable(result.methods),
           };
         } catch (error) {

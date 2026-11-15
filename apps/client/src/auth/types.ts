@@ -135,7 +135,10 @@ export type LoginChallenge = {
   loginId: string;
   /** The number typed to log in. Null for a log in by email, which never shows the number. */
   phone: string | null;
-  /** The proved address typed to log in, so a code can go there. Null for a log in by number. */
+  /**
+   * The address typed to log in, when it is proved, so a code can go there.
+   * Null for a log in by number, or by an address not confirmed yet.
+   */
   email: string | null;
   /** Where the code was last sent, once one has been. */
   codeSentBy?: CodeChannel;

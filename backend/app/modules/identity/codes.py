@@ -363,11 +363,14 @@ class CodeService:
         async with self.database.transaction() as session:
             account = (
                 await session.execute(
-                    text("SELECT phone, email FROM identity_clients WHERE id = :id"),
+                    text(
+                        "SELECT phone, CASE WHEN email_verified_at IS NOT NULL THEN email END "
+                        "AS email FROM identity_clients WHERE id = :id"
+                    ),
                     {"id": actor.id},
                 )
             ).one()
-            # Email only if the client gave an address. Otherwise the code is texted.
+            # Email only to an address the client proved. Otherwise the code is texted.
             by_email = channel == "email" and account.email is not None
             await self._issue(
                 session,
