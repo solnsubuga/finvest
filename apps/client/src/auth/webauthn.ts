@@ -1,17 +1,57 @@
 import { Platform } from "react-native";
 
 /**
- * Passkeys through the browser's WebAuthn API. The API sends the options as
- * JSON with base64url strings where WebAuthn wants bytes, and wants the
- * credential back in the same JSON form, so this file only converts between
- * the two and asks the browser.
+ * Passkeys. The API sends the options as JSON with base64url strings where
+ * WebAuthn wants bytes, and wants the credential back in the same JSON form.
  *
- * A phone build cannot use the browser's API. Passkeys there need a native
- * module and a development build, so `passkeysSupported()` is false and the
- * app offers the authenticator app or an SMS code instead.
+ * On the web this converts between the two and asks the browser's WebAuthn.
+ * On Android and iPhone, react-native-passkey takes and gives that JSON form
+ * as it is, and asks the phone's own passkeys (Credential Manager on Android,
+ * AuthenticationServices on iPhone). The phone only lets the app use passkeys
+ * for finvestug.com once finvestug.com says the app is Finvest's, in the
+ * association files the website serves, so a phone build offers passkeys only
+ * when it is built with `EXPO_PUBLIC_NATIVE_PASSKEYS=1`. Without it,
+ * `passkeysSupported()` is false and the app offers the authenticator app or
+ * an SMS code instead.
  */
 
 type Json = Record<string, unknown>;
+
+type NativePasskeys = {
+  isSupported(): boolean;
+  create(request: Json): Promise<Json>;
+  get(request: Json): Promise<Json>;
+};
+
+/** The native module, loaded only on a phone. A web build never bundles a call to it. */
+function nativePasskeys(): NativePasskeys | null {
+  if (Platform.OS === "web" || process.env.EXPO_PUBLIC_NATIVE_PASSKEYS !== "1") return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    return (require("react-native-passkey") as { Passkey: NativePasskeys }).Passkey;
+  } catch {
+    // Expo Go and other builds without the native module.
+    return null;
+  }
+}
+
+/**
+ * The module's errors carry a name in `error`. Closing the prompt, and a
+ * phone that holds no Finvest passkey, both mean nothing was used.
+ */
+function nativeCancel(error: unknown): boolean {
+  const name = typeof error === "object" && error !== null ? (error as { error?: unknown }).error : undefined;
+  return name === "UserCancelled" || name === "NoCredentials" || name === "Interrupted" || name === "TimedOut";
+}
+
+async function askThePhone(work: () => Promise<Json>): Promise<Json> {
+  try {
+    return await work();
+  } catch (error) {
+    if (nativeCancel(error)) throw new PasskeyCancelled();
+    throw error instanceof Error ? error : new Error("passkey");
+  }
+}
 
 export class PasskeyCancelled extends Error {
   constructor() {
@@ -21,6 +61,14 @@ export class PasskeyCancelled extends Error {
 }
 
 export function passkeysSupported(): boolean {
+  if (Platform.OS !== "web") {
+    const native = nativePasskeys();
+    try {
+      return native !== null && native.isSupported();
+    } catch {
+      return false;
+    }
+  }
   return (
     Platform.OS === "web" &&
     typeof window !== "undefined" &&
@@ -80,6 +128,8 @@ function isCancel(error: unknown): boolean {
 
 /** Makes a new passkey on this device and returns it in the JSON form the API reads. */
 export async function createPasskey(options: Json): Promise<Json> {
+  const native = nativePasskeys();
+  if (native) return askThePhone(() => native.create(options));
   let credential: PublicKeyCredential | null;
   try {
     credential = (await navigator.credentials.create({ publicKey: creationOptions(options) })) as PublicKeyCredential | null;
@@ -105,6 +155,8 @@ export async function createPasskey(options: Json): Promise<Json> {
 
 /** Signs the API's challenge with a passkey already on this device. */
 export async function signWithPasskey(options: Json): Promise<Json> {
+  const native = nativePasskeys();
+  if (native) return askThePhone(() => native.get(options));
   let credential: PublicKeyCredential | null;
   try {
     credential = (await navigator.credentials.get({ publicKey: requestOptions(options) })) as PublicKeyCredential | null;

@@ -1,7 +1,7 @@
 import { readdirSync } from "fs";
 import { join } from "path";
 
-import { destinations, sidebarGroups, tabBarDestinations } from "@/navigation/destinations";
+import { destinations, SIDEBAR_ACCOUNT_DESTINATION, sidebarGroups, tabBarDestinations } from "@/navigation/destinations";
 
 describe("destinations", () => {
   it("has a route file for every destination and a destination for every route file", () => {
@@ -12,12 +12,13 @@ describe("destinations", () => {
     expect(destinations.map((destination) => destination.name).sort()).toEqual(files);
   });
 
-  it("puts Home, Invest, Goals and Activity in the phone tab bar", () => {
+  it("puts Home, Invest, Goals, Activity and Profile in the phone tab bar", () => {
     expect(tabBarDestinations.map((destination) => destination.label)).toEqual([
       "Home",
       "Invest",
       "Goals",
       "Activity",
+      "Profile",
     ]);
   });
 
@@ -27,8 +28,11 @@ describe("destinations", () => {
     );
   });
 
-  it("groups every destination in the sidebar exactly once", () => {
-    const grouped = sidebarGroups.flatMap((group) => group.destinations.map((d) => d.name));
+  it("groups every destination in the sidebar exactly once, with Profile behind the signed-in name", () => {
+    const grouped = [
+      ...sidebarGroups.flatMap((group) => group.destinations.map((d) => d.name)),
+      SIDEBAR_ACCOUNT_DESTINATION,
+    ];
     expect([...grouped].sort()).toEqual(destinations.map((d) => d.name).sort());
     expect(new Set(grouped).size).toBe(grouped.length);
   });
@@ -40,7 +44,7 @@ describe("destinations", () => {
       [null, ["Home"]],
       ["Money", ["Invest", "Portfolio", "Activity"]],
       ["Planning", ["Goals", "Insights"]],
-      ["Account", ["Profile", "Documents", "Help"]],
+      ["Account", ["Documents", "Help"]],
     ]);
   });
 });

@@ -220,6 +220,20 @@ export interface AuthClient {
   startLogin(identifier: LoginIdentifier, password: string): Promise<LoginChallenge>;
   /** Log in, step 2, with a passkey. */
   verifyWithPasskey(loginId: string): Promise<Session>;
+  /**
+   * Whether this device can log in with a passkey alone, from the log in
+   * screen. False where the device has no passkeys to offer.
+   */
+  canLogInWithPasskey(): boolean;
+  /**
+   * Log in with a passkey alone: no number or password. The device offers
+   * the Finvest passkeys it holds, and the one chosen says whose account it
+   * is. It checks the client's fingerprint, face or screen lock, so it counts
+   * as both steps. Fails with `cancelled` when the client dismisses the
+   * device's prompt, and `passkey_failed` when the passkey is not one saved
+   * to an open account.
+   */
+  logInWithPasskey(): Promise<Session>;
   /** Log in, step 2, with the 6 digit code from an authenticator app. */
   verifyWithAuthenticator(loginId: string, code: string): Promise<Session>;
   /**

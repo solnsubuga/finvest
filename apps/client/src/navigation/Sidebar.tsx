@@ -4,12 +4,15 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
 import { Session } from "@/auth/types";
+import { useSignOut } from "@/auth/useSignOut";
 import { Icon } from "@/components/Icon";
 import { Logo } from "@/components/Logo";
+import { initials } from "@/profile/initials";
 import { Txt } from "@/components/Txt";
 import { colors, radii } from "@/theme";
 
-import { sidebarGroups } from "./destinations";
+import { SIDEBAR_ACCOUNT_DESTINATION, sidebarGroups } from "./destinations";
+import { useStartLoaderDone } from "./useStartLoaderDone";
 
 type Props = { activeName: string; session: Session };
 
@@ -17,6 +20,10 @@ type Props = { activeName: string; session: Session };
 export function Sidebar({ activeName, session }: Props) {
   const router = useRouter();
   const { demo } = useAuth();
+  const { signOut, busy } = useSignOut();
+  useStartLoaderDone();
+  const onProfile = activeName === SIDEBAR_ACCOUNT_DESTINATION;
+  const name = session.displayName ?? formatE164(session.phone);
   return (
     <View style={styles.sidebar} accessibilityRole="navigation" accessibilityLabel="Main">
       <View style={styles.logo}>
@@ -76,12 +83,54 @@ export function Sidebar({ activeName, session }: Props) {
             Demo account
           </Txt>
         ) : null}
-        <Txt size={12} color={colors.onBlackMuted}>
-          Signed in as
-        </Txt>
-        <Txt size={13} weight="bold" color={colors.white}>
-          {session.displayName ?? formatE164(session.phone)}
-        </Txt>
+        <Pressable
+          accessibilityRole="link"
+          accessibilityLabel={`Profile, signed in as ${name}`}
+          aria-current={onProfile ? "page" : undefined}
+          onPress={() => router.navigate("/profile")}
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+            styles.me,
+            onProfile && styles.itemActive,
+            !onProfile && (pressed || hovered) && styles.itemHover,
+          ]}
+          testID="sidebar-profile"
+        >
+          <View style={[styles.mini, onProfile && styles.miniActive]}>
+            {session.displayName ? (
+              <Txt size={12} weight="extrabold" color={onProfile ? colors.lime : colors.ink}>
+                {initials(session.displayName)}
+              </Txt>
+            ) : (
+              <Icon name="profile" size={16} color={onProfile ? colors.lime : colors.ink} />
+            )}
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Txt size={13} weight="bold" color={onProfile ? colors.ink : colors.white} numberOfLines={1}>
+              {name}
+            </Txt>
+            <Txt size={12} color={onProfile ? colors.ink : colors.onBlackMuted}>
+              View your profile
+            </Txt>
+          </View>
+          <Icon name="chevron" size={16} strokeWidth={2.2} color={onProfile ? colors.ink : colors.onBlackMuted} />
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          accessibilityState={{ busy, disabled: busy }}
+          disabled={busy}
+          onPress={signOut}
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+            styles.logOut,
+            (pressed || hovered) && styles.itemHover,
+          ]}
+          testID="sidebar-sign-out"
+        >
+          <Icon name="logout" size={18} color={colors.onBlackMuted} />
+          <Txt size={14} weight="semibold" color={colors.white}>
+            {busy ? "Logging out" : "Log out"}
+          </Txt>
+        </Pressable>
       </View>
     </View>
   );
@@ -120,5 +169,33 @@ const styles = StyleSheet.create({
     borderTopColor: colors.onBlackDivider,
     paddingTop: 14,
     paddingHorizontal: 8,
+  },
+  me: {
+    marginTop: 6,
+    marginHorizontal: -8,
+    padding: 8,
+    borderRadius: radii.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  mini: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.lime,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  miniActive: { backgroundColor: colors.black },
+  logOut: {
+    height: 40,
+    marginTop: 10,
+    marginHorizontal: -6,
+    paddingHorizontal: 6,
+    borderRadius: radii.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
 });

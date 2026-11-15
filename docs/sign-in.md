@@ -34,3 +34,28 @@ Migration `0236_client_own_changes`. The API still holds no UPDATE on `identity_
 - A downgrade refuses while number change codes or client re-confirmations exist.
 
 Each change is on the audit trail: `identity.password.changed`, `identity.phone.changed_by_client`, `identity.email.changed` and `identity.session.reconfirmed`.
+
+## Logging in with a passkey alone
+
+The owner asked for it on 2026-11-15: the log in screen has "Log in with a passkey", which signs a client in with no number or password. A passkey is held only by the client's device and the device checks their fingerprint, face or screen lock before it signs, so it counts as both steps, as a password then a passkey would. The session it opens is a passkey session: it counts as confirming it is you for ten minutes, and it limits nothing for 24 hours.
+
+| Route | |
+| --- | --- |
+| `POST /client/login/passkey-only/options` | No body. Answers `attempt_id` and `public_key`, options that list no passkeys, so the device offers any Finvest passkey it holds. The challenge is stored with no person (purpose `passkey_login`) for five minutes. 30 in fifteen minutes from one caller address. 503 `unavailable` when client passkeys are off. |
+| `POST /client/login/passkey-only/verify` | `{attempt_id, credential}`. Spends the challenge once, finds the passkey by its credential ID, checks the device's `userHandle` names the same client, checks the signature and that the device verified the person, and opens the session: a cookie for a browser, a token for the phone app. A passkey that is unknown, removed, or belongs to a closed, locked or frozen account is 401 `passkey_failed`, all alike. A spent, crossed or late challenge is 410 `expired`. |
+
+Passkeys added before this change were asked to be discoverable ("resident") where the device can, which every phone and computer passkey is. A security key that saved a passkey it cannot list still works as the second step after the password. Staff never log in this way: they always type their email and password first.
+
+## Passkeys in the phone apps
+
+The Android and iPhone apps add passkeys and log in with them through `react-native-passkey`, which asks the phone's own passkeys (Credential Manager on Android, AuthenticationServices on iPhone) with the same JSON options and answers the web uses. A passkey made in a browser on finvestug.com, and synced by Google or Apple, works in the app too, and the other way round.
+
+A phone lets an app use passkeys for finvestug.com only when finvestug.com vouches for the app, so three things must all be in place before an app build offers passkeys:
+
+| What | Where | Value |
+| --- | --- | --- |
+| The app's ids | `apps/client/app.json` | `com.finvestug.app` on both, and `webcredentials:finvestug.com` as the iPhone app's associated domain. |
+| The website's association files | `https://finvestug.com/.well-known/apple-app-site-association` and `/.well-known/assetlinks.json`, written by the site build (`apps/site/src/lib/app-association.ts`) | The site is built with `PUBLIC_APPLE_TEAM_ID` (Apple team ID) and `PUBLIC_ANDROID_CERT_SHA256` (the SHA-256 fingerprint of the Android app signing certificate, comma separated for more than one). Without them each file lists no app. |
+| The API's accepted origins | `FINVEST_CLIENT_PASSKEY_APP_ORIGINS` | `https://finvestug.com` for the iPhone app, and `android:apk-key-hash:<the same fingerprint as unpadded base64url>` for the Android app. |
+
+Then the phone build is made with `EXPO_PUBLIC_NATIVE_PASSKEYS=1`. Without it, or on a phone too old for passkeys (before Android 9 or iOS 16), the app offers no passkey and keeps the authenticator app and the SMS code, as before. Closing the phone's prompt, or a phone with no Finvest passkey, counts as nothing used.

@@ -19,7 +19,7 @@ Run `pnpm install` once at the repository root, then from `apps/client`:
 | `pnpm lint` | ESLint with the Expo rules |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm test` | Jest unit tests and the flow tests for sign-in and for Sign in and security |
-| `pnpm build:web` | Exports the static web build to `dist/`, then lists its screen files in `index.html` (`scripts/route-chunks.mjs`) |
+| `pnpm build:web` | Exports the static web build to `dist/`, then lists its screen files in `index.html` (`scripts/route-chunks.mjs`) and adds the start-up hints: preloads for the scripts, fonts and first screens, and a preconnect to the API (`scripts/start-hints.mjs`) |
 
 Add Expo packages with `npx expo install <package>` so the version matches the SDK.
 
@@ -53,7 +53,8 @@ The screens talk to the `AuthClient` interface in `src/auth/types.ts`. It follow
 - **Where the API is.** `EXPO_PUBLIC_API_URL` at build time. Without it a development build talks to a local backend on `http://localhost:8000` (`make dev`), and only a production build talks to `https://api.finvestug.com`. The local API must list the app's origin in `FINVEST_CLIENT_ALLOWED_ORIGINS`; Compose already allows `http://localhost:8081`.
 - **The session.** On the web it is the API's HttpOnly cookie, so the page never sees it. On a phone the API hands over a token, kept in the Keychain or Keystore with `expo-secure-store`, this device only. The app looks the session up when it starts, so a reload keeps you signed in, and goes back to log in when the API says the session has ended.
 - **Errors.** Every refusal arrives as the API's error code and becomes a sentence from `describeAuthError`. "Offline" and "timeout" are told apart in `src/api/http.ts` for the wording, but both count as uncertain, because a connection can drop after the request arrived. That matters for anything that moves money.
-- **Passkeys** use the browser's WebAuthn on the web. A phone build has no WebAuthn, so it hides the passkey option at log in and says so on the add screen. Passkeys on Android and iPhone need a native module and a development build, which is not done yet.
+- **Log in with a passkey.** The log in screen offers "Log in with a passkey" under the form wherever passkeys work. It asks the device for any Finvest passkey it holds, with no number or password, and opens a full session (`logInWithPasskey`). Closing the device's prompt says nothing was used; a passkey that is not saved to an open account says to log in with the number and password. In the demo, it logs in to `772 123 456`.
+- **Passkeys** use the browser's WebAuthn on the web, and `react-native-passkey` on Android and iPhone (a development or store build, not Expo Go). A phone build offers passkeys only when built with `EXPO_PUBLIC_NATIVE_PASSKEYS=1`, once finvestug.com serves the association files that vouch for the app (see [docs/sign-in.md](../../docs/sign-in.md#passkeys-in-the-phone-apps)). Without it the phone hides the passkey option at log in and says so on the add screen.
 
 The in-memory demo in `src/auth/stubAuthClient.ts` answers in tests, and in a build only with `EXPO_PUBLIC_DEMO_AUTH=1`, and the app says so on screen while it is active. A normal production build leaves it out, and CI checks that.
 
@@ -175,7 +176,6 @@ Not built yet: sending an investment to another client, changing a plan's amount
 - Clients never see tax rates, only net figures.
 - The app PIN or fingerprint unlocks a phone that is already signed in and approves payments. It never signs in a new device.
 - `app.json` cannot import the tokens, so its two `#0D0D0D` values (Android icon and splash background) are written by hand. Keep them equal to `colors.black`.
-- `docs/screenshots/sheets/` holds contact sheets of the same screenshots, for PR descriptions.
 - Screenshots in `docs/screenshots/` keep stable file names. Replace them in place when a screen changes.
 - Build to the [design canvas](../../docs/design.md). Every PR that adds or changes a screen includes screenshots.
 
@@ -191,3 +191,7 @@ The screens talk to the `SupportClient` interface in `src/support/types.ts`, who
 - In the demo (tests, or `EXPO_PUBLIC_DEMO_AUTH=1`) each signed-in account has its own memory. The two ready-made accounts start with the canvas's notifications and one closed complaint. An account made by signing up starts empty. A chat message gets one canned reply a few seconds later, which says it is the demo.
 
 Not built: push notifications on the device (they come with the backend's sending work), attachments in chat, and the screens behind payout, payout account and identity check notifications.
+
+## Starting on the web
+
+The page shell is `public/index.html`, which Expo uses in place of its own. It paints the Finvest mark on brand black from the HTML alone, before any script arrives, so a first visit never shows an empty page. The first screen drawn in `Screen`, the tab bar or the sidebar removes it once the app's font is in (`src/navigation/useStartLoaderDone.ts`), and the root layout removes it after eight seconds regardless. After fifteen seconds it says the start is slow and offers a reload. The shell has no inline script, so the Content-Security-Policy is unchanged. `metro.config.js` leaves Zod's message translations out of the bundle (about 290 KB); the app uses English only.

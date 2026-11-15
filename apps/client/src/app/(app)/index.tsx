@@ -37,19 +37,13 @@ import { formatAmount } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { useFocusLoaded } from "@/investing/useLoaded";
+import { useOpeningOrganisation } from "@/organisations/useOpening";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
+import { initials } from "@/profile/initials";
 import { useProfile } from "@/profile/ProfileProvider";
 import { colors } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
 
 /** What UGX 100,000 (or the product's minimum, if higher) would earn in the shortest live bill. */
 function useFirstExample(enabled: boolean): string | null {
@@ -78,9 +72,16 @@ function useSetUpSteps(openGoals: number | null, moving: boolean): SetUpStep[] |
   const identity = useIdentityCheck();
   const [questions] = useFocusLoaded(useCallback(() => profile.getRiskProfile(), [profile]));
   const [kin] = useFocusLoaded(useCallback(() => profile.getNextOfKin(), [profile]));
+  const opening = useOpeningOrganisation();
 
   return useMemo(() => {
-    if (identity.status === "loading" || questions.state === "loading" || kin.state === "loading" || openGoals === null) {
+    if (
+      identity.status === "loading" ||
+      questions.state === "loading" ||
+      kin.state === "loading" ||
+      opening.state === "loading" ||
+      openGoals === null
+    ) {
       return null;
     }
     const steps: SetUpStep[] = [];
@@ -95,6 +96,16 @@ function useSetUpSteps(openGoals: number | null, moving: boolean): SetUpStep[] |
         detail: copy?.detail ?? "Needed before you invest",
         done: approved,
         onPress: () => router.push("/id-check"),
+      });
+    }
+    if (opening.state === "ready" && opening.value) {
+      const approved = identity.status === "ready" && identity.check?.status === "approved";
+      steps.push({
+        key: "organisation",
+        title: "Open the company or group account",
+        detail: approved ? "Its registration papers and who signs for it" : "Once your ID check is approved",
+        done: false,
+        onPress: () => router.push("/account/organisations/new"),
       });
     }
     if (questions.state === "ready") {
@@ -124,7 +135,7 @@ function useSetUpSteps(openGoals: number | null, moving: boolean): SetUpStep[] |
       onPress: () => router.push("/goals/new"),
     });
     return steps.every((step) => step.done) ? [] : steps;
-  }, [identity, questions, kin, openGoals, moving, router]);
+  }, [identity, questions, kin, opening, openGoals, moving, router]);
 }
 
 export default function Home() {
@@ -308,7 +319,7 @@ export default function Home() {
         <View style={styles.header}>
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel="Profile"
+            accessibilityLabel="Your profile"
             onPress={() => router.navigate("/profile")}
             style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.8 }]}
             testID="home-profile"

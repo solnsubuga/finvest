@@ -123,3 +123,27 @@ describe("Activity on a wide screen", () => {
     expect(within(screen.getByTestId("activity-table")).getAllByText(/^Payment for/).length).toBeGreaterThan(0);
   });
 });
+
+describe("Log out on a wide screen", () => {
+  it("logs out from the sidebar on any page", async () => {
+    await logIn();
+    await visit("/activity");
+    await fireEvent.press(await screen.findByTestId("sidebar-sign-out"));
+    expect(await screen.findByText("Your money, working every day.")).toBeTruthy();
+  });
+});
+
+describe("Profile on a wide screen", () => {
+  it("opens from the signed-in name, not a menu item, and shows each status", async () => {
+    await logIn();
+    expect(within(screen.getByLabelText("Main")).queryByText("Profile")).toBeNull();
+    await fireEvent.press(screen.getByTestId("sidebar-profile"));
+    expect(await screen.findByTestId("profile-wide")).toBeTruthy();
+    expect(screen.getByTestId("profile-header")).toHaveTextContent(/\+256 772 123 456/);
+    expect(await screen.findByTestId("profile-id-check-status")).toBeTruthy();
+    expect(await screen.findByTestId("profile-next-of-kin-status")).toBeTruthy();
+    expect(screen.getByTestId("profile-security")).toHaveTextContent(/Passkey/);
+    await fireEvent.press(screen.getByTestId("sign-out"));
+    expect(await screen.findByText("Your money, working every day.")).toBeTruthy();
+  });
+});
