@@ -77,7 +77,7 @@ export function PotTransfers({ api, me, canChange, newKey = () => crypto.randomU
           Transfers between pots
         </h2>
         <p className="m-0 max-w-[760px] text-md text-muted">
-          Finvest's own money moving between its pots, such as a sweep from an ioTec wallet to the trust account. Record it as the provider or bank shows
+          Finvest's own money moving between its pots, such as a sweep from an ioTec wallet, or a Pesapal card settlement, to the trust account. Record it as the provider or bank shows
           it. A different person approves it, which posts it to the books.
         </p>
       </div>

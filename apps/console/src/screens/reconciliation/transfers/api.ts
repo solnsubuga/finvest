@@ -4,16 +4,19 @@
  * docs/reconciliation.md).
  *
  * Finvest moves its own money between pots, such as a sweep of collected mobile money from an
- * ioTec wallet to the trust bank account. One member of staff records a transfer that has been
+ * ioTec wallet, or a settlement of card payments from Pesapal, to the trust bank account. One member of staff records a transfer that has been
  * made, as the provider or bank shows it. A different one approves it, which posts it to the
  * ledger, or declines it. The backend checks every rule. The screen decides nothing.
  */
+
+import type { ReconciliationTransfersApiPotOut } from "@finvest/api-client/staff";
 
 import type { Amount, Currency } from "../api.ts";
 
 export type { Amount, Currency };
 
-export type PotSource = "iotec" | "bank";
+/** Typed from the API, so a pot source the backend adds fails the typecheck here. */
+export type PotSource = ReconciliationTransfersApiPotOut["source"];
 
 export interface Pot {
   source: PotSource;

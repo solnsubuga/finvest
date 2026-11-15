@@ -86,6 +86,19 @@ function samplePots(day: string, stubCase: DayCloseStubCase): Pot[] {
       importedBy: COLLEAGUE,
     },
     {
+      // Card payments wait here until Pesapal settles them to the trust account.
+      source: "pesapal",
+      accountReference: "cards",
+      name: "Pesapal balance",
+      opening: 1_035_000,
+      ledgerClosing: 3_105_000,
+      printedClosing: 3_105_000,
+      statementClosing: 3_105_000,
+      lines: [],
+      movements: [],
+      importedBy: COLLEAGUE,
+    },
+    {
       source: "bank",
       accountReference: "trust",
       name: "Trust bank account",

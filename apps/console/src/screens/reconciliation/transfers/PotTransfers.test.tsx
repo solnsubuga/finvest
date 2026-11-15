@@ -51,7 +51,15 @@ describe("transfers between pots", () => {
       reason: "Afternoon sweep",
     });
     expect(await screen.findByText(/Recorded. A different person/)).toBeInTheDocument();
-    expect(within(screen.getByRole("list", { name: "Transfers between pots waiting" })).getAllByRole("article")).toHaveLength(3);
+    expect(within(screen.getByRole("list", { name: "Transfers between pots waiting" })).getAllByRole("article")).toHaveLength(4);
+  });
+
+  it("shows a Pesapal card settlement with what Pesapal kept as its fee", async () => {
+    renderSection(createStubPotTransfersApi(ME, 0, "sample", NOW));
+    const list = await screen.findByRole("list", { name: "Transfers between pots waiting" });
+    const settlement = within(list).getByText("PSP-SETTLE-20261113").closest("article");
+    expect(settlement).toHaveTextContent("Pesapal balance");
+    expect(settlement).toHaveTextContent("UGX 105,000");
   });
 
   it("words a refusal of the record", async () => {
