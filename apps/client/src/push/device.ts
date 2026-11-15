@@ -1,6 +1,8 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
+import { loadNotifications as load } from "./notifications";
+
 /** What the phone says about push for this app. "unsupported" on the web, where there is none. */
 export type PushPermission = "granted" | "undetermined" | "denied" | "unsupported";
 
@@ -14,13 +16,6 @@ export interface PushDevice {
   token(): Promise<string>;
 }
 
-type Notifications = typeof import("expo-notifications");
-
-function load(): Notifications {
-  // Required on use, so the web bundle and the tests never load the native module.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("expo-notifications") as Notifications;
-}
 
 function toPermission(status: string): PushPermission {
   return status === "granted" ? "granted" : status === "denied" ? "denied" : "undetermined";
