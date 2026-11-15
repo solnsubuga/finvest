@@ -20,7 +20,7 @@ export default function LoginStart() {
   const router = useRouter();
   const { client, setLogin, setSession } = useAuth();
   const params = useLocalSearchParams<{ with?: string }>();
-  // The design's "Use email instead": a proved address in place of the number.
+  // The design's "Use email instead": the account's email address in place of the number.
   const [byEmail, setByEmail] = useState(params.with === "email");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -120,7 +120,7 @@ export default function LoginStart() {
             label="Email"
             value={email}
             onChangeText={setEmail}
-            hint="The address you confirmed by the link we emailed you."
+            hint="The email address on your Finvest account."
             error={emailError}
             keyboardType="email-address"
             inputMode="email"

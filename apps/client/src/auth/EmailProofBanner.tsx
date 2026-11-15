@@ -26,8 +26,7 @@ export function EmailProofBanner() {
         <View style={{ flex: 1, gap: 2 }}>
           <Txt weight="bold">Confirm your email</Txt>
           <Txt size={13} color={colors.muted}>
-            Open the link we sent to {email}. Then we can email your statements and receipts, and you
-            can log in with your email.
+            Open the link we sent to {email}. Then we can email your statements and receipts.
           </Txt>
         </View>
       </View>

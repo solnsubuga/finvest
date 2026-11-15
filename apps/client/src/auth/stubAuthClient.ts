@@ -452,9 +452,10 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       await wait();
       const byEmail = "email" in identifier;
       const email = byEmail ? identifier.email.trim().toLowerCase() : null;
-      // Like the API, only a proved address finds an account.
+      // Like the API, the address on the account, proved or not, with a proved holder first.
+      const held = byEmail ? [...accounts].filter(([, account]) => account.email === email) : [];
       const phone = byEmail
-        ? [...accounts].find(([, held]) => held.emailVerified && held.email === email)?.[0]
+        ? (held.find(([, account]) => account.emailVerified) ?? held[held.length - 1])?.[0]
         : identifier.phone;
       const account = phone ? accounts.get(phone) : undefined;
       if (!phone || !account || account.password !== password) {

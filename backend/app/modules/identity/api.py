@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import Field, model_validator
 
@@ -16,6 +17,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.modules.identity.domain.permissions import Permission, Role
 from app.modules.identity.domain.sessions import SecondStep
+from app.modules.identity.email_checks import EmailCheckService
 from app.modules.identity.service import (
     CONFIRMATION_WINDOW,
     AccountKind,
@@ -34,6 +36,8 @@ COOKIES: dict[AccountKind, str] = {
 }
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _BEARER = "bearer "
+
+logger = structlog.get_logger()
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -306,6 +310,14 @@ async def client_login_start(
         address=caller_address(request),
         by_email=by_email,
     )
+    if challenge.unproved_email_of is not None:
+        # Signing in by an address not proved yet works, and asks again to confirm it. Never
+        # holds the sign-in up: a link already sent, or one too many, is fine.
+        email_checks: EmailCheckService = request.app.state.email_checks
+        try:
+            await email_checks.send_link(challenge.unproved_email_of)
+        except ApplicationError as error:
+            logger.info("login_email_check_not_sent", error_code=error.code)
     return LoginStarted(login_id=challenge.id, methods=challenge.methods)
 
 
