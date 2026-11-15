@@ -39,6 +39,17 @@ def day(offset: int) -> date:
     return today() + timedelta(days=offset)
 
 
+# Run records are shared, one per day and currency, and keep the clock of the first test to add
+# to one or finish it as their start. A finish is refused before the start, so every test
+# finishes a run at the hour the scheduled job tests run it, and adds to one no later.
+FINISHED_AT_HOUR = 12
+
+
+async def finish(worker_database: Database, run_date: date) -> dict[str, int]:
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        return await accrual.finish_run(session, run_date, at(run_date, FINISHED_AT_HOUR))
+
+
 async def pay_interest(
     worker_database: Database, investment_id: str, run_date: date, clock: FakeClock | None = None
 ) -> Accrual | None:
@@ -309,8 +320,7 @@ async def test_one_investment_that_cannot_be_paid_does_not_stop_the_rest(
         )
 
     _, failed = await whole_run(worker_database, day(2))
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        behind = await accrual.finish_run(session, day(2), at(day(2)))
+    behind = await finish(worker_database, day(2))
 
     assert failed == 1
     assert behind == {"UGX": 1}
@@ -379,8 +389,7 @@ async def test_an_investment_left_behind_is_raised_until_it_is_paid(
         )
     later = at(day(2)).now() + timedelta(days=1)
     await whole_run(worker_database, day(2))
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        await accrual.finish_run(session, day(2), at(day(2)))
+    await finish(worker_database, day(2))
     during = (await operations_signals(app_database, later))["interest_behind"]
     assert during >= 1
     # Put right: the count drops at once, without waiting for the next run.
@@ -488,8 +497,7 @@ async def test_only_staff_read_the_record_of_runs(
     app_database: Database, worker_database: Database
 ) -> None:
     investment = await started(app_database, worker_database, NOW)
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        await accrual.finish_run(session, day(1), at(day(1)))
+    await finish(worker_database, day(1))
     client = Actor("client", investment.client_id)
     async with app_database.actor_transaction(client) as session:
         with pytest.raises(ApplicationError) as error:
@@ -511,9 +519,13 @@ async def test_nobody_in_the_api_writes_the_record_of_runs(app_database: Databas
             )
 
 
-async def test_the_record_of_a_run_only_grows(worker_database: Database) -> None:
-    async with worker_database.actor_transaction(SYSTEM) as session:
-        await accrual.finish_run(session, day(1), at(day(1)))
+async def test_the_record_of_a_run_only_grows(
+    app_database: Database, worker_database: Database
+) -> None:
+    # A run that paid someone, whatever ran before this test.
+    await started(app_database, worker_database, NOW)
+    await whole_run(worker_database, day(1))
+    await finish(worker_database, day(1))
     with pytest.raises(DBAPIError, match="the record of an interest run only grows"):
         async with worker_database.actor_transaction(SYSTEM) as session:
             await session.execute(

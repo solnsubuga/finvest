@@ -125,8 +125,10 @@ async def test_a_late_schedule_is_counted(
 
 
 async def test_the_endpoint_answers_ok_or_unavailable(
-    test_database: TestDatabase, app_database: Database
+    test_database: TestDatabase, app_database: Database, migrator_database: Database
 ) -> None:
+    # Stopped work of its own at NOW, so the answer does not depend on another test's.
+    await add_job(migrator_database, status="pending", run_at=NOW - timedelta(minutes=11))
     clock = FakeClock(current=QUIET)
     app = create_app(test_database.settings("finvest_app"), app_database, clock)
     transport = httpx.ASGITransport(app=app)

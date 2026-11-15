@@ -7,7 +7,7 @@ says so.
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from apscheduler.triggers.interval import IntervalTrigger  # type: ignore[import-untyped]
@@ -512,8 +512,11 @@ async def test_a_heartbeat_extends_the_lease_and_fails_once_lost(
 
 
 async def test_retries_back_off_then_fail_and_an_operator_can_requeue(
-    worker_database: Database, names: Names, fake_clock: FakeClock
+    worker_database: Database, names: Names
 ) -> None:
+    # Later than any other test's clock, so this job is the newest failure and the failed list,
+    # newest first and at most 500 long, shows it however many failures other tests left.
+    fake_clock = FakeClock(datetime(2090, 1, 1, tzinfo=UTC))
     kind = names.kind("flaky")
     healthy = False
 
@@ -546,8 +549,8 @@ async def test_retries_back_off_then_fail_and_an_operator_can_requeue(
     ]
 
     async with worker_database.transaction() as session:
-        # The failed-job queue is shared by every test in this database, so look at this
-        # test's own queue.
+        # The failed-job queue is shared by every test in this database, so look for this
+        # test's own queue in it.
         failed = await job_queue.failed_jobs(session, limit=500)
         assert next(job.id for job in failed if job.queue == names.queue) == job_id
         assert await job_queue.requeue_failed(session, job_id, now=fake_clock.now())

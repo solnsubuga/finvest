@@ -6,6 +6,7 @@ fake clock. Races use separate connection pools.
 
 import asyncio
 import json
+import secrets
 from collections.abc import AsyncIterator
 from datetime import timedelta
 
@@ -176,7 +177,7 @@ async def awaiting_deposit(
     msisdn, ref = phone(), reference()
     provider.on_send(msisdn, Accepted(ref))
     provider.on_status(msisdn, Pending(ref))
-    deposit = await start_deposit(app_database, clock, msisdn=msisdn)
+    deposit = await start_deposit(app_database, clock, msisdn=msisdn, provider=provider.name)
     await drain(worker)
     return deposit, msisdn, ref
 
@@ -831,12 +832,13 @@ async def test_a_deposit_that_was_never_sent_fails_and_is_not_sent_late(
 
 
 async def test_a_quiet_prompt_is_read_again_and_confirmed_once(
-    app_database: Database,
-    worker_database: Database,
-    provider: FakeCollections,
-    worker: Worker,
-    fake_clock: FakeClock,
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
 ) -> None:
+    # A provider of its own: the sweep takes the oldest quiet deposits of its provider a batch
+    # at a time, and other tests leave quiet deposits of the shared fake behind.
+    provider = FakeCollections()
+    provider.name = f"fake_{secrets.token_hex(4)}"
+    worker = deposit_worker(worker_database, provider, fake_clock)
     deposit, msisdn, ref = await awaiting_deposit(app_database, provider, worker, fake_clock)
     provider.on_status(msisdn, Confirmed(ref, ugx(50_000)))
     fake_clock.advance(seconds=SENDING_GRACE.total_seconds())

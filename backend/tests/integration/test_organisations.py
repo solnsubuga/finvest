@@ -192,9 +192,10 @@ async def test_a_company_opens_after_its_people_join_and_two_staff_approve(
 
     checker = await api.staff("operations")
     queue = (await api.http.get("/staff/organisations")).json()["items"]
-    assert [o["id"] for o in queue] == [organisation_id]
-    assert queue[0]["can_check"] is True and queue[0]["can_approve"] is False
-    assert all(s["verified_name"] for s in queue[0]["signatories"])
+    # Other tests leave companies waiting too, so find this one.
+    [mine] = [o for o in queue if o["id"] == organisation_id]
+    assert mine["can_check"] is True and mine["can_approve"] is False
+    assert all(s["verified_name"] for s in mine["signatories"])
     links = await api.http.post(f"/staff/organisations/{organisation_id}/document-links")
     assert links.status_code == 200, links.text
     assert len(links.json()["documents"]) == 2

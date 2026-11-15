@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import pytest
+from sqlalchemy import text
 
 from app.infrastructure.database import Database
 from tests.support import database as harness
@@ -48,6 +49,30 @@ async def migrator_database(test_database: TestDatabase) -> AsyncIterator[Databa
     database = Database(test_database.settings("finvest_migrator"))
     yield database
     await database.close()
+
+
+# When a job left by an earlier test is set aside: far before any clock a test sets, so it never
+# counts as a recent failure and lists of failed jobs, newest first, show it last.
+SET_ASIDE_AT = datetime(2000, 1, 1, tzinfo=UTC)
+SET_ASIDE = text(
+    "UPDATE jobs SET status = 'failed', lease_owner = NULL, lease_expires_at = NULL, "
+    "finished_at = :at, last_error_code = 'left_by_an_earlier_test' "
+    "WHERE status IN ('pending', 'running')"
+)
+
+
+@pytest.fixture(autouse=True)
+async def own_job_queue(migrator_database: Database) -> None:
+    """Start each test with no job waiting.
+
+    The job queue is shared by every test in this database, and a test's worker claims any due
+    job of the kinds it handles. A job an earlier test left waiting would then run through this
+    test's fakes, or a stale one would use up a claim and end a drain early. So the jobs earlier
+    tests left are failed, under their own error code, before each test, and a test's worker
+    only ever runs the jobs that test made.
+    """
+    async with migrator_database.transaction() as session:
+        await session.execute(SET_ASIDE, {"at": SET_ASIDE_AT})
 
 
 @pytest.fixture(params=["finvest_app", "finvest_worker"])
