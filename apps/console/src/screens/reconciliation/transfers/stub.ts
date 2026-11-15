@@ -12,6 +12,7 @@ const OTHER = "sample-colleague";
 export const SAMPLE_POTS: Pot[] = [
   { source: "iotec", accountReference: "mtn", name: "ioTec wallet, MTN", currency: "UGX" },
   { source: "iotec", accountReference: "airtel", name: "ioTec wallet, Airtel", currency: "UGX" },
+  { source: "pesapal", accountReference: "cards", name: "Pesapal balance", currency: "UGX" },
   { source: "bank", accountReference: "trust", name: "Trust bank account", currency: "UGX" },
 ];
 
@@ -54,9 +55,23 @@ export function createStubPotTransfersApi(me: string, delay = 150, which: PotTra
             proposedBy: me,
             proposedAt: new Date(now.getTime() - 12 * 60_000).toISOString(),
           },
+          {
+            // A Pesapal settlement of card payments: what Pesapal kept is its fee.
+            id: "-OdPotTransfer000003",
+            fromPot: named("pesapal", "cards"),
+            toPot: named("bank", "trust"),
+            sent: { minor: 3_105_000, currency: "UGX" },
+            received: { minor: 3_000_000, currency: "UGX" },
+            fee: { minor: 105_000, currency: "UGX" },
+            valueDate: day(-1, now),
+            providerReference: "PSP-SETTLE-20261113",
+            status: "proposed",
+            proposedBy: OTHER,
+            proposedAt: new Date(now.getTime() - 30 * 60_000).toISOString(),
+          },
         ]
       : [];
-  let made = 2;
+  let made = 3;
   const wait = <T>(value: () => T): Promise<T> =>
     new Promise((resolve, reject) =>
       setTimeout(() => {

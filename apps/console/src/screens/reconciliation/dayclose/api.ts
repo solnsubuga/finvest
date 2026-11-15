@@ -9,9 +9,12 @@
  * enforces every rule, and the screen only words what it answers.
  */
 
+import type { ReconciliationApiPotOut } from "@finvest/api-client/staff";
+
 import type { Amount } from "../api.ts";
 
-export type Source = "iotec" | "bank";
+/** Typed from the API, so a pot source the backend adds fails the typecheck here. */
+export type Source = ReconciliationApiPotOut["source"];
 
 export type Blocker =
   | "previous_day_not_closed"
