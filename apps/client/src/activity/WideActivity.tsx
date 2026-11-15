@@ -42,7 +42,7 @@ export function shownRows(items: ActivityItem[], filter: WideFilter, recent: boo
 
 function signed(item: ActivityItem): string {
   const figure = formatMoney(item.amount).replace(/^[A-Z]+ /, "");
-  return item.direction === "in" ? `+${figure}` : figure;
+  return item.direction === "in" ? `+${figure}` : `\u2212${figure}`;
 }
 
 /**

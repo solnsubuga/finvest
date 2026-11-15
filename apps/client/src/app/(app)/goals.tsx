@@ -5,6 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
 import { GoalCard } from "@/goals/Parts";
 import { GroupCard } from "@/goals/GroupParts";
@@ -86,6 +87,13 @@ export default function Goals() {
               </View>
             ))}
           </View>
+          <LinkCard
+            icon="repeat"
+            title="Save automatically"
+            description="Invest the same amount every week or month from your mobile money"
+            onPress={() => router.push("/autoinvest")}
+            testID="goals-autoinvest"
+          />
           <Together
             groups={state.groups}
             wide={wide}
