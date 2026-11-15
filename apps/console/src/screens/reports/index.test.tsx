@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { notConnectedAuditApi, type AuditApi, type AuditExport } from "./api.ts";
 import { ReportsScreen } from "./index.tsx";
+import { createStubDirectory } from "@/directory/stub.ts";
 import { createStubAuditApi } from "./stub.ts";
 
 const ME = { id: "-NstubMe000000000000", name: "Solomon N." };
@@ -10,7 +11,7 @@ const NOW = Date.parse("2026-11-13T09:00:00Z");
 
 function renderReports(api: AuditApi = createStubAuditApi(ME, () => NOW), canReadAudit = true) {
   const save = vi.fn<(exported: AuditExport) => void>();
-  render(<ReportsScreen api={api} canReadAudit={canReadAudit} save={save} />);
+  render(<ReportsScreen api={api} canReadAudit={canReadAudit} directory={createStubDirectory(ME)} save={save} />);
   return { api, save, user: userEvent.setup() };
 }
 
@@ -32,12 +33,30 @@ describe("reports and audit", () => {
     const { user } = renderReports();
     expect(await rows()).toHaveLength(50);
     const first = (await rows())[0] as HTMLElement;
-    expect(within(first).getByText("Grace Auma")).toBeInTheDocument();
-    expect(within(first).getByText("identity.team.change_proposed")).toBeInTheDocument();
+    expect(within(first).getByText("Solomon N.")).toBeInTheDocument();
+    expect(within(first).getByText("Report downloaded")).toBeInTheDocument();
+    expect(within(first).queryByText("reports.downloaded")).not.toBeInTheDocument();
     await user.click(within(first).getByRole("button", { expanded: false }));
-    expect(within(first).getByText("Moving to the operations desk")).toBeInTheDocument();
-    expect(within(first).getByText("change_role")).toBeInTheDocument();
+    // The code stays on the details, for anyone matching it against an export.
+    expect(within(first).getByText("reports.downloaded")).toBeInTheDocument();
+    expect(within(first).getByText("client_balances", { selector: "dd" })).toBeInTheDocument();
     expect(screen.getByText(/50 events shown, older ones follow/)).toBeInTheDocument();
+  });
+
+  it("reads actions in words and names clients by name and account number, never by raw ID", async () => {
+    renderReports();
+    const all = await rows();
+    const second = all[1] as HTMLElement;
+    expect(within(second).getByText("Grace Auma")).toBeInTheDocument();
+    expect(within(second).getByText("Request to run interest again approved")).toBeInTheDocument();
+    const signedIn = all[2] as HTMLElement;
+    expect(await within(signedIn).findAllByText("Amara Nakato · 1001004827")).toHaveLength(2);
+    expect(within(signedIn).getByText("Signed in")).toBeInTheDocument();
+    expect(within(signedIn).queryByText(/sample-client-amara/)).not.toBeInTheDocument();
+    // A client the directory cannot find is still not shown by ID.
+    const unknown = all[13] as HTMLElement;
+    expect(within(unknown).getAllByText("A client")).toHaveLength(2);
+    expect(within(unknown).queryByText(/-NstubClient/)).not.toBeInTheDocument();
   });
 
   it("shows older events after the first page", async () => {
@@ -54,7 +73,7 @@ describe("reports and audit", () => {
     await user.selectOptions(screen.getByLabelText("Outcome"), "denied");
     await user.click(screen.getByRole("button", { name: "Show events" }));
     const denied = await rows();
-    expect(denied).toHaveLength(5);
+    expect(denied).toHaveLength(4);
     for (const row of denied) expect(within(row).getByText("Denied")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Record ID"), "-NstubNothing");

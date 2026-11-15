@@ -1,9 +1,12 @@
-import { Fragment, useCallback, useEffect, useState, type FormEvent } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
 import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
+import { emptyDirectory, type ClientCard, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
+import { createStubDirectory } from "@/directory/stub.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import {
@@ -18,12 +21,14 @@ import {
   type AuditFilters,
   type Facets,
 } from "./api.ts";
+import { describeAction, describeRecordType } from "./actions.ts";
 import { createHttpAuditApi } from "./http.ts";
 import {
   ACTOR_KIND_LABELS,
   actorIdLabel,
   CATEGORY_LABELS,
   describeActor,
+  describeClient,
   formatDetail,
   formatTime,
   narrowByActorLabel,
@@ -57,6 +62,8 @@ interface ReportsScreenProps {
   api: AuditApi;
   /** `audit.view`. Without it the screen says so and asks the API for nothing. */
   canReadAudit: boolean;
+  /** Names the clients the trail holds only by ID. Left out, they read as "A client". */
+  directory?: Directory;
   save?: (exported: AuditExport) => void;
   /** The reports and their schedules. Left out, the screen shows the audit trail alone. */
   reports?: {
@@ -70,7 +77,7 @@ interface ReportsScreenProps {
   } | null;
 }
 
-export function ReportsScreen({ api, canReadAudit, save = saveFile, reports = null }: ReportsScreenProps) {
+export function ReportsScreen({ api, canReadAudit, directory = emptyDirectory, save = saveFile, reports = null }: ReportsScreenProps) {
   return (
     <>
       <PageHeader title="Reports and audit" summary={SUMMARY} />
@@ -78,7 +85,7 @@ export function ReportsScreen({ api, canReadAudit, save = saveFile, reports = nu
         <ReportsSection api={reports.api} me={reports.me} save={reports.save ?? saveFile} newKey={reports.newKey ?? (() => crypto.randomUUID())} link={reports.link ?? null} />
       ) : null}
       {canReadAudit ? (
-        <AuditTrail api={api} save={save} />
+        <AuditTrail api={api} directory={directory} save={save} />
       ) : (
         <section className="flex max-w-[640px] flex-col gap-2 rounded-xl border border-border bg-surface p-5">
           <h2 className="m-0 text-xl font-extrabold">Audit trail</h2>
@@ -89,7 +96,15 @@ export function ReportsScreen({ api, canReadAudit, save = saveFile, reports = nu
   );
 }
 
-function AuditTrail({ api, save }: { api: AuditApi; save: (exported: AuditExport) => void }) {
+/** The clients an event is about: the one who acted, and the one it was done to. */
+function clientIds(event: AuditEvent): string[] {
+  const ids: string[] = [];
+  if (event.actorKind === "client" && event.actorId) ids.push(event.actorId);
+  if (event.resourceType === "client" && event.resourceId) ids.push(event.resourceId);
+  return ids;
+}
+
+function AuditTrail({ api, directory, save }: { api: AuditApi; directory: Directory; save: (exported: AuditExport) => void }) {
   const [filters, setFilters] = useState<AuditFilters>({});
   const [draft, setDraft] = useState<AuditFilters>({});
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -97,6 +112,21 @@ function AuditTrail({ api, save }: { api: AuditApi; save: (exported: AuditExport
   const [open, setOpen] = useState<string | null>(null);
   const [more, setMore] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
   const [exporting, setExporting] = useState<{ busy: boolean; error: string | null; done: boolean }>({ busy: false, error: null, done: false });
+  // Each client is looked up once. A client who cannot be found reads as "A client".
+  const [clients, setClients] = useState<Record<string, ClientCard | null>>({});
+  const asked = useRef(new Set<string>());
+
+  const events = load.state === "ready" ? load.events : null;
+  useEffect(() => {
+    for (const clientId of (events ?? []).flatMap(clientIds)) {
+      if (asked.current.has(clientId)) continue;
+      asked.current.add(clientId);
+      void directory.client(clientId).then(
+        (card) => setClients((known) => ({ ...known, [clientId]: card })),
+        () => setClients((known) => ({ ...known, [clientId]: null })),
+      );
+    }
+  }, [events, directory]);
 
   useEffect(() => {
     let current = true;
@@ -234,6 +264,7 @@ function AuditTrail({ api, save }: { api: AuditApi; save: (exported: AuditExport
                 event={event}
                 open={open === event.id}
                 onToggle={() => setOpen(open === event.id ? null : event.id)}
+                clients={clients}
                 onNarrow={(next) => apply({ ...filters, ...next })}
               />
             ))}
@@ -264,12 +295,15 @@ function Select<T extends string>({
   value,
   options,
   labels,
+  describe,
   onChange,
 }: {
   label: string;
   value: T | undefined;
   options: readonly T[];
   labels?: Record<T, string>;
+  /** Words for an option not in `labels`, such as an action code. */
+  describe?: (option: T) => string;
   onChange: (value: T | undefined) => void;
 }) {
   return (
@@ -279,7 +313,7 @@ function Select<T extends string>({
         <option value="">Any</option>
         {options.map((option) => (
           <option key={option} value={option}>
-            {labels ? labels[option] : option}
+            {labels ? labels[option] : describe ? describe(option) : option}
           </option>
         ))}
       </select>
@@ -335,7 +369,7 @@ function FilterForm({
         <Select label="Kind" value={draft.category} options={CATEGORIES} labels={CATEGORY_LABELS} onChange={set("category")} />
         <Select label="Outcome" value={draft.outcome} options={OUTCOMES} labels={OUTCOME_LABELS} onChange={set("outcome")} />
         <Select label="Done by" value={draft.actorKind} options={ACTOR_KINDS} labels={ACTOR_KIND_LABELS} onChange={set("actorKind")} />
-        <Select label="Action" value={draft.action} options={actions} onChange={set("action")} />
+        <Select label="Action" value={draft.action} options={actions} describe={describeAction} onChange={set("action")} />
         <Select label="Record type" value={draft.resourceType} options={kinds} onChange={set("resourceType")} />
         <Text label="Record ID" value={draft.resourceId} onChange={set("resourceId")} />
         <Text label="Staff or client ID" value={draft.actorId} onChange={set("actorId")} />
@@ -363,14 +397,20 @@ function EventRow({
   event,
   open,
   onToggle,
+  clients,
   onNarrow,
 }: {
   event: AuditEvent;
   open: boolean;
   onToggle: () => void;
+  clients: Record<string, ClientCard | null>;
   onNarrow: (filters: AuditFilters) => void;
 }) {
   const record = event.resourceId ? `${event.resourceType} ${event.resourceId}` : event.resourceType;
+  const actor = describeActor(event, event.actorId ? clients[event.actorId] : null);
+  // A record that is a client reads by their name. Anything else reads by its kind, with its ID below.
+  const recordWords =
+    event.resourceType === "client" && event.resourceId ? describeClient(clients[event.resourceId]) : describeRecordType(event.resourceType);
   const details = Object.entries(event.details);
   return (
     <li className="border-b border-border last:border-b-0">
@@ -381,9 +421,9 @@ function EventRow({
         className="grid w-full cursor-pointer gap-1 bg-transparent px-4 py-3 text-left text-md text-ink hover:bg-surface-sunken lg:grid-cols-[180px_200px_minmax(0,1fr)_minmax(0,220px)_100px] lg:items-center lg:gap-4"
       >
         <span className="text-sm text-muted">{formatTime(event.occurredAt)}</span>
-        <span className="font-bold">{describeActor(event)}</span>
-        <span className="min-w-0 font-mono text-sm break-words">{event.action}</span>
-        <span className="min-w-0 truncate text-sm text-muted">{record}</span>
+        <span className="font-bold">{actor}</span>
+        <span className="min-w-0 break-words">{describeAction(event.action)}</span>
+        <span className="min-w-0 truncate text-sm text-muted">{recordWords}</span>
         <span>
           <span className={cn("rounded-pill px-2 py-0.5 text-2xs font-bold", OUTCOME_TONE[event.outcome])}>{OUTCOME_LABELS[event.outcome]}</span>
         </span>
@@ -393,6 +433,8 @@ function EventRow({
           <dl className="m-0 grid gap-x-4 gap-y-2 text-sm [grid-template-columns:max-content_minmax(0,1fr)]">
             <dt className="font-bold text-muted">Reason</dt>
             <dd className="m-0">{event.reason ?? "None given"}</dd>
+            <dt className="font-bold text-muted">Action code</dt>
+            <dd className="m-0 font-mono break-all">{event.action}</dd>
             <dt className="font-bold text-muted">Kind</dt>
             <dd className="m-0">{CATEGORY_LABELS[event.category]}</dd>
             <dt className="font-bold text-muted">Record</dt>
@@ -459,9 +501,15 @@ export default function ReportsPage() {
     return base ? createHttpReportsApi(createHttp(base)) : notConnectedReportsApi;
   });
   const [link] = useState<ReportLink | null>(() => readLink(window.location.search));
+  const [directory] = useState<Directory>(() => {
+    if (isStubAuth() && session) return createStubDirectory({ id: session.staffId, name: session.name });
+    const base = apiBaseUrl();
+    return base ? createHttpDirectory(createHttp(base)) : emptyDirectory;
+  });
   return (
     <ReportsScreen
       api={api}
+      directory={directory}
       canReadAudit={session ? can(session, "audit.view") : false}
       reports={canReadReports && session ? { api: reportsApi, me: session.staffId, link } : null}
     />
