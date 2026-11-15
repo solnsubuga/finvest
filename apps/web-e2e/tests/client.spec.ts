@@ -338,18 +338,27 @@ test("a client sends part of an investment to another client after checking the 
   await expect(page.locator("text=You invested >> visible=true")).toBeVisible();
 });
 
-/** A phone opens the investment's own screen to send; a wide Portfolio has Send in the detail beside its table. */
+/**
+ * A phone opens the investment's own screen to send; a wide Portfolio has Send in the detail beside its table.
+ * Portfolio is shown first: until it is, Home's own investment cards are still on screen and could take the
+ * click, and Portfolio would then open on top of the send screen. Screens left behind in the stack stay
+ * mounted but hidden, so each step picks the visible match.
+ */
 async function openToSend(page: Page) {
-  const card = page.getByLabel(/^91 Day Treasury Bill, Running/).first();
-  const row = page.getByLabel(/^91 Day Treasury Bill, worth/).first();
+  const visible = (testId: string) => page.getByTestId(testId).filter({ visible: true });
+  // The phone's totals card, or the wide page's Invest more button: Portfolio is the screen in front.
+  await expect(visible("portfolio-totals").or(visible("portfolio-invest")).first()).toBeVisible();
+  const card = page.getByLabel(/^91 Day Treasury Bill, Running/).filter({ visible: true }).first();
+  const row = page.getByLabel(/^91 Day Treasury Bill, worth/).filter({ visible: true }).first();
   await card.or(row).first().waitFor();
   if (await card.count()) {
     await card.click();
-    await page.getByTestId("send-investment").click();
+    await visible("send-investment").click();
   } else {
     await row.click();
-    await page.getByTestId("detail-send").click();
+    await visible("detail-send").click();
   }
+  await expect(visible("send-to")).toBeVisible();
 }
 
 test("a screen opened for the first time while offline says so, and opens once back online", async ({ page, context }) => {
