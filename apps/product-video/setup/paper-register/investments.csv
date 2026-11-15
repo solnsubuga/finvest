@@ -1,0 +1,4 @@
+legacy_investment_ref,legacy_client_ref,product_code,status,principal,annual_rate_percent,tax_percent,start_date,maturity_date,interest_before_tax,tax_withheld
+INV/2026/118,PAPER-0012,TREA-91,running,500000,11.25,20,2026-12-01,2027-03-02,11558,2312
+INV/2026/121,PAPER-0013,TREA-91,running,1200000,11.25,20,2026-12-15,2027-03-16,22562,4512
+INV/2026/127,PAPER-0014,TREA-91,pending_payment,300000,,,,,,

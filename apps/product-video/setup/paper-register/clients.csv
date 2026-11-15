@@ -1,0 +1,4 @@
+legacy_client_ref,source,surname,given_names,phone,email,date_of_birth,id_type,id_number,id_expires_on,id_verified,legacy_account_number,next_of_kin_name,next_of_kin_phone
+PAPER-0012,manual,NAKATO,Florence,0700000801,florence@finvest-demo.test,1979-06-21,national_id,CF79062B4KDA2M,2029-04-30,yes,,Joseph Nakato,0700000802
+PAPER-0013,manual,OPIO,Denis,0700000803,,1988-01-09,national_id,CM88010C7RTE5P,2031-08-15,yes,,,
+PAPER-0014,manual,KIGGUNDU,Ronald,,,1969-11-30,national_id,CM69113D2WLX8Q,,no,,,
