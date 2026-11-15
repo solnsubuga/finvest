@@ -1177,6 +1177,7 @@ async def test_a_bad_request_saves_nothing_and_does_not_echo_what_was_sent(
                 idempotency_key=f"key-{push_id()}",
                 provider=PROVIDER,
                 clock=fake_clock,
+                account_phone=phone(),
             )
     assert refused.value.code == "validation_failed"
     problem = refused.value.fields[0]

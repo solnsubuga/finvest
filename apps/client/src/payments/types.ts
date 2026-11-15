@@ -307,7 +307,7 @@ const messages: Record<PaymentErrorCode, string> = {
   not_found: "We could not find this payment.",
   card_refused: "This cannot be paid by card right now. Pay by mobile money or bank transfer instead.",
   other_number_limit:
-    "You have paid from other numbers five times today. Pay from your own number, or try that number again tomorrow.",
+    "You have asked other numbers to pay five times in the last 24 hours. Pay from your own number, or try again later.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

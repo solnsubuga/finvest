@@ -39,6 +39,7 @@ from app.modules.ledger.domain.entries import (
     debit,
 )
 from app.modules.notifications import contract as notifications
+from app.modules.payments.domain.cards import HOSTED_PROVIDERS
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
     OTHER_NUMBER_PERIOD,
@@ -251,7 +252,7 @@ async def request_deposit(
     idempotency_key: str,
     provider: str,
     clock: Clock,
-    account_phone: str | None = None,
+    account_phone: str,
 ) -> Deposit:
     """Save a client's mobile money payment for one investment or goal, and a job to send it.
 
@@ -281,7 +282,7 @@ async def request_deposit(
             raise ApplicationError(
                 "unavailable", fields=[FieldProblem(field_path=["network"], code="channel_paused")]
             )
-        if account_phone is not None and msisdn != normalise_msisdn(account_phone):
+        if msisdn != normalise_msisdn(account_phone):
             await _limit_other_numbers(session, client_id, normalise_msisdn(account_phone), now)
         deposit_id = push_id()
         await insert_deposit(
@@ -333,10 +334,11 @@ async def request_deposit(
 _CLIENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
 # The client's phone prompts to numbers other than the one on their account, in the period. A
 # payment on a hosted page is not a prompt we send, so it does not count.
+_HOSTED = ", ".join("'" + name + "'" for name in sorted(HOSTED_PROVIDERS))
 _OTHER_NUMBER_PROMPTS = text(
-    "SELECT count(*) FROM payment_deposits WHERE client_id = :client_id "
+    "SELECT count(*) FROM payment_deposits WHERE client_id = :client_id "  # noqa: S608 - constant names
     "AND method IN ('mtn', 'airtel') AND payer_msisdn <> :account AND created_at > :since "
-    "AND provider NOT IN ('pesapal', 'card_sandbox')"
+    f"AND provider NOT IN ({_HOSTED})"
 )
 
 

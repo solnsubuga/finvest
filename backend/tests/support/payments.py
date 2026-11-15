@@ -126,8 +126,8 @@ async def start_deposit(
     provider: str = PROVIDER,
     account_phone: str | None = None,
 ) -> Deposit:
-    """Start a deposit, prompting `msisdn` (any number may pay). `account_phone`, when given, is
-    the number on the client's account, which limits prompts to other numbers."""
+    """Start a deposit, prompting `msisdn` (any number may pay). `account_phone` is the number
+    on the client's account, which limits prompts to other numbers: `msisdn` when left out."""
     actor = actor or client()
     msisdn = msisdn or phone()
     async with database.actor_transaction(actor) as session:
@@ -144,7 +144,7 @@ async def start_deposit(
             idempotency_key=key or f"key-{push_id()}",
             provider=provider,
             clock=clock,
-            account_phone=account_phone,
+            account_phone=account_phone or msisdn,
         )
 
 
