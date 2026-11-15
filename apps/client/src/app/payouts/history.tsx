@@ -82,7 +82,7 @@ export default function Payouts() {
 }
 
 function limitRows(limits: Limits) {
-  const shown = (money: Limits["bankPerDay"]) => (money ? formatMoney(money) : "Not set");
+  const shown = (money: Limits["bankPerDay"]) => (money ? formatMoney(money) : "No limit");
   return [
     { label: "Mobile money, each payout", value: formatMoney(limits.mobileMoneyPerPayout) },
     { label: "Mobile money, each day", value: shown(limits.mobileMoneyPerDay) },

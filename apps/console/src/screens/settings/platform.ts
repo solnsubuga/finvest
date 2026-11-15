@@ -238,9 +238,9 @@ export const BOUNDS = {
 
 const SHILLINGS = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
 
-/** "UGX 5,000,000", or "Not set". */
-export function shillings(amount: number | null): string {
-  return amount === null ? "Not set" : `UGX ${SHILLINGS.format(amount)}`;
+/** "UGX 5,000,000". A withdrawal limit that is not set does not apply, so it reads "No limit". */
+export function shillings(amount: number | null, none = "No limit"): string {
+  return amount === null ? none : `UGX ${SHILLINGS.format(amount)}`;
 }
 
 const DAY = new Intl.DateTimeFormat("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
