@@ -65,12 +65,15 @@ check_tls() { # HOST
       fail "$version handshake failed or the certificate did not verify"
     fi
   done
-  # Security level 0 lets this client offer TLS 1.1 at all, so a refusal is the server's.
+  # Security level 0 lets this client offer TLS 1.1 if its OpenSSL still can. Only the server's
+  # protocol version alert counts as a refusal; a client that cannot offer TLS 1.1 proves nothing.
   if openssl s_client -connect "$host:443" -servername "$host" -tls1_1 -cipher 'DEFAULT@SECLEVEL=0' \
-    </dev/null >/dev/null 2>&1; then
+    </dev/null >"$work/tls" 2>&1; then
     fail "TLS 1.1 is accepted"
+  elif grep -qi 'alert protocol version' "$work/tls"; then
+    pass "TLS 1.1 is refused by the server"
   else
-    pass "TLS 1.1 is refused"
+    note "this client could not offer TLS 1.1, so its refusal is unconfirmed (min_tls_version is 1.2 in Terraform)"
   fi
   fetch "http://$host/"
   if [[ "$status" =~ ^30[178]$ ]] && header Location | grep -q "^https://$host"; then
