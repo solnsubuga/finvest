@@ -157,7 +157,7 @@ describe("paying for an investment by mobile money", () => {
     await fireEvent.press(screen.getByTestId("pay-submit"));
 
     await screen.findByText("Pay on Pesapal's secure page");
-    expect(screen.getByText(/Pay from \+256 77• ••• •56, the number on your Finvest account/)).toBeTruthy();
+    expect(screen.getByText(/Pay from your own number ending 56, the one on your Finvest account/)).toBeTruthy();
     expect(screen.queryByText(/Dial \*165#/)).toBeNull();
     await advance(2_000);
     await screen.findByText("Open the secure page");

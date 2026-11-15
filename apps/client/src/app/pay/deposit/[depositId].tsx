@@ -198,7 +198,7 @@ function OnPage({
             ]}
           />
           <Notice tone="warning">
-            {`Pay from ${deposit.payer}, the number on your Finvest account. A payment from any other number is not added to your investment until our team has checked it.`}
+            {`Pay from your own number ending ${deposit.payer.replace(/\D/g, "").slice(-2)}, the one on your Finvest account. A payment from any other number is not added to your investment until our team has checked it.`}
           </Notice>
         </View>
       </Screen>
