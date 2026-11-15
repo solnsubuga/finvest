@@ -33,19 +33,23 @@ function templates(me: Me): Template[] {
   const system = { actorKind: "system" as const, actorId: null, actorName: null };
   const provider = { actorKind: "provider" as const, actorId: null, actorName: null };
   const none: Record<string, JsonValue> = {};
+  const amara = { actorKind: "client" as const, actorId: "sample-client-amara", actorName: null };
+  const peter = { actorKind: "client" as const, actorId: "sample-client-peter", actorName: null };
   return [
-    { ...grace, category: "change", action: "identity.team.change_proposed", outcome: "succeeded", resourceType: "staff_change", resourceId: "-NstubChange00000001", reason: "Moving to the operations desk", details: { kind: "change_role", role: "operations" } },
-    { ...self, category: "approval", action: "identity.team.change_approved", outcome: "succeeded", resourceType: "staff_change", resourceId: "-NstubChange00000000", reason: "Agreed at the Monday meeting", details: { kind: "invite" } },
-    { ...client, category: "security", action: "identity.client.signed_in", outcome: "succeeded", resourceType: "client", resourceId: "-NstubClient00000042", reason: null, details: { method: "passkey" } },
-    { ...daniel, category: "access", action: "identity.staff.denied", outcome: "denied", resourceType: "route", resourceId: "/staff/audit/events", reason: null, details: { permission: "audit.view" } },
-    { ...ruth, category: "change", action: "notifications.suppression.lift_proposed", outcome: "succeeded", resourceType: "email_suppression", resourceId: "8f3a1c0d", reason: "Client fixed their inbox", details: none },
-    { ...grace, category: "approval", action: "notifications.suppression.lift_approved", outcome: "succeeded", resourceType: "email_suppression", resourceId: "8f3a1c0d", reason: "Confirmed on a call", details: none },
-    { ...system, category: "operator_control", action: "reconciliation.day.closed", outcome: "succeeded", resourceType: "reconciliation_day", resourceId: "2026-11-12", reason: null, details: { lines: 184, unmatched: 0 } },
-    { ...provider, category: "change", action: "payments.collection.confirmed", outcome: "succeeded", resourceType: "collection", resourceId: "-NstubCollection0007", reason: null, details: { provider: "iotec" } },
-    { ...self, category: "change", action: "identity.client.lock_proposed", outcome: "succeeded", resourceType: "client", resourceId: "-NstubClient00000017", reason: "Client reported a lost phone", details: { lock: true } },
-    { ...daniel, category: "security", action: "identity.staff.sign_in_failed", outcome: "failed", resourceType: "staff", resourceId: "-NstubDanielKato0000", reason: null, details: { step: "authenticator" } },
+    { ...self, category: "access", action: "reports.downloaded", outcome: "succeeded", resourceType: "report", resourceId: "client_balances", reason: null, details: { report: "client_balances", rows: 412 } },
+    { ...grace, category: "approval", action: "investments.run_request.approved", outcome: "succeeded", resourceType: "investment_run_request", resourceId: "-NstubRunRequest0002", reason: "The 12 Nov run stopped halfway", details: { day: "2026-11-12" } },
+    { ...amara, category: "security", action: "identity.session.opened", outcome: "succeeded", resourceType: "client", resourceId: "sample-client-amara", reason: null, details: { method: "passkey" } },
+    { ...ruth, category: "change", action: "investments.run_request.proposed", outcome: "succeeded", resourceType: "investment_run_request", resourceId: "-NstubRunRequest0002", reason: "The 12 Nov run stopped halfway", details: { day: "2026-11-12" } },
+    { ...daniel, category: "approval", action: "kyc.check.approved", outcome: "succeeded", resourceType: "kyc_check", resourceId: "-NstubKycCheck000009", reason: "ID and selfie match", details: none },
+    { ...grace, category: "approval", action: "complaints.closed", outcome: "succeeded", resourceType: "complaint", resourceId: "-NstubComplaint00004", reason: "Refund confirmed with the client", details: { outcome: "upheld" } },
+    { ...system, category: "operator_control", action: "ledger.day_closed", outcome: "succeeded", resourceType: "reconciliation_day", resourceId: "2026-11-12", reason: null, details: { lines: 184, unmatched: 0 } },
+    { ...provider, category: "change", action: "payments.deposit_confirmed", outcome: "succeeded", resourceType: "deposit", resourceId: "-NstubDeposit0000007", reason: null, details: { provider: "iotec" } },
+    { ...self, category: "change", action: "console.client.note_written", outcome: "succeeded", resourceType: "client", resourceId: "sample-client-peter", reason: null, details: none },
+    { ...peter, category: "change", action: "investments.withdrawal_requested", outcome: "succeeded", resourceType: "investment", resourceId: "-NstubInvestment0031", reason: null, details: none },
+    { ...daniel, category: "access", action: "kyc.check.photos_viewed", outcome: "succeeded", resourceType: "kyc_check", resourceId: "-NstubKycCheck000009", reason: null, details: none },
     { ...ruth, category: "access", action: "audit.trail_exported", outcome: "succeeded", resourceType: "audit_trail", resourceId: null, reason: null, details: { events: 212, filters: { category: "approval" } } },
-    { ...grace, category: "change", action: "investing.rates.change_proposed", outcome: "succeeded", resourceType: "rate_change", resourceId: "-NstubRate0000000003", reason: "Treasury auction results", details: { product: "tbill_364" } },
+    { ...grace, category: "change", action: "investments.rate.proposed", outcome: "succeeded", resourceType: "rate_change", resourceId: "-NstubRate0000000003", reason: "Treasury auction results", details: { product: "TREA-364" } },
+    { ...client, category: "security", action: "identity.pin.changed", outcome: "denied", resourceType: "client", resourceId: "-NstubClient00000042", reason: null, details: { step: "pin" } },
   ];
 }
 
@@ -81,7 +85,7 @@ function matches(event: AuditEvent, filters: AuditFilters): boolean {
 }
 
 function check(filters: AuditFilters) {
-  if (filters.actorId?.trim() && !/^[-_0-9A-Za-z]{20}$/.test(filters.actorId.trim())) throw new AuditError("invalid", "actor_id");
+  if (filters.actorId?.trim() && !/^([-_0-9A-Za-z]{20}|sample-client-[a-z]+)$/.test(filters.actorId.trim())) throw new AuditError("invalid", "actor_id");
   if (filters.from && filters.to && filters.to < filters.from) throw new AuditError("invalid", "until");
 }
 

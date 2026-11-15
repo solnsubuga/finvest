@@ -1,3 +1,4 @@
+import type { ClientCard } from "@/directory/api.ts";
 import type { ActorKind, AuditEvent, Category, JsonValue, Outcome } from "./api.ts";
 
 export const CATEGORY_LABELS: Record<Category, string> = {
@@ -36,10 +37,16 @@ export function formatTime(iso: string): string {
   return TIME.format(new Date(iso));
 }
 
-/** Who did it, in words: a name for staff, an ID for a client. */
-export function describeActor(event: AuditEvent): string {
-  if (event.actorKind === "staff") return event.actorName ?? event.actorId ?? "A member of staff";
-  if (event.actorKind === "client") return event.actorId ? `Client ${event.actorId}` : "A client";
+/** A client by name and account number, as staff know them, once their card has been looked up. */
+export function describeClient(card: ClientCard | null | undefined): string {
+  if (!card) return "A client";
+  return card.accountNumber ? `${card.name} · ${card.accountNumber}` : card.name;
+}
+
+/** Who did it, in words: a name for staff, and for a client their name and account number. */
+export function describeActor(event: AuditEvent, client?: ClientCard | null): string {
+  if (event.actorKind === "staff") return event.actorName ?? "A member of staff";
+  if (event.actorKind === "client") return describeClient(client);
   return ACTOR_KIND_LABELS[event.actorKind];
 }
 

@@ -210,7 +210,7 @@ The Reports and audit screen reads the trail through `backend/app/modules/audit/
 
 | Route | Use |
 | --- | --- |
-| `GET /staff/audit/events` | Newest first, 50 to a page (at most 200), continued with `cursor` from `next_cursor`. Filters, all optional and combined: `category`, `action` (a whole action, or a prefix ending in a dot such as `identity.team.`), `outcome`, `actor_kind`, `actor_id`, `resource_type`, `resource_id`, `correlation_id`, and `since` (inclusive) to `until` (exclusive), each with a time zone. A staff actor comes with their name; a client is shown by ID only. |
+| `GET /staff/audit/events` | Newest first, 50 to a page (at most 200), continued with `cursor` from `next_cursor`. Filters, all optional and combined: `category`, `action` (a whole action, or a prefix ending in a dot such as `identity.team.`), `outcome`, `actor_kind`, `actor_id`, `resource_type`, `resource_id`, `correlation_id`, and `since` (inclusive) to `until` (exclusive), each with a time zone. A staff actor comes with their name; a client is shown by ID only, and the console names them (name and account number) through the staff client directory, which the export does not. The console reads each action code in words (`apps/console/src/screens/reports/actions.ts`) and keeps the code on the event's details. |
 | `GET /staff/audit/events.csv` | The same filters as a CSV file, newest first. More than 10,000 events is refused with `too_many_events`: narrow the dates. A cell that a spreadsheet would run as a formula is written with a leading `'`. Every export is itself an `audit.trail_exported` event that records the filters and how many events it held. |
 | `GET /staff/audit/facets` | Every action and record type on the trail, for the filter lists. |
 
