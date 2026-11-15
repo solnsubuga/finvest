@@ -118,6 +118,10 @@ The owner decided on 2026-11-15 that Pesapal collects mobile money as well as ca
 
 ioTec is the fallback. A mobile money payment goes to ioTec when the setting says so, and also when Pesapal is not running in the API. It goes to Pesapal when ioTec is not running. Automatic investing and goal savings are asked for by the system with nobody to open a page, so they always use ioTec's prompt. Each provider's sweep and status reads only touch its own deposits.
 
+What staff do with a `payer_differs` payment: the money is in Pesapal's pot but belongs to no investment yet, so it shows as an unmatched Pesapal line at reconciliation. Staff look the order up on Pesapal's dashboard and ask the client who paid. Nothing is credited until they settle it. There is no staff route yet to settle an uncertain deposit from the console, for ioTec or Pesapal: today that is `settle_deposit` run by an engineer with what the provider's record shows, and a console screen for it is a follow-up. If the payer was someone other than the client, the money goes back to them once Pesapal mobile money refunds exist.
+
+Limit: an earlier note in [decisions.md](decisions.md) says Pesapal caps mobile money at UGX 5,000,000 a payment. That has no source in Pesapal's API documents and is unconfirmed, so nothing here enforces it. Whatever Pesapal refuses fails the deposit with the reason Pesapal gives (`limit_exceeded` when it says so), and the client can pay another way. Check the real limit with Pesapal before switching the collector to Pesapal.
+
 Not built yet for Pesapal mobile money: refunds (Pesapal refunds mobile money in full only), and a way to ask Pesapal to show only mobile money or only cards on its page. Its documents have no such field, so that is a setting on Pesapal's side.
 
 ### Paying a card payment back
