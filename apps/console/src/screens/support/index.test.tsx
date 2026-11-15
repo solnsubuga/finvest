@@ -205,11 +205,11 @@ describe("about this client", () => {
         <AboutClient
           card={{ ...card, status: "active" }}
           money={[
-            { accountCode: "client.holding", accountReference: "A", minor: 2_000_000, currency: "UGX" },
-            { accountCode: "client.holding", accountReference: "B", minor: 500_000, currency: "UGX" },
-            { accountCode: "client.holding", accountReference: "C", minor: 30_000, currency: "USD" },
-            { accountCode: "client.payout_in_flight", accountReference: null, minor: 150_000, currency: "UGX" },
-            { accountCode: "client.interest_accrued", accountReference: "A", minor: 9_000, currency: "UGX" },
+            { accountCode: "client.holding", accountReference: "A", minor: 2_000_000, currency: "UGX", productName: null, maturesOn: null },
+            { accountCode: "client.holding", accountReference: "B", minor: 500_000, currency: "UGX", productName: null, maturesOn: null },
+            { accountCode: "client.holding", accountReference: "C", minor: 30_000, currency: "USD", productName: null, maturesOn: null },
+            { accountCode: "client.payout_in_flight", accountReference: null, minor: 150_000, currency: "UGX", productName: null, maturesOn: null },
+            { accountCode: "client.interest_accrued", accountReference: "A", minor: 9_000, currency: "UGX", productName: null, maturesOn: null },
           ]}
         />
       </MemoryRouter>,

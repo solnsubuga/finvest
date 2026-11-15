@@ -447,10 +447,10 @@ export default function SupportPage() {
 async function stubMoney(clientId: string): Promise<ClientMoney> {
   const samples: Record<string, ClientMoney> = {
     "sample-client-amara": [
-      { accountCode: "client.holding", accountReference: "TB91-0042", minor: 2_500_000, currency: "UGX" },
-      { accountCode: "client.payout_pending", accountReference: null, minor: 150_000, currency: "UGX" },
+      { accountCode: "client.holding", accountReference: "TB91-0042", minor: 2_500_000, currency: "UGX", productName: null, maturesOn: null },
+      { accountCode: "client.payout_pending", accountReference: null, minor: 150_000, currency: "UGX", productName: null, maturesOn: null },
     ],
-    "sample-client-peter": [{ accountCode: "client.holding", accountReference: "TB182-0017", minor: 10_000_000, currency: "UGX" }],
+    "sample-client-peter": [{ accountCode: "client.holding", accountReference: "TB182-0017", minor: 10_000_000, currency: "UGX", productName: null, maturesOn: null }],
   };
   return samples[clientId] ?? [];
 }
