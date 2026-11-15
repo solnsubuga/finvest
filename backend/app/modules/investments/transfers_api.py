@@ -84,6 +84,9 @@ Reviewer = Annotated[StaffSession, Depends(require_confirmed("investment_transfe
 
 AmountMinor = Annotated[int, Field(ge=1, le=MAX_AMOUNT_MINOR)]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
+# JSON carries enums as strings, which the strict Contract would refuse for an enum type.
+CurrencyCode = Annotated[Currency, Field(strict=False)]
+PurposeCode = Annotated[TransferPurpose, Field(strict=False)]
 
 
 class RecipientOut(Contract):
@@ -97,10 +100,10 @@ class SendRequest(Contract):
     # The recipient's ten-digit Finvest account number, as `transfer-recipients` returned it.
     to_account_number: Annotated[str, Field(min_length=10, max_length=16)]
     amount_minor: AmountMinor
-    currency: Currency
+    currency: CurrencyCode
     message: Annotated[str, Field(max_length=MAX_MESSAGE_LENGTH)] | None = None
     # Why the client sends it, kept for anti money laundering and shown only to staff.
-    purpose: TransferPurpose
+    purpose: PurposeCode
     # A few words of the client's own: required with `other`, refused with anything else.
     purpose_note: Annotated[str, Field(max_length=MAX_PURPOSE_NOTE_LENGTH)] | None = None
     # Send everything: the whole value when the request is saved, and the interest added before
