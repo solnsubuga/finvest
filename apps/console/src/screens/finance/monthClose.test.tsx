@@ -12,7 +12,7 @@ const ADMIN = { id: "stub-admin", name: "Solomon N." };
 const FINANCE = { id: "stub-finance", name: "Daniel Opio" };
 const NOW = () => Date.parse("2026-11-14T09:00:00Z");
 
-function renderClose({ me = ADMIN, options = {}, api }: { me?: typeof ADMIN; options?: MonthCloseStubOptions; api?: MonthCloseApi } = {}) {
+function renderClose({ me = ADMIN, options = {}, api, canClose = true }: { me?: typeof ADMIN; options?: MonthCloseStubOptions; api?: MonthCloseApi; canClose?: boolean } = {}) {
   let keys = 0;
   render(
     <FinanceScreen
@@ -20,7 +20,7 @@ function renderClose({ me = ADMIN, options = {}, api }: { me?: typeof ADMIN; opt
       canPay={false}
       today={() => "2026-11-14"}
       newKey={() => `key-${++keys}`}
-      monthClose={{ api: api ?? createStubMonthCloseApi(me, { now: NOW, ...options }), me: me.id }}
+      monthClose={{ api: api ?? createStubMonthCloseApi(me, { now: NOW, ...options }), me: me.id, canClose }}
     />,
   );
   return userEvent.setup();
@@ -49,6 +49,15 @@ describe("closing the month", () => {
     // November has not ended, so nothing can be proposed next.
     expect(await within(section()).findByText("November 2026 has not ended yet.")).toBeInTheDocument();
     expect(within(section()).getByRole("list", { name: "Earlier closes" })).toHaveTextContent("you approved");
+  });
+
+  it("reads only for a role that sees Finance but cannot close months", async () => {
+    renderClose({ canClose: false });
+    // Proposed by Daniel Opio; the reader is someone else.
+    const close = await waiting();
+    expect(within(close).getByRole("table", { name: "Books in UGX, as proposed" })).toBeInTheDocument();
+    expect(within(close).queryByRole("button")).not.toBeInTheDocument();
+    expect(within(close).getByText(/Your role cannot approve or decline it/)).toBeInTheDocument();
   });
 
   it("lets the proposer withdraw, never approve", async () => {
