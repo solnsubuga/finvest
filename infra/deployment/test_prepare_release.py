@@ -1,6 +1,7 @@
 """Tests for prepare_release.py. Run with: python3 -m unittest discover -s infra/deployment"""
 
 import os
+import shutil
 import stat
 import tempfile
 import unittest
@@ -33,6 +34,9 @@ def settings(**overrides):
         "DATABASE_CA_CERT": CERT,
         "ORIGIN_TLS_CERT": CERT,
         "ORIGIN_TLS_KEY": KEY,
+        "FINVEST_EMAIL_BACKEND": "resend",
+        "FINVEST_EMAIL_FROM": "hello@finvestug.com",
+        "FINVEST_EMAIL_RESEND_API_KEY": "re_test_not_a_real_key",
     }
     values.update(overrides)
     return {k: v for k, v in values.items() if v is not None}
@@ -66,6 +70,42 @@ class PrepareRelease(unittest.TestCase):
             for service in pr.ROLES:
                 env = read_env(self.out / "runtime" / f"{service}.env")
                 self.assertEqual(env["FINVEST_ENVIRONMENT"], environment)
+
+    def worker_email_backend(self, env):
+        pr.prepare(self.out, env)
+        backend = read_env(self.out / "runtime" / "worker.env").get("FINVEST_EMAIL_BACKEND")
+        shutil.rmtree(self.out)
+        return backend
+
+    def test_production_sends_through_resend_when_the_backend_is_blank(self):
+        for blank in (None, ""):
+            env = settings(FINVEST_EMAIL_BACKEND=blank)
+            self.assertEqual(self.worker_email_backend(env), "resend")
+            self.assertEqual(pr.email_warnings(env), [])
+
+    def test_production_without_email_is_warned_about_but_still_prepared(self):
+        for missing in (
+            {"FINVEST_EMAIL_BACKEND": "none"},
+            {"FINVEST_EMAIL_BACKEND": None, "FINVEST_EMAIL_FROM": None},
+            {"FINVEST_EMAIL_BACKEND": None, "FINVEST_EMAIL_RESEND_API_KEY": None},
+        ):
+            with self.subTest(missing=missing):
+                env = settings(**missing)
+                self.assertEqual(len(pr.email_warnings(env)), 1)
+                # Left off rather than resend, so the worker still starts without a key.
+                self.assertIn(self.worker_email_backend(env), (None, "none"))
+
+    def test_production_with_email_has_no_warning(self):
+        self.assertEqual(pr.email_warnings(settings()), [])
+        self.assertEqual(self.worker_email_backend(settings()), "resend")
+
+    def test_staging_and_rehearsals_may_leave_email_off(self):
+        for env in (
+            settings(DEPLOY_ENVIRONMENT="staging", FINVEST_EMAIL_BACKEND=None),
+            settings(FINVEST_REHEARSAL="true", FINVEST_EMAIL_BACKEND=None),
+        ):
+            self.assertEqual(pr.email_warnings(env), [])
+        self.assertIsNone(self.worker_email_backend(settings(DEPLOY_ENVIRONMENT="staging", FINVEST_EMAIL_BACKEND=None)))
 
     def test_password_is_percent_encoded(self):
         pr.prepare(self.out, settings())

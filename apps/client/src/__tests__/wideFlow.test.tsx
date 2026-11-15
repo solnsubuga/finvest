@@ -123,3 +123,12 @@ describe("Activity on a wide screen", () => {
     expect(within(screen.getByTestId("activity-table")).getAllByText(/^Payment for/).length).toBeGreaterThan(0);
   });
 });
+
+describe("Log out on a wide screen", () => {
+  it("logs out from the sidebar on any page", async () => {
+    await logIn();
+    await visit("/activity");
+    await fireEvent.press(await screen.findByTestId("sidebar-sign-out"));
+    expect(await screen.findByText("Your money, working every day.")).toBeTruthy();
+  });
+});

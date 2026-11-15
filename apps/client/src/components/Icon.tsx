@@ -48,6 +48,7 @@ const paths = {
   ],
   // A padlock: freezing the account.
   lock: ["M5 11h14v10H5z", "M8 11V7a4 4 0 018 0v4"],
+  logout: ["M10 4H5v16h5", "M14 8l4 4-4 4M18 12H9"],
 } as const;
 
 export type IconName = keyof typeof paths;
