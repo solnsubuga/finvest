@@ -25,7 +25,7 @@ describe("the client money check", () => {
     expect(within(held).getByText("Less: Finvest's own money in the buffer")).toBeInTheDocument();
     expect(within(held).getByText("-UGX 250,000,000")).toBeInTheDocument();
     // Earnings below zero add to what is held, as the interest accrued is not yet paid for.
-    expect(within(held).getByText("Plus: Finvest's earnings so far, income less costs")).toBeInTheDocument();
+    expect(within(held).getByText("Plus: Finvest's costs so far above its income")).toBeInTheDocument();
     expect(within(held).getByText("UGX 35,600,000")).toBeInTheDocument();
     expect(within(owed).getAllByText("UGX 4,635,200,000")).toHaveLength(1);
     expect(within(held).getAllByText("UGX 4,635,200,000")).toHaveLength(1);
@@ -65,6 +65,15 @@ describe("the client money check", () => {
     render(<ClientMoney api={{ get: () => Promise.resolve({ ...check, unexplained: { minor: 1_000, currency: "UGX" } }) }} />);
     expect(await screen.findByText("Not accounted for")).toBeInTheDocument();
     expect(screen.getByText(/a figure may have been read wrongly/)).toBeInTheDocument();
+  });
+
+  it("never shows a carried-over account by its ledger name", async () => {
+    const check = await createStubClientMoneyApi(0, "short").get();
+    if (!check) throw new Error("the sample has a check");
+    const line = { code: "migration.opening_balances_usd", name: "Finvest 1.0 balances carried over", amount: { minor: 5, currency: "UGX" as const } };
+    render(<ClientMoney api={{ get: () => Promise.resolve({ ...check, notOnStatement: [...check.notOnStatement, line] }) }} />);
+    expect(await screen.findAllByText(/Balances carried over from the paper register/)).toHaveLength(2);
+    expect(panel()).not.toHaveTextContent("1.0");
   });
 
   it("is not connected without a backend", async () => {
