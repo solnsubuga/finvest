@@ -62,7 +62,8 @@ export default function CardPaymentScreen() {
     return (
       <NotPaid
         payment={payment}
-        onRetry={() => router.replace(`/pay/${payment.payable.id}`)}
+        onRetry={() => router.replace(`/pay/${payment.payable.id}?method=card`)}
+        onAnotherWay={() => router.replace(`/pay/${payment.payable.id}`)}
         onClose={home}
       />
     );
@@ -286,10 +287,12 @@ const NOT_PAID: Record<string, NotPaidCopy> = {
 function NotPaid({
   payment,
   onRetry,
+  onAnotherWay,
   onClose,
 }: {
   payment: CardPayment;
   onRetry: () => void;
+  onAnotherWay: () => void;
   onClose: () => void;
 }) {
   const copy = NOT_PAID[payment.failure ?? "other"] ?? OTHER;
@@ -299,7 +302,7 @@ function NotPaid({
       footer={
         <>
           <Button label="Try again" onPress={onRetry} testID="card-retry" />
-          <Button label="Pay another way" variant="secondary" onPress={onRetry} testID="card-pay-another-way" />
+          <Button label="Pay another way" variant="secondary" onPress={onAnotherWay} testID="card-pay-another-way" />
           <TextLink label="Close" onPress={onClose} />
         </>
       }

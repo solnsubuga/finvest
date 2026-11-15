@@ -46,7 +46,8 @@ function outcomeUnknown(error: unknown): boolean {
  */
 export default function Pay() {
   const router = useRouter();
-  const { payableId } = useLocalSearchParams<{ payableId: string }>();
+  // `method=card` opens with card chosen, as "Try again" after a card that was not paid does.
+  const { payableId, method: asked } = useLocalSearchParams<{ payableId: string; method?: string }>();
   const { session } = useAuth();
   const { client } = usePayments();
 
@@ -62,7 +63,7 @@ export default function Pay() {
   // One key for this visit: a second tap or a retry asks for the money once.
   const [idempotencyKey] = useState(newIdempotencyKey);
   const [cardKey] = useState(newIdempotencyKey);
-  const [method, setMethod] = useState<Method>("mobile_money");
+  const [method, setMethod] = useState<Method>(asked === "card" ? "card" : "mobile_money");
   const [cardOffer, setCardOffer] = useState<CardOffer | null>(null);
 
   useEffect(() => {
@@ -74,7 +75,12 @@ export default function Pay() {
     // Cards are offered only when the server says what they would cost. Without an answer the
     // screen offers mobile money and bank transfer, as before.
     client.getCardOffer?.(payableId).then(
-      (offer) => live && setCardOffer(offer),
+      (offer) => {
+        if (!live) return;
+        setCardOffer(offer);
+        // Card cannot stay chosen when it cannot be used now.
+        if (offer.refused !== null) setMethod("mobile_money");
+      },
       () => undefined,
     );
     return () => {
@@ -209,7 +215,7 @@ export default function Pay() {
                   cardOffer.refused === "channel_paused"
                     ? "Paused for now. Try mobile money or a bank transfer."
                     : cardOffer.refused
-                      ? `Up to ${formatMoney(cardOffer.maxPayment)} a payment`
+                      ? `Up to ${formatMoney(cardOffer.maxPayment)} a payment, charge included`
                       : "Visa or Mastercard, debit or credit"
                 }
                 badge="VISA MC"
@@ -228,7 +234,7 @@ export default function Pay() {
                 <BreakdownRow label="You pay" value={formatMoney(cardOffer.total)} strong />
               </View>
               <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
-                {`${cardOffer.charge.minor > 0 ? "The card charge goes to the card network and Pesapal, not to Finvest. " : ""}Up to ${formatMoney(cardOffer.maxPayment)} a payment. If this money is ever refunded, it goes back to the same card.`}
+                {`${cardOffer.charge.minor > 0 ? "The card charge goes to the card network and Pesapal, not to Finvest. " : ""}Up to ${formatMoney(cardOffer.maxPayment)} a payment, card charge included. If this money is ever refunded, it goes back to the same card.`}
               </Txt>
             </View>
           ) : (
@@ -319,8 +325,8 @@ function CardRefusedNotice({ offer }: { offer: CardOffer }) {
   }
   if (offer.refused === "above_card_payment_limit") {
     return (
-      <Notice tone="warning" title={`Cards take up to ${formatMoney(offer.maxPayment)}`}>
-        Pay this one by mobile money or bank transfer, or invest a smaller amount by card.
+      <Notice tone="warning" title={`Cards take up to ${formatMoney(offer.maxPayment)} a payment`}>
+        With the card charge, this payment is above that. Pay it by mobile money or bank transfer, or invest a smaller amount by card.
       </Notice>
     );
   }

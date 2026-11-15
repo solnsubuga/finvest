@@ -154,14 +154,28 @@ describe("paying for an investment by card", () => {
     await advance(4_000);
     await screen.findByText("Your card was declined");
     await fireEvent.press(screen.getByTestId("card-pay-another-way"));
-    await screen.findByTestId("method-mobile-money");
+    expect(await screen.findByTestId("method-mobile-money")).toBeChecked();
+  });
+
+  it("tries a declined card again with card already chosen", async () => {
+    await openPayScreen(DEMO_CARD_DECLINED_ID);
+    await fireEvent.press(screen.getByTestId("method-card"));
+    await fireEvent.press(await screen.findByText(/by card$/));
+    await advance(2_000);
+    await fireEvent.press(await screen.findByText("Open the secure page"));
+    await act(async () => router.replace(mockOpened[0]!));
+    await advance(4_000);
+    await screen.findByText("Your card was declined");
+    await fireEvent.press(screen.getByTestId("card-retry"));
+    expect(await screen.findByTestId("method-card")).toBeChecked();
+    expect(screen.getByTestId("card-charge")).toBeTruthy();
   });
 
   it("refuses a card above the limit and while cards are paused, before anything is sent", async () => {
     await openPayScreen(DEMO_CARD_LIMIT_ID);
     // The card choice cannot be picked, and the screen says why before anything is pressed.
     expect(screen.getByTestId("method-card")).toBeDisabled();
-    await screen.findByText("Cards take up to UGX 5,000,000");
+    await screen.findByText("Cards take up to UGX 5,000,000 a payment");
 
     await act(async () => router.replace(`/pay/${DEMO_CARDS_PAUSED_ID}`));
     await screen.findByText("Card payments are paused");
