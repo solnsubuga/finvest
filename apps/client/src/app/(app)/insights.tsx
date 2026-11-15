@@ -17,7 +17,7 @@ import { upcomingHref, upcomingWords } from "@/insights/upcoming";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
-import { useIsWide } from "@/theme/useIsWide";
+import { useHasTwoColumns } from "@/theme/useIsWide";
 
 const MONTHS_SHOWN = 6;
 const BAR_HEIGHT = 110;
@@ -34,7 +34,7 @@ type State =
 export default function Insights() {
   const client = useInsights();
   const router = useRouter();
-  const wide = useIsWide();
+  const wide = useHasTwoColumns();
   const { light } = useDataSaving();
   const [state, setState] = useState<State>({ status: "loading" });
   const [currency, setCurrency] = useState<Currency>("UGX");
