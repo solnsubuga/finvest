@@ -17,9 +17,11 @@ from app.modules.payments import payer_names
 from app.modules.payments.domain.deposits import DepositStatus as S
 from app.modules.payments.payer_name_jobs import PayerNameJobs
 from app.modules.payouts.domain.name_lookups import (
+    Accepted,
     Found,
     LookupStatus,
     NoName,
+    NotReceived,
     Unanswerable,
 )
 from app.shared.actors import SYSTEM
@@ -63,6 +65,11 @@ async def run_all(runner: Worker, clock: FakeClock, rounds: int = 6) -> None:
         clock.advance(seconds=10)
 
 
+def sent_for(names: FakeNames, deposit_id: str) -> list[str]:
+    """The numbers sent for this payment's lookup: its deposit is the lookup's reference."""
+    return [number for number, reference in names.sent if reference == deposit_id]
+
+
 async def lookup(setup: Setup, deposit_id: str) -> payer_names.PayerName | None:
     async with setup.system.actor_transaction(SYSTEM) as session:
         return await payer_names.payer_name(session, deposit_id)
@@ -89,7 +96,8 @@ async def test_another_numbers_payment_gets_the_name_the_network_holds(setup: Se
 
     names = FakeNames(answers=[Found("  Grace Nambi  ")])
     await run_all(names_worker(setup.system, names, setup.clock), setup.clock)
-    assert [number for number, _ in names.sent] == [OTHER.removeprefix("+")]
+    # Other tests may leave lookups queued in the shared database: count only this payment's.
+    assert sent_for(names, deposit_id) == [OTHER.removeprefix("+")]
     found = await lookup(setup, deposit_id)
     assert found is not None
     assert (found.status, found.registered_name) == (LookupStatus.FOUND, "Grace Nambi")
@@ -97,7 +105,7 @@ async def test_another_numbers_payment_gets_the_name_the_network_holds(setup: Se
 
     # The answer is final: running again asks nothing more.
     await run_all(names_worker(setup.system, names, setup.clock), setup.clock)
-    assert len(names.sent) == 1
+    assert len(sent_for(names, deposit_id)) == 1
 
 
 async def test_the_clients_own_number_is_not_looked_up(setup: Setup) -> None:
@@ -114,17 +122,28 @@ async def test_nothing_is_looked_up_when_pesapal_names_no_number(setup: Setup) -
     assert await lookup(setup, deposit_id) is None
 
 
-@pytest.mark.parametrize(
-    ("names", "status"),
-    [
-        (FakeNames(answers=[NoName()]), LookupStatus.NO_NAME),
-        (FakeNames(sends=[Unanswerable("refused")]), LookupStatus.UNANSWERED),
-    ],
-)
+class RefusesOne(FakeNames):
+    """Refuses the lookup for one payment only, whatever else is queued."""
+
+    def __init__(self, reference: str) -> None:
+        super().__init__()
+        self.reference = reference
+
+    async def send(self, msisdn: str, reference: str) -> Accepted | NotReceived | Unanswerable:
+        if reference == self.reference:
+            self.sent.append((msisdn, reference))
+            return Unanswerable("refused")
+        return await super().send(msisdn, reference)
+
+
+@pytest.mark.parametrize("status", [LookupStatus.NO_NAME, LookupStatus.UNANSWERED])
 async def test_no_name_or_no_answer_is_kept_and_the_payment_stands(
-    setup: Setup, names: FakeNames, status: LookupStatus
+    setup: Setup, status: LookupStatus
 ) -> None:
     deposit_id = await paid_from(setup, OTHER)
+    names = (
+        FakeNames(answers=[NoName()]) if status is LookupStatus.NO_NAME else RefusesOne(deposit_id)
+    )
     await run_all(names_worker(setup.system, names, setup.clock), setup.clock)
     found = await lookup(setup, deposit_id)
     assert found is not None and (found.status, found.registered_name) == (status, None)
