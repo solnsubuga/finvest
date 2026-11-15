@@ -517,12 +517,41 @@ async def test_an_identity_document_opens_only_one_account(
         async with app_database.actor_transaction(staff) as session:
             await kyc.approve(session, SEALER, staff, second, "Checked", fake_clock)
     assert error.value.code == "conflict"
+    # Named, so the console says another client holds the ID, not that someone else acted.
+    assert [f.code for f in error.value.fields] == ["duplicate_document"]
+    async with app_database.actor_transaction(staff) as session:
+        # Staff see it on the check, approved after it was handed in, before anyone decides.
+        held = await kyc.check_for_staff(session, SEALER, second)
+        assert await kyc.document_held_elsewhere(session, held)
+        approved = await kyc.check_for_staff(session, SEALER, first)
+        assert not await kyc.document_held_elsewhere(session, approved)
     async with worker_database.actor_transaction(SYSTEM) as session:
         view = await kyc.record_provider_result(
             session, SEALER, third, 1, "ref", all_passed(), fake_clock, automatic_approval=True
         )
     assert view.status is CheckStatus.NEEDS_REVIEW
     assert view.review_flags == ("duplicate_document",)
+
+
+async def test_the_queue_flags_a_check_whose_document_another_client_holds(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    # Handed in before every other test's checks, so these lead the shared queue.
+    fake_clock.current = datetime(2025, 1, 1, tzinfo=UTC)
+    number = details().document_number
+    _, first = await in_review(app_database, fake_clock, document_number=number)
+    _, second = await in_review(app_database, fake_clock, document_number=number)
+    _, other = await in_review(app_database, fake_clock)
+    staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        before = {item.id: item.review_flags for item in await kyc.review_queue(session)}
+        await kyc.approve(session, SEALER, staff, first, "Checked", fake_clock)
+        after = {item.id: item.review_flags for item in await kyc.review_queue(session)}
+    assert "duplicate_document" not in before[second]
+    # First, as it decides the check.
+    assert after[second] == ("duplicate_document", *before[second])
+    assert after[other] == before[other]
+    assert first not in after
 
 
 async def test_two_approvals_racing_for_one_document_issue_one_account_number(
