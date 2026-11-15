@@ -20,7 +20,7 @@ import {
 
 export const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink aria-invalid:border-danger";
 
-const STATUS_TONE: Record<ClientPage["account"]["status"], string> = {
+export const STATUS_TONE: Record<ClientPage["account"]["status"], string> = {
   unclaimed: "bg-surface-sunken text-muted",
   active: "bg-success-surface text-success",
   locked: "bg-danger-surface text-danger",

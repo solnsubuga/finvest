@@ -10,6 +10,8 @@ interface Me {
   name: string;
 }
 
+/** The sample list's page size, small so paging can be seen with a handful of clients. */
+const LIST_PAGE = 4;
 const wait = () => new Promise((resolve) => setTimeout(resolve, 150));
 const copy = <T>(value: T): T => structuredClone(value);
 
@@ -215,6 +217,41 @@ export function createStubClientsApi(
           (digits(text).length >= 9 && digits(page.account.phone) === digits(text)),
       );
       return found ? [copy(found.account)] : [];
+    },
+    async list(query, status, after) {
+      await wait();
+      const text = query.trim().toLowerCase();
+      const words = text.split(/\s+/).filter(Boolean);
+      const number = text.replace(/[\s-]/g, "");
+      const exact = (page: ClientPage) =>
+        page.account.id.toLowerCase() === text ||
+        (number.length === 10 && page.identityCheck?.accountNumber === number) ||
+        (digits(text).length >= 9 && digits(page.account.phone) === digits(text));
+      const named = (page: ClientPage) => {
+        const name = page.verifiedName?.toLowerCase() ?? "";
+        return name !== "" && words.every((word) => name.includes(word));
+      };
+      const emailed = (page: ClientPage) => words.length === 1 && (page.account.email?.toLowerCase().includes(text) ?? false);
+      const one = text ? pages.find(exact) : undefined;
+      const found = (one ? [one] : pages.filter((page) => !text || named(page) || emailed(page)))
+        .filter((page) => status === null || page.account.status === status)
+        .sort((a, b) => b.account.createdAt.localeCompare(a.account.createdAt));
+      const start = after ? found.findIndex((page) => page.account.id === after) + 1 : 0;
+      const shown = text ? found : found.slice(start, start + LIST_PAGE);
+      const last = shown.at(-1);
+      return {
+        clients: shown.map((page) => ({
+          id: page.account.id,
+          verifiedName: page.verifiedName,
+          accountNumber: page.identityCheck?.status === "approved" ? page.identityCheck.accountNumber : null,
+          phone: page.account.phone,
+          email: page.account.email,
+          status: page.account.status,
+          createdAt: page.account.createdAt,
+        })),
+        nextAfter: !text && last && start + LIST_PAGE < found.length ? last.account.id : null,
+        more: false,
+      };
     },
     async client(id) {
       await wait();
