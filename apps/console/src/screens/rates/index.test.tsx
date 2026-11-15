@@ -171,3 +171,19 @@ describe("last bought tile", () => {
     expect(screen.queryByText("Last bought")).not.toBeInTheDocument();
   });
 });
+
+describe("last bill auction tile", () => {
+  it("shows the Bank of Uganda's yields before tax, shortest term first", async () => {
+    const auction = {
+      heldOn: "2026-10-21",
+      source: "Bank of Uganda, issue 1236",
+      securities: [
+        { termDays: 182 as const, isin: "B", maturesOn: "2027-04-22", netYieldPercent: "10.72", grossYieldPercent: "13.400", taxPercent: "20", acceptedBillions: "37.7" },
+        { termDays: 91 as const, isin: "A", maturesOn: "2027-01-21", netYieldPercent: "9.00", grossYieldPercent: "11.249", taxPercent: "20", acceptedBillions: "23.1" },
+      ],
+    };
+    render(<RatesScreen api={createStubCatalogueApi({ me: ME, today: TODAY })} me={ME} canChange today={() => TODAY} auction={auction} />);
+    expect(await screen.findByText("21 Oct 2026")).toBeInTheDocument();
+    expect(screen.getByText("91 day 11.249%, 182 day 13.400%. Before tax, Bank of Uganda")).toBeInTheDocument();
+  });
+});

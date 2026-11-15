@@ -20,6 +20,7 @@ import { formatBps, formatDay, formatStamp, parsePercent, previewClientRate } fr
 import { connectedCatalogueApi } from "../products/http.ts";
 import { Reach } from "../products/Reach.tsx";
 import { createStubCatalogueApi, sampleFrom } from "../products/stub.ts";
+import { billAuction, type Auction, type AuctionedBill } from "@finvest/market";
 import { connectedLastBuys, latestBuy, stubLastBuys, type LastBuy, type LastBuysReader } from "./lastBuys.ts";
 
 const SUMMARY = "Every rate change is proposed by one person, approved by another, and starts on a set date.";
@@ -42,13 +43,15 @@ interface RatesScreenProps {
   today?: () => string;
   /** The latest bills bought for each product. Left out when the person cannot see dealing. */
   lastBuys?: LastBuysReader | undefined;
+  /** The Bank of Uganda's latest bill auction, kept by hand in @finvest/market. */
+  auction?: Auction<AuctionedBill>;
 }
 
 type Buys = { state: "loading" } | { state: "failed" } | { state: "ready"; buys: readonly LastBuy[] };
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
 
-export function RatesScreen({ api, me, canChange, today = kampalaToday, lastBuys }: RatesScreenProps) {
+export function RatesScreen({ api, me, canChange, today = kampalaToday, lastBuys, auction = billAuction }: RatesScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [buys, setBuys] = useState<Buys>({ state: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
@@ -154,6 +157,7 @@ export function RatesScreen({ api, me, canChange, today = kampalaToday, lastBuys
         />
         <Tile name="Next change takes effect" value={upcoming ? formatDay(upcoming) : "None approved"} note={upcoming ? "At the start of the day, Kampala time" : "Every rate is in force"} />
         <Tile name="Clients affected" value="New investments only" note="Running ones keep their rate" />
+        <LastAuction auction={auction} />
         {lastBuys ? <LastBought buys={buys} names={names} /> : null}
       </div>
       <div className="flex flex-wrap items-start gap-5">
@@ -482,6 +486,15 @@ function Tile({ name, value, note }: { name: string; value: string; note: string
       <p className="m-0 text-xs font-bold text-muted">{note}</p>
     </div>
   );
+}
+
+/** The Bank of Uganda's yields as published, before tax, to set Finvest's rates against. */
+function LastAuction({ auction }: { auction: Auction<AuctionedBill> }) {
+  const yields = [...auction.securities]
+    .sort((a, b) => a.termDays - b.termDays)
+    .map((bill) => `${bill.termDays} day ${bill.grossYieldPercent}%`)
+    .join(", ");
+  return <Tile name="Last bill auction" value={formatDay(auction.heldOn)} note={`${yields}. Before tax, Bank of Uganda`} />;
 }
 
 /** Finvest's own latest settled purchase, before tax: the backend holds no Bank of Uganda cut-off rates. */

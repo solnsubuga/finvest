@@ -37,7 +37,8 @@ Already on main when checked, though the QA table listed them: the investment de
 
 - Console Support: Invested and Payout pending in About this client. Read from the client's ledger balances (the same figures the client page shows), only for staff who hold `clients.view`.
 - Console Complaints: Export register. `POST /staff/complaints.csv` (complaints.view) writes every complaint as CSV and records `complaints.register_exported` in the audit trail. It leaves out the client's own words and the resolution note.
-- Console Rates: Last bought tile, in place of Last auction. The backend holds no Bank of Uganda auction results, so `GET /staff/dealing/last-buys` (rates.view) gives the yearly yield, before tax, of Finvest's own latest settled purchase for each product, and the tile shows the newest one.
+- Console Rates: Last bill auction tile. The Bank of Uganda's results the website already shows now live in the shared `packages/market` (`@finvest/market`), updated by hand after each auction. Bills carry the published before-tax yield for staff, and the tile shows it with the auction date. The website still shows only the after-tax fields.
+- Console Rates: a Last bought tile beside it. `GET /staff/dealing/last-buys` (rates.view) gives the yearly yield, before tax, of Finvest's own latest settled purchase for each product, and the tile shows the newest one.
 - Console Finance: the withholding tax payees file was already there, as "Download for URA (CSV)" on each month (`GET /staff/tax/months/{month}/payees.csv`).
 
 ## Still owed
