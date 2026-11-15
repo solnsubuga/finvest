@@ -54,7 +54,7 @@ describe("Home", () => {
       expect(screen.getByTestId(id)).toBeTruthy();
     }
     // The demo saves the 182 day bill to a goal, so Investments and Goals each hold one.
-    expect(screen.getByTestId("home-investments")).toHaveTextContent(/1 active, next matures/);
+    expect(screen.getByTestId("home-investments")).toHaveTextContent(/1 running, next matures/);
     expect(screen.getByTestId("home-goals")).toHaveTextContent(/2 goals, 1 saving running/);
     expect(screen.getByTestId("home-maturing-next")).toHaveTextContent(/91 Day Treasury Bill/);
     expect(screen.getByTestId("home-maturing-next")).toHaveTextContent(/Reinvest is on/);

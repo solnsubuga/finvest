@@ -59,14 +59,15 @@ export function createStubProfileClient(account: string | null): ProfileClient {
     standing: seeded
       ? {
           runningInvestments: 2,
+          unpaidInvestments: 1,
           owed: [{ minor: 8_164_760, currency: "UGX" }],
           openDeposits: 0,
           openPayouts: 0,
           openGoals: 2,
           livePlans: 0,
-          blockers: ["investments_running", "money_owed", "goals_open"],
+          blockers: ["investments_running", "investments_unpaid", "money_owed", "goals_open"],
         }
-      : { runningInvestments: 0, owed: [], openDeposits: 0, openPayouts: 0, openGoals: 0, livePlans: 0, blockers: [] },
+      : { runningInvestments: 0, unpaidInvestments: 0, owed: [], openDeposits: 0, openPayouts: 0, openGoals: 0, livePlans: 0, blockers: [] },
     request: null,
   };
 

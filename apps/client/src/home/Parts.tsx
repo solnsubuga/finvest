@@ -128,7 +128,7 @@ export function HoldingRows({
       <HoldingRow
         dot={<View style={[styles.dot, { backgroundColor: colors.black }]} />}
         title="Investments"
-        detail={`${investments.count} active${nextMaturesOn ? `, next matures ${shortDay(nextMaturesOn)}` : ""}`}
+        detail={`${investments.count} running${nextMaturesOn ? `, next matures ${shortDay(nextMaturesOn)}` : ""}`}
         value={figure(investments.worth)}
         onPress={onInvestments}
         testID="home-investments"
