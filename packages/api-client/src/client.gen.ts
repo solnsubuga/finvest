@@ -145,7 +145,7 @@ export const BondCouponOut = z.object({
 });
 export type BondCouponOut = z.infer<typeof BondCouponOut>;
 
-export const HoldingStatus = z.enum(["unpaid", "active", "cancelled"]);
+export const HoldingStatus = z.enum(["unpaid", "active", "matured", "cancelled"]);
 export type HoldingStatus = z.infer<typeof HoldingStatus>;
 
 export const BondHoldingOut = z.object({
@@ -206,6 +206,22 @@ export const BondQuoteOut = z.object({
   total_back_minor: z.number().int(),
 });
 export type BondQuoteOut = z.infer<typeof BondQuoteOut>;
+
+export const BondRepaymentOut = z.object({
+  amount_minor: z.number().int(),
+  code: z.string(),
+  coupon_minor: z.number().int(),
+  currency: Currency,
+  face_minor: z.number().int(),
+  held_because: z.string().nullable(),
+  holding_id: z.string(),
+  id: z.string(),
+  name: z.string(),
+  payout_id: z.string().nullable(),
+  repaid_on: z.string(),
+  status: z.string(),
+});
+export type BondRepaymentOut = z.infer<typeof BondRepaymentOut>;
 
 export const BuyBondIn = z.object({
   code: z.string(),
@@ -1906,6 +1922,30 @@ export const operations = {
     idempotent: true,
     status: 201,
     response: PaymentView,
+  },
+  "GET /client/bond-repayments": {
+    method: "GET",
+    path: "/client/bond-repayments",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BondRepaymentOut),
+  },
+  "POST /client/bond-repayments/{repayment_id}/pay-out": {
+    method: "POST",
+    path: "/client/bond-repayments/{repayment_id}/pay-out",
+    params: z.object({
+    repayment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CouponPayOutIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: BondRepaymentOut,
   },
   "GET /client/bonds": {
     method: "GET",

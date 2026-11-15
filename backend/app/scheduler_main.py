@@ -23,6 +23,7 @@ from app.modules.autoinvest.jobs import OPEN_DUE_KIND as AUTOINVEST_OPEN_KIND
 from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.bonds.jobs import CANCEL_UNPAID_KIND as BONDS_CANCEL_UNPAID_KIND
 from app.modules.bonds.jobs import PAY_COUPONS_KIND as BONDS_PAY_COUPONS_KIND
+from app.modules.bonds.jobs import REPAY_MATURED_KIND as BONDS_REPAY_MATURED_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
@@ -109,6 +110,14 @@ def schedules() -> list[Schedule]:
             catch_up="all",
             max_catch_up=31,
             max_age=timedelta(days=7),
+        ),
+        # Repays bond holdings whose issue matured: the face value and the last coupon. A
+        # missed day is made up by the next run, which repays every issue matured by its day.
+        Schedule(
+            name="bonds.repay_matured",
+            trigger=CronTrigger(hour=1, minute=15, timezone=KAMPALA),
+            kind=BONDS_REPAY_MATURED_KIND,
+            max_age=timedelta(days=1),
         ),
         # Closes investments whose term has ended: rolled over, or handed to payouts. One run
         # closes everything due, so a missed day needs no run of its own.

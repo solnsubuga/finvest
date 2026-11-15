@@ -1950,7 +1950,7 @@ export const HoldingOut = z.object({
 });
 export type HoldingOut = z.infer<typeof HoldingOut>;
 
-export const HoldingStatus = z.enum(["unpaid", "active", "cancelled"]);
+export const HoldingStatus = z.enum(["unpaid", "active", "matured", "cancelled"]);
 export type HoldingStatus = z.infer<typeof HoldingStatus>;
 
 export const HolidayValue = z.object({
@@ -3694,6 +3694,26 @@ export const StaffBondOut = z.object({
 });
 export type StaffBondOut = z.infer<typeof StaffBondOut>;
 
+export const StaffBondRepaymentOut = z.object({
+  amount_minor: z.number().int(),
+  client_id: z.string(),
+  code: z.string(),
+  cost_minor: z.number().int(),
+  coupon_gross_minor: z.number().int(),
+  coupon_minor: z.number().int(),
+  coupon_tax_minor: z.number().int(),
+  currency: Currency,
+  face_minor: z.number().int(),
+  held_because: z.string().nullable(),
+  holding_id: z.string(),
+  id: z.string(),
+  name: z.string(),
+  payout_id: z.string().nullable(),
+  repaid_on: z.string(),
+  status: z.string(),
+});
+export type StaffBondRepaymentOut = z.infer<typeof StaffBondRepaymentOut>;
+
 export const StaffChat = z.object({
   client_id: z.string(),
   conversation: ConversationItem,
@@ -4739,6 +4759,20 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(StaffBondHoldingOut),
+  },
+  "GET /staff/bond-repayments": {
+    method: "GET",
+    path: "/staff/bond-repayments",
+    params: z.object({}),
+    query: z.object({
+    status: z.string().nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StaffBondRepaymentOut),
   },
   "GET /staff/bonds": {
     method: "GET",

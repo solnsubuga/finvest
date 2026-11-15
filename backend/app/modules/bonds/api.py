@@ -8,6 +8,8 @@
 * `/staff/bonds`, `/staff/bond-changes`: issues with their tax, and proposing and deciding new
   issues, prices, pauses and openings, a second person enforced in the database.
 * `/staff/bond-holdings`: every client's holdings, for the books and the dealing desk.
+* `/client/bond-repayments`, `/staff/bond-repayments`: holdings repaid at maturity, the face
+  value and the last coupon, and sending on one that waits for a destination.
 """
 
 from collections.abc import AsyncIterator
@@ -21,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.bonds import catalogue, coupons, holdings
+from app.modules.bonds import catalogue, coupons, holdings, maturity
 from app.modules.bonds.domain.changes import BondChangeAction, BondChangeStatus
 from app.modules.bonds.domain.holdings import HoldingStatus
 from app.modules.bonds.domain.issues import (
@@ -277,6 +279,35 @@ class StaffBondCouponOut(BondCouponOut):
     client_id: PushId
     gross_minor: int
     tax_minor: int
+
+
+class BondRepaymentOut(Contract):
+    """A holding repaid at maturity: the face value and the last coupon, after tax."""
+
+    id: PushId
+    holding_id: PushId
+    code: str
+    name: str
+    repaid_on: date
+    currency: Currency
+    face_minor: int
+    # The last coupon after tax.
+    coupon_minor: int
+    # What the client is paid: the face value and the last coupon.
+    amount_minor: int
+    # `paid_out` once a payout carries it, `held` while it waits for a destination.
+    status: str
+    payout_id: PushId | None
+    # Why it waits: `no_destination`, or the payout's refusal.
+    held_because: str | None
+
+
+class StaffBondRepaymentOut(BondRepaymentOut):
+    client_id: PushId
+    # What the client paid for the holding.
+    cost_minor: int
+    coupon_gross_minor: int
+    coupon_tax_minor: int
 
 
 class StaffBondHoldingOut(Contract):
@@ -633,6 +664,68 @@ async def client_pay_out_coupon(
     return _coupon_out(view)
 
 
+def _repayment_out(view: maturity.RedemptionView) -> BondRepaymentOut:
+    return BondRepaymentOut(
+        id=view.id,
+        holding_id=view.holding_id,
+        code=view.code,
+        name=view.name,
+        repaid_on=view.redeemed_on,
+        currency=view.amount.currency,
+        face_minor=view.face.minor,
+        coupon_minor=view.coupon_net.minor,
+        amount_minor=view.amount.minor,
+        status=view.status,
+        payout_id=view.payout_id,
+        held_because=view.payout_refusal,
+    )
+
+
+@client_router.get("/bond-repayments")
+async def client_bond_repayments(request: Request, client: CurrentClient) -> list[BondRepaymentOut]:
+    """The client's bonds repaid at maturity, newest first, after tax."""
+    async with _transaction(request, client.actor) as session:
+        found = await maturity.client_redemptions(session, client.client_id)
+    return [_repayment_out(r) for r in found]
+
+
+@client_router.post(
+    "/bond-repayments/{repayment_id}/pay-out", responses={428: {"model": ErrorEnvelope}}
+)
+async def client_pay_out_repayment(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    pins: Pins,
+    repayment_id: PushId,
+    body: CouponPayOutIn,
+) -> BondRepaymentOut:
+    """Send on a repayment that is waiting for a destination.
+
+    A repeat after it was sent on is refused with 409 `conflict`, never paid twice. 428
+    `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh
+    confirmation for `withdrawal`.
+    """
+    try:
+        async with _transaction(request, client.actor) as session:
+            view = await maturity.pay_out_held(
+                session,
+                client.actor,
+                repayment_id,
+                destination_id=body.destination_id,
+                clock=clock,
+                confirm=lambda: pins.spend(
+                    client, "withdrawal", body.pin_confirmation, session=session
+                ),
+            )
+    except payouts.PayoutRefused as refused:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["destination_id"], code=refused.code)],
+        ) from None
+    return _repayment_out(view)
+
+
 # Staff ------------------------------------------------------------------------------------------
 
 staff_router = APIRouter(prefix="/staff", tags=["staff bonds"], responses=_REFUSALS)
@@ -710,6 +803,29 @@ async def staff_bond_coupons(
             tax_minor=c.tax.minor,
         )
         for c in found
+    ]
+
+
+@staff_router.get("/bond-repayments")
+async def staff_bond_repayments(
+    request: Request,
+    staff: InvestmentsViewer,
+    status: Annotated[str | None, Query(pattern="^(paid_out|held)$")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[StaffBondRepaymentOut]:
+    """Holdings repaid at maturity, newest first, with the tax on the last coupon. `held` lists
+    those still waiting for a destination."""
+    async with _transaction(request, staff.actor) as session:
+        found = await maturity.staff_redemptions(session, staff.actor, status, limit)
+    return [
+        StaffBondRepaymentOut(
+            **_repayment_out(r).model_dump(),
+            client_id=r.client_id,
+            cost_minor=r.cost.minor,
+            coupon_gross_minor=r.coupon_gross.minor,
+            coupon_tax_minor=r.coupon_tax.minor,
+        )
+        for r in found
     ]
 
 
