@@ -109,12 +109,8 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   await id(page, "use-passkey").click();
   await createPin(page);
   await expect(page.getByTestId("home")).toBeVisible();
-  // The phone's tab bar and the wide sidebar both name it Profile.
-  await page
-    .getByRole("link", { name: "Profile", exact: true })
-    .or(page.getByLabel("Profile", { exact: true }))
-    .first()
-    .click();
+  // A Profile tab on the phone; the signed-in name at the foot of the wide sidebar.
+  await page.getByRole("tab", { name: "Profile", exact: true }).or(id(page, "sidebar-profile")).first().click();
   await id(page, "open-payout-accounts").click();
   await expect(id(page, "payout-account-demo-account-mtn")).toBeVisible();
 
