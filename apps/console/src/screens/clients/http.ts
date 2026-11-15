@@ -140,7 +140,7 @@ export function toPage(json: PageJson): ClientPage {
 }
 
 interface ListJson {
-  clients: { id: string; verified_name: string | null; account_number: string | null; phone: string; email: string | null; status: ClientStatus; created_at: string }[];
+  clients: { id: string; verified_name: string | null; account_number: string | null; phone: string; email: string | null; status: ClientStatus; created_at: string; found_by?: string | null }[];
   next_after: string | null;
   more: boolean;
 }
@@ -171,6 +171,7 @@ export function createHttpClientsApi(http: Http): ClientsApi {
             email: row.email,
             status: row.status,
             createdAt: row.created_at,
+            foundBy: row.found_by ?? null,
           })),
           nextAfter: found.next_after,
           more: found.more,

@@ -108,7 +108,7 @@ export function ClientsScreen({
             Find a client
           </label>
           <span id={`${inputId}-hint`} className="text-xs font-medium text-muted">
-            By name, email, account number, mobile number or client ID.
+            By name, email, account number, mobile number, client ID, or a reference such as FV-3R0D5-3X44V.
           </span>
         </div>
         <div className="flex gap-2">
