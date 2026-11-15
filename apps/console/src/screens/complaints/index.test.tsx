@@ -212,6 +212,25 @@ describe("complaints screen", () => {
     await waitFor(async () => expect((await rows()).map((row) => row[0])).not.toContain("C-2615"));
   });
 
+  it("keeps a half-written note when someone else changes the complaint, and shows their change", async () => {
+    const shared: StubShare = {};
+    const mine = createStubComplaintsApi(ME, () => TODAY, () => NOW, "sample", shared);
+    const grace = createStubComplaintsApi(GRACE, () => TODAY, () => NOW, "sample", shared);
+    const { user } = renderComplaints({ api: mine, pollMs: 40 });
+    const detail = await panel("C-2611, Joan Namutebi");
+    await user.click(within(detail).getByRole("button", { name: "Add a note" }));
+    await user.type(within(detail).getByRole("textbox"), "Half of what the client said");
+
+    const id = (await grace.register("open")).complaints.find((complaint) => complaint.reference === "C-2611")?.id ?? "";
+    await grace.addNote(id, "Grace rang the bank");
+
+    expect(await screen.findByText("Grace rang the bank", {}, { timeout: 2000 })).toBeInTheDocument();
+    const after = await panel("C-2611, Joan Namutebi");
+    expect(within(after).getByRole("textbox")).toHaveValue("Half of what the client said");
+    await user.click(within(after).getByRole("button", { name: "Add note" }));
+    expect(await within(await panel("C-2611, Joan Namutebi")).findByText("Half of what the client said")).toBeInTheDocument();
+  });
+
   it("does not replace the open complaint when nothing about it changed", async () => {
     const api = createStubComplaintsApi(ME, () => TODAY, () => NOW);
     const read = vi.spyOn(api, "complaint");

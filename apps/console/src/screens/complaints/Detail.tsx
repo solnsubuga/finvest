@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import type { ClientCardStatus, StaffCard } from "@/directory/api.ts";
 import { formatExact } from "@/screens/dealing-desk/format.ts";
@@ -41,13 +41,15 @@ interface DetailPanelProps {
   error: string | null;
   /** Resolves true once the command is done, so its form can close. */
   onCommand: (command: Command) => Promise<boolean>;
+  /** Told whether a form here holds words the reader has typed, so a refresh does not drop them. */
+  onDraft?: (drafting: boolean) => void;
 }
 
 type Form = "move" | "note" | "propose" | "reject" | null;
 
 const FIELD = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink";
 
-export function DetailPanel({ detail, clientName, clientStatus, staffName, team, me, canManage, canClose, busy, error, onCommand }: DetailPanelProps) {
+export function DetailPanel({ detail, clientName, clientStatus, staffName, team, me, canManage, canClose, busy, error, onCommand, onDraft }: DetailPanelProps) {
   const { complaint, history, pendingOutcome: pending, lastRejected: rejected } = detail;
   const open = complaint.status !== "closed";
   const logged = history.find((item) => item.action === "logged");
@@ -59,6 +61,12 @@ export function DetailPanel({ detail, clientName, clientStatus, staffName, team,
   const [resolution, setResolution] = useState("");
   const [accepted, setAccepted] = useState<boolean | null>(null);
   const [tried, setTried] = useState(false);
+  const drafting = form !== null && (note.trim() !== "" || resolution.trim() !== "");
+  useEffect(() => {
+    onDraft?.(drafting);
+  }, [drafting, onDraft]);
+  // A panel that goes away holds no draft any more.
+  useEffect(() => () => onDraft?.(false), [onDraft]);
 
   function show(next: Form, status?: MoveTo) {
     if (next === "propose" && rejected && outcome === null && resolution.trim() === "" && accepted === null) {
