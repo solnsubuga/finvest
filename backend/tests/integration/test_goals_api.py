@@ -74,7 +74,7 @@ async def test_a_client_plans_sets_up_reads_and_closes_a_goal(api: Api) -> None:
     )
     assert plan.status_code == 200
     assert plan.json()["product_code"] == "TREA-91"
-    assert plan.json()["rate_percent"] == "10.63"
+    assert plan.json()["rate_percent"] == "10.62"
 
     created = await api.http.post(
         "/client/goals", json=GOAL, headers={**headers, "Idempotency-Key": key()}

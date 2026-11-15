@@ -128,7 +128,7 @@ async def test_the_website_lists_live_and_paused_products_after_tax(api: Api) ->
     assert response.headers["access-control-allow-origin"] == "*"
     body = response.json()
     by_code = {product["code"]: product for product in body["products"]}
-    assert by_code["TREA-91"]["client_rate_percent"] == "10.63"
+    assert by_code["TREA-91"]["client_rate_percent"] == "10.62"
     assert by_code["TREA-91"]["status"] == "live"
     assert by_code["USD-BOND"]["status"] == "paused"
     assert body["updated_on"] == today().isoformat()

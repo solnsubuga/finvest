@@ -32,7 +32,7 @@ export type PlanProduct = {
   code: string;
   name: string;
   minimum: Money;
-  /** "10.63", a label only. No amount is ever worked out from it. */
+  /** "10.62", a label only. No amount is ever worked out from it. */
   ratePercent: string;
   termDays: number;
 };
