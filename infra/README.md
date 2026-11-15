@@ -243,6 +243,10 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 | Public website | The website from `apps/site`, built for the environment's own addresses. Staging always serves it. Production answers "on its way" until `SITE_PUBLISHED` is `true`. |
 | Client app | The web version of `apps/client` (`app.Dockerfile`). Its policy (`app-csp.mjs`) lets the guided selfie run its WebAssembly face detector and Regula's liveness check, and the edge allows the camera for this address only. In production it stays behind Cloudflare Access until `CLIENT_APP_PUBLIC` is `true` and Provision has run. |
 
+### Edge check
+
+`infra/deployment/check-edge.sh` reads production from outside the way a browser meets it: HSTS, nosniff, frame and referrer rules, the opener policy, each host's content security policy and camera rule, cookie flags, TLS 1.2 and 1.3 with a valid certificate, TLS 1.1 refused, and plain HTTP sent to HTTPS. It sends only GET and HEAD requests. The Edge Check workflow runs it after every production deploy and on demand. Hosts behind Cloudflare Access show only their TLS and the login redirect from outside.
+
 ### Rehearsal
 
 `bash infra/deployment/rehearse.sh` runs the whole deployment on one machine with Docker: real images, roles, migrations, two switches while polling the API, and a failed check that must switch back. CI runs it on every infrastructure pull request.

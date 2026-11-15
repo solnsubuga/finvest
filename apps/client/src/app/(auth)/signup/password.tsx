@@ -5,7 +5,7 @@ import { Redirect, Stack } from "expo-router";
 import { useAuth } from "@/auth/AuthProvider";
 import { signupSteps, stepOf } from "@/auth/signupSteps";
 import { checkPassword, passwordIsAcceptable, passwordStrength } from "@/auth/password";
-import { describeAuthError } from "@/auth/types";
+import { AuthError, describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Card, CheckRow, Notice, StepProgress } from "@/components/Blocks";
 import { Button } from "@/components/Button";
@@ -21,13 +21,15 @@ export default function SignupPassword() {
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The password the server refused as leaked. The meter must not praise it.
+  const [refused, setRefused] = useState<string | null>(null);
 
   if (!ticket) {
     return <Redirect href="/signup" />;
   }
 
   const checks = checkPassword(password, confirmation, ticket.phone);
-  const strength = passwordStrength(password);
+  const strength = refused !== null && password === refused ? REFUSED : passwordStrength(password);
 
   const submit = async () => {
     setBusy(true);
@@ -44,6 +46,7 @@ export default function SignupPassword() {
       setSession(session);
     } catch (caught) {
       setError(describeAuthError(caught));
+      if (caught instanceof AuthError && caught.code === "leaked_password") setRefused(password);
       setBusy(false);
     }
   };
@@ -127,6 +130,8 @@ export default function SignupPassword() {
     </Screen>
   );
 }
+
+const REFUSED = { label: "Not accepted", fraction: 0.1, ok: false };
 
 const styles = StyleSheet.create({
   top: { flexDirection: "row", alignItems: "center", gap: 16 },

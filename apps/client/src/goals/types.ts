@@ -27,7 +27,7 @@ export type Plan = {
   productCode: string;
   /** "91 Day Treasury Bill" */
   productName: string;
-  /** "10.63": the yearly rate after tax, as a label. */
+  /** "10.62": the yearly rate after tax, as a label. */
   ratePercent: string;
   termDays: number;
   saving: Money;

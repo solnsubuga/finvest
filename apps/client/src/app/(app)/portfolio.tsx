@@ -7,7 +7,7 @@ import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { LinkCard } from "@/components/LinkCard";
 import { Txt } from "@/components/Txt";
-import { plural, termProgress } from "@/home/format";
+import { plural, runningSummary, termProgress } from "@/home/format";
 import { InvestmentsTable, Panel, PanelLine, SplitBar, Tile } from "@/home/Parts";
 import { atMaturityLabel, formatAmount, formatDay, investmentLabel } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
@@ -167,6 +167,16 @@ function TotalsCard({ totals }: { totals: Totals }) {
           <SplitBar portfolio={totals} />
         </View>
       ) : null}
+      {totals.activeCount ? (
+        <View style={styles.blackFoot} testID="portfolio-running">
+          <Txt size={13} color={colors.onBlackMuted}>
+            Investments
+          </Txt>
+          <Txt size={13} weight="bold" color={colors.white}>
+            {runningSummary(totals)}
+          </Txt>
+        </View>
+      ) : null}
       {totals.awaitingPaymentCount ? (
         <View style={styles.blackFoot}>
           <Txt size={13} color={colors.onBlackMuted}>
@@ -182,10 +192,9 @@ function TotalsCard({ totals }: { totals: Totals }) {
 }
 
 function WideTiles({ totals }: { totals: Totals }) {
-  const bills = totals.products.reduce((count, share) => count + share.count, 0);
   return (
     <View style={styles.tiles}>
-      <Tile label="You put in" value={formatAmount(totals.invested)} detail={`Across ${plural(bills, "investment")}`} testID="tile-put-in" />
+      <Tile label="You put in" value={formatAmount(totals.invested)} detail={runningSummary(totals)} testID="tile-put-in" />
       <Tile label="Worth today" value={formatAmount(totals.worth)} detail="After tax" testID="tile-worth" />
       <Tile
         label="Interest so far"

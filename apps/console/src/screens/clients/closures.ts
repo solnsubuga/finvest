@@ -13,6 +13,7 @@ import type { Currency } from "./api.ts";
 export type ClosureStatus = "requested" | "prepared" | "closed" | "declined" | "cancelled";
 export type Blocker =
   | "investments_running"
+  | "investments_unpaid"
   | "money_owed"
   | "deposits_in_progress"
   | "payouts_in_progress"
@@ -20,7 +21,10 @@ export type Blocker =
   | "plans_live";
 
 export interface Standing {
+  /** Started and still running, goal savings included. */
   runningInvestments: number;
+  /** Asked for but not paid yet: not in `runningInvestments` or `owed`. */
+  unpaidInvestments: number;
   /** Whole units of the smallest denomination, per currency. */
   owed: { minor: number; currency: Currency }[];
   openDeposits: number;
@@ -124,6 +128,7 @@ function toClosuresError(error: unknown, approving = false): ClosuresError {
 
 interface StandingJson {
   running_investments: number;
+  unpaid_investments: number;
   owed: { amount_minor: number; currency: string }[];
   open_deposits: number;
   open_payouts: number;
@@ -172,6 +177,7 @@ export function toClosure(json: ClosureJson): Closure {
     decisionNote: json.decision_note,
     standing: {
       runningInvestments: s.running_investments,
+      unpaidInvestments: s.unpaid_investments,
       // A currency this console does not know is left out rather than shown wrongly.
       owed: s.owed.filter((m) => CURRENCIES.has(m.currency)).map((m) => ({ minor: m.amount_minor, currency: m.currency as Currency })),
       openDeposits: s.open_deposits,
@@ -212,7 +218,7 @@ const refuse = () => Promise.reject(new ClosuresError("not_connected"));
 
 export const notConnectedClosuresApi: ClosuresApi = { open: refuse, prepare: refuse, approve: refuse, decline: refuse };
 
-const CLEAR: Standing = { runningInvestments: 0, owed: [], openDeposits: 0, openPayouts: 0, openGoals: 0, livePlans: 0, blockers: [] };
+const CLEAR: Standing = { runningInvestments: 0, unpaidInvestments: 0, owed: [], openDeposits: 0, openPayouts: 0, openGoals: 0, livePlans: 0, blockers: [] };
 
 /** Sample requests for `pnpm dev`. Nothing here is real. The rules follow the API. */
 export function createStubClosuresApi(me: { name: string }, now: () => number = Date.now, onClosed: (clientId: string) => void = () => {}, canClose = true): ClosuresApi {

@@ -89,7 +89,7 @@ class ClientPlan:
 
     product_code: str
     product_name: str
-    # "10.63": the yearly rate after tax, as a label.
+    # "10.62": the yearly rate after tax, as a label.
     rate_percent: str
     term_days: int
     saving: Money

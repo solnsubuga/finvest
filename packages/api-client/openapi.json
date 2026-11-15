@@ -2078,6 +2078,7 @@
       "Blocker": {
         "enum": [
           "investments_running",
+          "investments_unpaid",
           "money_owed",
           "deposits_in_progress",
           "payouts_in_progress",
@@ -25126,10 +25127,15 @@
           "running_investments": {
             "title": "Running Investments",
             "type": "integer"
+          },
+          "unpaid_investments": {
+            "title": "Unpaid Investments",
+            "type": "integer"
           }
         },
         "required": [
           "running_investments",
+          "unpaid_investments",
           "owed",
           "open_deposits",
           "open_payouts",

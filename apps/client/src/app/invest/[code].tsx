@@ -42,6 +42,7 @@ export default function ProductDetail() {
         product ? (
           <Button
             label="Review"
+            variant="lime"
             disabled={!ready}
             onPress={() => router.push({ pathname: "/invest/review", params: { code: product.code, amount: String(amount?.minor ?? "") } })}
             testID="review"

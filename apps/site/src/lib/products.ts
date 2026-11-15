@@ -21,7 +21,7 @@ export interface Product {
   /** The smallest investment, in the smallest unit: shillings for UGX, cents for USD. */
   minimumMinor: number;
   interestPaid: InterestPaid;
-  /** Yearly rate after tax, two decimal places, as a label: "10.63". */
+  /** Yearly rate after tax, two decimal places, as a label, rounded down: "10.62". */
   clientRatePercent: string;
   status: ProductStatus;
 }

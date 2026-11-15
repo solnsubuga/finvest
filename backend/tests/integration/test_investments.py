@@ -634,7 +634,7 @@ async def test_the_portfolio_shows_figures_after_tax_only(
         same = await investments.client_investment(session, client, investment.id, NOW)
     assert view == same
     assert view.status is ACTIVE
-    assert view.rate_percent == "10.63"
+    assert view.rate_percent == "10.62"
     assert view.amount == view.value == ugx(1_000_000)
     assert view.interest_so_far == view.interest_today == ugx(0)
     assert view.at_maturity_returns == ClientReturns(ugx(26_490), ugx(1_026_490))

@@ -115,7 +115,7 @@ Each of these is blocked on something only the owner can get, and is listed agai
 | **SMS credentials.** Both adapters are built (`FINVEST_SMS_BACKEND=africastalking`, `FINVEST_SMS_FALLBACK=iotec`), but the worker needs `FINVEST_SMS_AFRICASTALKING_USERNAME` and `FINVEST_SMS_AFRICASTALKING_API_KEY` (and the FINVEST sender id once Africa's Talking approves it), plus `FINVEST_SMS_IOTEC_CLIENT_ID` and `FINVEST_SMS_IOTEC_API_KEY` for the fallback. Both have been tested only against fakes: before launch, one real message through each must confirm the request shape and the status codes (and ioTec's `ReferenceId` lookup). | Until they are set, **no sign-up, SMS sign-in, payout account code or claim code can be delivered**, so nobody can sign up or claim an account. This is the most serious blocker. |
 | ~~**ioTec Verify: the name a network holds for a number.**~~ Closed: built (`backend/app/modules/payouts/providers/iotec_names.py`); needs the Verify credentials listed below. | ~~Mobile money payout accounts wait at `awaiting_proof` for good ([payouts.md](payouts.md)).~~ |
 | **Identity check provider.** Every client is reviewed by a person. | Works, but every sign-up needs staff time. |
-| **Public site facts.** `registeredName`, `regulator` and `licenceNumber` in `apps/site/src/data/company.ts` are empty, and `pnpm placeholders --strict` fails until they are set. The legal pages are headings only. | The site cannot be opened to search engines. |
+| **Public site facts.** `registeredName`, `regulator` and `licenceNumber` in `apps/site/src/data/company.ts` are empty, and `pnpm placeholders --strict` fails until they are set. The six legal pages are written out in full (`apps/site/src/data/legal.ts`) but are drafts: each says so until Finvest's lawyers review it and its `stage` is set to `reviewed`, and the strict check fails until then. | The site cannot be opened to search engines. |
 
 ## What only the owner can provide
 
@@ -132,7 +132,7 @@ Credentials and accounts:
 
 Legal and regulatory:
 
-- The company's registered name, regulator and licence number for the website, and the wording of the terms, privacy notice and other legal pages from Finvest's lawyers.
+- The company's registered name, company number, regulator, licence number, office address and data protection registration for the website, and the lawyers' review of the drafted terms, privacy notice, risk disclosure, fees, complaints policy and cookies pages.
 - Whether the regulator must be told of the change of system, and how.
 - Counsel's answers in [decisions.md](decisions.md): money in transit through the trust account, data hosted in London, group goals as a collective scheme, the tax on interest and its rounding, and the old system's higher interest.
 - How long records must be kept, which decides the retention jobs for the ledger, the audit trail and email events.

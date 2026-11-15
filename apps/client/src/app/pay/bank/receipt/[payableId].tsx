@@ -12,7 +12,7 @@ import { formatFileSize } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { chooseReceiptFile, photographReceipt } from "@/payments/pickReceipt";
 import {
-  checkReceipt,
+  checkReceiptFile,
   groupDigits,
   parseDaySent,
   parseShillings,
@@ -48,11 +48,11 @@ export default function UploadReceipt() {
   // "Not in the future" is judged against the moment the screen was opened.
   const [openedAt] = useState(() => Date.now());
 
-  const take = (picked: PickedFile | null) => {
+  const take = async (picked: PickedFile | null) => {
     if (!picked) {
       return;
     }
-    const checked = checkReceipt(picked);
+    const checked = await checkReceiptFile(picked);
     if (typeof checked === "string") {
       setFile(null);
       setFileError(receiptProblemCopy[checked]);
@@ -64,7 +64,7 @@ export default function UploadReceipt() {
 
   const choose = async () => {
     try {
-      take(await chooseReceiptFile());
+      await take(await chooseReceiptFile());
     } catch {
       setFileError("We could not open that file. Try another one.");
     }
@@ -77,7 +77,7 @@ export default function UploadReceipt() {
         setFileError("Finvest is not allowed to use the camera. Choose a file instead.");
         return;
       }
-      take(result);
+      await take(result);
     } catch {
       setFileError("We could not open the camera. Choose a file instead.");
     }

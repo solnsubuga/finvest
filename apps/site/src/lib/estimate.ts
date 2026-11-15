@@ -4,14 +4,15 @@
  * It is an estimate, and the page says so. The exact figure comes from the backend's interest
  * formula, which works from terms the public site must not carry (docs/rules.md: clients never
  * see tax rates). The site only has the yearly rate after tax as a two decimal label, so the
- * estimate can differ from the real figure by a few shillings. The app shows the exact amount
- * before anyone pays.
+ * estimate can differ from the real figure by a few shillings. The label is rounded down, so the
+ * estimate is never more than the real figure. The calculator replaces it with the exact quote
+ * from the API when the API answers, and the app shows the exact amount before anyone pays.
  *
  * Whole numbers throughout: BigInt, no floating point.
  */
 
 const DAYS_IN_YEAR = 365n;
-/** Hundredths of one percent in a whole: "10.63" is 1063 of 10,000. */
+/** Hundredths of one percent in a whole: "10.62" is 1062 of 10,000. */
 const RATE_SCALE = 10_000n;
 
 export interface Estimate {
@@ -19,7 +20,7 @@ export interface Estimate {
   total: bigint;
 }
 
-/** "10.63" as 1063. `null` if the label is not a rate. */
+/** "10.62" as 1062. `null` if the label is not a rate. */
 export function rateHundredths(label: string): bigint | null {
   const match = /^(\d{1,2})\.(\d{2})$/.exec(label);
   if (match === null) return null;

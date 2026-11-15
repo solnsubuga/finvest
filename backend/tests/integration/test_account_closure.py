@@ -11,11 +11,11 @@ from sqlalchemy.exc import DBAPIError
 from app.infrastructure.database import Database
 from app.modules.closures import service as closures
 from app.modules.investments import service as investments
-from app.shared.actors import Actor
+from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
-from tests.support.investments import PRESENT, pay, request
+from tests.support.investments import PRESENT, pay, request, today
 from tests.support.kyc import verify
 from tests.support.ledger import key, ugx
 
@@ -120,13 +120,20 @@ async def test_a_running_investment_or_money_owed_stops_the_request(
     blocked = await ask(api)
     assert blocked.status_code == 409
     codes = [f["code"] for f in blocked.json()["error"]["fields"]]
-    assert codes == ["investments_running"]
+    # Not paid yet: counted apart from running investments, as it holds no money.
+    assert codes == ["investments_unpaid"]
+    standing = (await api.http.get("/client/account-closure")).json()["standing"]
+    assert (standing["running_investments"], standing["unpaid_investments"]) == (0, 1)
 
     await pay(worker_database, investment, investment.amount, api.clock)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await investments.start_investment(
+            session, investment.id, confirmed_on=today(), clock=PRESENT
+        )
     standing = (await api.http.get("/client/account-closure")).json()["standing"]
     assert standing["blockers"] == ["investments_running", "money_owed"]
     assert standing["owed"] == [{"amount_minor": 1_000_000, "currency": "UGX"}]
-    assert standing["running_investments"] == 1
+    assert (standing["running_investments"], standing["unpaid_investments"]) == (1, 0)
 
 
 async def test_staff_check_again_before_closing(api: Api) -> None:
@@ -158,7 +165,7 @@ async def test_staff_check_again_before_closing(api: Api) -> None:
     await api.staff("operations")
     refused = await step(api, request_id, "preparation")
     assert refused.status_code == 409
-    assert [f["code"] for f in refused.json()["error"]["fields"]] == ["investments_running"]
+    assert [f["code"] for f in refused.json()["error"]["fields"]] == ["investments_unpaid"]
     assert await status_of(api, client) == "active"
 
 
