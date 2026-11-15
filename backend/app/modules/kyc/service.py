@@ -884,12 +884,27 @@ class ClientName:
     first: str  # "Amara"
 
 
+# The name the client typed on a check that is with Finvest now, newest first. Only to greet the
+# client with their own words while the check waits. Never for a payout name or for staff.
+_SENT_NAME = text(
+    "SELECT surname, given_names FROM kyc_checks "
+    "WHERE client_id = :client_id "
+    "AND status IN ('submitted', 'needs_review', 'with_compliance', 'awaiting_client') "
+    "AND surname IS NOT NULL AND given_names IS NOT NULL "
+    "ORDER BY created_at DESC LIMIT 1"
+)
+
+
 async def own_name(session: AsyncSession, client_id: str) -> ClientName | None:
-    """The signed-in client's verified name, or None until their check is approved.
+    """The name to greet the signed-in client by: the verified name once their check is
+    approved, and until then the name they sent on a check that is still being looked at.
+    None before they send one, and after a rejection.
 
     For the client's own transaction: they may read their own check.
     """
     row = (await session.execute(_VERIFIED_NAME, {"client_id": client_id})).one_or_none()
+    if row is None:
+        row = (await session.execute(_SENT_NAME, {"client_id": client_id})).one_or_none()
     if row is None:
         return None
     return ClientName(

@@ -9,10 +9,10 @@ export type Session = {
   phone: string;
   /**
    * The name on the client's approved ID, given names first and in proper case ("Amara Nakato").
-   * Null until the identity check is approved.
+   * While a sent ID check is being looked at, the name the client sent on it. Null before then.
    */
   displayName: string | null;
-  /** The first given name, to greet the client by ("Amara"). Null until approved. */
+  /** The first given name, to greet the client by ("Amara"). Null when displayName is. */
   firstName: string | null;
   /**
    * True when the second step was a code sent by SMS or email. The server

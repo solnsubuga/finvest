@@ -250,7 +250,8 @@ class ClientSessionView(Contract):
     # `confirm_it_is_you`.
     confirmed_until: datetime | None = None
     # The name on the client's approved identity document, given names first and in proper
-    # case ("Amara Nakato"), and the first given name to greet them by. Null until approved.
+    # case ("Amara Nakato"), and the first given name to greet them by. While a check is being
+    # looked at, the name the client sent on it. Null before they send one and after a rejection.
     display_name: str | None = None
     first_name: str | None = None
 
