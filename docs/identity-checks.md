@@ -44,7 +44,7 @@ Four checks decide. The identity provider answers two: `document_genuine`, that 
 - Anything else, including a failed check, sends the client to a person with the reasons listed. A provider never rejects a client on its own.
 - The name the network holds for the client's phone number is looked up too and shown to staff ([Phone number name](#phone-number-name)). It is not one of the four checks: a different name never fails the check, but it blocks approval, and approval with no person needs it to match.
 - The expiry date is checked again at approval. Staff cannot approve a document that expired while the check waited.
-- Finvest itself refuses to approve a second client on an identity document that an approved client already holds. The database enforces this with a unique index on a keyed fingerprint of the document.
+- Finvest itself refuses to approve a second client on an identity document that an approved client already holds. The database enforces this with a unique index on a keyed fingerprint of the document. Staff see such a check flagged `duplicate_document`, first among its flags, in the queue and on the check, whenever the other client was approved, and Approve is not offered. A staff approval that meets one answers `conflict` with the field code `duplicate_document`.
 
 ## Account number
 
