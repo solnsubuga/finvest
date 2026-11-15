@@ -12,7 +12,7 @@ from app.modules.documents.domain.building import (
     method_name,
     totals_by_currency,
 )
-from app.modules.documents.domain.statements import ActivityKind, Period
+from app.modules.documents.domain.statements import ActivityKind, Period, summarise
 from app.modules.investments.domain.investments import InvestmentStatus
 from app.shared.money import Currency, Money
 
@@ -78,6 +78,28 @@ def test_a_payout_is_money_out_and_a_returned_one_is_a_correction() -> None:
     assert out is not None and back is not None
     assert (out.kind, out.description) == (ActivityKind.PAID_OUT, "Paid out to your bank account")
     assert (back.kind, back.description) == (ActivityKind.CORRECTION, "Payout returned")
+
+
+def test_an_investment_sent_or_received_is_neither_paid_in_nor_paid_out() -> None:
+    sent = activity_line(change("investment.transferred", -100_000, "tr-1"), NAMES)
+    received = activity_line(change("investment.transferred", 100_000, "tr-1"), NAMES)
+    assert sent is not None and received is not None
+    assert (sent.kind, sent.description, sent.amount) == (
+        ActivityKind.TRANSFERRED,
+        "Investment sent",
+        ugx(-100_000),
+    )
+    assert (received.kind, received.description) == (
+        ActivityKind.TRANSFERRED,
+        "Investment received",
+    )
+    # A payout and a sent investment on one statement: only the payout is paid out.
+    payout = activity_line(change("payout.sent", -920_344, "po-1"), NAMES)
+    assert payout is not None
+    summary = summarise(
+        Currency.UGX, opening=ugx(1_020_344), closing=ugx(0), activity=[payout, sent]
+    )
+    assert (summary.paid_out, summary.transferred) == (ugx(920_344), ugx(-100_000))
 
 
 def test_anything_else_that_changes_what_the_client_is_owed_is_a_correction() -> None:

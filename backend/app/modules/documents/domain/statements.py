@@ -34,6 +34,9 @@ class ActivityKind(StrEnum):
     PAID_IN = "paid_in"  # a payment received for an investment
     EARNED = "earned"  # interest, after tax
     PAID_OUT = "paid_out"  # a payout to the client's mobile money or bank account
+    # An investment sent to or received from another client. The money never left Finvest, so
+    # it is neither paid in nor paid out. Signed, like a correction.
+    TRANSFERRED = "transferred"
     CORRECTION = "correction"  # a correction staff approved
 
 
@@ -134,6 +137,8 @@ class Summary:
     paid_in: Money
     earned: Money
     paid_out: Money  # a positive amount: what left
+    # Investments sent to and received from other clients, signed.
+    transferred: Money
     corrections: Money  # signed
     closing: Money
 
@@ -158,10 +163,18 @@ def summarise(
         paid_in=totals[ActivityKind.PAID_IN],
         earned=totals[ActivityKind.EARNED],
         paid_out=-totals[ActivityKind.PAID_OUT],
+        transferred=totals[ActivityKind.TRANSFERRED],
         corrections=totals[ActivityKind.CORRECTION],
         closing=closing,
     )
-    explained = opening + summary.paid_in + summary.earned - summary.paid_out + summary.corrections
+    explained = (
+        opening
+        + summary.paid_in
+        + summary.earned
+        - summary.paid_out
+        + summary.transferred
+        + summary.corrections
+    )
     if explained != closing:
         raise StatementDoesNotAddUp(f"The {currency} lines do not explain the change in value")
     return summary
@@ -245,6 +258,7 @@ def group_interest(lines: Sequence[Activity]) -> list[Activity]:
 _ORDER = {
     ActivityKind.PAID_IN: 0,
     ActivityKind.EARNED: 1,
-    ActivityKind.CORRECTION: 2,
-    ActivityKind.PAID_OUT: 3,
+    ActivityKind.TRANSFERRED: 2,
+    ActivityKind.CORRECTION: 3,
+    ActivityKind.PAID_OUT: 4,
 }

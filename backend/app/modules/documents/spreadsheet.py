@@ -34,6 +34,7 @@ ACTIVITY_NAMES = {
     ActivityKind.PAID_IN: "Paid in",
     ActivityKind.EARNED: "Interest, after tax",
     ActivityKind.PAID_OUT: "Paid out",
+    ActivityKind.TRANSFERRED: "Sent or received",
     ActivityKind.CORRECTION: "Correction",
 }
 
@@ -116,6 +117,8 @@ def _summary(sheet: Worksheet, statement: Statement) -> None:
         rows.add("Paid in", summary.paid_in)
         rows.add("Interest earned, after tax", summary.earned)
         rows.add("Paid out", -summary.paid_out)
+        if not summary.transferred.is_zero:
+            rows.add("Investments sent and received", summary.transferred)
         if not summary.corrections.is_zero:
             rows.add("Corrections", summary.corrections)
         rows.add(f"Value on {formatting.day(statement.period.end)}", summary.closing, bold=True)
