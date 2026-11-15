@@ -114,6 +114,8 @@ class Purpose(StrEnum):
 
     INVESTMENT = "investment"
     GOAL = "goal"
+    # A client's bond holding, bought at a quoted cost (app/modules/bonds/holdings.py).
+    BOND = "bond"
 
 
 class Code(StrEnum):

@@ -21,6 +21,7 @@ from app.infrastructure.process import keep_heartbeat, stop_on_signals
 from app.infrastructure.settings import Settings
 from app.modules.autoinvest.jobs import OPEN_DUE_KIND as AUTOINVEST_OPEN_KIND
 from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
+from app.modules.bonds.jobs import CANCEL_UNPAID_KIND as BONDS_CANCEL_UNPAID_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
@@ -65,6 +66,13 @@ def schedules() -> list[Schedule]:
             name="investments.cancel_unpaid",
             trigger=IntervalTrigger(minutes=15),
             kind=CANCEL_UNPAID_KIND,
+            max_age=timedelta(minutes=30),
+        ),
+        # Cancels bond purchases nobody paid for within their payment window.
+        Schedule(
+            name="bonds.cancel_unpaid",
+            trigger=IntervalTrigger(minutes=15),
+            kind=BONDS_CANCEL_UNPAID_KIND,
             max_age=timedelta(minutes=30),
         ),
         # Funds the early withdrawals queued for the buffer once it can pay them.

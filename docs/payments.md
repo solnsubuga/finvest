@@ -2,7 +2,7 @@
 
 How a client pays for an investment or a goal. The code is in `backend/app/modules/payments`, and the database side is migrations 0020 to 0022. Payouts are in `backend/app/modules/payouts`.
 
-There is no wallet. Every deposit names the investment or goal it pays for, and the money it brings sits in a ledger account for that purpose until the investment starts.
+There is no wallet. Every deposit names the investment, goal or bond holding it pays for, and the money it brings sits in a ledger account for that purpose until the investment or holding starts (see [bonds.md](bonds.md#buying)).
 
 **Status:** mobile money deposits work end to end against a sandbox provider. Bank transfers work end to end in the service layer: receipt, staff check against an imported bank statement, and posting. The client and console routes, receipt file storage and the correction commands arrive in their own pull requests.
 

@@ -12,6 +12,7 @@ from datetime import date, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.bonds import holdings as bond_holdings
 from app.modules.documents.domain import building
 from app.modules.documents.domain.building import EntryChange, InvestmentFacts, Names
 from app.modules.documents.domain.investment_notes import (
@@ -129,6 +130,9 @@ async def receipt(
         # A name that cannot be found leaves a plain description, never a wrong one.
         with contextlib.suppress(ApplicationError):
             paid_for = (await investments.get_investment(session, deposit.purpose_id)).product_name
+    elif deposit.purpose.value == "bond":
+        with contextlib.suppress(ApplicationError):
+            paid_for = (await bond_holdings.get_holding(session, deposit.purpose_id)).name
     return (
         Receipt(
             reference=reference,
