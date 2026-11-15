@@ -253,6 +253,7 @@ export default function Insights() {
               key={upcomingKey(item)}
               item={item}
               first={index === 0}
+              thisYear={today.slice(0, 4)}
               onPress={() => router.push(upcomingHref(item))}
             />
           ))}
@@ -399,14 +400,18 @@ function Row({ label, value, first }: { label: string; value: string; first?: bo
 function UpcomingRow({
   item,
   first,
+  thisYear,
   onPress,
 }: {
   item: Upcoming;
   first: boolean;
+  /** "2026": a day in another year shows its year, so a goal due next November never reads as this one. */
+  thisYear: string;
   onPress: () => void;
 }) {
   const day = item.on.slice(8, 10).replace(/^0/, "");
-  const month = formatLongDay(item.on).split(" ")[1];
+  const year = item.on.slice(0, 4);
+  const month = `${formatLongDay(item.on).split(" ")[1]}${year === thisYear ? "" : ` ${year}`}`;
   const words = upcomingWords(item);
   const amount = formatMoney(item.amount);
   return (

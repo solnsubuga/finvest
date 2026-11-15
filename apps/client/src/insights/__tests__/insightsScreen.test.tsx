@@ -102,4 +102,18 @@ describe("the Insights screen", () => {
     expect(await screen.findByText("No dollar earnings yet")).toBeTruthy();
     expect(screen.queryByText("Make your first investment")).toBeNull();
   });
+
+  it("names the year of a day that is not in this year", async () => {
+    const fake = client(["UGX"]);
+    fake.getInsights = async () => ({
+      ...figures("UGX", 31_408, 5_000_000),
+      upcoming: [
+        { kind: "goal_date", on: "2026-12-20", goalId: "g1", goalName: "School fees", amount: { currency: "UGX", minor: 1_000_000 } },
+        { kind: "goal_date", on: "2027-11-15", goalId: "g2", goalName: "New roof", amount: { currency: "UGX", minor: 3_000_000 } },
+      ],
+    });
+    await show(fake);
+    expect(await screen.findByText("Nov 2027")).toBeTruthy();
+    expect(screen.getByText("Dec")).toBeTruthy();
+  });
 });
