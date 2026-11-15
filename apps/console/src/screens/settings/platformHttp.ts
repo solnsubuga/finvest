@@ -3,6 +3,7 @@
 import { ApiError, type Http } from "@/api/http.ts";
 import {
   SettingsError,
+  type CardPayments,
   type Channels,
   type Limits,
   type LimitsApi,
@@ -20,6 +21,7 @@ interface ChannelsJson {
   mtn_pay_in: boolean;
   airtel_pay_in: boolean;
   bank_pay_in: boolean;
+  card_pay_in: boolean;
   mtn_payout: boolean;
   airtel_payout: boolean;
   bank_payout: boolean;
@@ -82,6 +84,7 @@ const channelsIn = (json: ChannelsJson): Channels => ({
   mtnPayIn: json.mtn_pay_in,
   airtelPayIn: json.airtel_pay_in,
   bankPayIn: json.bank_pay_in,
+  cardPayIn: json.card_pay_in,
   mtnPayout: json.mtn_payout,
   airtelPayout: json.airtel_payout,
   bankPayout: json.bank_payout,
@@ -91,6 +94,7 @@ const channelsOut = (value: Channels): ChannelsJson => ({
   mtn_pay_in: value.mtnPayIn,
   airtel_pay_in: value.airtelPayIn,
   bank_pay_in: value.bankPayIn,
+  card_pay_in: value.cardPayIn,
   mtn_payout: value.mtnPayout,
   airtel_payout: value.airtelPayout,
   bank_payout: value.bankPayout,
@@ -126,15 +130,35 @@ const layoutOut = (layout: StatementLayout): LayoutJson => ({
   out_word: layout.outWord,
 });
 
-/** The value as the console holds it. Only channels and layouts change shape. */
+interface CardPaymentsJson {
+  charge_basis_points: number;
+  max_payment_minor: number;
+  max_30_days_minor: number;
+}
+
+const cardIn = (json: CardPaymentsJson): CardPayments => ({
+  chargeBasisPoints: json.charge_basis_points,
+  maxPaymentMinor: json.max_payment_minor,
+  max30DaysMinor: json.max_30_days_minor,
+});
+
+const cardOut = (value: CardPayments): CardPaymentsJson => ({
+  charge_basis_points: value.chargeBasisPoints,
+  max_payment_minor: value.maxPaymentMinor,
+  max_30_days_minor: value.max30DaysMinor,
+});
+
+/** The value as the console holds it. Only channels, card payments and layouts change shape. */
 export function valueIn<K extends SettingKey>(key: K, json: unknown): Values[K] {
   if (key === "payment_channels") return channelsIn(json as ChannelsJson) as Values[K];
+  if (key === "card_payments") return cardIn(json as CardPaymentsJson) as Values[K];
   if (key === "statement_layouts") return (json as LayoutJson[]).map(layoutIn) as Values[K];
   return json as Values[K];
 }
 
 export function valueOut<K extends SettingKey>(key: K, value: Values[K]): unknown {
   if (key === "payment_channels") return channelsOut(value as Channels);
+  if (key === "card_payments") return cardOut(value as CardPayments);
   if (key === "statement_layouts") return (value as StatementLayout[]).map(layoutOut);
   return value;
 }

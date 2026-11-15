@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ApiError, type Http } from "@/api/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
-import { inNetwork, remindersText, SettingsError, shillings } from "./platform.ts";
-import { createHttpLimitsApi, createHttpPlatformSettingsApi, toSettingsError } from "./platformHttp.ts";
+import { basisPointsFrom, inNetwork, percentText, remindersText, SettingsError, shillings } from "./platform.ts";
+import { createHttpLimitsApi, createHttpPlatformSettingsApi, toSettingsError, valueIn, valueOut } from "./platformHttp.ts";
 import { PlatformSections } from "./PlatformSections.tsx";
 import { createStubLimitsApi, createStubPlatformSettingsApi, type PlatformSample } from "./platformStub.ts";
 
@@ -29,7 +29,9 @@ describe("settings: platform rules", () => {
     expect(await within(limits).findByText("UGX 5,000,000")).toBeInTheDocument();
     expect(within(limits).getByText("Off. A person reviews every client")).toBeInTheDocument();
     const channels = await card("Payment channels");
-    expect(await within(channels).findByText("All open")).toBeInTheDocument();
+    // Cards start paused until someone opens them.
+    expect(await within(channels).findByText("6 of 7 open")).toBeInTheDocument();
+    expect(within(channels).getByText("3.5% on top")).toBeInTheDocument();
     const calendar = await card("Calendar and timing");
     expect(within(calendar).getByText("14:00")).toBeInTheDocument();
     expect(within(calendar).getByText("7 days and 1 day before")).toBeInTheDocument();
@@ -195,5 +197,51 @@ describe("settings: platform over the API", () => {
       review_above_minor: 8_000_000,
       reason: "Fraud review",
     });
+  });
+
+  it("proposes a card charge and limits, and refuses a 30 day limit below one payment", async () => {
+    const { user } = renderSections("empty");
+    const channels = await card("Payment channels");
+    await user.click(await within(channels).findByRole("button", { name: "Change card charge and limits" }));
+    const form = within(channels).getByRole("form", { name: "New card charge and limits" });
+    const rate = within(form).getByRole("textbox", { name: /Card charge the client pays on top/ });
+    await user.clear(rate);
+    await user.type(rate, "2.75");
+    const most = within(form).getByRole("textbox", { name: /Most for one card payment/ });
+    await user.clear(most);
+    await user.type(most, "20,000,000");
+    await user.type(within(form).getByRole("textbox", { name: /Why is it changing/ }), "Pesapal's new rate");
+    await user.click(within(form).getByRole("button", { name: "Send for approval" }));
+    expect(within(form).getByText("The 30 day limit cannot be below the limit for one payment.")).toBeInTheDocument();
+    await user.clear(most);
+    await user.type(most, "4000000");
+    await user.click(within(form).getByRole("button", { name: "Send for approval" }));
+    const waiting = await within(channels).findByRole("region", { name: /Card charge and limits: change waiting/ });
+    expect(within(waiting).getByText("2.75%")).toBeInTheDocument();
+    expect(within(waiting).getByText("UGX 4,000,000")).toBeInTheDocument();
+  });
+});
+
+describe("card payment values", () => {
+  it("writes basis points as a percentage and reads one back, with no floating point", () => {
+    expect(percentText(350)).toBe("3.5%");
+    expect(percentText(0)).toBe("0%");
+    expect(percentText(1000)).toBe("10%");
+    expect(percentText(275)).toBe("2.75%");
+    expect(basisPointsFrom("3.5")).toBe(350);
+    expect(basisPointsFrom("2.75%")).toBe(275);
+    expect(basisPointsFrom("10")).toBe(1000);
+    expect(basisPointsFrom("3.555")).toBeNull();
+    expect(basisPointsFrom("abc")).toBeNull();
+  });
+
+  it("maps the card setting and the card channel to the API's names", () => {
+    const json = { charge_basis_points: 350, max_payment_minor: 5_000_000, max_30_days_minor: 10_000_000 };
+    const value = valueIn("card_payments", json);
+    expect(value).toEqual({ chargeBasisPoints: 350, maxPaymentMinor: 5_000_000, max30DaysMinor: 10_000_000 });
+    expect(valueOut("card_payments", value)).toEqual(json);
+    const channels = { mtn_pay_in: true, airtel_pay_in: true, bank_pay_in: true, card_pay_in: false, mtn_payout: true, airtel_payout: true, bank_payout: true };
+    expect(valueIn("payment_channels", channels).cardPayIn).toBe(false);
+    expect(valueOut("payment_channels", valueIn("payment_channels", channels))).toEqual(channels);
   });
 });

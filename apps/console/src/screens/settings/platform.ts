@@ -9,7 +9,7 @@
 export type Decision = "approved" | "rejected" | "withdrawn";
 export type Section = "channels" | "calendar" | "staff_security" | "statement_import";
 
-export const CHANNELS = ["mtnPayIn", "airtelPayIn", "bankPayIn", "mtnPayout", "airtelPayout", "bankPayout"] as const;
+export const CHANNELS = ["mtnPayIn", "airtelPayIn", "bankPayIn", "cardPayIn", "mtnPayout", "airtelPayout", "bankPayout"] as const;
 export type Channel = (typeof CHANNELS)[number];
 /** True where the channel is open. A paused channel refuses new requests only. */
 export type Channels = Record<Channel, boolean>;
@@ -43,8 +43,19 @@ export interface StatementLayout {
   outWord: string | null;
 }
 
+/** What clients pay by card: the charge on top, and the card limits. Amounts in shillings. */
+export interface CardPayments {
+  /** Basis points: 350 is 3.5%. 0 to 1,000. */
+  chargeBasisPoints: number;
+  /** The most one card payment may be, charge included. */
+  maxPaymentMinor: number;
+  /** The most one client may pay by card in any 30 days, charge included. */
+  max30DaysMinor: number;
+}
+
 export interface Values {
   payment_channels: Channels;
+  card_payments: CardPayments;
   public_holidays: Holiday[];
   /** HH:MM, Kampala time. */
   bank_payout_cutoff: string;
@@ -59,6 +70,7 @@ export interface Values {
 export type SettingKey = keyof Values;
 export const SETTING_KEYS: readonly SettingKey[] = [
   "payment_channels",
+  "card_payments",
   "public_holidays",
   "bank_payout_cutoff",
   "maturity_reminders",
@@ -262,10 +274,25 @@ export const CHANNEL_LABELS: Record<Channel, string> = {
   mtnPayIn: "MTN Mobile Money, paying in",
   airtelPayIn: "Airtel Money, paying in",
   bankPayIn: "Bank transfer, paying in",
+  cardPayIn: "Card, paying in (Pesapal)",
   mtnPayout: "MTN Mobile Money, payouts",
   airtelPayout: "Airtel Money, payouts",
   bankPayout: "Bank payouts",
 };
+
+/** "3.5%" from 350 basis points, without floating point. */
+export function percentText(basisPoints: number): string {
+  const whole = Math.trunc(basisPoints / 100);
+  const part = String(basisPoints % 100).padStart(2, "0").replace(/0+$/, "");
+  return part ? `${whole}.${part}%` : `${whole}%`;
+}
+
+/** 350 from "3.5" or "3.5%", or null when it is not a percentage with at most two decimals. */
+export function basisPointsFrom(text: string): number | null {
+  const match = /^\s*(\d{1,2})(?:\.(\d{1,2}))?\s*%?\s*$/.exec(text);
+  if (!match) return null;
+  return Number(match[1]) * 100 + Number((match[2] ?? "").padEnd(2, "0"));
+}
 
 /** Whether an address falls in a network, for the "this leaves you out" warning. IPv4 only; the backend decides. */
 export function inNetwork(address: string, network: string): boolean {
