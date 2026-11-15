@@ -46,6 +46,7 @@ from app.modules.organisations.jobs import OrganisationJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.card_jobs import CardDepositJobs
 from app.modules.payments.jobs import DepositJobs
+from app.modules.payments.provider_refunds import ProviderRefundJobs
 from app.modules.payments.reversals import ReversalJobs
 from app.modules.payments.settings import CardSettings, PaymentsSettings
 from app.modules.payments.wiring import card_provider, collections_provider
@@ -164,6 +165,8 @@ def handlers(
     cards_provider = card_provider(CardSettings(), clock)
     if cards_provider is not None:
         kinds.update(CardDepositJobs(database, cards_provider, clock).handlers())
+        # Paying a card payment back goes through the provider that collected it.
+        kinds.update(ProviderRefundJobs(database, cards_provider, clock).handlers())
     # Runs ask for mobile money payments, so they are asked for only with a provider.
     kinds.update(
         AutoinvestJobs(

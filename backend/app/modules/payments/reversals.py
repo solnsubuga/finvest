@@ -480,7 +480,7 @@ async def _facts(session: AsyncSession, deposit: Deposit, clock: Clock) -> Facts
     return Facts(
         status=deposit.status,
         purpose=deposit.purpose,
-        reversed=deposit.reversal_id is not None,
+        reversed=deposit.taken_back,
         entry_type=entry_type,
         amount=deposit.amount,
         waiting=await ledger.get_balance(session, account.id),

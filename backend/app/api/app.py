@@ -84,6 +84,7 @@ from app.modules.overview import api as overview_api
 from app.modules.payments import api as payments_api
 from app.modules.payments import (
     bank_account_routes,
+    provider_refund_routes,
     reassignment_routes,
     receivable_routes,
     reversal_routes,
@@ -299,7 +300,7 @@ def create_app(
         app.include_router(router)
     for router in reassignment_routes.routers:
         app.include_router(router)
-    for router in reversal_routes.routers:
+    for router in (*reversal_routes.routers, *provider_refund_routes.routers):
         app.include_router(router)
     for router in receivable_routes.routers:
         app.include_router(router)

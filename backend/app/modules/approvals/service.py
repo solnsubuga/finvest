@@ -28,6 +28,7 @@ from app.modules.organisations import service as organisations
 from app.modules.payments import (
     bank_accounts,
     bank_transfers,
+    provider_refunds,
     reassignments,
     receivables,
     reversals,
@@ -118,6 +119,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _reversals(session)
     if "deposit_receivable" in kinds:
         found += await _receivables(session)
+    if "card_refund" in kinds:
+        found += await _card_refunds(session)
     if "withdrawal_limits_change" in kinds and (change := await limit_changes.waiting(session)):
         # The start day only. The limits are shown on Settings.
         found.append(
@@ -487,6 +490,14 @@ async def _reversals(session: AsyncSession) -> list[Waiting]:
     return [
         Waiting("deposit_reversal", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
         for r in await reversals.proposals_awaiting_approval(session)
+    ]
+
+
+async def _card_refunds(session: AsyncSession) -> list[Waiting]:
+    # The subject is the deposit's ID, never a name or an amount.
+    return [
+        Waiting("card_refund", r.id, r.deposit_id, r.proposed_by, r.proposed_at)
+        for r in await provider_refunds.proposals_awaiting_approval(session)
     ]
 
 

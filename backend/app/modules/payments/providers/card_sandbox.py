@@ -16,6 +16,9 @@ The last three digits of the total (investment and charge) choose what happens:
 | 005 | The provider is busy and took nothing (deferred) |
 | 006 | Paid, but for a different amount |
 | anything else | Paid after a few seconds, with a Visa ending 1111 |
+
+A refund chooses by the last three digits of what goes back: 007 is refused, 008 gets no
+answer, 009 is never reached. Anything else is taken, and reads as paid back at once.
 """
 
 from __future__ import annotations
@@ -43,6 +46,7 @@ from app.modules.payments.domain.outcomes import (
     UncertainReason,
 )
 from app.modules.payments.domain.provider import InvalidNotice, ProviderNotice
+from app.modules.payments.domain.provider_refunds import RefundRequest, RequestResult
 from app.shared.clock import Clock
 from app.shared.money import Currency, Money
 
@@ -97,6 +101,17 @@ class SandboxCards:
         if ":abandoned:" in provider_reference:
             return CancelResult.CANCELLED
         return CancelResult.REFUSED
+
+    async def refund_payment(self, request: RefundRequest) -> RequestResult:
+        ending = f"{request.amount.minor:03d}"[-3:]
+        return {
+            "007": RequestResult.REFUSED,
+            "008": RequestResult.UNKNOWN,
+            "009": RequestResult.NOT_SENT,
+        }.get(ending, RequestResult.ACCEPTED)
+
+    async def payment_reversed(self, *, request_id: str, provider_reference: str) -> bool | None:
+        return provider_reference.startswith("csbx:paid:")
 
     def read_notice(self, token: str, query: Mapping[str, str], body: bytes) -> ProviderNotice:
         if self._token is None or not hmac.compare_digest(token.encode(), self._token.encode()):

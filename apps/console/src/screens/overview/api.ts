@@ -34,6 +34,7 @@ export const KINDS = [
   "deposit_reassignment",
   "deposit_reversal",
   "deposit_receivable",
+  "card_refund",
   "tax_remittance",
   "payout_resolution",
   "payout_release",

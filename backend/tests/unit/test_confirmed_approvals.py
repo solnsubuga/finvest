@@ -35,6 +35,9 @@ DECISIONS = {
     "POST /staff/payments/bank-transfers/{payment_id}/approve",
     "POST /staff/payments/reassignments/{reassignment_id}/approve",
     "POST /staff/payments/reversals/{reversal_id}/approve",
+    "POST /staff/payments/card-refunds/{refund_id}/approve",
+    # Saying a card refund was paid or not moves money out of the books, or back in.
+    "POST /staff/payments/card-refunds/{refund_id}/finding",
     "POST /staff/payments/receivables/{step_id}/approve",
     "POST /staff/payout-destinations/{destination_id}/approve",
     "POST /staff/payout-resolutions/{resolution_id}/approve",

@@ -170,7 +170,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "auction_date", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "auction_date", "rate_change", "product_change", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "card_refund", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -682,6 +682,63 @@ export const CardPaymentsProposal = z.object({
   yours: z.boolean(),
 });
 export type CardPaymentsProposal = z.infer<typeof CardPaymentsProposal>;
+
+export const CardRefundOut = z.object({
+  amount: MoneyView,
+  charge: MoneyView,
+  client_id: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  deposit_id: z.string(),
+  done_at: z.string().nullable(),
+  failure_code: z.string().nullable(),
+  finvest_erred: z.boolean(),
+  found: z.enum(["requested", "paid", "not_paid"]).nullable(),
+  found_at: z.string().nullable(),
+  found_by: z.string().nullable(),
+  found_note: z.string().nullable(),
+  id: z.string(),
+  investment_id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  provider: z.string(),
+  reason: z.string(),
+  sent_at: z.string().nullable(),
+  status: z.enum(["proposed", "approved", "sent_back", "withdrawn", "sending", "requested", "uncertain", "done", "failed"]),
+  total: MoneyView,
+});
+export type CardRefundOut = z.infer<typeof CardRefundOut>;
+
+export const CardRefundDetailOut = z.object({
+  can_decide: z.boolean(),
+  can_record_finding: z.boolean(),
+  card_brand: z.string().nullable(),
+  card_last_four: z.string().nullable(),
+  refund: CardRefundOut,
+  refusal: z.enum(["not_confirmed", "not_for_an_investment", "not_refundable", "already_taken_back", "not_a_payment", "no_confirmation_code", "money_moved_on"]).nullable(),
+  waiting: MoneyView,
+  yours: z.boolean(),
+});
+export type CardRefundDetailOut = z.infer<typeof CardRefundDetailOut>;
+
+export const CardRefundFindingIn = z.object({
+  found: z.enum(["requested", "paid", "not_paid"]),
+  note: z.string(),
+});
+export type CardRefundFindingIn = z.infer<typeof CardRefundFindingIn>;
+
+export const CardRefundProposeIn = z.object({
+  deposit_id: z.string(),
+  finvest_erred: z.boolean().optional(),
+  reason: z.string(),
+});
+export type CardRefundProposeIn = z.infer<typeof CardRefundProposeIn>;
+
+export const CardRefundSendBackIn = z.object({
+  note: z.string(),
+});
+export type CardRefundSendBackIn = z.infer<typeof CardRefundSendBackIn>;
 
 export const CaseAmountOut = z.object({
   currency: z.enum(["UGX", "USD"]),
@@ -6336,6 +6393,96 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: BankTransferOut,
+  },
+  "GET /staff/payments/card-refunds": {
+    method: "GET",
+    path: "/staff/payments/card-refunds",
+    params: z.object({}),
+    query: z.object({
+    status: z.enum(["proposed", "approved", "sent_back", "withdrawn", "sending", "requested", "uncertain", "done", "failed"]).nullable().optional(),
+    deposit_id: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(CardRefundOut),
+  },
+  "POST /staff/payments/card-refunds": {
+    method: "POST",
+    path: "/staff/payments/card-refunds",
+    params: z.object({}),
+    query: z.object({}),
+    body: CardRefundProposeIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: CardRefundDetailOut,
+  },
+  "GET /staff/payments/card-refunds/{refund_id}": {
+    method: "GET",
+    path: "/staff/payments/card-refunds/{refund_id}",
+    params: z.object({
+    refund_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CardRefundDetailOut,
+  },
+  "POST /staff/payments/card-refunds/{refund_id}/approve": {
+    method: "POST",
+    path: "/staff/payments/card-refunds/{refund_id}/approve",
+    params: z.object({
+    refund_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: CardRefundDetailOut,
+  },
+  "POST /staff/payments/card-refunds/{refund_id}/finding": {
+    method: "POST",
+    path: "/staff/payments/card-refunds/{refund_id}/finding",
+    params: z.object({
+    refund_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CardRefundFindingIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CardRefundDetailOut,
+  },
+  "POST /staff/payments/card-refunds/{refund_id}/send-back": {
+    method: "POST",
+    path: "/staff/payments/card-refunds/{refund_id}/send-back",
+    params: z.object({
+    refund_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CardRefundSendBackIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CardRefundDetailOut,
+  },
+  "POST /staff/payments/card-refunds/{refund_id}/withdraw": {
+    method: "POST",
+    path: "/staff/payments/card-refunds/{refund_id}/withdraw",
+    params: z.object({
+    refund_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: CardRefundDetailOut,
   },
   "GET /staff/payments/reassignments": {
     method: "GET",

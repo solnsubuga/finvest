@@ -50,6 +50,8 @@ _SPECS = (
     _event("payment_failed", Category.MONEY, "payments", "amount", "method"),
     # A payment credited by mistake was taken back by two staff. Never the amount in the words.
     _event("payment_reversed", Category.MONEY, "payments", "amount", "method"),
+    # A card payment is on its way back to the card, asked for by two staff.
+    _event("payment_refunded", Category.MONEY, "payments", "amount", "method"),
     # Money out.
     _event("payout_processing", Category.MONEY, "payouts", "amount", "destination"),
     _event("payout_sent", Category.MONEY, "payouts", "amount", "destination"),
