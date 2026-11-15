@@ -46,6 +46,7 @@
     "react-native": "0.88.1",
     "react-native-nitro-image": "0.15.2",
     "react-native-nitro-modules": "0.37.1",
+    "react-native-passkey": "3.6.2",
     "react-native-safe-area-context": "~5.11.1",
     "react-native-screens": "~4.30.1",
     "react-native-svg": "15.16.0",

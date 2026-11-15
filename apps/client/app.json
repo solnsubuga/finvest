@@ -8,12 +8,17 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
+      "bundleIdentifier": "com.finvestug.app",
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Finvest uses your camera to take photos of your ID and the selfie that confirms who you are."
-      }
+      },
+      "associatedDomains": [
+        "webcredentials:finvestug.com"
+      ]
     },
     "android": {
+      "package": "com.finvestug.app",
       "adaptiveIcon": {
         "backgroundColor": "#0D0D0D",
         "foregroundImage": "./assets/android-icon-foreground.png",
