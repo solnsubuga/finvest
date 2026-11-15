@@ -1,5 +1,6 @@
 """The worker's side of bonds: start a holding when its payment is confirmed, cancel the ones
-nobody paid for, pay coupons on their dates, and repay holdings when their bonds mature.
+nobody paid for, pay coupons on their dates, repay holdings when their bonds mature, and pay a
+sale two people approved.
 
 No handler here calls a provider. Each does all its work in the single fenced transaction that
 also completes the job, so a job that is run twice changes nothing the second time.
@@ -21,7 +22,7 @@ from app.infrastructure.jobs import (
     RetryableJobError,
 )
 from app.infrastructure.jobs import queue as job_queue
-from app.modules.bonds import coupons, holdings, maturity
+from app.modules.bonds import coupons, holdings, maturity, sales
 from app.modules.bonds.events import START_KIND
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
@@ -45,6 +46,7 @@ class BondJobs:
             CANCEL_UNPAID_KIND: self.cancel_unpaid,
             PAY_COUPONS_KIND: self.pay_coupons,
             REPAY_MATURED_KIND: self.repay_matured,
+            sales.SETTLE_KIND: self.settle_sale,
         }
 
     async def start_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
@@ -156,6 +158,28 @@ class BondJobs:
         logger.info(
             "bond_maturity_run_finished", run_date=run_date.isoformat(), paid=paid, held=held
         )
+
+    async def settle_sale(self, job: ClaimedJob, context: JobContext) -> None:
+        """Pay a sale two people approved: the price and accrued interest after tax, to the
+        destination the client named, or held for them. A sale paid once is never paid again.
+
+        A refusal fails the job for good, and staff see it among the failed jobs: the sale stays
+        approved and nothing has moved.
+        """
+        sale_id = job.payload.get("sale_id")
+        if not isinstance(sale_id, str):
+            raise PermanentJobError(code="sale_id_missing")
+
+        async def effect(session: AsyncSession) -> Mapping[str, object]:
+            try:
+                view = await sales.settle(session, sale_id, self._clock)
+            except ApplicationError as error:
+                raise PermanentJobError(code=f"bond_sale_{error.code}") from error
+            if view is None:
+                return {"sale_id": sale_id, "status": "already_sold"}
+            return {"sale_id": sale_id, "status": view.status.value}
+
+        await context.apply(effect)
 
 
 async def _nothing(_: AsyncSession) -> Mapping[str, object]:

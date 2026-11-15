@@ -10,12 +10,14 @@
 * `/staff/bond-holdings`: every client's holdings, for the books and the dealing desk.
 * `/client/bond-repayments`, `/staff/bond-repayments`: holdings repaid at maturity, the face
   value and the last coupon, and sending on one that waits for a destination.
+* `/client/bond-holdings/{id}/sale`, `/client/bond-sales`, `/staff/bond-sales`: a client's ask
+  to sell a holding early, priced by the dealing desk and approved by a second person.
 """
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
@@ -23,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.bonds import catalogue, coupons, holdings, maturity
+from app.modules.bonds import catalogue, coupons, holdings, maturity, sales
 from app.modules.bonds.domain.changes import BondChangeAction, BondChangeStatus
 from app.modules.bonds.domain.holdings import HoldingStatus
 from app.modules.bonds.domain.issues import (
@@ -33,6 +35,7 @@ from app.modules.bonds.domain.issues import (
     Quote,
     default_tax_bps,
 )
+from app.modules.bonds.domain.sales import SaleStatus, allowed_steps
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.pins_api import Pins
 from app.modules.identity.service import StaffSession
@@ -66,6 +69,7 @@ CurrencyIn = Annotated[Currency, Field(strict=False)]
 DateIn = Annotated[date, Field(strict=False)]
 StatusIn = Annotated[BondStatus, Field(strict=False)]
 PinConfirmation = Annotated[str | None, Field(max_length=200)]
+SaleStep = Literal["price", "approve", "send_back", "withdraw"]
 
 
 # Contracts --------------------------------------------------------------------------------------
@@ -326,6 +330,80 @@ class StaffBondHoldingOut(Contract):
     start_date: date | None
 
 
+class SellBondIn(Contract):
+    # One of the client's approved payout destinations, for the proceeds.
+    destination_id: PushId
+    pin_confirmation: PinConfirmation = None
+
+
+class BondSaleOut(Contract):
+    """A client's ask to sell a holding early, and what it paid, after tax."""
+
+    id: PushId
+    holding_id: PushId
+    code: str
+    name: str
+    currency: Currency
+    face_minor: int
+    requested_at: datetime
+    # `requested`, `priced` and `approved` while the desk sells it, then `sold`. `cancelled` by
+    # the client, or `closed` when the bond matured first and was repaid instead.
+    status: SaleStatus
+    destination_id: PushId
+    # The price it sold at, per 100 of face value, and the day it settled, once sold.
+    price: int | None
+    sold_on: date | None
+    # What the client is paid: the price and the accrued interest, after tax. Once sold.
+    amount_minor: int | None
+    sold_at: datetime | None
+    # `paid_out` once a payout carries it, `held` while it waits for a destination.
+    payout_status: str | None
+    payout_id: PushId | None
+    held_because: str | None
+
+
+class StaffBondSaleOut(Contract):
+    id: PushId
+    holding_id: PushId
+    client_id: PushId
+    code: str
+    name: str
+    currency: Currency
+    face_minor: int
+    # What the client paid for the holding.
+    cost_minor: int
+    destination_id: PushId
+    requested_at: datetime
+    status: SaleStatus
+    price: int | None
+    sold_on: date | None
+    # The dealing desk's reference for the trade.
+    reason: str | None
+    priced_by: PushId | None
+    priced_at: datetime | None
+    decided_by: PushId | None
+    decided_at: datetime | None
+    # Why it was last sent back.
+    note: str | None
+    clean_minor: int | None
+    accrued_minor: int | None
+    tax_minor: int | None
+    amount_minor: int | None
+    sold_at: datetime | None
+    payout_status: str | None
+    payout_id: PushId | None
+    held_because: str | None
+    closed_at: datetime | None
+    # What the reader may do with it now: `price`, `approve`, `send_back` or `withdraw`.
+    allowed: list[SaleStep]
+
+
+class PriceSaleIn(Contract):
+    price: Price
+    sold_on: DateIn
+    reason: Note
+
+
 # Wiring -----------------------------------------------------------------------------------------
 
 
@@ -335,6 +413,9 @@ def _clock(request: Request) -> Clock:
 
 
 AppClock = Annotated[Clock, Depends(_clock)]
+DeskViewer = Annotated[StaffSession, Depends(require_permission("dealing_desk.view"))]
+DeskChanger = Annotated[StaffSession, Depends(require_permission("dealing_orders.change"))]
+DeskApprover = Annotated[StaffSession, Depends(require_confirmed("dealing_orders.change"))]
 ProductsViewer = Annotated[StaffSession, Depends(require_permission("products.view"))]
 ProductsChanger = Annotated[StaffSession, Depends(require_permission("products.change"))]
 ProductsApprover = Annotated[StaffSession, Depends(require_confirmed("products.change"))]
@@ -726,6 +807,159 @@ async def client_pay_out_repayment(
     return _repayment_out(view)
 
 
+def _money(value: Money | None) -> int | None:
+    return None if value is None else value.minor
+
+
+def _sale_out(view: sales.SaleView) -> BondSaleOut:
+    sold = view.status is SaleStatus.SOLD
+    return BondSaleOut(
+        id=view.id,
+        holding_id=view.holding_id,
+        code=view.code,
+        name=view.name,
+        currency=view.face.currency,
+        face_minor=view.face.minor,
+        requested_at=view.requested_at,
+        status=view.status,
+        destination_id=view.destination_id,
+        price=view.price if sold else None,
+        sold_on=view.sold_on if sold else None,
+        amount_minor=_money(view.amount),
+        sold_at=view.settled_at,
+        payout_status=view.payout_status,
+        payout_id=view.payout_id,
+        held_because=view.payout_refusal,
+    )
+
+
+def _staff_sale_out(view: sales.SaleView, staff: StaffSession) -> StaffBondSaleOut:
+    steps = allowed_steps(
+        view.status,
+        view.priced_by,
+        staff.staff_id,
+        may_change="dealing_orders.change" in staff.permissions,
+    )
+    return StaffBondSaleOut(
+        id=view.id,
+        holding_id=view.holding_id,
+        client_id=view.client_id,
+        code=view.code,
+        name=view.name,
+        currency=view.face.currency,
+        face_minor=view.face.minor,
+        cost_minor=view.cost.minor,
+        destination_id=view.destination_id,
+        requested_at=view.requested_at,
+        status=view.status,
+        price=view.price,
+        sold_on=view.sold_on,
+        reason=view.reason,
+        priced_by=view.priced_by,
+        priced_at=view.priced_at,
+        decided_by=view.decided_by,
+        decided_at=view.decided_at,
+        note=view.note,
+        clean_minor=_money(view.clean),
+        accrued_minor=_money(view.accrued),
+        tax_minor=_money(view.tax),
+        amount_minor=_money(view.amount),
+        sold_at=view.settled_at,
+        payout_status=view.payout_status,
+        payout_id=view.payout_id,
+        held_because=view.payout_refusal,
+        closed_at=view.closed_at,
+        allowed=[cast(SaleStep, step) for step in steps],
+    )
+
+
+def _refused_destination(refused: payouts.PayoutRefused) -> ApplicationError:
+    return ApplicationError(
+        "validation_failed",
+        fields=[FieldProblem(field_path=["destination_id"], code=refused.code)],
+    )
+
+
+@client_router.post(
+    "/bond-holdings/{holding_id}/sale", status_code=201, responses={428: {"model": ErrorEnvelope}}
+)
+async def client_sell_bond(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    pins: Pins,
+    key: IdempotencyKey,
+    holding_id: PushId,
+    body: SellBondIn,
+) -> BondSaleOut:
+    """Ask Finvest to sell the whole holding early, at the market price the dealing desk gets.
+    Nothing moves until two members of staff have recorded and approved the sale.
+
+    422 `holding_id` / `holding_not_active` or `matured`; 409 `holding_id` /
+    `sale_already_asked`; 422 `destination_id` when it cannot be paid. 428 `pin_required` from
+    the phone app once it has a PIN, unless `pin_confirmation` is a fresh confirmation for
+    `withdrawal`.
+    """
+    async with _transaction(request, client.actor) as session:
+        view = await sales.request_sale(
+            session,
+            client.actor,
+            holding_id,
+            idempotency_key=key,
+            destination_id=body.destination_id,
+            clock=clock,
+            confirm=lambda: pins.spend(
+                client, "withdrawal", body.pin_confirmation, session=session
+            ),
+        )
+    return _sale_out(view)
+
+
+@client_router.get("/bond-sales")
+async def client_bond_sales(request: Request, client: CurrentClient) -> list[BondSaleOut]:
+    """The client's asks to sell, newest first, with what each paid after tax."""
+    async with _transaction(request, client.actor) as session:
+        found = await sales.client_sales(session, client.client_id)
+    return [_sale_out(v) for v in found]
+
+
+@client_router.post("/bond-sales/{sale_id}/cancel")
+async def client_cancel_bond_sale(
+    request: Request, client: CurrentClient, clock: AppClock, sale_id: PushId
+) -> BondSaleOut:
+    """Cancel an ask to sell. 409 once the dealing desk has priced it."""
+    async with _transaction(request, client.actor) as session:
+        view = await sales.cancel_sale(session, client.actor, sale_id, clock)
+    return _sale_out(view)
+
+
+@client_router.post("/bond-sales/{sale_id}/pay-out", responses={428: {"model": ErrorEnvelope}})
+async def client_pay_out_sale(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    pins: Pins,
+    sale_id: PushId,
+    body: CouponPayOutIn,
+) -> BondSaleOut:
+    """Send on the proceeds of a sale that wait for a destination. 409 when they do not wait."""
+    try:
+        async with _transaction(request, client.actor) as session:
+            view = await sales.pay_out_held(
+                session,
+                client.actor,
+                sale_id,
+                destination_id=body.destination_id,
+                clock=clock,
+                confirm=lambda: pins.spend(
+                    client, "withdrawal", body.pin_confirmation, session=session
+                ),
+            )
+    except payouts.PayoutRefused as refused:
+        raise _refused_destination(refused) from None
+    return _sale_out(view)
+
+
 # Staff ------------------------------------------------------------------------------------------
 
 staff_router = APIRouter(prefix="/staff", tags=["staff bonds"], responses=_REFUSALS)
@@ -913,6 +1147,74 @@ async def staff_withdraw_bond_change(
     async with _transaction(request, staff.actor) as session:
         view = await catalogue.withdraw(session, staff.actor, change_id, clock)
     return _change_out(view)
+
+
+@staff_router.get("/bond-sales")
+async def staff_bond_sales(
+    request: Request,
+    staff: DeskViewer,
+    status: SaleStatus | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[StaffBondSaleOut]:
+    """Clients' asks to sell, newest first. `requested` lists those for the desk to sell,
+    `priced` those waiting for a second person."""
+    async with _transaction(request, staff.actor) as session:
+        found = await sales.staff_sales(session, staff.actor, status, limit)
+    return [_staff_sale_out(v, staff) for v in found]
+
+
+@staff_router.post("/bond-sales/{sale_id}/price")
+async def staff_price_bond_sale(
+    request: Request, staff: DeskChanger, clock: AppClock, sale_id: PushId, body: PriceSaleIn
+) -> StaffBondSaleOut:
+    """Record the price the desk sold the holding at, the day it settled and the desk's
+    reference, for a second person to approve.
+
+    422 `sold_on` / `sold_on_in_future`, `sold_on_before_start`, `sold_on_at_maturity` or
+    `coupon_since_sale`. 409 when it is not waiting to be priced.
+    """
+    async with _transaction(request, staff.actor) as session:
+        view = await sales.price_sale(
+            session,
+            staff.actor,
+            sale_id,
+            price=body.price,
+            sold_on=body.sold_on,
+            reason=body.reason,
+            clock=clock,
+        )
+    return _staff_sale_out(view, staff)
+
+
+@staff_router.post("/bond-sales/{sale_id}/approve")
+async def staff_approve_bond_sale(
+    request: Request, staff: DeskApprover, clock: AppClock, sale_id: PushId
+) -> StaffBondSaleOut:
+    """Approve a sale someone else priced. The worker then pays the client. Asks the person to
+    confirm it is them."""
+    async with _transaction(request, staff.actor) as session:
+        view = await sales.approve_sale(session, staff.actor, sale_id, clock)
+    return _staff_sale_out(view, staff)
+
+
+@staff_router.post("/bond-sales/{sale_id}/send-back")
+async def staff_send_back_bond_sale(
+    request: Request, staff: DeskChanger, clock: AppClock, sale_id: PushId, body: SendBack
+) -> StaffBondSaleOut:
+    async with _transaction(request, staff.actor) as session:
+        view = await sales.send_back_sale(
+            session, staff.actor, sale_id, note=body.note, clock=clock
+        )
+    return _staff_sale_out(view, staff)
+
+
+@staff_router.post("/bond-sales/{sale_id}/withdraw")
+async def staff_withdraw_bond_sale(
+    request: Request, staff: DeskChanger, clock: AppClock, sale_id: PushId
+) -> StaffBondSaleOut:
+    async with _transaction(request, staff.actor) as session:
+        view = await sales.withdraw_sale(session, staff.actor, sale_id, clock)
+    return _staff_sale_out(view, staff)
 
 
 routers = (public_router, client_router, staff_router)

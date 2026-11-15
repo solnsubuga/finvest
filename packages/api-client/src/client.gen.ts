@@ -145,7 +145,7 @@ export const BondCouponOut = z.object({
 });
 export type BondCouponOut = z.infer<typeof BondCouponOut>;
 
-export const HoldingStatus = z.enum(["unpaid", "active", "matured", "cancelled"]);
+export const HoldingStatus = z.enum(["unpaid", "active", "matured", "sold", "cancelled"]);
 export type HoldingStatus = z.infer<typeof HoldingStatus>;
 
 export const BondHoldingOut = z.object({
@@ -222,6 +222,29 @@ export const BondRepaymentOut = z.object({
   status: z.string(),
 });
 export type BondRepaymentOut = z.infer<typeof BondRepaymentOut>;
+
+export const SaleStatus = z.enum(["requested", "priced", "approved", "sold", "cancelled", "closed"]);
+export type SaleStatus = z.infer<typeof SaleStatus>;
+
+export const BondSaleOut = z.object({
+  amount_minor: z.number().int().nullable(),
+  code: z.string(),
+  currency: Currency,
+  destination_id: z.string(),
+  face_minor: z.number().int(),
+  held_because: z.string().nullable(),
+  holding_id: z.string(),
+  id: z.string(),
+  name: z.string(),
+  payout_id: z.string().nullable(),
+  payout_status: z.string().nullable(),
+  price: z.number().int().nullable(),
+  requested_at: z.string(),
+  sold_at: z.string().nullable(),
+  sold_on: z.string().nullable(),
+  status: SaleStatus,
+});
+export type BondSaleOut = z.infer<typeof BondSaleOut>;
 
 export const BuyBondIn = z.object({
   code: z.string(),
@@ -1505,6 +1528,12 @@ export const SelfieConfirmationState = z.object({
 });
 export type SelfieConfirmationState = z.infer<typeof SelfieConfirmationState>;
 
+export const SellBondIn = z.object({
+  destination_id: z.string(),
+  pin_confirmation: z.string().nullable().optional(),
+});
+export type SellBondIn = z.infer<typeof SellBondIn>;
+
 export const SendLoginCode = z.object({
   channel: z.enum(["sms", "email"]).optional(),
   login_id: z.string(),
@@ -1924,6 +1953,19 @@ export const operations = {
     status: 201,
     response: PaymentView,
   },
+  "POST /client/bond-holdings/{holding_id}/sale": {
+    method: "POST",
+    path: "/client/bond-holdings/{holding_id}/sale",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: SellBondIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: BondSaleOut,
+  },
   "GET /client/bond-repayments": {
     method: "GET",
     path: "/client/bond-repayments",
@@ -1947,6 +1989,43 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: BondRepaymentOut,
+  },
+  "GET /client/bond-sales": {
+    method: "GET",
+    path: "/client/bond-sales",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BondSaleOut),
+  },
+  "POST /client/bond-sales/{sale_id}/cancel": {
+    method: "POST",
+    path: "/client/bond-sales/{sale_id}/cancel",
+    params: z.object({
+    sale_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BondSaleOut,
+  },
+  "POST /client/bond-sales/{sale_id}/pay-out": {
+    method: "POST",
+    path: "/client/bond-sales/{sale_id}/pay-out",
+    params: z.object({
+    sale_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CouponPayOutIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: BondSaleOut,
   },
   "GET /client/bonds": {
     method: "GET",
