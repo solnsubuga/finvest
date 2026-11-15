@@ -287,7 +287,7 @@ export default function DealingDeskPage() {
     if (isStubAuth() && session) {
       const sample = new URLSearchParams(window.location.search).get("sample");
       if (sample === "offline") return notConnectedBondSalesApi;
-      return createStubBondSalesApi({ id: session.staffId, name: session.name }, sample === "empty" ? "empty" : "sample");
+      return createStubBondSalesApi({ id: session.staffId, name: session.name }, sample === "empty" ? "empty" : "sample", kampalaToday);
     }
     const base = apiBaseUrl();
     if (!base) return notConnectedBondSalesApi;

@@ -21,7 +21,8 @@ export async function toBondSales(rows: readonly StaffBondSaleOut[], directory: 
       names.set(id, (await directory.staffName(id).catch(() => null)) ?? id);
     }),
     ...[...clients].map(async (id) => {
-      names.set(id, (await directory.client(id).catch(() => null))?.name ?? id);
+      // As the audit trail and other screens say it when the directory does not know the client.
+      names.set(id, (await directory.client(id).catch(() => null))?.name ?? "A client");
     }),
   ]);
   const named = (id: string | null) => (id ? (names.get(id) ?? id) : null);

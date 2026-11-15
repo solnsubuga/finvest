@@ -1,7 +1,7 @@
 /**
  * Sample bond sales for `pnpm dev` and tests. Follows the backend's rules closely enough to try
  * the screen: a sale is priced by one person and decided by another, and the figures of a sold
- * one are the backend's worked example in docs/bonds.md.
+ * one are the backend's worked example in docs/bonds.md, dated around today.
  */
 
 import { BondSaleError, type BondSale, type BondSalesApi, type SaleStep } from "./bondSales.ts";
@@ -42,44 +42,50 @@ function base(id: string, clientName: string, requestedAt: string): BondSale {
   };
 }
 
-function samples(me: { id: string; name: string }): BondSale[] {
+/** The day `days` before `today`, as a calendar date. */
+function before(today: string, days: number): string {
+  return new Date(Date.parse(`${today}T00:00:00Z`) - days * 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Dated around `today`, so the day a sale settled reads as recent beside the price form. */
+function samples(me: { id: string; name: string }, today: string): BondSale[] {
   return [
-    base("-SaleRequested000001", "Sarah Nakato", "2027-02-14T07:12:00Z"),
+    base("-SaleRequested000001", "Sarah Nakato", `${today}T07:12:00Z`),
     {
-      ...base("-SalePricedColleague", "Brian Okello", "2027-02-13T10:40:00Z"),
+      ...base("-SalePricedColleague", "Brian Okello", `${before(today, 1)}T10:40:00Z`),
       status: "priced",
       price: 972_500,
-      soldOn: "2027-02-14",
+      soldOn: today,
       reason: "Desk trade 4471 with Stanbic",
       pricedBy: SALES_COLLEAGUE.name,
-      pricedAt: "2027-02-14T09:05:00Z",
+      pricedAt: `${today}T09:05:00Z`,
     },
     {
-      ...base("-SalePricedByMe00001", "Joan Achieng", "2027-02-12T15:20:00Z"),
+      ...base("-SalePricedByMe00001", "Joan Achieng", `${before(today, 2)}T15:20:00Z`),
       face: UGX(500_000),
       cost: UGX(512_000),
       status: "priced",
       price: 1_001_250,
-      soldOn: "2027-02-14",
+      soldOn: today,
       reason: "Desk trade 4472 with Absa",
       pricedBy: me.name,
-      pricedAt: "2027-02-14T09:30:00Z",
+      pricedAt: `${today}T09:30:00Z`,
     },
     {
-      ...base("-SaleSold00000000001", "Peter Mugisha", "2027-02-10T08:00:00Z"),
+      ...base("-SaleSold00000000001", "Peter Mugisha", `${before(today, 4)}T08:00:00Z`),
       status: "sold",
       price: 972_500,
-      soldOn: "2027-02-14",
+      soldOn: today,
       reason: "Desk trade 4460 with Stanbic",
       pricedBy: SALES_COLLEAGUE.name,
-      pricedAt: "2027-02-14T08:15:00Z",
+      pricedAt: `${today}T08:15:00Z`,
       decidedBy: me.name,
-      decidedAt: "2027-02-14T08:40:00Z",
+      decidedAt: `${today}T08:40:00Z`,
       clean: UGX(972_500),
       accrued: UGX(40_662),
       tax: UGX(4_066),
       amount: UGX(1_009_096),
-      soldAt: "2027-02-14T08:41:00Z",
+      soldAt: `${today}T08:41:00Z`,
       payoutStatus: "paid_out",
     },
   ];
@@ -91,8 +97,12 @@ function steps(sale: BondSale, me: string): readonly SaleStep[] {
   return [];
 }
 
-export function createStubBondSalesApi(me: { id: string; name: string }, sample: "sample" | "empty" = "sample"): BondSalesApi {
-  let sales = sample === "empty" ? [] : samples(me);
+export function createStubBondSalesApi(
+  me: { id: string; name: string },
+  sample: "sample" | "empty" = "sample",
+  today: () => string = () => new Date().toISOString().slice(0, 10),
+): BondSalesApi {
+  let sales = sample === "empty" ? [] : samples(me, today());
   const shown = (sale: BondSale): BondSale => ({ ...sale, allowed: steps(sale, me.name) });
   function update(id: string, change: (sale: BondSale) => BondSale): Promise<BondSale> {
     const found = sales.find((s) => s.id === id);

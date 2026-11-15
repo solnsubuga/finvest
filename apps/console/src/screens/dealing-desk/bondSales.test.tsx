@@ -12,7 +12,7 @@ import { createStubBondSalesApi } from "./bondSalesStub.ts";
 const TODAY = "2027-02-14";
 const ME = { id: "-StaffMe000000000001", name: "Ada Namubiru" };
 
-function renderSales(api: BondSalesApi = createStubBondSalesApi(ME)) {
+function renderSales(api: BondSalesApi = createStubBondSalesApi(ME, "sample", () => TODAY)) {
   render(<BondSalesSection api={api} today={() => TODAY} />);
   return userEvent.setup();
 }
@@ -26,20 +26,20 @@ describe("bonds clients are selling", () => {
     expect(within(waiting).getAllByRole("article")).toHaveLength(3);
     const asked = await card("Sarah Nakato");
     expect(within(asked).getByText("Waiting for the desk to sell")).toBeInTheDocument();
-    expect(within(asked).getByRole("button", { name: /Record the price/ })).toBeInTheDocument();
+    expect(within(asked).getByRole("button", { name: /Record price for/ })).toBeInTheDocument();
     const colleague = await card("Brian Okello");
     expect(within(colleague).getByText("97.2500 per 100")).toBeInTheDocument();
     expect(within(colleague).getByRole("button", { name: /^Approve/ })).toBeInTheDocument();
     expect(within(colleague).getByRole("button", { name: /^Send back/ })).toBeInTheDocument();
     const mine = await card("Joan Achieng");
     expect(within(mine).queryByRole("button", { name: /^Approve/ })).toBeNull();
-    expect(within(mine).getByRole("button", { name: /^Withdraw the price/ })).toBeInTheDocument();
+    expect(within(mine).getByRole("button", { name: /^Withdraw price for/ })).toBeInTheDocument();
   });
 
   it("records a price after checking what was typed", async () => {
     const user = renderSales();
     const asked = await card("Sarah Nakato");
-    await user.click(within(asked).getByRole("button", { name: /Record the price/ }));
+    await user.click(within(asked).getByRole("button", { name: /Record price for/ }));
     const form = within(asked).getByRole("form", { name: "Record the price" });
     await user.click(within(form).getByRole("button", { name: "Record price" }));
     expect(within(form).getByText(/between 50 and 150/)).toBeInTheDocument();
@@ -84,7 +84,7 @@ describe("bonds clients are selling", () => {
   });
 
   it("says when nobody is selling, and when the list cannot be loaded", async () => {
-    renderSales(createStubBondSalesApi(ME, "empty"));
+    renderSales(createStubBondSalesApi(ME, "empty", () => TODAY));
     expect(await screen.findByText(/No client is waiting to sell a bond/)).toBeInTheDocument();
   });
 
@@ -96,7 +96,7 @@ describe("bonds clients are selling", () => {
   });
 
   it("reloads the list when someone else moved the sale on", async () => {
-    const api = createStubBondSalesApi(ME);
+    const api = createStubBondSalesApi(ME, "sample", () => TODAY);
     const approve = vi.spyOn(api, "approve").mockRejectedValueOnce(new BondSaleError("conflict"));
     const user = renderSales(api);
     const colleague = await card("Brian Okello");
@@ -158,6 +158,13 @@ describe("bond sales over the API", () => {
     });
     await api.sendBack(row.id, "Wrong");
     expect(request).toHaveBeenLastCalledWith("POST", `/staff/bond-sales/${row.id}/send-back`, { note: "Wrong" });
+  });
+
+  it("names a client the directory does not know as a client", async () => {
+    const request = vi.fn(() => Promise.resolve([row]));
+    const unknown: Directory = { ...directory, client: () => Promise.resolve(null) };
+    const [sale] = await createHttpBondSalesApi({ request } as unknown as Http, unknown).list();
+    expect(sale?.clientName).toBe("A client");
   });
 
   it("turns the backend's refusals into the screen's", () => {

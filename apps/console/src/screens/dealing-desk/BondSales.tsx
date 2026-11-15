@@ -255,7 +255,7 @@ function SaleCard(props: SaleCardProps) {
         {open === null ? (
           <div className="flex shrink-0 flex-wrap gap-2">
             {sale.allowed.includes("price") ? (
-              <Button disabled={busy} aria-label={`Record the price for ${what}`} onClick={() => props.onOpen("price")}>
+              <Button disabled={busy} aria-label={`Record price for ${what}`} onClick={() => props.onOpen("price")}>
                 Record price
               </Button>
             ) : null}
@@ -270,7 +270,7 @@ function SaleCard(props: SaleCardProps) {
               </Button>
             ) : null}
             {sale.allowed.includes("withdraw") ? (
-              <Button variant="secondary" disabled={busy} aria-label={`Withdraw the price for ${what}`} onClick={props.onWithdraw}>
+              <Button variant="secondary" disabled={busy} aria-label={`Withdraw price for ${what}`} onClick={props.onWithdraw}>
                 Withdraw price
               </Button>
             ) : null}
