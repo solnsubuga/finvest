@@ -535,7 +535,7 @@ def tax_certificate_pdf(certificate: tax.Certificate, *, reference: str, issued_
         ],
         [
             [
-                (f"{line.product_name}\n{line.investment_id}", "B"),
+                (f"{line.product_name}\n{_short(line.investment_id)}", "B"),
                 (formatting.day(line.start_date) if line.start_date else "-", ""),
                 (formatting.day(line.maturity_date) if line.maturity_date else "-", ""),
                 (formatting.money(line.gross), ""),
@@ -612,7 +612,7 @@ def investment_note_pdf(note: InvestmentNote, *, issued_on: date) -> bytes:
             _Fact("Prepared for", note.client_name),
             _Fact("Account number", account),
             _Fact("Investment", note.product_name),
-            _Fact("Investment number", note.investment_id),
+            _Fact("Investment number", _short(note.investment_id)),
         ],
         [
             _Fact("Started", formatting.day(note.start_date)),
@@ -716,7 +716,7 @@ def ended_note_pdf(note: EndedNote, *, issued_on: date) -> bytes:
             _Fact("Prepared for", note.client_name),
             _Fact("Account number", account),
             _Fact("Investment", note.product_name),
-            _Fact("Investment number", note.investment_id),
+            _Fact("Investment number", _short(note.investment_id)),
         ],
         [
             _Fact("Started", formatting.day(note.start_date)),
