@@ -510,3 +510,27 @@ async def test_a_first_statement_that_opens_away_from_the_books_cannot_be_closed
         await day_close.refresh(session, checker, day, fake_clock, pots=[honest.pot])
         (position,) = await day_close.positions(session, day, fake_clock, pots=[honest.pot])
     assert position.unexplained == ugx(0)
+
+
+async def test_a_pot_added_later_needs_a_statement_only_once_it_has_been_used(
+    app_database: Database, books: Books, fake_clock: FakeClock
+) -> None:
+    """As for Pesapal's pot: the days before its first card payment close without a statement,
+    at zero. From the day it is used, its statement is needed like any other pot's."""
+    from dataclasses import replace
+
+    books.pot = replace(books.pot, starts_when_used=True)
+    reader = staff()
+    day = await next_day(app_database, fake_clock)
+    async with app_database.actor_transaction(reader) as session:
+        (position,) = await day_close.positions(session, day, fake_clock, pots=[books.pot])
+        assert position.statement_closing == ugx(0) and position.unexplained == ugx(0)
+        assert await day_close.blockers(session, day, [position], pots=[books.pot]) == ()
+
+    await books.post(day, 1_000, "dep-later")
+    with pytest.raises(CloseError) as missing:
+        await books.prepare(day)
+    assert missing.value.code == "statement_missing"
+    await books.statement(day, line(day, 1_000, "dep-later"))
+    assert (await books.prepare(day)).status is CloseStatus.PREPARED
+    assert (await books.approve(day)).status is CloseStatus.CLOSED

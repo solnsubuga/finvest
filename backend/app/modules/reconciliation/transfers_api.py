@@ -62,7 +62,12 @@ Changer = Annotated[StaffSession, Depends(require_permission("reconciliation.cha
 # The second signature moves money, so it needs a passkey or app code from the last few minutes.
 Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.change"))]
 
-Source = Literal["iotec", "bank"]
+Source = Literal["iotec", "pesapal", "bank"]
+_SOURCES: dict[StatementSource, Source] = {
+    StatementSource.IOTEC: "iotec",
+    StatementSource.PESAPAL: "pesapal",
+    StatementSource.BANK: "bank",
+}
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 # A day as JSON sends it, "2026-11-13". Strict contracts would refuse the string.
 Day = Annotated[date, Field(strict=False)]
@@ -142,7 +147,7 @@ def _money(value: Money) -> MoneyOut:
 
 def _pot_out(view: transfers.TransferView, side: Literal["from", "to"]) -> PotOut:
     pot = view.terms.from_pot if side == "from" else view.terms.to_pot
-    source: Source = "iotec" if pot.source is StatementSource.IOTEC else "bank"
+    source = _SOURCES[pot.source]
     return PotOut(source=source, account_reference=pot.account_reference, name=pot.name)
 
 

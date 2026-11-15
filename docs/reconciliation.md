@@ -10,6 +10,7 @@ A pot is one place real money sits, with one ledger asset account and one statem
 | --- | --- | --- |
 | ioTec wallet, MTN | `iotec.wallet`, reference `mtn` | ioTec |
 | ioTec wallet, Airtel | `iotec.wallet`, reference `airtel` | ioTec |
+| Pesapal balance | `pesapal.balance` | Pesapal, as an uploaded export (a layout set on Settings). Card payments wait here until Pesapal settles them to the trust account. Until the first card payment it needs no statement: it closes at zero (`starts_when_used`). |
 | Trust bank account | `bank.trust` | The bank, as an uploaded export until there is a bank API |
 | Custodian | Bills, not cash: compared with the dealing desk's holdings (see [Custodian statement checks](#custodian)) | The custodian, as an uploaded statement in any layout |
 
@@ -115,7 +116,7 @@ The ledger is closed before the figures are read at approval, so no entry can sl
 | Never reopened | A closed or sent back close never changes, and nothing is deleted |
 | Who | Only staff prepare and decide. The worker reads. Clients see nothing |
 
-The pots closed today are the two ioTec wallets and the trust bank account (`domain/pots.py`). The custodian joins when the dealing desk can report holdings. A bill's purchase and its maturity are posted to `bank.trust` without the bank's reference, which is not known when the entry is posted, so they pair by the reference the dealing desk gives for them. A maturity on a weekend or public holiday is paid on the next working day, so its bank line can come a day or more after the entry.
+The pots closed today are the two ioTec wallets, the Pesapal balance (from its first card payment, migration `0481_pesapal_pot`) and the trust bank account (`domain/pots.py`). A card payment is posted with the deposit ID as its reference, which is the merchant reference on Pesapal's export, so it pairs by reference. The custodian joins when the dealing desk can report holdings. A bill's purchase and its maturity are posted to `bank.trust` without the bank's reference, which is not known when the entry is posted, so they pair by the reference the dealing desk gives for them. A maturity on a weekend or public holiday is paid on the next working day, so its bank line can come a day or more after the entry.
 
 ## Staff routes
 
@@ -150,7 +151,7 @@ The journeys import ioTec's statements and sign every day off through these rout
 Finvest moves its own money between pots, such as sweeping collected mobile money from an ioTec wallet to the trust bank account so the dealing desk can pay for bills. `reconciliation.transfers` records it (migration `0042_pot_transfers`).
 
 1. One member of staff records a transfer that has already been made, with the provider's reference, what was sent, what arrived and a reason. Nothing is posted.
-2. A different member of staff approves it, which posts one entry: debit the receiving pot with what arrived, debit `fees.provider.iotec` with any difference, credit the sending pot with what was sent. A transfer that leaves the trust bank account cannot carry a fee yet (`transfer_fee_not_allowed`), because no bank charges account is agreed. Or they decline it with a reason.
+2. A different member of staff approves it, which posts one entry: debit the receiving pot with what arrived, debit the sending provider's fee account (`fees.provider.iotec`, or `fees.provider.pesapal` for a Pesapal settlement) with any difference, credit the sending pot with what was sent. A Pesapal settlement to the trust account is recorded this way, with what Pesapal kept as its fee. A transfer that leaves the trust bank account cannot carry a fee yet (`transfer_fee_not_allowed`), because no bank charges account is agreed. Or they decline it with a reason.
 
 | Rule | How it is held |
 | --- | --- |

@@ -88,7 +88,9 @@ Pesapal's notifications (IPN) are not signed, and carry only `OrderTrackingId`, 
 | --- | --- | --- |
 | Card payment confirmed (`payment.deposit_confirmed`) | Asset `pesapal.balance` with the total | Liability `client.awaiting_start` with the investment's amount, and income `payments.card_charges` with the card charge the client paid |
 
-Pesapal holds the money until it settles to the trust account. Its own charge is not reported per payment, so it is booked when the settlement arrives (see Not built yet).
+Pesapal holds the money until it settles to the trust account. Its own charge is not reported per payment, so it is booked when the settlement arrives: staff record the settlement as a transfer from the Pesapal balance to the trust account, and what Pesapal kept is posted to `fees.provider.pesapal` (see [reconciliation](reconciliation.md#transfers-between-pots)).
+
+The 30-day card limit counts the client's card deposits that have not failed when a new one is asked for. Two card payments asked for at the same moment, for two different investments, can each pass it, so it is a soft limit. One investment has at most one live deposit, so the overshoot is at most one payment per investment in flight.
 
 ### Pesapal settings
 
@@ -359,7 +361,7 @@ Staff can pause MTN, Airtel or bank transfer pay ins on Settings, two people agr
 
 ## Not built yet
 
-- Cards: the Pesapal balance as a pot in reconciliation and the close of day, settlement to the trust account with Pesapal's charge, card refunds and chargebacks by two people, and the console screens for them. The client app screens. Trying the adapter against Pesapal's sandbox, which needs the sandbox keys.
+- Cards: card refunds and chargebacks by two people, and the console screens for card settings, card payments and refunds. Trying the adapter against Pesapal's sandbox, which needs the sandbox keys.
 
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.

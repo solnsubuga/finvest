@@ -83,3 +83,18 @@ def test_a_currency_mismatch_and_an_unknown_pot_are_refused() -> None:
 def test_fees_are_an_expense() -> None:
     account = transfers.fee_account(Currency.UGX)
     assert (account.code, account.kind) == ("fees.provider.iotec", AccountKind.EXPENSE)
+
+
+PESAPAL = transfers.find_pot(StatementSource.PESAPAL, "cards")
+
+
+def test_a_pesapal_settlement_keeps_its_fee_as_pesapal_s_expense() -> None:
+    settled = TransferTerms("-Nabc0000000000000T2", PESAPAL, BANK, ugx(1_000), ugx(965), DAY)
+    assert settled.fee == ugx(35)
+    account = transfers.fee_account(Currency.UGX, StatementSource.PESAPAL)
+    assert (account.code, account.kind) == ("fees.provider.pesapal", AccountKind.EXPENSE)
+    assert PESAPAL.ledger_account.code == "pesapal.balance"
+    entry = transfers.posting(
+        settled, from_account_id="from", to_account_id="to", fee_account_id="fee"
+    )
+    assert sum(line.amount.minor for line in entry.lines) == 0

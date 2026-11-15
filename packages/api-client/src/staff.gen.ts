@@ -482,7 +482,7 @@ export const BodyImportStatementStaffReconciliationStatementsPost = z.object({
   file: Upload,
   format: z.string().optional(),
   opening_balance: z.string(),
-  source: z.enum(["iotec", "bank"]),
+  source: z.enum(["iotec", "pesapal", "bank"]),
   statement_date: z.string(),
 });
 export type BodyImportStatementStaffReconciliationStatementsPost = z.infer<typeof BodyImportStatementStaffReconciliationStatementsPost>;
@@ -1310,7 +1310,7 @@ export const ReconciliationApiPositionOut = z.object({
   name: z.string(),
   open_exceptions_count: z.number().int(),
   open_exceptions_total: ReconciliationApiMoneyOut,
-  source: z.enum(["iotec", "bank"]),
+  source: z.enum(["iotec", "pesapal", "bank"]),
   statement_closing: ReconciliationApiMoneyOut.nullable(),
   unexplained: ReconciliationApiMoneyOut.nullable(),
 });
@@ -2530,7 +2530,7 @@ export type PlanCountsView = z.infer<typeof PlanCountsView>;
 
 export const PotIn = z.object({
   account_reference: z.string(),
-  source: z.enum(["iotec", "bank"]),
+  source: z.enum(["iotec", "pesapal", "bank"]),
 });
 export type PotIn = z.infer<typeof PotIn>;
 
@@ -3791,7 +3791,7 @@ export const StatementOut = z.object({
   id: z.string(),
   line_count: z.number().int(),
   opening: ReconciliationApiMoneyOut,
-  source: z.enum(["iotec", "bank"]),
+  source: z.enum(["iotec", "pesapal", "bank"]),
 });
 export type StatementOut = z.infer<typeof StatementOut>;
 
@@ -3930,7 +3930,7 @@ export type ReconciliationTransfersApiMoneyOut = z.infer<typeof ReconciliationTr
 export const ReconciliationTransfersApiPotOut = z.object({
   account_reference: z.string(),
   name: z.string(),
-  source: z.enum(["iotec", "bank"]),
+  source: z.enum(["iotec", "pesapal", "bank"]),
 });
 export type ReconciliationTransfersApiPotOut = z.infer<typeof ReconciliationTransfersApiPotOut>;
 
@@ -4093,7 +4093,7 @@ export const ReconciliationApiPotOut = z.object({
   last_closing: ReconciliationApiMoneyOut.nullable(),
   last_statement_date: z.string().nullable(),
   name: z.string(),
-  source: z.enum(["iotec", "bank"]),
+  source: z.enum(["iotec", "pesapal", "bank"]),
 });
 export type ReconciliationApiPotOut = z.infer<typeof ReconciliationApiPotOut>;
 
@@ -7676,7 +7676,7 @@ export const operations = {
     path: "/staff/reconciliation/statements",
     params: z.object({}),
     query: z.object({
-    source: z.enum(["iotec", "bank"]),
+    source: z.enum(["iotec", "pesapal", "bank"]),
     account_reference: z.string(),
     date_from: z.string(),
     date_to: z.string(),

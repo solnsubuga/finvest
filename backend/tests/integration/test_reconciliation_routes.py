@@ -155,6 +155,7 @@ async def test_the_day_shows_each_pot_and_why_it_cannot_close_yet(api: Api) -> N
     assert {(p["source"], p["account_reference"]) for p in day["positions"]} == {
         ("iotec", "mtn"),
         ("iotec", "airtel"),
+        ("pesapal", "cards"),
         ("bank", "trust"),
     }
     if day["close"] is None:

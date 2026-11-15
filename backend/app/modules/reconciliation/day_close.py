@@ -292,6 +292,14 @@ async def positions(
     for pot in pots:
         account = await ledger.open_account(session, pot.ledger_account, clock)
         statement = await statements.get_statement(session, pot.source, pot.account_reference, day)
+        statement_closing = None if statement is None else statement.closing_balance
+        if (
+            statement_closing is None
+            and pot.starts_when_used
+            and not await ledger_statements.has_lines_by(session, account.id, day)
+        ):
+            # Never used by the end of this day: there is nothing to have a statement of.
+            statement_closing = Money.zero(pot.currency)
         exceptions = await open_exceptions(session, pot, day)
         total = Money.zero(pot.currency)
         for exception in exceptions:
@@ -300,7 +308,7 @@ async def positions(
             PotPosition(
                 source=pot.source,
                 account_reference=pot.account_reference,
-                statement_closing=None if statement is None else statement.closing_balance,
+                statement_closing=statement_closing,
                 ledger_closing=await ledger_statements.balance_as_of(session, account.id, day),
                 open_exceptions_total=total,
                 open_exceptions_count=len(exceptions),

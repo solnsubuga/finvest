@@ -84,7 +84,7 @@ Staff = Annotated[StaffSession, Depends(require_permission("reconciliation.view"
 Changer = Annotated[StaffSession, Depends(require_permission("reconciliation.change"))]
 Approver = Annotated[StaffSession, Depends(require_confirmed("reconciliation.change"))]
 
-Source = Literal["iotec", "bank"]
+Source = Literal["iotec", "pesapal", "bank"]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -209,6 +209,8 @@ def _refused(
 def _source(source: StatementSource) -> Source:
     if source is StatementSource.IOTEC:
         return "iotec"
+    if source is StatementSource.PESAPAL:
+        return "pesapal"
     if source is StatementSource.BANK:
         return "bank"
     raise ValueError("Only cash pots are reconciled here")

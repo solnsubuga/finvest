@@ -21,6 +21,9 @@ class Pot:
     ledger_reference: str | None
     name: str
     currency: Currency = Currency.UGX
+    # A pot added after reconciliation began, such as Pesapal's, needs no statement on the days
+    # before its ledger account was first used: nothing was ever in it, so it stands at zero.
+    starts_when_used: bool = False
 
     @property
     def key(self) -> tuple[StatementSource, str]:
@@ -40,5 +43,15 @@ class Pot:
 CASH_POTS: tuple[Pot, ...] = (
     Pot(StatementSource.IOTEC, "mtn", "iotec.wallet", "mtn", "ioTec wallet"),
     Pot(StatementSource.IOTEC, "airtel", "iotec.wallet", "airtel", "ioTec wallet"),
+    # Card payments collected by Pesapal, until Pesapal settles them to the trust account. The
+    # ledger account is the one card deposits are paid into (`payments.cards.provider_balance`).
+    Pot(
+        StatementSource.PESAPAL,
+        "cards",
+        "pesapal.balance",
+        None,
+        "Pesapal balance",
+        starts_when_used=True,
+    ),
     Pot(StatementSource.BANK, "trust", "bank.trust", None, "Trust bank account"),
 )
