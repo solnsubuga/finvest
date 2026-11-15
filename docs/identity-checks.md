@@ -158,6 +158,7 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 
 - A start that certainly did not arrive is tried again. One that may have arrived is not sent again on a guess: ioTec cannot be asked by our key, so the attempt ends as `not_started` and the client starts a new one, under a new key.
 - A client has 10 attempts per check. A live capture counts toward the 30 photos a check may hold.
+- When staff ask for a new selfie, `GET /liveness` stops showing an attempt started before they asked, so the client is offered a new attempt rather than the old result.
 - A client may still send a camera selfie instead. At hand-in, `liveness` is `pass` for a live selfie, `fail` for a camera selfie after a failed attempt, and not run (`liveness_not_run`) otherwise. Staff see each as a flag, and see which selfie was live.
 - The database holds the rules too (migration 0200): only the worker adds a `liveness` photo, only as a selfie and only while the photo trigger of migration 0050 allows the selfie to change; a client sends only `client` photos; an attempt only moves forward, and a client may only retire a waiting one.
 - Each attempt's start and its end are audit events (`kyc.liveness.*`, resource `kyc_liveness`).

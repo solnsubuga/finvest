@@ -138,6 +138,7 @@ def site_caddy(site_domains: list[str], published: bool, listed: bool) -> str:
             "\t}\n"
             "\thandle {\n"
             "\t\theader Cache-Control no-store\n"
+            "\t\theader Content-Security-Policy \"default-src 'none'; frame-ancestors 'none'\"\n"
             '\t\trespond "Finvest\'s new website is on its way." 503\n'
             "\t}\n"
             "}\n"
@@ -146,6 +147,7 @@ def site_caddy(site_domains: list[str], published: bool, listed: bool) -> str:
         text += (
             f"{', '.join(others)} {{\n"
             "\timport origin_tls\n"
+            "\timport common_headers\n"
             f"\tredir https://{canonical}{{uri}} 308\n"
             "}\n"
         )
