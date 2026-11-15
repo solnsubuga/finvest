@@ -24,6 +24,7 @@ from app.modules.documents.domain.statements import (
 )
 from app.modules.tax import service as tax
 from app.shared.money import Money
+from app.shared.references import short_reference as _short
 
 FONTS = Path(__file__).parent / "fonts"
 FAMILY = "Jakarta"
@@ -202,6 +203,37 @@ def _table_header(pdf: _Page, columns: Sequence[_Column]) -> None:
     pdf.line(MARGIN, pdf.get_y(), PAGE_W - MARGIN, pdf.get_y())
 
 
+_SMALLEST = 6.5  # points: a cell's text is made no smaller than this to fit its column
+
+
+def _fit(
+    pdf: _Page,
+    text: str,
+    width: float,
+    *,
+    size: float,
+    weight: str = "",
+    colour: tuple[int, int, int] = INK,
+) -> str:
+    """Set the font for a cell so its text stays inside the cell and never runs into the next.
+
+    The text is made smaller, down to `_SMALLEST`, and only if it still does not fit is the end
+    cut and "…" put in its place. Each cell keeps a margin on both sides, so neighbours never
+    touch.
+    """
+    room = width - 2 * pdf.c_margin
+    while True:
+        pdf.font(size, weight=weight, colour=colour)
+        if pdf.get_string_width(text) <= room or size <= _SMALLEST:
+            break
+        size = max(_SMALLEST, size - 0.5)
+    if pdf.get_string_width(text) <= room:
+        return text
+    while text and pdf.get_string_width(text + "…") > room:
+        text = text[:-1]
+    return text.rstrip() + "…"
+
+
 def _table(
     pdf: _Page,
     columns: Sequence[_Column],
@@ -227,14 +259,15 @@ def _table(
         x = MARGIN
         for column, (text, weight) in zip(columns, row, strict=True):
             first, _, second = text.partition("\n")
+            width = CONTENT_W * column.width
             pdf.set_xy(x, top + (1.5 if two_lines else 1))
-            pdf.font(9, weight=weight)
-            pdf.cell(CONTENT_W * column.width, 6, first, align=column.align)
+            shown = _fit(pdf, first, width, size=9, weight=weight)
+            pdf.cell(width, 6, shown, align=column.align)
             if second:
                 pdf.set_xy(x, top + 6.5)
-                pdf.font(7.5, colour=MUTED)
-                pdf.cell(CONTENT_W * column.width, 4, second, align=column.align)
-            x += CONTENT_W * column.width
+                shown = _fit(pdf, second, width, size=7.5, colour=MUTED)
+                pdf.cell(width, 4, shown, align=column.align)
+            x += width
         pdf.set_y(top + height)
         pdf.set_draw_color(*RULE)
         pdf.set_line_width(0.2)
@@ -325,7 +358,7 @@ def statement_pdf(statement: Statement) -> bytes:
             ],
             [
                 [
-                    (f"{holding.product}\n{holding.status} · {holding.reference}", "B"),
+                    (f"{holding.product}\n{holding.status} · {_short(holding.reference)}", "B"),
                     (formatting.day(holding.started_on) if holding.started_on else "-", ""),
                     (formatting.day(holding.matures_on) if holding.matures_on else "-", ""),
                     (formatting.money(holding.invested), ""),
@@ -347,9 +380,9 @@ def statement_pdf(statement: Statement) -> bytes:
         _table(
             pdf,
             [
-                _Column("Date", 0.14),
-                _Column("Description", 0.40),
-                _Column("Reference", 0.16),
+                _Column("Date", 0.13),
+                _Column("Description", 0.37),
+                _Column("Reference", 0.20),
                 _Column("Money in", 0.15, "R"),
                 _Column("Money out", 0.15, "R"),
             ],
@@ -357,7 +390,7 @@ def statement_pdf(statement: Statement) -> bytes:
                 [
                     (formatting.day(line.on), ""),
                     (line.description, "B"),
-                    (line.reference, ""),
+                    (_short(line.reference), ""),
                     (formatting.money(line.amount) if line.amount.is_positive else "", "B"),
                     (formatting.money(-line.amount) if line.amount.is_negative else "", "B"),
                 ]

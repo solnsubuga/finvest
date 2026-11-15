@@ -3,6 +3,7 @@ import type { BankTransferDetails, ClientInvestmentOut, PaymentView, Upload } fr
 
 import { api, ApiError, isAccountClosing } from "@/api/http";
 
+import { shortReference } from "./reference";
 import {
   BankTransfer,
   Deposit,
@@ -85,7 +86,7 @@ export function toDeposit(view: PaymentView, payable: Payable): Deposit {
     confirmedAt: view.confirmed_at,
     // The API keeps the network's reference to itself. Ours is what support looks up.
     networkReference: null,
-    reference: view.id,
+    reference: shortReference(view.id),
   };
 }
 
@@ -101,8 +102,8 @@ export function toBankTransfer(view: PaymentView, payable: Payable): BankTransfe
     reason: view.status === "failed" ? toMismatch(view.failure) : null,
     submittedAt: view.created_at,
     confirmedAt: view.confirmed_at,
-    // Until the bank details route lands, the transfer is known by our own reference.
-    reference: view.id,
+    // Our own short reference for the payment, which support can look up.
+    reference: shortReference(view.id),
   };
 }
 
