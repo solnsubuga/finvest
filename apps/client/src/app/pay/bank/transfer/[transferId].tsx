@@ -149,7 +149,7 @@ export default function BankTransferStatus() {
         <AmountCard
           title="Bank transfer"
           amount={transfer.amountSent}
-          note={`For your ${transfer.payable.title}. Finvest reference ${transfer.reference}`}
+          note={`For your ${transfer.payable.title}\nFinvest reference ${transfer.reference}`}
         />
         <Timeline
           steps={[
