@@ -35,6 +35,7 @@ from app.modules.investments.domain.interest import (
 from app.modules.investments.domain.investments import (
     CHOSEN_LATER,
     MAX_AWAITING_PAYMENT,
+    PAYS_OUT,
     AtMaturity,
     InvestmentStatus,
     can_be_cancelled,
@@ -54,6 +55,7 @@ from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDra
 from app.modules.notifications import contract as notifications
 from app.modules.payments import service as payments
 from app.modules.payments.domain.deposits import Purpose
+from app.modules.payouts import destinations
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -298,18 +300,31 @@ async def request_investment(
     amount: Money,
     at_maturity: AtMaturity | None,
     clock: Clock,
+    destination_id: str | None = None,
 ) -> Investment:
     """Save the investment a client reviewed and confirmed. Nothing is paid and nothing moves.
 
-    The terms are the product's rate today, and they hold for the payment window. A retry with
-    the same key returns the same investment. The same key for a different request is refused.
+    The terms are the product's rate today, and they hold for the payment window. To be paid
+    out at maturity, all of it or the interest alone, the client names one of their approved
+    payout destinations, saved with it. Without one the money waits at maturity until they
+    say where, as for an investment staff booked. A retry with the same key returns the same
+    investment. The same key for a different request is refused.
     """
     if client.kind != "client" or client.id is None:
         raise ApplicationError("forbidden")
     client_id = client.id
 
     async def command() -> Receipt:
+        if destination_id is not None:
+            if at_maturity not in PAYS_OUT:
+                raise invalid("destination_id", "not_used_when_rolling_over")
+            await _usable_destination(session, client_id, destination_id)
         investment_id = await _create(session, client_id, product_code, amount, at_maturity, clock)
+        if destination_id is not None:
+            await session.execute(
+                _SET_DESTINATION,
+                {"id": investment_id, "destination_id": destination_id, "now": clock.now()},
+            )
         return Receipt(201, {"investment_id": investment_id})
 
     outcome = await run_once(
@@ -322,11 +337,28 @@ async def request_investment(
             "amount_minor": amount.minor,
             "currency": amount.currency.value,
             "at_maturity": at_maturity.value if at_maturity else None,
+            **({"destination_id": destination_id} if destination_id is not None else {}),
         },
         now=clock.now(),
         command=command,
     )
     return await get_investment(session, str(outcome.receipt.response["investment_id"]))
+
+
+# Saved with the choice it serves, in the transaction that saves the investment.
+_SET_DESTINATION = text(
+    "UPDATE investments SET payout_destination_id = :destination_id, updated_at = :now "
+    "WHERE id = :id"
+)
+
+
+async def _usable_destination(session: AsyncSession, client_id: str, destination_id: str) -> None:
+    try:
+        await destinations.usable_destination(session, client_id, destination_id)
+    except ApplicationError as error:
+        if error.code != "not_found":
+            raise
+        raise invalid("destination_id", "not_usable") from error
 
 
 async def request_system_investment(

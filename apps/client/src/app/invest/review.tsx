@@ -10,7 +10,8 @@ import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { atMaturityDetail, atMaturityLabel, formatAmount, formatDay } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
-import { AtMaturity, describeInvestingError, InvestingError, Product, Quote } from "@/investing/types";
+import { AccountPicker, firstChoosable } from "@/investing/AccountPicker";
+import { AtMaturity, describeInvestingError, InvestingError, PayoutAccount, Product, Quote } from "@/investing/types";
 import { useLoaded } from "@/investing/useLoaded";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { DetailList, Loading } from "@/payments/Parts";
@@ -20,6 +21,8 @@ import { IdCheckPrompt } from "@/identity/Parts";
 /** The choices when investing. Saving the interest to a goal is chosen later, on the investment. */
 type NewChoice = Exclude<AtMaturity, "interest_to_goal">;
 const CHOICES: NewChoice[] = ["roll_over", "pay_out", "pay_interest"];
+/** The choices that pay money out, and so need an approved account to pay it to. */
+const PAID: ReadonlySet<NewChoice> = new Set(["pay_out", "pay_interest"]);
 
 /**
  * Review and confirm. Confirming saves the investment at today's rate, then
@@ -30,6 +33,7 @@ export default function Review() {
   const params = useLocalSearchParams<{ code: string; amount: string }>();
   const client = useInvesting();
   const [atMaturity, setAtMaturity] = useState<NewChoice>("roll_over");
+  const [pickedAccount, setPickedAccount] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Refused because the ID check is not approved yet: the error then opens it.
@@ -42,17 +46,25 @@ export default function Review() {
 
   const minor = Number(params.amount);
   const [loaded, retry] = useLoaded(
-    useCallback(async (): Promise<{ product: Product; quote: Quote }> => {
-      const product = (await client.listProducts()).find((p) => p.code === params.code);
+    useCallback(async (): Promise<{ product: Product; quote: Quote; accounts: PayoutAccount[] }> => {
+      const [products, accounts] = await Promise.all([client.listProducts(), client.listPayoutAccounts()]);
+      const product = products.find((p) => p.code === params.code);
       if (!product || !Number.isSafeInteger(minor) || minor <= 0) {
         throw new InvestingError("not_found");
       }
-      return { product, quote: await client.quote(product.code, { currency: product.currency, minor }) };
+      return { product, quote: await client.quote(product.code, { currency: product.currency, minor }), accounts };
     }, [client, params.code, minor]),
   );
+  const accounts = loaded.state === "ready" ? loaded.value.accounts : [];
+  // Paid at maturity, the money goes to an approved account named now. With none, the choices
+  // that pay out cannot be made: the money would only wait at maturity with nowhere to go.
+  const hasAccount = firstChoosable(accounts, true) !== null;
+  const paid = PAID.has(atMaturity);
+  const destinationId = paid ? (pickedAccount ?? firstChoosable(accounts, true)) : null;
+  const canConfirm = !paid || destinationId !== null;
 
   const confirm = async () => {
-    if (loaded.state !== "ready") {
+    if (loaded.state !== "ready" || !canConfirm) {
       return;
     }
     const { product, quote } = loaded.value;
@@ -63,6 +75,7 @@ export default function Review() {
         productCode: product.code,
         amount: quote.amount,
         atMaturity: product.termDays === null ? null : atMaturity,
+        destinationId: product.termDays === null ? null : destinationId,
         idempotencyKey,
       });
       // Replace, so Back from paying does not land on a confirm button that saves another one.
@@ -85,7 +98,7 @@ export default function Review() {
     <Screen
       signedIn
       footer={
-        loaded.state === "ready" ? (
+        loaded.state === "ready" && canConfirm ? (
           <Button label="Confirm and pay" variant="lime" onPress={confirm} loading={busy} testID="confirm" />
         ) : null
       }
@@ -122,17 +135,18 @@ export default function Review() {
               <Eyebrow>When the term ends</Eyebrow>
               {CHOICES.map((choice) => {
                 const selected = choice === atMaturity;
+                const unavailable = PAID.has(choice) && !hasAccount;
                 return (
                   <Pressable
                     key={choice}
                     accessibilityRole="radio"
                     aria-checked={selected}
-                    aria-disabled={locked}
-                    disabled={locked}
+                    aria-disabled={locked || unavailable}
+                    disabled={locked || unavailable}
                     accessibilityLabel={atMaturityLabel[choice]}
                     onPress={() => setAtMaturity(choice)}
                     testID={`at-maturity-${choice}`}
-                    style={({ pressed }) => [styles.option, selected && styles.selected, pressed && { opacity: 0.85 }]}
+                    style={({ pressed }) => [styles.option, selected && styles.selected, unavailable && styles.unavailable, pressed && { opacity: 0.85 }]}
                   >
                     <View style={[styles.radio, selected && styles.radioOn]} />
                     <View style={{ flex: 1, gap: 2 }}>
@@ -140,12 +154,29 @@ export default function Review() {
                         {atMaturityLabel[choice]}
                       </Txt>
                       <Txt size={fontSizes.sm} color={colors.muted}>
-                        {atMaturityDetail[choice]}
+                        {unavailable ? "Needs an approved payout account. Add one first." : atMaturityDetail[choice]}
                       </Txt>
                     </View>
                   </Pressable>
                 );
               })}
+              {paid ? (
+                <View style={{ gap: 8, marginTop: 8 }}>
+                  <Eyebrow>{atMaturity === "pay_interest" ? "Pay the interest to" : "Pay it to"}</Eyebrow>
+                  <AccountPicker accounts={accounts} chosen={destinationId} onChoose={setPickedAccount} allowWaiting locked={locked} />
+                </View>
+              ) : !hasAccount ? (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 4 }} testID="at-maturity-no-account">
+                  <Txt size={fontSizes.sm} color={colors.muted}>
+                    To be paid out at maturity, add an approved payout account first.
+                  </Txt>
+                  <Pressable accessibilityRole="link" onPress={() => router.push("/payouts/add")} testID="add-payout-account">
+                    <Txt size={fontSizes.sm} weight="bold" style={{ textDecorationLine: "underline" }}>
+                      Add a payout account
+                    </Txt>
+                  </Pressable>
+                </View>
+              ) : null}
               <Txt size={fontSizes.xs} color={colors.muted}>
                 {locked
                   ? "Your last try may have gone through, so this choice stays as it was. You can change it later from the investment."
@@ -175,6 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   selected: { borderColor: colors.black, borderWidth: 2, padding: 15 },
+  unavailable: { opacity: 0.55 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: colors.borderStrong },
   radioOn: { borderColor: colors.black, borderWidth: 6 },
 });

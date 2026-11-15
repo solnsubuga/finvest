@@ -468,7 +468,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       await pause();
       // Like the backend: a known key returns its investment, and the same key with
       // different details is refused rather than saving or replaying the wrong thing.
-      const details = JSON.stringify([request.productCode, request.amount, request.atMaturity ?? null]);
+      const details = JSON.stringify([request.productCode, request.amount, request.atMaturity ?? null, request.destinationId ?? null]);
       const known = byKey.get(request.idempotencyKey);
       if (known) {
         if (known.request !== details) {
@@ -488,7 +488,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
         product,
         amount: request.amount,
         atMaturity: product.termDays === null ? null : (request.atMaturity ?? "roll_over"),
-        destinationId: null,
+        destinationId: request.destinationId ?? null,
         payoutId: null,
         createdAtMs: now(),
         startDate: null,

@@ -901,6 +901,7 @@ export const InvestmentRequest = z.object({
   amount_minor: z.number().int(),
   at_maturity: AtMaturity.nullable().optional(),
   currency: Currency,
+  destination_id: z.string().nullable().optional(),
   product_code: z.string(),
 });
 export type InvestmentRequest = z.infer<typeof InvestmentRequest>;

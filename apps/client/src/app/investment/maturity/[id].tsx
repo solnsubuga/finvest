@@ -231,10 +231,16 @@ function choiceAmount(investment: Investment, option: AtMaturity): string | null
 function ifNothing(investment: Investment): string {
   const saved = investment.atMaturity ?? "roll_over";
   const on = investment.maturityDate ? `on ${formatDay(investment.maturityDate)}` : "at the end of the term";
+  // Paid out with no account named, the money only waits: the screen never says it is paid.
+  const nowhere = investment.payoutDestinationId === null;
   const what: Record<AtMaturity, string> = {
     roll_over: "everything starts a new term at the rate on that day",
-    pay_out: "everything is paid to the account you chose",
-    pay_interest: "the interest is paid to the account you chose and the rest starts a new term",
+    pay_out: nowhere
+      ? "everything waits for you to choose an account to pay it to"
+      : "everything is paid to the account you chose",
+    pay_interest: nowhere
+      ? "the interest waits for you to choose an account to pay it to and the rest starts a new term"
+      : "the interest is paid to the account you chose and the rest starts a new term",
     interest_to_goal: "the interest is saved to your goal and the rest starts a new term",
   };
   return `If you do nothing, ${on} ${what[saved]}.`;

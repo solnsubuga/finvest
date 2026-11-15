@@ -267,6 +267,44 @@ async def test_a_client_who_chose_to_be_paid_gets_a_payout_for_principal_and_int
     assert await handed_over(worker_database, old) == 0
 
 
+async def test_the_account_chosen_when_investing_is_paid_at_maturity(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    destination_id = await approved_destination(app_database, client, NOW)
+    investment = await request(
+        app_database, client, NOW, at_maturity=AtMaturity.PAY_OUT, destination_id=destination_id
+    )
+    assert investment.payout_destination_id == destination_id
+    await pay(worker_database, investment, investment.amount, NOW)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        await investments.start_investment(session, investment.id, confirmed_on=day(0), clock=NOW)
+
+    paid = await mature(worker_database, investment.id)
+
+    assert paid.status is MATURED and paid.payout_id is not None
+    assert paid.payout_refusal is None
+
+
+async def test_an_account_to_be_paid_to_is_checked_when_investing(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    destination_id = await approved_destination(app_database, client, NOW)
+    other = await approved_client(app_database, NOW)
+    with pytest.raises(ApplicationError) as rolling:
+        await request(app_database, client, NOW, destination_id=destination_id)
+    assert refused(rolling) == (
+        "validation_failed",
+        [("destination_id", "not_used_when_rolling_over")],
+    )
+    with pytest.raises(ApplicationError) as theirs:
+        await request(
+            app_database, other, NOW, at_maturity=AtMaturity.PAY_OUT, destination_id=destination_id
+        )
+    assert refused(theirs) == ("validation_failed", [("destination_id", "not_usable")])
+
+
 async def test_with_nowhere_to_send_it_the_money_waits_until_the_client_says_where(
     app_database: Database, worker_database: Database
 ) -> None:

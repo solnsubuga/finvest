@@ -10,6 +10,7 @@ const mockClock = { ms: Date.parse("2026-11-13T09:00:00Z") };
 const mockRequest = jest.fn();
 const mockWithdraw = jest.fn();
 const mockSample = { value: "empty" };
+const mockAccounts: { value: "none" | undefined } = { value: undefined };
 /** The next request's failure, if any: what the network or the backend answers instead. */
 const mockFailNext: { code: string | null } = { code: null };
 
@@ -32,7 +33,12 @@ jest.mock("@/investing/stubInvestingClient", () => {
   return {
     ...actual,
     createStubInvestingClient: () => {
-      const client = actual.createStubInvestingClient({ delayMs: 0, now: () => mockClock.ms, sample: mockSample.value });
+      const client = actual.createStubInvestingClient({
+        delayMs: 0,
+        now: () => mockClock.ms,
+        sample: mockSample.value,
+        accounts: mockAccounts.value,
+      });
       return {
         ...client,
         requestInvestment: async (request: unknown) => {
@@ -93,6 +99,7 @@ beforeEach(() => {
   mockRequest.mockClear();
   mockWithdraw.mockClear();
   mockSample.value = "empty";
+  mockAccounts.value = undefined;
   mockFailNext.code = null;
 });
 
@@ -168,6 +175,8 @@ describe("investing", () => {
       amount: { currency: "UGX", minor: 1_000_000 },
       atMaturity: "pay_out",
     });
+    // Paid out to an approved account named now, so the money never waits with nowhere to go.
+    expect(mockRequest.mock.calls[0][0].destinationId).toEqual(expect.any(String));
 
     await fireEvent.press(screen.getByTestId("pay-submit"));
     await screen.findByText("Approve on your phone");
@@ -175,6 +184,17 @@ describe("investing", () => {
       mockClock.ms += 8_000;
     });
     await screen.findByText("Completed");
+  });
+
+  it("does not offer to pay out at maturity without a payout account", async () => {
+    mockAccounts.value = "none";
+    await openReview();
+    expect(screen.getByTestId("at-maturity-pay_out")).toBeDisabled();
+    expect(screen.getByTestId("at-maturity-pay_interest")).toBeDisabled();
+    expect(screen.getByTestId("at-maturity-no-account")).toHaveTextContent(/add an approved payout account first/);
+    await fireEvent.press(screen.getByTestId("confirm"));
+    await screen.findByText("Pay UGX 1,000,000");
+    expect(mockRequest.mock.calls[0][0]).toMatchObject({ atMaturity: "roll_over", destinationId: null });
   });
 
   it("sends the same request again after an answer that was lost, with the choice locked", async () => {

@@ -109,6 +109,9 @@ class InvestmentRequest(Contract):
     currency: CurrencyIn
     # Fixed terms only. Rolling over is the default.
     at_maturity: AtMaturityIn | None = None
+    # Required to be paid out, all of it or the interest: one of the client's approved payout
+    # destinations. Not given otherwise.
+    destination_id: PushId | None = None
 
 
 class MaturityChoice(Contract):
@@ -839,6 +842,7 @@ async def request_investment(
             amount=_money(body.amount_minor, body.currency),
             at_maturity=body.at_maturity,
             clock=clock,
+            destination_id=body.destination_id,
         )
         view = await service.client_investment(session, client.actor, saved.id, clock)
     return _client_out(view, request)

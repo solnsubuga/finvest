@@ -71,6 +71,7 @@ async def request(
     product_code: str = "TREA-91",
     at_maturity: AtMaturity | None = None,
     idempotency_key: str | None = None,
+    destination_id: str | None = None,
 ) -> investments.Investment:
     async with database.actor_transaction(client) as session:
         return await investments.request_investment(
@@ -81,6 +82,7 @@ async def request(
             amount=amount or ugx(1_000_000),
             at_maturity=at_maturity,
             clock=clock,
+            destination_id=destination_id,
         )
 
 

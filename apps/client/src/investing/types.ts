@@ -206,6 +206,8 @@ export type NewInvestment = {
   amount: Amount;
   /** Fixed terms only. Null means roll over, the default. A goal is chosen later, on the investment. */
   atMaturity: Exclude<AtMaturity, "interest_to_goal"> | null;
+  /** To be paid out, all of it or the interest: the approved account to pay it to. Null otherwise. */
+  destinationId?: string | null;
   /** Made once when the review screen opens and sent with every try, so a double tap saves one investment. */
   idempotencyKey: string;
 };
