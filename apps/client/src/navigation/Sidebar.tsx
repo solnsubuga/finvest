@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
 import { Session } from "@/auth/types";
+import { useSignOut } from "@/auth/useSignOut";
 import { Icon } from "@/components/Icon";
 import { Logo } from "@/components/Logo";
 import { Txt } from "@/components/Txt";
@@ -17,6 +18,7 @@ type Props = { activeName: string; session: Session };
 export function Sidebar({ activeName, session }: Props) {
   const router = useRouter();
   const { demo } = useAuth();
+  const { signOut, busy } = useSignOut();
   return (
     <View style={styles.sidebar} accessibilityRole="navigation" accessibilityLabel="Main">
       <View style={styles.logo}>
@@ -82,6 +84,23 @@ export function Sidebar({ activeName, session }: Props) {
         <Txt size={13} weight="bold" color={colors.white}>
           {session.displayName ?? formatE164(session.phone)}
         </Txt>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Log out"
+          accessibilityState={{ busy, disabled: busy }}
+          disabled={busy}
+          onPress={signOut}
+          style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
+            styles.logOut,
+            (pressed || hovered) && styles.itemHover,
+          ]}
+          testID="sidebar-sign-out"
+        >
+          <Icon name="logout" size={18} color={colors.onBlackMuted} />
+          <Txt size={14} weight="semibold" color={colors.white}>
+            {busy ? "Logging out" : "Log out"}
+          </Txt>
+        </Pressable>
       </View>
     </View>
   );
@@ -120,5 +139,15 @@ const styles = StyleSheet.create({
     borderTopColor: colors.onBlackDivider,
     paddingTop: 14,
     paddingHorizontal: 8,
+  },
+  logOut: {
+    height: 40,
+    marginTop: 10,
+    marginHorizontal: -6,
+    paddingHorizontal: 6,
+    borderRadius: radii.md,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
 });

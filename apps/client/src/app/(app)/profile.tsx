@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
+import { useSignOut } from "@/auth/useSignOut";
 import { describeAuthError } from "@/auth/types";
 import { AppPage } from "@/components/AppPage";
 import { Card, Notice } from "@/components/Blocks";
@@ -17,7 +18,7 @@ export default function Profile() {
   const router = useRouter();
   const { client, session, setSession } = useAuth();
   const wide = useIsWide();
-  const [busy, setBusy] = useState(false);
+  const { signOut, busy } = useSignOut();
   const [sending, setSending] = useState(false);
   const [emailNote, setEmailNote] = useState<{ tone: "neutral" | "danger"; text: string } | null>(null);
 
@@ -63,16 +64,6 @@ export default function Profile() {
       setEmailNote({ tone: "danger", text: describeAuthError(caught) });
     } finally {
       setSending(false);
-    }
-  };
-
-  const signOut = async () => {
-    setBusy(true);
-    try {
-      await client.signOut();
-    } finally {
-      // Leaving this device always works, even if the server cannot be told.
-      setSession(null);
     }
   };
 
