@@ -149,14 +149,16 @@ async def claim_complete(
 
 
 @router.get("")
-async def my_claim(request: Request, client: CurrentClient) -> ClaimStateView:
-    """The signed-in client's claim. `not_found` for a client who signed up in Finvest 2.0."""
+async def my_claim(request: Request, client: CurrentClient) -> ClaimStateView | None:
+    """The signed-in client's claim, or null for a client who signed up in Finvest 2.0.
+
+    Every client's app asks on each start, and most have no claim, so that is an ordinary
+    answer and not a 404 in the browser's console.
+    """
     database, _, _ = _state(request)
     async with database.actor_transaction(client.actor) as session:
         view = await claims.claim_for(session, client.client_id)
-    if view is None:
-        raise ApplicationError("not_found")
-    return _view(view)
+    return None if view is None else _view(view)
 
 
 @router.post("/problem")

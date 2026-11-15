@@ -1674,7 +1674,7 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
-    response: ClaimStateView,
+    response: ClaimStateView.nullable(),
   },
   "POST /client/claim/complete": {
     method: "POST",

@@ -571,6 +571,14 @@ class CodeService:
                 session, "id = :id AND purpose = 'password_reset'", {"id": challenge_id}, code
             )
             if row is not None and row.actor_id is not None:
+                stored = await session.scalar(
+                    text("SELECT password_hash FROM identity_clients WHERE id = :id"),
+                    {"id": row.actor_id},
+                )
+                if stored is not None and await self.hasher.verify(password, stored):
+                    # The code was right, so the refusal can say why. Raising here rolls the
+                    # transaction back, so the code is not spent and works with a new password.
+                    raise _field("password", "same_as_now")
                 await session.execute(
                     text(
                         "UPDATE identity_clients SET password_hash = :hash, "
