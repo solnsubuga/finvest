@@ -16916,6 +16916,18 @@
             "title": "Count",
             "type": "integer"
           },
+          "next_matures_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Matures On"
+          },
           "worth_minor": {
             "title": "Worth Minor",
             "type": "integer"
@@ -16923,7 +16935,8 @@
         },
         "required": [
           "worth_minor",
-          "count"
+          "count",
+          "next_matures_on"
         ],
         "title": "PortfolioPartView",
         "type": "object"

@@ -107,8 +107,12 @@ export function toPortfolio(view: PortfolioView): Portfolio {
     interestToday: m(view.interest_today_minor),
     activeCount: view.active_count,
     awaitingPaymentCount: view.awaiting_payment_count,
-    outsideGoals: { worth: m(view.outside_goals.worth_minor), count: view.outside_goals.count },
-    inGoals: { worth: m(view.in_goals.worth_minor), count: view.in_goals.count },
+    outsideGoals: {
+      worth: m(view.outside_goals.worth_minor),
+      count: view.outside_goals.count,
+      nextMaturesOn: view.outside_goals.next_matures_on,
+    },
+    inGoals: { worth: m(view.in_goals.worth_minor), count: view.in_goals.count, nextMaturesOn: view.in_goals.next_matures_on },
     openGoals: view.open_goals,
     products: view.products.map((share) => ({
       productCode: share.product_code,

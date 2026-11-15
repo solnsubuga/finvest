@@ -91,7 +91,7 @@ async def test_a_new_client_has_nothing_invested(app_database: Database) -> None
     zero = ugx(0)
     assert (portfolio.invested, portfolio.worth, portfolio.earning_per_day) == (zero, zero, zero)
     assert (portfolio.active_count, portfolio.awaiting_payment_count) == (0, 0)
-    assert portfolio.outside_goals == portfolio.in_goals == insights.Holding(zero, 0)
+    assert portfolio.outside_goals == portfolio.in_goals == insights.Holding(zero, 0, None)
     assert (portfolio.open_goals, portfolio.products, portfolio.next_maturity) == (0, (), None)
 
 
@@ -121,9 +121,9 @@ async def test_the_totals_add_up_the_clients_own_investments(
     assert portfolio.earning_per_day == sum((view.earning_per_day for view in running), ugx(0))
     assert all(view.earning_per_day.minor > 0 for view in running)
     assert (portfolio.active_count, portfolio.awaiting_payment_count) == (3, 1)
-    assert portfolio.in_goals == insights.Holding(views[saved].value, 1)
+    assert portfolio.in_goals == insights.Holding(views[saved].value, 1, views[saved].maturity_date)
     assert portfolio.outside_goals == insights.Holding(
-        views[bill.id].value + views[longer.id].value, 2
+        views[bill.id].value + views[longer.id].value, 2, bill.maturity_date
     )
     assert portfolio.in_goals.worth + portfolio.outside_goals.worth == portfolio.worth
     assert portfolio.open_goals == 1
@@ -141,6 +141,18 @@ async def test_the_totals_add_up_the_clients_own_investments(
     assert upcoming.days_left == 91
 
 
+async def test_with_only_a_goal_saving_running_no_investment_of_their_own_matures(
+    app_database: Database, worker_database: Database
+) -> None:
+    client = await approved_client(app_database, NOW)
+    await save_to_new_goal(app_database, worker_database, client, 1_000_000)
+    portfolio = await read(app_database, client)
+    # Home reads "0 running" for their own investments, with no date beside it.
+    assert portfolio.outside_goals == insights.Holding(ugx(0), 0, None)
+    assert portfolio.in_goals.count == 1 and portfolio.in_goals.next_matures_on is not None
+    assert portfolio.next_maturity is not None
+
+
 async def test_a_goal_that_is_closed_no_longer_holds_its_savings(
     app_database: Database, worker_database: Database
 ) -> None:
@@ -150,7 +162,7 @@ async def test_a_goal_that_is_closed_no_longer_holds_its_savings(
         (goal,) = await goals.client_goals(session, client, NOW)
         await goals.close_goal(session, client, goal.id, NOW)
     portfolio = await read(app_database, client)
-    assert portfolio.in_goals == insights.Holding(ugx(0), 0)
+    assert portfolio.in_goals == insights.Holding(ugx(0), 0, None)
     assert portfolio.outside_goals.count == 1
     assert portfolio.open_goals == 0
     assert saved
@@ -240,8 +252,8 @@ async def test_the_route_serves_the_signed_in_clients_own_totals(
             "interest_today_minor": 0,
             "active_count": 0,
             "awaiting_payment_count": 0,
-            "outside_goals": {"worth_minor": 0, "count": 0},
-            "in_goals": {"worth_minor": 0, "count": 0},
+            "outside_goals": {"worth_minor": 0, "count": 0, "next_matures_on": None},
+            "in_goals": {"worth_minor": 0, "count": 0, "next_matures_on": None},
             "open_goals": 0,
             "products": [],
             "next_maturity": None,

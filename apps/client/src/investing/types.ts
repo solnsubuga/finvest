@@ -241,13 +241,16 @@ export type Portfolio = {
   activeCount: number;
   awaitingPaymentCount: number;
   /** `worth` split by where it sits. The two add up to `worth`. */
-  outsideGoals: { worth: Amount; count: number };
-  inGoals: { worth: Amount; count: number };
+  outsideGoals: PortfolioPart;
+  inGoals: PortfolioPart;
   openGoals: number;
   /** Biggest first. */
   products: ProductShare[];
   nextMaturity: NextMaturity | null;
 };
+
+/** One side of the portfolio: what it is worth, how many are running, and the soonest of them to mature. */
+export type PortfolioPart = { worth: Amount; count: number; nextMaturesOn: string | null };
 
 export interface InvestingClient {
   /** The Home and Portfolio totals in one currency. */
