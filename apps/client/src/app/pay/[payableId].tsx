@@ -3,10 +3,11 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
-import { formatE164, nationalDigits } from "@/auth/phone";
+import { formatE164, nationalDigits, toE164 } from "@/auth/phone";
 import { BackButton } from "@/components/BackButton";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
+import { PhoneField } from "@/components/Field";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
@@ -39,10 +40,10 @@ function outcomeUnknown(error: unknown): boolean {
 }
 
 /**
- * Pay for your investment. The amount comes from the investment and the
- * number is the one on the client's own account, so neither can be changed
- * here. A payment from a number registered to someone else is refused. The
- * client only confirms the network.
+ * Pay for your investment. The amount comes from the investment and cannot be
+ * changed. The prompt goes to the number on the client's account, or to another
+ * number they give: any number may pay (the owner's decision, 2026-11-15), and
+ * the payment still counts for this investment.
  */
 export default function Pay() {
   const router = useRouter();
@@ -51,10 +52,13 @@ export default function Pay() {
   const { session } = useAuth();
   const { client } = usePayments();
 
-  const payer = session?.phone ?? "";
+  const ownNumber = session?.phone ?? "";
+  // Another number to pay from, as typed, while "Pay from another number" is open.
+  const [otherNumber, setOtherNumber] = useState<string | null>(null);
+  const [numberError, setNumberError] = useState<string | null>(null);
   const [payable, setPayable] = useState<Payable | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [network, setNetwork] = useState<Network>(likelyNetwork(nationalDigits(payer)));
+  const [network, setNetwork] = useState<Network>(likelyNetwork(nationalDigits(ownNumber)));
   // Set once a try from this visit may have been saved. From then on every try must be the
   // same request under the same key, so the network can no longer be changed.
   const [locked, setLocked] = useState(false);
@@ -124,9 +128,15 @@ export default function Pay() {
       await payByCard();
       return;
     }
-    if (!payable || !payer) {
+    const payer = otherNumber === null ? ownNumber : toE164(otherNumber);
+    if (!payer) {
+      setNumberError("Enter an MTN or Airtel number, like 772 123 456.");
       return;
     }
+    if (!payable) {
+      return;
+    }
+    setNumberError(null);
     setBusy(true);
     try {
       const deposit = await client.payWithMobileMoney({
@@ -193,7 +203,7 @@ export default function Pay() {
           {error ? <Notice tone="danger">{error}</Notice> : null}
           {locked ? (
             <Notice tone="warning">
-              {`Your first request may already be with ${networkName[network]}, so the network is fixed. Pressing Pay again repeats that same request. It does not ask for the money twice.`}
+              {`Your first request may already be with ${networkName[network]}, so the network and number are fixed. Pressing Pay again repeats that same request. It does not ask for the money twice.`}
             </Notice>
           ) : null}
           {cardShown && cardOffer.refused ? <CardRefusedNotice offer={cardOffer} /> : null}
@@ -275,17 +285,58 @@ export default function Pay() {
                 );
               })}
             </View>
-            <View style={styles.number} accessible testID="pay-number">
-              <Txt size={fontSizes.sm} color={colors.muted}>
-                Your number
-              </Txt>
-              <Txt size={fontSizes.lg} weight="bold">
-                {formatE164(payer)}
-              </Txt>
-            </View>
-            <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
-              {`${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
-            </Txt>
+            {otherNumber === null ? (
+              <>
+                <View style={styles.number} accessible testID="pay-number">
+                  <Txt size={fontSizes.sm} color={colors.muted}>
+                    Your number
+                  </Txt>
+                  <Txt size={fontSizes.lg} weight="bold">
+                    {formatE164(ownNumber)}
+                  </Txt>
+                </View>
+                <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
+                  {`${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
+                </Txt>
+              </>
+            ) : locked ? (
+              // The first request may already be with the network: the number is fixed with it.
+              <View style={styles.number} accessible testID="pay-number">
+                <Txt size={fontSizes.sm} color={colors.muted}>
+                  Number to pay from
+                </Txt>
+                <Txt size={fontSizes.lg} weight="bold">
+                  {formatE164(toE164(otherNumber) ?? otherNumber)}
+                </Txt>
+              </View>
+            ) : (
+              <PhoneField
+                label="Number to pay from"
+                value={otherNumber}
+                onChangeText={(text) => {
+                  setOtherNumber(text);
+                  setNumberError(null);
+                }}
+                hint={`${networkName[network]} sends the prompt to this number, and whoever has the phone approves it with their mobile money PIN. The payment counts for your investment.`}
+                error={numberError}
+                testID="pay-other-number"
+              />
+            )}
+            {locked ? null : (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  setOtherNumber(otherNumber === null ? "" : null);
+                  setNumberError(null);
+                }}
+                testID="pay-number-toggle"
+                hitSlop={8}
+              >
+                <Txt size={fontSizes.sm} weight="bold" color={colors.ink} style={styles.toggle}>
+                  {otherNumber === null ? "Pay from another number" : "Pay from my own number"}
+                </Txt>
+              </Pressable>
+            )}
             </>
           )}
           {locked ? null : (
@@ -438,6 +489,7 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   },
+  toggle: { textDecorationLine: "underline" },
   number: {
     flexDirection: "row",
     alignItems: "center",

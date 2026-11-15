@@ -116,14 +116,40 @@ beforeEach(() => {
 beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("paying for an investment by mobile money", () => {
-  it("shows the amount and the account's own number, which cannot be changed", async () => {
+  it("shows the amount and the account's own number to pay from", async () => {
     await openPayScreen();
     expect(screen.getByText("91 Day Treasury Bill")).toBeTruthy();
     expect(screen.getByText("UGX 1,000,000")).toBeTruthy();
     expect(screen.getByText("+256 772 123 456")).toBeTruthy();
-    expect(screen.queryByTestId("phone-input")).toBeNull();
+    expect(screen.queryByTestId("pay-other-number")).toBeNull();
     expect(screen.getByTestId("network-mtn")).toBeChecked();
     expect(screen.getByTestId("network-airtel")).not.toBeChecked();
+  });
+
+  it("pays from another number when the client gives one", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-number-toggle"));
+    expect(screen.queryByTestId("pay-number")).toBeNull();
+    // Nothing typed yet: nothing is asked for.
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    expect(await screen.findByText("Enter an MTN or Airtel number, like 772 123 456.")).toBeTruthy();
+    expect(mockPay).not.toHaveBeenCalled();
+
+    await fireEvent.changeText(screen.getByTestId("pay-other-number"), "701 999 999");
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    expect(mockPay).toHaveBeenCalledWith(expect.objectContaining({ payer: "+256701999999" }));
+  });
+
+  it("goes back to the account's own number", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-number-toggle"));
+    await fireEvent.changeText(screen.getByTestId("pay-other-number"), "701 999 999");
+    await fireEvent.press(screen.getByTestId("pay-number-toggle"));
+    expect(screen.getByText("+256 772 123 456")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    expect(mockPay).toHaveBeenCalledWith(expect.objectContaining({ payer: "+256772123456" }));
   });
 
   it("goes from the prompt to the receipt when the payment is approved", async () => {
@@ -175,14 +201,14 @@ describe("paying for an investment by mobile money", () => {
     expect(screen).toHavePathname("/goals/demo-goal-fees");
   });
 
-  it("pays on Pesapal's page from the client's own number when Settings choose Pesapal", async () => {
+  it("pays on Pesapal's page when Settings choose Pesapal", async () => {
     await openPayScreen();
     await act(async () => router.push(`/pay/${DEMO_MOBILE_MONEY_ON_PAGE_ID}`));
     await screen.findByText("Pay UGX 1,000,000");
     await fireEvent.press(screen.getByTestId("pay-submit"));
 
     await screen.findByText("Pay on Pesapal's secure page");
-    expect(screen.getByText(/Pay from your own number ending 56, the one on your Finvest account/)).toBeTruthy();
+    expect(screen.getByText(/You can pay from your own number or someone else's/)).toBeTruthy();
     expect(screen.queryByText(/Dial \*165#/)).toBeNull();
     await advance(2_000);
     await screen.findByText("Open the secure page");
