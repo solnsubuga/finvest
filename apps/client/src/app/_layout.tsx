@@ -27,6 +27,10 @@ import { colors, fontAssets } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
 
+// A screen that fails to load or draw shows a page that says so and tries again, never a blank
+// page. On the web that covers a screen opened for the first time while offline.
+export { ScreenLoadFailed as ErrorBoundary } from "@/navigation/ScreenLoadFailed";
+
 export default function RootLayout() {
   const [loaded, error] = useFonts(fontAssets);
   // If the font fails to load the app still opens, in the system font.
