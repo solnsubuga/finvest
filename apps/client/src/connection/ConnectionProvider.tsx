@@ -71,7 +71,7 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
           <MaintenanceScreen checking={checking} onRetry={retry} />
         </View>
       ) : null}
-      {connection === "offline" ? <OfflineBanner checking={checking} onRetry={retry} /> : null}
+      {connection === "offline" ? <OfflineBanner /> : null}
     </View>
   );
 }

@@ -17,11 +17,17 @@ export function formatExact(amount: Amount): string {
 /**
  * A figure for reading at a glance, as on the canvas: shillings in millions to
  * one decimal ("7,412.0m"), dollars to the whole dollar. Labels only. Nothing is
- * worked out from these.
+ * worked out from these. Shillings under a million are shown whole ("250,000"),
+ * because "0.3m" hides a real amount.
  */
 export function formatShort(amount: Amount, withCurrency = true): string {
   const sign = amount.minor < 0 ? "-" : "";
   if (amount.currency === "USD") return `${sign}$${GROUPED.format(roundedUnits(amount.minor, 100))}`;
+  const size = Math.abs(amount.minor);
+  if (size > 0 && size < 1_000_000) {
+    const whole = `${sign}${GROUPED.format(size)}`;
+    return withCurrency ? `UGX ${whole}` : whole;
+  }
   const tenths = roundedUnits(amount.minor, 100_000);
   const text = `${sign}${GROUPED.format((tenths - (tenths % 10)) / 10)}.${tenths % 10}m`;
   return withCurrency ? `UGX ${text}` : text;

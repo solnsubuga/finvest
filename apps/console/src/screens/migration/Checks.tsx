@@ -40,7 +40,7 @@ function Card({ title, value, note, attention }: { title: string; value: string;
 function countCard(title: string, line: TotalLine | undefined): ReactNode {
   if (!line) return null;
   const imported = formatAmount(line.new, null);
-  if (line.old === null) return <Card title={title} value={imported} note="Finvest 1.0 total not entered" attention={false} />;
+  if (line.old === null) return <Card title={title} value={imported} note="Paper register total not entered" attention={false} />;
   const gap = difference(line.old, line.new);
   return (
     <Card
@@ -67,9 +67,9 @@ export function Cards({ overview }: { overview: Overview }) {
           value={formatWithCurrency(interest.new, "UGX")}
           note={
             interest.old === null
-              ? "Finvest 1.0 total not entered"
+              ? "Paper register total not entered"
               : interestGap === "0"
-                ? "Agrees with Finvest 1.0"
+                ? "Agrees with the paper register"
                 : `Differs by ${formatWithCurrency(interestGap.replace("-", ""), "UGX")}`
           }
           attention={interestGap !== "0"}
@@ -87,15 +87,15 @@ export function Cards({ overview }: { overview: Overview }) {
   );
 }
 
-/** Finvest 1.0 against the trial import, line by line. */
+/** The paper register against the trial import, line by line. */
 export function ChecksTable({ lines }: { lines: readonly TotalLine[] }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Finvest 1.0 totals compared with the trial import">
+    <div className="overflow-x-auto rounded-xl border border-border bg-surface" tabIndex={0} role="region" aria-label="Paper register totals compared with the trial import">
       <table className="w-full min-w-[600px] border-collapse text-md">
-        <caption className="sr-only">Finvest 1.0 totals compared with the trial import</caption>
+        <caption className="sr-only">Paper register totals compared with the trial import</caption>
         <thead>
           <tr className="text-left text-xs text-muted">
-            {["Check", "Finvest 1.0", "Finvest 2.0", "Difference", "Result"].map((heading) => (
+            {["Check", "Paper register", "Finvest", "Difference", "Result"].map((heading) => (
               <th key={heading} scope="col" className="px-3 py-3.5 font-bold">
                 {heading}
               </th>

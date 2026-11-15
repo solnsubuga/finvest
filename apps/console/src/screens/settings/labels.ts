@@ -43,10 +43,28 @@ const EVENT_LABELS: Record<string, string> = {
   support_reply: "Reply in the help chat",
   complaint_received: "Complaint received",
   complaint_closed: "Complaint closed",
+  investment_booked: "Investment booked for the client to pay",
+  investment_sent: "Investment sent to another client",
+  investment_transfer_held: "Transfer to another client held for checks",
+  investment_transfer_failed: "Transfer to another client not made",
+  goal_interest_saved: "Interest saved to a goal",
+  goal_interest_not_saved: "Interest kept invested, not saved to the goal",
+  autoinvest_run_failed: "Automatic investment not made",
+  autoinvest_run_missed: "Automatic investment missed",
+  autoinvest_run_retrying: "Automatic investment not paid yet",
+  organisation_invited: "Asked to sign for a company or group account",
+  organisation_approved: "Company or group account open",
+  organisation_returned: "Company or group application sent back",
+  organisation_rejected: "Company or group application not approved",
+  announcement: "Announcement",
 };
 
+/** The label for an event, or for one added later, its name as a sentence: "Investment booked". */
 export function eventLabel(event: string): string {
-  return EVENT_LABELS[event] ?? event.replaceAll("_", " ");
+  const label = EVENT_LABELS[event];
+  if (label) return label;
+  const words = event.replaceAll("_", " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 const STAMP = new Intl.DateTimeFormat("en-GB", {

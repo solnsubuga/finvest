@@ -34,7 +34,7 @@ describe("settings: platform rules", () => {
     expect(within(calendar).getByText("14:00")).toBeInTheDocument();
     expect(within(calendar).getByText("7 days and 1 day before")).toBeInTheDocument();
     const security = await card("Staff security");
-    expect(within(security).getByText("30 minutes")).toBeInTheDocument();
+    expect(within(security).getByText("15 minutes")).toBeInTheDocument();
     expect(within(security).getByText("Any network")).toBeInTheDocument();
     expect(within(await card("Statement import")).getByText("Built-in layout only")).toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe("settings: platform rules", () => {
   it("shows a section read only without its permission", async () => {
     renderSections("empty", ["payment_channels.change"]);
     const security = await card("Staff security");
-    await within(security).findByText("30 minutes");
+    await within(security).findByText("15 minutes");
     expect(within(security).queryByRole("button", { name: /^Change/ })).not.toBeInTheDocument();
     expect(within(await card("Payment channels")).getByRole("button", { name: "Change channels open" })).toBeInTheDocument();
   });

@@ -48,15 +48,14 @@ export function toGoalsError(error: unknown): GoalsError {
 }
 
 /** Product names by code, read once. A failed read is tried again next time. */
-export function productNames(http: Http): () => Promise<ReadonlyMap<string, string>> {
+export function productNames(http: Http, mayListProducts = true): () => Promise<ReadonlyMap<string, string>> {
   let known: Promise<ReadonlyMap<string, string>> | null = null;
   const toMap = (products: readonly { code: string; name: string }[]) => new Map(products.map((p) => [p.code, p.name]));
+  const publicList = () => http.request<{ products: { code: string; name: string }[] }>("GET", "/public/products").then((json) => toMap(json.products));
   return () => {
-    known ??= http
-      .request<{ code: string; name: string }[]>("GET", "/staff/products")
-      .then(toMap)
-      // Without `products.view`, the open products everyone may see still name most goals.
-      .catch(() => http.request<{ products: { code: string; name: string }[] }>("GET", "/public/products").then((json) => toMap(json.products)))
+    // Without `products.view`, the open products everyone may see still name most goals, and the
+    // catalogue is never asked for only to be refused.
+    known ??= (mayListProducts ? http.request<{ code: string; name: string }[]>("GET", "/staff/products").then(toMap).catch(publicList) : publicList())
       .catch(() => {
         known = null;
         return new Map<string, string>();
@@ -193,9 +192,9 @@ export function createHttpGroupsApi(http: Http): GroupsApi {
 }
 
 /** The real API when the build names one, otherwise goals that say they are not connected. */
-export function connectedGoalsApis(): { goals: GoalsApi; groups: GroupsApi } {
+export function connectedGoalsApis(mayListProducts: boolean): { goals: GoalsApi; groups: GroupsApi } {
   const base = apiBaseUrl();
   if (!base) return { goals: notConnectedGoalsApi, groups: notConnectedGroupsApi };
   const http = createHttp(base);
-  return { goals: createHttpGoalsApi(http, createHttpDirectory(http)), groups: createHttpGroupsApi(http) };
+  return { goals: createHttpGoalsApi(http, createHttpDirectory(http), productNames(http, mayListProducts)), groups: createHttpGroupsApi(http) };
 }

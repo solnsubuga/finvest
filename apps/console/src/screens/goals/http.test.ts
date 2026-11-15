@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createHttp } from "@/api/http.ts";
 import { createHttpDirectory } from "@/directory/http.ts";
-import { createHttpGoalsApi, createHttpGroupsApi } from "./http.ts";
+import { createHttpGoalsApi, createHttpGroupsApi, productNames } from "./http.ts";
 
 const GOAL = {
   goal_id: "-NgoalA0000000000001",
@@ -108,6 +108,21 @@ describe("goals over HTTP", () => {
     expect(goals[0]).toMatchObject({ clientName: "Client details could not be read", accountNumber: null });
     await api.listGoals(null);
     expect(publicList).toHaveBeenCalledTimes(1);
+  });
+
+  it("never asks for the catalogue for staff without products.view", async () => {
+    const staffList = vi.fn(() => refusal(403, "forbidden"));
+    const fetch = routes({
+      "/staff/goals": () => reply(200, { goals: [GOAL] }),
+      "/staff/clients/cards": () => reply(200, { cards: [CARD] }),
+      "/staff/products": staffList,
+      "/public/products": () => reply(200, { updated_on: "2026-11-13", products: [{ code: "TREA-91", name: "91 Day Treasury Bill" }] }),
+    });
+    const http = createHttp("https://api.test", fetch);
+    const api = createHttpGoalsApi(http, createHttpDirectory(http), productNames(http, false));
+    const goals = await api.listGoals(null);
+    expect(goals[0]?.productName).toBe("91 Day Treasury Bill");
+    expect(staffList).not.toHaveBeenCalled();
   });
 
   it("opens a goal with its progress and savings as whole-number strings", async () => {

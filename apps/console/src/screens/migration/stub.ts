@@ -41,7 +41,7 @@ const PROBLEMS: readonly Problem[] = [
   { sheet: "investments", row: 611, column: "maturity_date", code: "past_maturity", severity: "warning" },
 ];
 
-const ROUNDING = "Finvest 1.0 rounded each day's dollar interest up.";
+const ROUNDING = "The paper register rounded each day's dollar interest up.";
 
 const approvedBy = (id: string, reason: string): SignOff => ({
   id,
@@ -121,7 +121,7 @@ const DIFFERENCES: readonly Difference[] = [
     currency: "UGX",
     old: "96120",
     new: "95500",
-    signedOff: { id: "sign-off-20977", reason: "Finvest 1.0 counted the start date as a day earned.", state: "proposed", proposedBy: "Grace Finance", decidedBy: null, decisionReason: null, mine: false },
+    signedOff: { id: "sign-off-20977", reason: "The paper register counted the start date as a day earned.", state: "proposed", proposedBy: "Grace Finance", decidedBy: null, decisionReason: null, mine: false },
   },
   { key: "tax_rate:INV-19034", kind: "tax_rate", row: 34, legacyInvestmentRef: "INV-19034", currency: "UGX", old: "1000", new: "1500", signedOff: null },
   { key: "investment:USD-0091", kind: "interest", row: 3190, legacyInvestmentRef: "USD-0091", currency: "USD", old: "4105", new: "4100", signedOff: approvedBy("sign-off-0091", ROUNDING) },
@@ -149,7 +149,7 @@ const NOT_CARRIED: readonly NotCarried[] = [
     state: "retry_proposed",
     resolutionId: "resolution-11930",
     proposedBy: "Grace Finance",
-    reason: "The 12% product's rate for July was corrected to match Finvest 1.0.",
+    reason: "The 12% product's rate for July was corrected to match the paper register.",
     mine: false,
   },
   {
@@ -220,7 +220,7 @@ const nextId = (prefix: string) => `${prefix}-${++counter}`;
 
 /**
  * `start` picks what the screen opens with: nothing imported yet, a first trial
- * with problems, or that trial with Finvest 1.0 totals a colleague entered and
+ * with problems, or that trial with paper register totals a colleague entered and
  * nobody has confirmed. `allowed` is everything by default, like an admin.
  */
 const EVERYTHING: readonly Allowed[] = [
@@ -246,7 +246,7 @@ function cleared(allowed: readonly Allowed[], proposal: Switch | null): State {
 
 /**
  * `start` picks what the screen opens with: nothing imported yet, a first trial
- * with problems, that trial with Finvest 1.0 totals a colleague entered and
+ * with problems, that trial with paper register totals a colleague entered and
  * nobody has confirmed, every check cleared with a switch a colleague proposed,
  * the same where approving finds a phone number that already has an account,
  * or an approved switch with clients it could not carry over. `allowed` is
@@ -330,7 +330,7 @@ export function createStubMigrationApi(
       wait(() => {
         may("enter_totals");
         // A new entry replaces the last and waits for a second person. As in the backend, a sign-off
-        // on a total line counts again only if that line's Finvest 1.0 figure comes out the same.
+        // on a total line counts again only if that line's paper register figure comes out the same.
         const before = state.totals;
         const entered: EnteredTotals = { ...input, id: nextId("totals"), enteredBy: YOU, enteredAt: new Date().toISOString(), confirmedBy: null, mine: true };
         for (const line of LINES) {

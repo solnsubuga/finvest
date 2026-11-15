@@ -249,7 +249,7 @@ export function ProductsScreen({ api, me = "", canChange = false }: ProductsScre
                     <th scope="row" className="px-3 py-3 text-left font-bold">
                       <button
                         type="button"
-                        className="cursor-pointer text-left font-bold underline-offset-2 hover:underline"
+                        className="inline-flex min-h-6 cursor-pointer items-center text-left font-bold underline-offset-2 hover:underline"
                         onClick={() => setSelected(product.code)}
                       >
                         {product.name}

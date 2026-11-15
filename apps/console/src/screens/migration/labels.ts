@@ -46,7 +46,7 @@ const PROBLEM_LABELS: Record<string, string> = {
   client_unknown: "This client is not in the clients sheet",
   phone_missing: "No phone number, so the client cannot be invited yet",
   under_age: "The client is under 18",
-  id_not_verified: "Identity was not verified in Finvest 1.0. The client redoes the ID check",
+  id_not_verified: "Identity was not verified in the paper register. The client redoes the ID check",
   id_expired: "The identity document has expired. The client redoes the ID check",
   id_expiry_unknown: "No expiry date on file for the identity document",
   below_minimum: "The amount is below today's minimum for the product",
@@ -63,8 +63,8 @@ export function problemLabel(problem: Problem): string {
 export const BLOCKER_LABELS: Record<Blocker, string> = {
   no_trial: "Run a trial import",
   import_has_errors: "Fix every error in the spreadsheet",
-  totals_not_entered: "Finance enters the Finvest 1.0 totals",
-  totals_not_confirmed: "A second person confirms the Finvest 1.0 totals",
+  totals_not_entered: "Finance enters the paper register totals",
+  totals_not_confirmed: "A second person confirms the paper register totals",
   difference_not_signed_off: "Finance signs off every difference with a reason",
 };
 
@@ -163,7 +163,7 @@ export function differenceSummary(item: Difference): string {
   const more = !gap.startsWith("-");
   const size = more ? gap : gap.slice(1);
   const amount = item.currency ? formatWithCurrency(size, item.currency) : `${formatAmount(size, null)} in the smallest unit`;
-  return gap === "0" ? "The tax held differs" : `Finvest 1.0 shows ${amount} ${more ? "more" : "less"} interest`;
+  return gap === "0" ? "The tax held differs" : `The paper register shows ${amount} ${more ? "more" : "less"} interest`;
 }
 
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
@@ -185,7 +185,7 @@ export function formatMoment(instant: string): string {
 
 /** Why the worker could not carry a client over, by the code it noted. */
 const NOT_CARRIED_LABELS: Record<string, string> = {
-  document_taken: "Their identity document belongs to another Finvest 2.0 client",
+  document_taken: "Their identity document belongs to another Finvest client",
   investment_interest_differs: "An investment's interest is not what the finance check showed",
   invalid_name: "Their name is not accepted by the identity check",
   invalid_document_number: "Their document number is not accepted by the identity check",

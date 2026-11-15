@@ -159,7 +159,7 @@ function ReceiptView({ transfer }: { transfer: TransferDetail }) {
           {formatSize(receipt.byteSize)}
         </span>
         {receipt.url ? (
-          <a href={receipt.url} target="_blank" rel="noreferrer" className="font-bold text-ink underline">
+          <a href={receipt.url} target="_blank" rel="noreferrer" className="inline-flex min-h-6 items-center font-bold text-ink underline">
             Open full size
           </a>
         ) : null}

@@ -539,14 +539,14 @@ function ClientName({ clientId, card }: { clientId: string; card: ClientCard | n
   const to = `/clients?client=${encodeURIComponent(clientId)}`;
   if (!card) {
     return (
-      <Link to={to} className="font-mono text-sm font-bold whitespace-nowrap">
+      <Link to={to} className="inline-flex min-h-6 items-center font-mono text-sm font-bold whitespace-nowrap">
         {clientId}
       </Link>
     );
   }
   return (
     <>
-      <Link to={to} className="font-bold whitespace-nowrap">
+      <Link to={to} className="inline-flex min-h-6 items-center font-bold whitespace-nowrap">
         {card.name}
       </Link>
       <div className="text-xs text-muted">{card.accountNumber ?? "No account number yet"}</div>

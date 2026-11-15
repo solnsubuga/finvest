@@ -1,5 +1,5 @@
 /**
- * The console's view of the Finvest 1.0 migration.
+ * The console's view of migration from the paper register.
  *
  * A stand-in for the generated client in packages/api-client, like AuthApi.
  * The shapes follow backend/app/modules/migration/domain (see docs/migration.md).
@@ -55,7 +55,7 @@ export interface TotalLine {
   figure: Figure;
   /** Null for a count. */
   currency: Currency | null;
-  /** What Finvest 1.0 reports. Null until finance has entered it. */
+  /** What the paper register says. Null until finance has entered it. */
   old: string | null;
   /** What the latest trial import holds. */
   new: string;
@@ -80,7 +80,7 @@ export interface Difference {
 /** One whole-number string per currency, in the smallest unit. A currency left out is none. */
 export type Amounts = Partial<Record<Currency, string>>;
 
-/** What finance says Finvest 1.0 holds on the "as of" day. */
+/** What finance says the paper register holds on the "as of" day. */
 export interface TotalsInput {
   asOf: string;
   clients: string;
@@ -92,7 +92,7 @@ export interface TotalsInput {
 }
 
 /**
- * The latest entry of the Finvest 1.0 totals. It is compared with the trial
+ * The latest entry of the paper register totals. It is compared with the trial
  * only once a second member of staff has confirmed it.
  */
 export interface EnteredTotals extends TotalsInput {
@@ -133,7 +133,7 @@ export type Blocker =
 
 /**
  * What the signed-in person may do, as the backend's overview says. `enter_totals` covers
- * entering and confirming the Finvest 1.0 totals: both routes require `migration.sign_off`,
+ * entering and confirming the paper register totals: both routes require `migration.sign_off`,
  * the same permission that gives `sign_off` (backend/app/modules/migration/api.py).
  */
 export type Allowed =
@@ -272,7 +272,7 @@ const MESSAGES: Record<MigrationErrorCode, string> = {
   file_too_large: "One of the files is too large. A sheet holds at most 100,000 rows.",
   not_the_trial_sheet: "These are not the sheets the latest trial checked. Choose the same two files, unchanged.",
   phone_missing: "A client in the sheets has no phone number. Every client claims their account by phone, so add one and run a trial again.",
-  phone_taken: "A phone number in the sheets already has a Finvest 2.0 account, so no account was created. Look into it, then approve again.",
+  phone_taken: "A phone number in the sheets already has a Finvest account, so no account was created. Look into it, then approve again.",
   not_connected: "Migration is not connected to the Finvest service yet.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };

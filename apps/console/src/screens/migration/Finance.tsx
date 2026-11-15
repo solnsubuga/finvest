@@ -46,7 +46,7 @@ interface TotalsFormProps {
   onCancel: () => void;
 }
 
-/** What Finvest 1.0's own report says it holds on the trial's "as of" day. */
+/** What the paper register says it holds on the trial's "as of" day. */
 export function TotalsForm({ busy, error, asOf, onEnter, onCancel }: TotalsFormProps) {
   const id = useId();
   const [values, setValues] = useState<Partial<Record<FieldName, string>>>({});
@@ -101,14 +101,14 @@ export function TotalsForm({ busy, error, asOf, onEnter, onCancel }: TotalsFormP
   return (
     <form
       noValidate
-      aria-label="Enter the Finvest 1.0 totals"
+      aria-label="Enter the paper register totals"
       onSubmit={submit}
       className="flex flex-col gap-4 rounded-xl border-2 border-black bg-surface p-5"
     >
       <div>
-        <h2 className="m-0 text-xl font-extrabold">Enter the Finvest 1.0 totals</h2>
+        <h2 className="m-0 text-xl font-extrabold">Enter the paper register totals</h2>
         <p className="m-0 text-md leading-normal text-muted">
-          Copy them from Finvest 1.0&apos;s own report for {formatDay(asOf)}, not from the spreadsheet. A second person
+          Copy them from the totals of the paper register for {formatDay(asOf)}, not from the spreadsheet. A second person
           checks them against the same report before they are compared with the trial. Leave a currency empty if Finvest
           1.0 holds none of it.
         </p>
@@ -154,16 +154,16 @@ interface TotalsPanelProps {
   onConfirm: (totalsId: string) => void;
 }
 
-/** Who entered the Finvest 1.0 totals, and whether a second person has checked them. */
+/** Who entered the paper register totals, and whether a second person has checked them. */
 export function TotalsPanel({ totals, mayEnter, busy, onOpenForm, onConfirm }: TotalsPanelProps) {
   // Entering confirmed totals again sets the check aside, so say so before the form opens.
   const [warning, setWarning] = useState(false);
   const confirmed = totals?.confirmedBy != null;
   return (
-    <Panel title="Finvest 1.0 totals">
+    <Panel title="Paper register totals">
       {totals === null ? (
         <p className="m-0 border-t border-divider pt-2.5 text-md leading-normal text-muted">
-          Not entered yet. Finance copies them from Finvest 1.0&apos;s own report, and a second person checks them.
+          Not entered yet. Finance copies them from the paper register, and a second person checks them.
         </p>
       ) : (
         <>
@@ -179,7 +179,7 @@ export function TotalsPanel({ totals, mayEnter, busy, onOpenForm, onConfirm }: T
               ? `Checked by ${totals.confirmedBy === "You" ? "you" : totals.confirmedBy}.`
               : totals.mine
                 ? "Someone else checks them against the report before they count."
-                : "Check each figure against Finvest 1.0's report before confirming."}
+                : "Check each figure against the paper register before confirming."}
           </p>
           {!totals.confirmedBy && !totals.mine && mayEnter ? (
             <Button onClick={() => onConfirm(totals.id)} disabled={busy} className="self-start">
@@ -233,7 +233,7 @@ function lineSummary(old: string, next: string, currency: Currency | null): stri
   const size = more ? gap : gap.slice(1);
   const amount = currency ? formatWithCurrency(size, currency) : formatAmount(size, null);
   const word = more ? "more" : currency ? "less" : "fewer";
-  return `Finvest 1.0 shows ${amount} ${word}`;
+  return `The paper register shows ${amount} ${word}`;
 }
 
 /** Every total line and investment that differs, in the order the backend lists them. */
@@ -386,7 +386,7 @@ export function SignOffs({ overview, actions }: { overview: Overview; actions: F
     <Panel title="What differs">
       {all.length === 0 ? (
         <p className="m-0 text-sm leading-normal text-muted">
-          Every total and every investment&apos;s interest and tax rate match what Finvest 2.0 works out.
+          Every total and every investment&apos;s interest and tax rate match what Finvest works out.
         </p>
       ) : (
         <>
@@ -403,7 +403,7 @@ export function SignOffs({ overview, actions }: { overview: Overview; actions: F
         </>
       )}
       <p className="m-0 text-sm leading-normal text-muted">
-        Each investment is opened with the interest Finvest 2.0 works out. A difference is never posted. One person proposes
+        Each investment is opened with the interest Finvest works out. A difference is never posted. One person proposes
         a sign-off with a reason and a different person approves it. If the figures change, it is asked for again.
       </p>
     </Panel>

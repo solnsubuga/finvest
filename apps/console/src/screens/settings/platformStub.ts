@@ -57,7 +57,8 @@ const DEFAULTS: Values = {
   public_holidays: HOLIDAYS,
   bank_payout_cutoff: "14:00",
   maturity_reminders: [7, 1],
-  staff_idle_minutes: 30,
+  // The backend's own default (`staff_session_idle_minutes` and the catalogue): 15 minutes, as on the canvas.
+  staff_idle_minutes: 15,
   office_networks: [],
   statement_layouts: [],
 };

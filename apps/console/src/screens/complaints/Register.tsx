@@ -88,7 +88,7 @@ export function RegisterTable({ complaints, selected, today, clientName, clientS
                     type="button"
                     onClick={() => onSelect(complaint.id)}
                     aria-label={`${complaint.reference}, ${complaint.summary}`}
-                    className="cursor-pointer underline-offset-2 hover:underline"
+                    className="inline-flex min-h-6 cursor-pointer items-center underline-offset-2 hover:underline"
                   >
                     {complaint.reference}
                   </button>

@@ -357,6 +357,9 @@ describe("dealing desk formatting", () => {
     expect(formatShort({ minor: 18_240_000_000, currency: "UGX" })).toBe("UGX 18,240.0m");
     expect(formatShort({ minor: 23_500_000, currency: "UGX" }, false)).toBe("23.5m");
     expect(formatShort({ minor: 0, currency: "UGX" }, false)).toBe("0.0m");
+    expect(formatShort({ minor: 250_000, currency: "UGX" })).toBe("UGX 250,000");
+    expect(formatShort({ minor: -999_999, currency: "UGX" }, false)).toBe("-999,999");
+    expect(formatShort({ minor: 1_000_000, currency: "UGX" }, false)).toBe("1.0m");
     expect(formatShort({ minor: 36_200_000, currency: "USD" })).toBe("$362,000");
   });
 

@@ -198,7 +198,7 @@ function NotCarriedRow({ client, switchId, overview, actions }: { client: NotCar
     <li className="flex flex-col gap-2 border-t border-divider py-3 text-md">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col">
-          <span className="font-bold">Finvest 1.0 client {client.legacyClientRef}</span>
+          <span className="font-bold">Paper register client {client.legacyClientRef}</span>
           <span className="text-sm text-muted">
             {notCarriedLabel(client.code)}. {client.attempt > 1 ? `Tried ${client.attempt} times, noted` : "Noted"} {formatMoment(client.notedAt)}.
           </span>
