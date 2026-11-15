@@ -8,18 +8,7 @@ import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { CatalogueError, catalogueErrorMessage, type CatalogueApi, type Product, type ProductChange, type ProductStatus } from "./api.ts";
 import { ChangeCard } from "./ChangeCard.tsx";
-import {
-  formatBps,
-  formatDay,
-  formatExact,
-  formatTerm,
-  INTEREST_PAID_LABELS,
-  isNewProductType,
-  KIND_LABELS,
-  NEW_PRODUCT_TYPES,
-  type NewProductType,
-  PRODUCT_STATUS_LABELS,
-} from "./format.ts";
+import { formatBps, formatDay, formatExact, formatTerm, INTEREST_PAID_LABELS, KIND_LABELS, NEW_PRODUCT_TYPES, PRODUCT_STATUS_LABELS } from "./format.ts";
 import { BondsError, bondsErrorMessage, type BondsApi } from "./bonds/api.ts";
 import { BondsSection, NewBondForm } from "./bonds/Bonds.tsx";
 import { connectedBondsApi } from "./bonds/http.ts";
@@ -27,6 +16,10 @@ import { createStubBondsApi } from "./bonds/stub.ts";
 import { connectedCatalogueApi } from "./http.ts";
 import { EditProductForm, NewProductForm } from "./ProductForm.tsx";
 import { createStubCatalogueApi, sampleFrom } from "./stub.ts";
+import type { ProductType, ProductTypesApi, ReturnModel } from "./types/api.ts";
+import { connectedProductTypesApi } from "./types/http.ts";
+import { createStubProductTypesApi } from "./types/stub.ts";
+import { TypePage, TypesSection } from "./types/Types.tsx";
 
 const SUMMARY = "What clients can invest in, at what rate, and what they see after tax.";
 
@@ -40,6 +33,28 @@ const STATUS_STYLES: Record<ProductStatus, string> = {
 interface Book {
   products: readonly Product[];
   waiting: readonly ProductChange[];
+  /** The product types to choose from. Null when they could not be loaded. */
+  types: readonly ProductType[] | null;
+}
+
+/** One entry in the Type list on New product. */
+interface TypeChoice {
+  value: string;
+  label: string;
+  hint: string;
+  model: ReturnModel;
+  /** Sent with the new product. Absent when the types could not be loaded. */
+  typeCode?: string;
+  defaultTaxBps?: number;
+}
+
+function typeChoices(types: readonly ProductType[] | null, bonds: boolean): TypeChoice[] {
+  const choices: TypeChoice[] = types
+    ? types
+        .filter((type) => type.status === "active")
+        .map((type) => ({ value: type.code, label: type.name, hint: type.description, model: type.model, typeCode: type.code, defaultTaxBps: type.defaultTaxBps }))
+    : NEW_PRODUCT_TYPES.map((type) => ({ value: type.value, label: type.label, hint: type.hint, model: type.value }));
+  return choices.filter((choice) => bonds || choice.model !== "treasury_bond");
 }
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; book: Book };
@@ -52,15 +67,18 @@ interface ProductsScreenProps {
   canChange?: boolean;
   /** Bond issues, shown under the products. See docs/bonds.md. */
   bondsApi?: BondsApi;
+  /** Product types, shown last and listed on New product. See docs/product-types.md. */
+  typesApi?: ProductTypesApi;
 }
 
 /**
  * The catalogue, and with `products.change` new products and edits sent for a second person.
- * `?new` opens the New product form, with `&type=` choosing the type (a Treasury bond has a form
- * of its own), and `?edit=CODE` the Edit form for one product. `?new-bond` is the same as
- * `?new&type=treasury_bond`.
+ * `?new` opens the New product form, with `&type=` naming the product type by its code (a type
+ * built on the bond model has a form of its own), and `?edit=CODE` the Edit form for one product.
+ * `?new-bond` opens it on the first bond type. `?new-type` defines a new product type and
+ * `?edit-type=CODE` changes one.
  */
-export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: ProductsScreenProps) {
+export function ProductsScreen({ api, me = "", canChange = false, bondsApi, typesApi }: ProductsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -71,12 +89,17 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
 
   const fetchBook = useCallback(async (): Promise<Load> => {
     try {
-      const [products, waiting] = await Promise.all([api.listProducts(), api.listProductChanges("proposed")]);
-      return { state: "ready", book: { products, waiting } };
+      const [products, waiting, types] = await Promise.all([
+        api.listProducts(),
+        api.listProductChanges("proposed"),
+        // Without the types, New product falls back to the built-in ones.
+        typesApi ? typesApi.listTypes().then((book) => book.types, () => null) : Promise.resolve(null),
+      ]);
+      return { state: "ready", book: { products, waiting, types } };
     } catch (error) {
       return { state: "failed", message: catalogueErrorMessage(error) };
     }
-  }, [api]);
+  }, [api, typesApi]);
 
   useEffect(() => {
     let current = true;
@@ -103,6 +126,10 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
     } finally {
       setBusy(null);
     }
+  }
+
+  if (canChange && typesApi && (params.has("new-type") || params.has("edit-type"))) {
+    return <TypePage api={typesApi} me={me} code={params.get("edit-type")} />;
   }
 
   if (load.state === "loading") {
@@ -150,9 +177,9 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
   const editing = params.get("edit");
   if (canChange && (params.has("new") || params.has("new-bond"))) {
     const asked = params.has("new-bond") ? "treasury_bond" : params.get("type");
-    const offered = NEW_PRODUCT_TYPES.filter((type) => type.value !== "treasury_bond" || bondsApi);
-    const type: NewProductType = isNewProductType(asked) && offered.some((t) => t.value === asked) ? asked : "treasury_bill";
-    const chosen = offered.find((t) => t.value === type);
+    const offered = typeChoices(load.book.types, bondsApi !== undefined);
+    // A type's code, or for older links a return model, which picks the first type built on it.
+    const chosen = offered.find((t) => t.value === asked) ?? offered.find((t) => t.model === asked) ?? offered[0];
     return (
       <>
         <Back />
@@ -163,9 +190,9 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
           </label>
           <select
             id="new-product-type"
-            value={type}
+            value={chosen?.value ?? ""}
             aria-describedby="new-product-type-hint"
-            onChange={(event) => void navigate(`/products?new&type=${event.target.value}`, { replace: true })}
+            onChange={(event) => void navigate(`/products?new&type=${encodeURIComponent(event.target.value)}`, { replace: true })}
             className="h-[54px] w-full rounded-lg border border-border-strong bg-surface px-3 text-lg font-semibold text-ink"
           >
             {offered.map((option) => (
@@ -177,20 +204,30 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
           <p id="new-product-type-hint" className="m-0 text-sm text-muted">
             {chosen?.hint}
           </p>
+          {typesApi ? (
+            <p className="m-0 text-sm text-muted">
+              Not in the list?{" "}
+              <Link to="/products?new-type" className="font-bold text-ink underline underline-offset-2">
+                Define a new product type
+              </Link>
+            </p>
+          ) : null}
         </div>
-        {type === "treasury_bond" && bondsApi ? (
+        {!chosen ? null : chosen.model === "treasury_bond" && bondsApi ? (
           <NewBondForm
+            key={chosen.value}
             busy={busy === "new-bond"}
             error={failed?.on === "new-bond" ? failed.message : null}
-            onSubmit={(draft) => void run("new-bond", () => bondsApi.proposeBond(draft), () => void navigate("/products"))}
+            onSubmit={(draft) => void run("new-bond", () => bondsApi.proposeBond({ ...draft, typeCode: chosen.typeCode }), () => void navigate("/products"))}
           />
         ) : (
           <NewProductForm
-            key={type}
-            kind={type === "treasury_bond" ? "treasury_bill" : type}
+            key={chosen.value}
+            kind={chosen.model === "treasury_bond" ? "treasury_bill" : chosen.model}
+            {...(chosen.defaultTaxBps === undefined ? {} : { defaultTaxBps: chosen.defaultTaxBps })}
             busy={busy === "new"}
             error={failed?.on === "new" ? failed.message : null}
-            onSubmit={(draft) => void run("new", () => api.proposeNewProduct(draft), () => void navigate("/products"))}
+            onSubmit={(draft) => void run("new", () => api.proposeNewProduct({ ...draft, typeCode: chosen.typeCode }), () => void navigate("/products"))}
           />
         )}
       </>
@@ -329,6 +366,7 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
         </div>
       )}
       {bondsApi ? <BondsSection key={round} api={bondsApi} me={me} canChange={canChange} /> : null}
+      {typesApi ? <TypesSection key={`types:${round}`} api={typesApi} me={me} canChange={canChange} /> : null}
     </>
   );
 }
@@ -349,7 +387,7 @@ function ClientView({ product, canChange }: { product: Product; canChange: boole
         {product.name}
       </h2>
       <dl className="m-0 flex flex-col gap-2.5">
-        <Row name="Kind" value={KIND_LABELS[product.kind]} />
+        <Row name="Type" value={product.typeName ?? KIND_LABELS[product.kind]} />
         <Row name="Term" value={formatTerm(product.termDays)} />
         <Row name="Interest paid" value={INTEREST_PAID_LABELS[product.interestPaid]} />
         <Row name="Minimum" value={formatExact(product.minimum)} />
@@ -407,5 +445,10 @@ export default function ProductsPage() {
   const [bondsApi] = useState<BondsApi>(() =>
     isStubAuth() && session ? createStubBondsApi({ me: session.staffId, sample: sampleFrom(window.location.search) }) : connectedBondsApi(),
   );
-  return <ProductsScreen api={api} bondsApi={bondsApi} me={session?.staffId ?? ""} canChange={session ? can(session, "products.change") : false} />;
+  const [typesApi] = useState<ProductTypesApi>(() =>
+    isStubAuth() && session ? createStubProductTypesApi({ me: session.staffId, sample: sampleFrom(window.location.search) }) : connectedProductTypesApi(),
+  );
+  return (
+    <ProductsScreen api={api} bondsApi={bondsApi} typesApi={typesApi} me={session?.staffId ?? ""} canChange={session ? can(session, "products.change") : false} />
+  );
 }

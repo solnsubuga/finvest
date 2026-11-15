@@ -53,6 +53,12 @@ One member of staff proposes, with a reason, and a different one approves or sen
 
 Audit events on resource `product_type_change`: `product_types.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the type's code, model, name and usual tax.
 
+## In the console
+
+Products lists the types under the bonds, with how each earns, its usual tax, how many products use it and whether it is in use or retired. Staff with `products.change` define a new type (`/products?new-type`), choosing the return model first, and change, retire or restore one (`/products?edit-type=CODE`). Each is a change a second person approves or sends back on the same screen.
+
+New product starts with a Type list of the types in use. The type's return model decides which form follows (a bond type opens the bond form), its usual tax fills the tax field, and its code goes with the new product. A link under the list opens New product type. If the types cannot be loaded, the list falls back to the three built-in types and the backend picks the type from the kind.
+
 ## Not built yet
 
-The console screens for defining types, the types in the console approvals inbox, and showing the type's name to clients.
+The types in the console approvals inbox, and showing the type's name to clients.
