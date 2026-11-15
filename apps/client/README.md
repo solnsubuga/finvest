@@ -175,7 +175,6 @@ Not built yet: sending an investment to another client, changing a plan's amount
 - Clients never see tax rates, only net figures.
 - The app PIN or fingerprint unlocks a phone that is already signed in and approves payments. It never signs in a new device.
 - `app.json` cannot import the tokens, so its two `#0D0D0D` values (Android icon and splash background) are written by hand. Keep them equal to `colors.black`.
-- `docs/screenshots/sheets/` holds contact sheets of the same screenshots, for PR descriptions.
 - Screenshots in `docs/screenshots/` keep stable file names. Replace them in place when a screen changes.
 - Build to the [design canvas](../../docs/design.md). Every PR that adds or changes a screen includes screenshots.
 

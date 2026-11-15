@@ -225,7 +225,7 @@ Staff can tell every client something, such as an office closure, as an `announc
 | Route | Who | What |
 | --- | --- | --- |
 | `GET /client/notifications` | Client | A page, newest first, with the unread count. `before` and `limit` page through it. |
-| `POST /client/notifications/read` | Client | Marks the named notifications read, or all of them when `ids` is left out |
+| `POST /client/notifications/read` | Client | Marks the named notifications read, at most 200 at a time. With `ids` left out it marks every one the client has, on every page, not only the ones the app has loaded. This is what "Mark all as read" sends. Answers with the count still unread |
 | `GET /client/notification-preferences` | Client | Channels for each kind of alert |
 | `PUT /client/notification-preferences` | Client | Changes the kinds of alert named and leaves the rest |
 | `PUT /client/push-devices` | Client | Sends this phone the client's pushes. `token` is the Expo push token, `platform` is `ios` or `android`. |
