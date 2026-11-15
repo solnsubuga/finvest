@@ -16,7 +16,7 @@ from app.modules.closures import service as closures
 from app.modules.identity import client_locks
 from app.modules.investments import accrual, transfers
 from app.modules.investments import service as investments
-from app.modules.investments.domain.investments import InvestmentStatus
+from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.modules.investments.domain.transfers import (
     NOT_POSSIBLE,
     HeldFor,
@@ -32,8 +32,10 @@ from app.modules.screening.monitor_jobs import MonitoringJobs
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
-from app.shared.push_ids import push_id
+from app.shared.push_ids import push_id, validate_push_id
+from tests.support import database as harness
 from tests.support.clock import AsyncBarrier, FakeClock
+from tests.support.database import TestDatabase
 from tests.support.investments import (
     PRESENT,
     account_balance,
@@ -232,6 +234,105 @@ async def test_part_of_an_investment_moves_to_the_recipient_in_one_entry(
         "investments.transfer.done",
         "investments.transfer.requested",
     ]
+
+
+def sent_days_into_its_term(database: TestDatabase, investment_id: str, days: int) -> None:
+    """Make a received investment look as if it was sent `days` into a 91 day term: the
+    database dates a transfer by its own clock, so a test cannot send one later in the term.
+    The administrator rewrites the term, inside one transaction, past the fence on purpose."""
+    validate_push_id(investment_id)
+    remaining = 91 - int(days)
+    statement = (
+        "BEGIN; SET LOCAL session_replication_role = replica; "  # noqa: S608 - a push ID and ints
+        f"UPDATE investments SET term_days = {remaining}, "
+        f"maturity_date = start_date + {remaining} WHERE id = '{investment_id}'; COMMIT;"
+    )
+    harness.psql(database.admin.set(database=database.name), "-c", statement)
+
+
+async def test_a_received_investment_rolls_over_on_the_products_own_term(
+    test_database: TestDatabase, app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    asked = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    done = await carry_out(worker_database, asked.id)
+    assert done.received_investment_id is not None
+    sent_days_into_its_term(test_database, done.received_investment_id, 5)
+    received = await investment(worker_database, done.received_investment_id)
+    assert received.term_days == 86
+    assert received.at_maturity is AtMaturity.ROLL_OVER
+    due = received.maturity_date
+    assert due is not None
+
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        closed = await investments.mature_investment(session, received.id, due, at(due))
+    assert closed.status is InvestmentStatus.MATURED and closed.rolled_into_id is not None
+    rolled = await investment(worker_database, closed.rolled_into_id)
+    # The new term is the product's 91 days, not the 86 that were left when it was sent.
+    assert (rolled.status, rolled.term_days) == (InvestmentStatus.ACTIVE, 91)
+    assert (rolled.start_date, rolled.maturity_date) == (due, due + timedelta(days=91))
+    assert rolled.client_id == recipient.id
+
+
+def started_days_ago(database: TestDatabase, investment_id: str, days: int) -> None:
+    """Make a running investment look as if it began `days` ago, past the fence on purpose."""
+    validate_push_id(investment_id)
+    statement = (
+        "BEGIN; SET LOCAL session_replication_role = replica; "  # noqa: S608 - a push ID and an int
+        f"UPDATE investments SET start_date = start_date - {int(days)}, "
+        f"maturity_date = maturity_date - {int(days)} WHERE id = '{investment_id}'; COMMIT;"
+    )
+    harness.psql(database.admin.set(database=database.name), "-c", statement)
+
+
+async def test_the_kept_part_carries_on_the_days_of_its_term(
+    test_database: TestDatabase, app_database: Database, worker_database: Database
+) -> None:
+    sender, _ = await person(app_database)
+    recipient, _ = await person(app_database)
+    source = await running(app_database, worker_database, sender)
+    # Sent five days into its term.
+    started_days_ago(test_database, source.id, 5)
+    first = await send(
+        app_database, sender, source.id, await number_of(app_database, recipient), ugx(1_000_000)
+    )
+    done = await carry_out(worker_database, first.id)
+    assert done.kept_investment_id is not None and done.received_investment_id is not None
+    async with app_database.actor_transaction(sender) as session:
+        kept = await investments.client_investment(
+            session, sender, done.kept_investment_id, PRESENT
+        )
+        sent = await investments.client_investment(session, sender, source.id, PRESENT)
+    assert (kept.days_earned, kept.term_days) == (5, 91)
+    assert sent.interest_today.is_zero
+    async with app_database.actor_transaction(recipient) as session:
+        received = await investments.client_investment(
+            session, recipient, done.received_investment_id, PRESENT
+        )
+    # The recipient's investment is new to them: its days are its own.
+    assert (received.days_earned, received.term_days) == (0, 86)
+
+    # Sent on again two days later, what is kept still counts from the first start.
+    started_days_ago(test_database, source.id, 2)
+    started_days_ago(test_database, done.kept_investment_id, 2)
+    second = await send(
+        app_database,
+        sender,
+        done.kept_investment_id,
+        await number_of(app_database, recipient),
+        ugx(500_000),
+    )
+    again = await carry_out(worker_database, second.id)
+    assert again.kept_investment_id is not None
+    async with app_database.actor_transaction(sender) as session:
+        (still,) = await investments.client_investments_by_id(
+            session, sender, [again.kept_investment_id], PRESENT
+        )
+    assert (still.days_earned, still.term_days) == (7, 91)
 
 
 async def test_sending_the_whole_value_leaves_the_sender_nothing(

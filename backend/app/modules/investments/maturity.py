@@ -338,6 +338,7 @@ async def _mature(
             session,
             investment,
             row.id,
+            product.term_days,
             rate.annual_rate_bps,
             rate.tax_bps,
             quoted_at,
@@ -360,6 +361,7 @@ async def _mature(
             session,
             investment,
             row.id,
+            product.term_days,
             rate.annual_rate_bps,
             rate.tax_bps,
             quoted_at,
@@ -371,6 +373,7 @@ async def _mature(
             session,
             investment,
             row.id,
+            product.term_days,
             rate.annual_rate_bps,
             rate.tax_bps,
             quoted_at,
@@ -445,6 +448,7 @@ async def _roll_over(
     session: AsyncSession,
     investment: Investment,
     product_id: str,
+    term_days: int | None,
     annual_rate_bps: int,
     tax_bps: int,
     quoted_at: datetime,
@@ -455,7 +459,10 @@ async def _roll_over(
     to_goal: _GoalSaving | None = None,
     keep_goal: bool = False,
 ) -> None:
-    """Start a new term in the same product.
+    """Start a new term in the same product, on the product's own terms on the day.
+
+    The term is the product's, not the old investment's: an investment received from another
+    client, or the part a sender kept, ran only the days left of the one it came from.
 
     With `pay_interest`, the new term is for the principal alone, keeps the client's choice and
     destination, and the interest goes to payouts in the same entry. With `to_goal`, the new
@@ -472,7 +479,7 @@ async def _roll_over(
     new_id = push_id()
     # The new term starts the day the old one ended, so no day is left without interest.
     start_date = _maturity(investment)
-    if investment.term_days is None:
+    if term_days is None:
         raise ApplicationError("conflict")
     if pay_interest:
         choice = AtMaturity.PAY_INTEREST
@@ -490,7 +497,7 @@ async def _roll_over(
             "principal_minor": proceeds.minor,
             "annual_rate_bps": annual_rate_bps,
             "tax_bps": tax_bps,
-            "term_days": investment.term_days,
+            "term_days": term_days,
             "at_maturity": choice.value,
             "destination_id": investment.payout_destination_id if pay_interest else None,
             "goal_id": investment.interest_goal_id
@@ -547,7 +554,7 @@ async def _roll_over(
         {
             "id": new_id,
             "start_date": start_date,
-            "maturity_date": maturity_date(start_date, investment.term_days),
+            "maturity_date": maturity_date(start_date, term_days),
             "entry_id": entry.id,
             "now": now,
         },

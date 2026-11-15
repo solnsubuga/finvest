@@ -159,12 +159,14 @@ class ClientInvestment:
     amount: Money
     # "10.62": the yearly rate after tax that this investment earns.
     rate_percent: str
+    # The length of the term. For the part a sender kept, the whole term it came from.
     term_days: int | None
     at_maturity: AtMaturity | None
     pay_by: datetime
     start_date: date | None
     maturity_date: date | None
-    # Days of interest earned so far, as posted to the ledger.
+    # Days of interest earned so far, as posted to the ledger. For the part a sender kept, it
+    # counts from the start of the term it came from.
     days_earned: int
     interest_so_far: Money
     # What was added by the latest daily run, if that run was for today.
@@ -264,6 +266,9 @@ BOOKING_SOURCE = "investment_booking"
 # What `source_type` says of an investment started from another's interest at maturity, saved
 # to the goal the client chose. `source_id` is the investment that matured.
 GOAL_INTEREST_SOURCE = "goal_interest"
+# What `source_type` says of the part of an investment its client kept when they sent the rest
+# to another client. `source_id` is the transfer.
+TRANSFER_KEPT = "transfer_kept"
 _START = text(
     "UPDATE investments SET status = 'active', start_date = :start_date, "
     "maturity_date = :maturity_date, started_at = :now, start_entry_id = :entry_id, "
@@ -705,6 +710,36 @@ async def positions(session: AsyncSession, staff: Actor) -> list[Investment]:
     return [investment_from_row(row) for row in rows]
 
 
+# The part a sender kept is a new investment from the day of the transfer, for the days that were
+# left. Its term began when the investment it came from began, through any earlier transfers.
+_TERM_STARTS = text(
+    "WITH RECURSIVE chain(id, source_type, source_id, start_date) AS ("
+    "SELECT i.id, i.source_type, i.source_id, i.start_date FROM investments i "
+    "WHERE i.id = ANY(:ids) "
+    "UNION ALL "
+    "SELECT c.id, s.source_type, s.source_id, s.start_date FROM chain c "
+    "JOIN investment_transfers t ON c.source_type = 'transfer_kept' AND t.id = c.source_id "
+    "JOIN investments s ON s.id = t.investment_id) "
+    "SELECT id, min(start_date) AS started FROM chain GROUP BY id"
+)
+
+
+async def _term_starts(session: AsyncSession, found: list[Investment]) -> dict[str, date]:
+    """When the term of each kept part of a sent investment began."""
+    kept = [i.id for i in found if i.source_type == TRANSFER_KEPT and i.start_date is not None]
+    if not kept:
+        return {}
+    rows = await session.execute(_TERM_STARTS, {"ids": kept})
+    return {row.id: row.started for row in rows.all() if row.started is not None}
+
+
+async def _client_views(
+    session: AsyncSession, found: list[Investment], today: date
+) -> list[ClientInvestment]:
+    starts = await _term_starts(session, found)
+    return [_client_view(i, today, term_started_on=starts.get(i.id)) for i in found]
+
+
 async def client_investments(
     session: AsyncSession, client: Actor, clock: Clock, *, limit: int = MAX_PAGE_SIZE
 ) -> list[ClientInvestment]:
@@ -715,7 +750,7 @@ async def client_investments(
     rows = await session.execute(
         _FOR_CLIENT, {"client_id": client.id, "limit": max(1, min(limit, MAX_PAGE_SIZE))}
     )
-    return [_client_view(investment_from_row(row), today) for row in rows.all()]
+    return await _client_views(session, [investment_from_row(row) for row in rows.all()], today)
 
 
 async def client_investment(
@@ -727,7 +762,8 @@ async def client_investment(
     # An investment undone for a mistaken deposit was never really the client's.
     if row is None or row.client_id != client.id or row.status == InvestmentStatus.UNWOUND:
         raise ApplicationError("not_found")
-    return _client_view(investment_from_row(row), business_date(clock.now()))
+    (view,) = await _client_views(session, [investment_from_row(row)], business_date(clock.now()))
+    return view
 
 
 async def client_investments_by_id(
@@ -738,11 +774,12 @@ async def client_investments_by_id(
     if client.kind != "client":
         raise ApplicationError("forbidden")
     today = business_date(clock.now())
-    return [
-        _client_view(investment, today)
+    found = [
+        investment
         for investment in await get_investments(session, investment_ids)
         if investment.client_id == client.id and investment.status is not InvestmentStatus.UNWOUND
     ]
+    return await _client_views(session, found, today)
 
 
 _SAVING_INTEREST_TO = text(
@@ -761,7 +798,7 @@ async def client_investments_saving_interest_to(
         raise ApplicationError("forbidden")
     today = business_date(clock.now())
     rows = await session.execute(_SAVING_INTEREST_TO, {"client_id": client.id, "goal_id": goal_id})
-    return [_client_view(investment_from_row(row), today) for row in rows.all()]
+    return await _client_views(session, [investment_from_row(row) for row in rows.all()], today)
 
 
 # Internals --------------------------------------------------------------------------------------
@@ -813,14 +850,28 @@ def investment_from_row(row: Row[Any]) -> Investment:
     )
 
 
-def _client_view(investment: Investment, today: date) -> ClientInvestment:
+def _client_view(
+    investment: Investment, today: date, *, term_started_on: date | None = None
+) -> ClientInvestment:
     terms = investment.terms
     earned = (
         0
         if investment.start_date is None or investment.accrued_through is None
         else days_earned(investment.start_date, investment.accrued_through, investment.term_days)
     )
-    added_today = investment.accrued_through == today and earned > 0
+    # A kept part carries on the term it came from: the client sees the days of the whole term,
+    # though it earns, and is quoted, on its own days.
+    before = (
+        0
+        if term_started_on is None or investment.start_date is None
+        else max(0, (investment.start_date - term_started_on).days)
+    )
+    # Only a running investment earns. One sent on or closed early shows nothing added today.
+    added_today = (
+        investment.accrued_through == today
+        and earned > 0
+        and investment.status in (InvestmentStatus.ACTIVE, InvestmentStatus.MATURED)
+    )
     locked = is_locked(investment.withdrawal_locked_until, today)
     return ClientInvestment(
         id=investment.id,
@@ -831,12 +882,12 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
         rate_percent=RateVersion(
             investment.created_at.date(), terms.annual_rate_bps, terms.tax_bps
         ).client_rate_percent,
-        term_days=investment.term_days,
+        term_days=None if investment.term_days is None else investment.term_days + before,
         at_maturity=investment.at_maturity,
         pay_by=investment.pay_by,
         start_date=investment.start_date,
         maturity_date=investment.maturity_date,
-        days_earned=earned,
+        days_earned=earned + before,
         interest_so_far=investment.accrued_net,
         interest_today=day_accrual(terms, earned).net
         if added_today
