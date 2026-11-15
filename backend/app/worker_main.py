@@ -21,6 +21,7 @@ from app.infrastructure.settings import Settings
 from app.infrastructure.sms import SmsSettings
 from app.infrastructure.storage import StorageSettings
 from app.modules.autoinvest.jobs import AutoinvestJobs
+from app.modules.bonds.jobs import BondJobs
 from app.modules.dealing.jobs import DealingJobs
 from app.modules.documents.jobs import DocumentJobs
 from app.modules.goals.jobs import GoalJobs
@@ -75,6 +76,7 @@ def handlers(
     kinds: dict[str, JobHandler | Handler] = {
         SWEEP_UNANSWERED: sweep_unanswered(clock),
         **InvestmentJobs(database, clock).handlers(),
+        **BondJobs(database, clock).handlers(),
         **DealingJobs(clock).handlers(),
         **GoalJobs(database, clock).handlers(),
         **OrganisationJobs(database, clock).handlers(),

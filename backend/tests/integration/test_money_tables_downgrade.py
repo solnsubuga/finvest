@@ -12,8 +12,8 @@ into, why a payout send waited, the account code maps, the deposits taken back a
 what clients owe for them, the runs staff asked for again, staff notes and actions on a
 client, the account freezes, why an investment was sent to another client, the platform
 settings, the withdrawal limit changes, the paydays clients named, the custodian statement
-checks, the SMS delivery reports, the choice to save an investment's interest to a goal or
-the auction calendar."""
+checks, the SMS delivery reports, the choice to save an investment's interest to a goal, the
+auction calendar, the bond catalogue or clients' bond holdings."""
 
 import os
 from collections.abc import Iterator
@@ -26,6 +26,34 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0491_bond_holdings": (
+        "INSERT INTO bond_changes (id, action, code, isin, name, currency, coupon_bps, tax_bps, "
+        "issue_date, maturity_date, minimum_face_minor, face_step_minor, price, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'create', 'BOND-T', "
+        "'UGT000000010', 'Test bond', 'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, "
+        "100000, 985000, 'From the auction', '-Nabc0000000000000S1', now()); "
+        "INSERT INTO bond_issues (id, code, isin, name, currency, coupon_bps, tax_bps, "
+        "issue_date, maturity_date, minimum_face_minor, face_step_minor, status, version, "
+        "change_id, created_at, updated_at) VALUES ('-Nabc0000000000000I1', 'BOND-T', "
+        "'UGT000000010', 'Test bond', 'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, "
+        "100000, 'live', 1, '-Nabc0000000000000A1', now(), now()); "
+        "INSERT INTO bond_prices (id, issue_id, price, change_id, effective_at) VALUES "
+        "('-Nabc0000000000000P1', '-Nabc0000000000000I1', 985000, '-Nabc0000000000000A1', now()); "
+        "INSERT INTO bond_holdings (id, client_id, issue_id, currency, face_minor, price, "
+        "price_id, accrued_minor, cost_minor, quoted_on, created_at, pay_by, updated_at) VALUES "
+        "('-Nabc0000000000000H1', '-Nabc0000000000000B1', '-Nabc0000000000000I1', 'UGX', "
+        "1000000, 985000, '-Nabc0000000000000P1', 883, 985883, CURRENT_DATE, now(), "
+        "now() + interval '1 day', now())",
+        "refusing to drop clients' bond holdings",
+    ),
+    "0490_bond_issues": (
+        "INSERT INTO bond_changes (id, action, code, isin, name, currency, coupon_bps, tax_bps, "
+        "issue_date, maturity_date, minimum_face_minor, face_step_minor, price, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'create', 'BOND-T', "
+        "'UGT000000010', 'Test bond', 'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, "
+        "100000, 985000, 'From the auction', '-Nabc0000000000000S1', now())",
+        "refusing to drop the record of bond issues and prices",
+    ),
     "0310_identity_unlock_keys": (
         "INSERT INTO identity_clients (id, phone, status, created_at) VALUES "
         "('-Nabc0000000000000B1', '+256772123456', 'unclaimed', now()); "

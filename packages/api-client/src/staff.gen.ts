@@ -355,6 +355,7 @@ export const BankTransferInQueue = z.object({
   on_page: z.boolean().optional(),
   page_url: z.string().nullable().optional(),
   payer: z.string().nullable(),
+  purpose: z.enum(["investment", "bond"]).optional(),
   receipt: ReceiptView.nullable(),
   receipt_used_before: z.boolean(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
@@ -386,6 +387,7 @@ export const PaymentView = z.object({
   on_page: z.boolean().optional(),
   page_url: z.string().nullable().optional(),
   payer: z.string().nullable(),
+  purpose: z.enum(["investment", "bond"]).optional(),
   receipt: ReceiptView.nullable(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
 });
@@ -1885,6 +1887,9 @@ export const HoldingOut = z.object({
   product_name: z.string(),
 });
 export type HoldingOut = z.infer<typeof HoldingOut>;
+
+export const HoldingStatus = z.enum(["unpaid", "active", "cancelled"]);
+export type HoldingStatus = z.infer<typeof HoldingStatus>;
 
 export const HolidayValue = z.object({
   date: z.string(),
@@ -3509,6 +3514,23 @@ export const SignedOut = z.object({
 });
 export type SignedOut = z.infer<typeof SignedOut>;
 
+export const StaffBondHoldingOut = z.object({
+  accrued_minor: z.number().int(),
+  client_id: z.string(),
+  code: z.string(),
+  cost_minor: z.number().int(),
+  created_at: z.string(),
+  currency: Currency,
+  face_minor: z.number().int(),
+  id: z.string(),
+  pay_by: z.string(),
+  price: z.number().int(),
+  quoted_on: z.string(),
+  start_date: z.string().nullable(),
+  status: HoldingStatus,
+});
+export type StaffBondHoldingOut = z.infer<typeof StaffBondHoldingOut>;
+
 export const StaffBondOut = z.object({
   code: z.string(),
   coupon_bps: z.number().int(),
@@ -4537,6 +4559,20 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: BondChangeOut,
+  },
+  "GET /staff/bond-holdings": {
+    method: "GET",
+    path: "/staff/bond-holdings",
+    params: z.object({}),
+    query: z.object({
+    status: HoldingStatus.nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StaffBondHoldingOut),
   },
   "GET /staff/bonds": {
     method: "GET",

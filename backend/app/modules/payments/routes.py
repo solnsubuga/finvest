@@ -8,6 +8,8 @@ A bank transfer arrives as a form with the receipt file. The file is stored firs
 transaction, then the transfer is saved pointing at it, so a saved transfer always has its file.
 """
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Annotated, Literal
 
@@ -19,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.storage import FileStorage, InvalidFile, NewFile, StorageError, sha256_hex
+from app.modules.bonds import holdings as bond_holdings
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import holdings
@@ -110,6 +113,8 @@ class CardView(Contract):
 
 class PaymentView(Contract):
     id: PushId
+    # What the payment is for: an investment's ID, or a bond holding's when `purpose` is
+    # `bond`.
     investment_id: PushId
     method: Literal["mtn", "airtel", "bank_transfer", "card"]
     status: Literal[
@@ -137,6 +142,7 @@ class PaymentView(Contract):
     # None before the page is open, once the payment has ended, and when `on_page` is false.
     on_page: bool = False
     page_url: str | None = None
+    purpose: Literal["investment", "bond"] = "investment"
 
 
 class CardOffer(Contract):
@@ -168,6 +174,37 @@ class BankTransferDetails(Contract):
 
 class MobileMoneyPayment(Contract):
     network: Literal["mtn", "airtel"]
+
+
+@dataclass(frozen=True, slots=True)
+class _Payable:
+    """What a payment is for, and exactly how much it must be."""
+
+    purpose: Purpose
+    purpose_id: str
+    amount: Money
+
+
+# Finds what a client is paying for, by its ID, and checks it can be paid now.
+_Find = Callable[[AsyncSession, ClientSession, str, Clock], Awaitable[_Payable]]
+
+
+async def _investment_payable(
+    session: AsyncSession, client: ClientSession, investment_id: str, clock: Clock
+) -> _Payable:
+    payable = await holdings.payable_investment(
+        session, client_id=client.client_id, investment_id=investment_id, clock=clock
+    )
+    return _Payable(Purpose.INVESTMENT, payable.investment_id, payable.amount)
+
+
+async def _bond_payable(
+    session: AsyncSession, client: ClientSession, holding_id: str, clock: Clock
+) -> _Payable:
+    payable = await bond_holdings.payable_holding(
+        session, client_id=client.client_id, holding_id=holding_id, clock=clock
+    )
+    return _Payable(Purpose.BOND, payable.holding_id, payable.amount)
 
 
 async def _payable_for_transfer(
@@ -237,6 +274,7 @@ def _view(
         **card_fields,  # type: ignore[arg-type]
         id=deposit.id,
         investment_id=deposit.purpose_id,
+        purpose="bond" if deposit.purpose is Purpose.BOND else "investment",
         method=deposit.method.value,
         status=deposit.status.value,
         amount=MoneyView(minor=deposit.amount.minor, currency=deposit.amount.currency.value),
@@ -280,6 +318,44 @@ def create_client_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/client", tags=["client payments"], responses=_REFUSALS)
 
+    async def _card_offer(
+        client: ClientSession, database: Database, clock: Clock, find: _Find, purpose_id: str
+    ) -> CardOffer:
+        async with database.actor_transaction(client.actor) as session:
+            payable = await find(session, client, purpose_id, clock)
+            offer = await cards.card_offer(session, client.client_id, payable.amount, clock)
+        return CardOffer(
+            amount=_money(offer.quote.amount),
+            charge=_money(offer.quote.charge),
+            total=_money(offer.quote.total),
+            max_payment=_money(offer.terms.max_payment),
+            refused="cards_unavailable" if card_provider is None else offer.refused,
+        )
+
+    async def _pay_by_card(
+        client: ClientSession,
+        key: str,
+        database: Database,
+        clock: Clock,
+        find: _Find,
+        purpose_id: str,
+    ) -> PaymentView:
+        if card_provider is None:
+            raise ApplicationError("unavailable")
+        async with database.actor_transaction(client.actor) as session:
+            payable = await find(session, client, purpose_id, clock)
+            deposit = await cards.request_card_deposit(
+                session,
+                client.actor,
+                purpose=payable.purpose,
+                purpose_id=payable.purpose_id,
+                amount=payable.amount,
+                idempotency_key=key,
+                provider=card_provider.name,
+                clock=clock,
+            )
+            return await _payment_view(session, deposit)
+
     @router.get("/investments/{investment_id}/payments/card")
     async def card_offer(
         investment_id: PushId, client: CurrentClient, database: Db, clock: Time
@@ -289,18 +365,7 @@ def create_client_router(
         `refused` says when the client may not pay by card now, so the app can explain and
         offer mobile money. 404 if the investment is not the client's, 409 if it cannot be paid.
         """
-        async with database.actor_transaction(client.actor) as session:
-            payable = await holdings.payable_investment(
-                session, client_id=client.client_id, investment_id=investment_id, clock=clock
-            )
-            offer = await cards.card_offer(session, client.client_id, payable.amount, clock)
-        return CardOffer(
-            amount=_money(offer.quote.amount),
-            charge=_money(offer.quote.charge),
-            total=_money(offer.quote.total),
-            max_payment=_money(offer.terms.max_payment),
-            refused="cards_unavailable" if card_provider is None else offer.refused,
-        )
+        return await _card_offer(client, database, clock, _investment_payable, investment_id)
 
     @router.post("/investments/{investment_id}/payments/card", status_code=201)
     async def pay_by_card(
@@ -313,23 +378,23 @@ def create_client_router(
         there: the card is typed only on that page. 503 `channel_paused` while card payments
         are paused, 422 when over a card limit, 409 if the investment already has a payment.
         """
-        if card_provider is None:
-            raise ApplicationError("unavailable")
-        async with database.actor_transaction(client.actor) as session:
-            payable = await holdings.payable_investment(
-                session, client_id=client.client_id, investment_id=investment_id, clock=clock
-            )
-            deposit = await cards.request_card_deposit(
-                session,
-                client.actor,
-                purpose=Purpose.INVESTMENT,
-                purpose_id=payable.investment_id,
-                amount=payable.amount,
-                idempotency_key=key,
-                provider=card_provider.name,
-                clock=clock,
-            )
-            return await _payment_view(session, deposit)
+        return await _pay_by_card(client, key, database, clock, _investment_payable, investment_id)
+
+    @router.get("/bond-holdings/{holding_id}/payments/card")
+    async def bond_card_offer(
+        holding_id: PushId, client: CurrentClient, database: Db, clock: Time
+    ) -> CardOffer:
+        """The card charge and total for paying for this bond purchase by card, as for an
+        investment. 409 once it cannot be paid: started, cancelled, its window closed or a
+        coupon fell due."""
+        return await _card_offer(client, database, clock, _bond_payable, holding_id)
+
+    @router.post("/bond-holdings/{holding_id}/payments/card", status_code=201)
+    async def pay_for_bond_by_card(
+        holding_id: PushId, client: CurrentClient, key: IdempotencyKey, database: Db, clock: Time
+    ) -> PaymentView:
+        """Start a card payment for exactly the bond purchase's cost, as for an investment."""
+        return await _pay_by_card(client, key, database, clock, _bond_payable, holding_id)
 
     @router.post("/payments/{payment_id}/card-return", status_code=202)
     async def card_return(
@@ -389,35 +454,23 @@ def create_client_router(
             amount=MoneyView(minor=payable.amount.minor, currency=payable.amount.currency.value),
         )
 
-    @router.post("/investments/{investment_id}/payments/mobile-money", status_code=201)
-    async def pay_by_mobile_money(
-        investment_id: PushId,
+    async def _pay_by_mobile_money(
         body: MobileMoneyPayment,
-        client: CurrentClient,
-        key: IdempotencyKey,
-        database: Db,
-        clock: Time,
+        client: ClientSession,
+        key: str,
+        database: Database,
+        clock: Clock,
+        find: _Find,
+        purpose_id: str,
     ) -> PaymentView:
-        """Ask for a mobile money payment from the client's own number, for exactly the amount
-        owed.
-
-        Who collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the
-        client's phone. Pesapal opens an order on its page instead: poll
-        `GET /client/payments/{payment_id}` until `page_url` is set and send the client there,
-        as for a card. When the chosen collector is not running here, the other one is used.
-        409 if the investment already has a payment under way or paid: fetch it from
-        `GET /client/investments/{investment_id}/payment`.
-        """
         hosted = card_provider if card_provider and card_provider.name in HOSTED_PROVIDERS else None
         if collections is None and hosted is None:
             raise ApplicationError("unavailable")
         async with database.actor_transaction(client.actor) as session:
-            payable = await holdings.payable_investment(
-                session, client_id=client.client_id, investment_id=investment_id, clock=clock
-            )
+            payable = await find(session, client, purpose_id, clock)
             request = DepositRequest(
-                purpose=Purpose.INVESTMENT,
-                purpose_id=payable.investment_id,
+                purpose=payable.purpose,
+                purpose_id=payable.purpose_id,
                 network=Network(body.network),
                 amount=payable.amount,
                 phone=client.phone,
@@ -445,6 +498,45 @@ def create_client_router(
                 clock=clock,
             )
             return _view(deposit)
+
+    @router.post("/investments/{investment_id}/payments/mobile-money", status_code=201)
+    async def pay_by_mobile_money(
+        investment_id: PushId,
+        body: MobileMoneyPayment,
+        client: CurrentClient,
+        key: IdempotencyKey,
+        database: Db,
+        clock: Time,
+    ) -> PaymentView:
+        """Ask for a mobile money payment from the client's own number, for exactly the amount
+        owed.
+
+        Who collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the
+        client's phone. Pesapal opens an order on its page instead: poll
+        `GET /client/payments/{payment_id}` until `page_url` is set and send the client there,
+        as for a card. When the chosen collector is not running here, the other one is used.
+        409 if the investment already has a payment under way or paid: fetch it from
+        `GET /client/investments/{investment_id}/payment`.
+        """
+        return await _pay_by_mobile_money(
+            body, client, key, database, clock, _investment_payable, investment_id
+        )
+
+    @router.post("/bond-holdings/{holding_id}/payments/mobile-money", status_code=201)
+    async def pay_for_bond_by_mobile_money(
+        holding_id: PushId,
+        body: MobileMoneyPayment,
+        client: CurrentClient,
+        key: IdempotencyKey,
+        database: Db,
+        clock: Time,
+    ) -> PaymentView:
+        """Ask for a mobile money payment of exactly the bond purchase's cost, from the
+        client's own number, as for an investment. 409 if it already has a payment under way
+        or paid: fetch it from `GET /client/bond-holdings/{holding_id}/payment`."""
+        return await _pay_by_mobile_money(
+            body, client, key, database, clock, _bond_payable, holding_id
+        )
 
     @router.post("/investments/{investment_id}/payments/bank-transfer", status_code=201)
     async def pay_by_bank_transfer(
@@ -529,18 +621,30 @@ def create_client_router(
             await _discard_receipt(storage, stored_key, deposit_id)
         return _view(transfer.deposit, transfer.receipt)
 
+    async def _current_payment(
+        client: ClientSession, database: Database, purpose: Purpose, purpose_id: str
+    ) -> PaymentView:
+        async with database.actor_transaction(client.actor) as session:
+            deposit = await service.live_deposit_for(
+                session, purpose=purpose, purpose_id=purpose_id
+            )
+            if deposit is None:
+                raise ApplicationError("not_found")
+            return await _payment_view(session, deposit)
+
     @router.get("/investments/{investment_id}/payment")
     async def current_payment(
         investment_id: PushId, client: CurrentClient, database: Db
     ) -> PaymentView:
         """The investment's payment that has not failed: under way, being checked or paid."""
-        async with database.actor_transaction(client.actor) as session:
-            deposit = await service.live_deposit_for(
-                session, purpose=Purpose.INVESTMENT, purpose_id=investment_id
-            )
-            if deposit is None:
-                raise ApplicationError("not_found")
-            return await _payment_view(session, deposit)
+        return await _current_payment(client, database, Purpose.INVESTMENT, investment_id)
+
+    @router.get("/bond-holdings/{holding_id}/payment")
+    async def current_bond_payment(
+        holding_id: PushId, client: CurrentClient, database: Db
+    ) -> PaymentView:
+        """The bond purchase's payment that has not failed: under way or paid."""
+        return await _current_payment(client, database, Purpose.BOND, holding_id)
 
     @router.get("/payments")
     async def list_payments(

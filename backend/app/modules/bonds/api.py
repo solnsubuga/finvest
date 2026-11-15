@@ -3,8 +3,11 @@
 * `/public/bonds`: the website. Live and paused issues with their coupon after tax and price.
   Cached for five minutes and readable from any origin.
 * `/client/bonds`: the same for a signed-in client, with a quote for a face value.
+* `/client/bond-holdings`: buying a face value at today's price, and the client's holdings.
+  Paying for one is in the payments module, under `/client/bond-holdings/{holding_id}/...`.
 * `/staff/bonds`, `/staff/bond-changes`: issues with their tax, and proposing and deciding new
   issues, prices, pauses and openings, a second person enforced in the database.
+* `/staff/bond-holdings`: every client's holdings, for the books and the dealing desk.
 """
 
 from collections.abc import AsyncIterator
@@ -16,9 +19,11 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.bonds import catalogue
+from app.modules.bonds import catalogue, holdings
 from app.modules.bonds.domain.changes import BondChangeAction, BondChangeStatus
+from app.modules.bonds.domain.holdings import HoldingStatus
 from app.modules.bonds.domain.issues import (
     BondIssue,
     BondStatus,
@@ -203,6 +208,53 @@ class SendBack(Contract):
     note: Note
 
 
+class BuyBondIn(Contract):
+    code: Code
+    face_minor: FaceMinor
+    currency: CurrencyIn
+
+
+class BondHoldingOut(Contract):
+    """A client's holding as they see it. Every figure is after tax."""
+
+    id: PushId
+    code: str
+    name: str
+    currency: Currency
+    face_minor: int
+    price: int
+    accrued_minor: int
+    # What the client pays, or paid: the clean amount and the accrued interest.
+    cost_minor: int
+    status: HoldingStatus
+    created_at: datetime
+    # Until when an unpaid holding may be paid. None once it is not unpaid.
+    pay_by: datetime | None
+    start_date: date | None
+    maturity_date: date
+    coupon_minor: int
+    coupons_left: int
+    next_coupon_date: date | None
+    # The coupons still to come and the face value at maturity.
+    still_to_come_minor: int
+
+
+class StaffBondHoldingOut(Contract):
+    id: PushId
+    client_id: PushId
+    code: str
+    currency: Currency
+    face_minor: int
+    price: int
+    accrued_minor: int
+    cost_minor: int
+    quoted_on: date
+    status: HoldingStatus
+    created_at: datetime
+    pay_by: datetime
+    start_date: date | None
+
+
 # Wiring -----------------------------------------------------------------------------------------
 
 
@@ -215,6 +267,7 @@ AppClock = Annotated[Clock, Depends(_clock)]
 ProductsViewer = Annotated[StaffSession, Depends(require_permission("products.view"))]
 ProductsChanger = Annotated[StaffSession, Depends(require_permission("products.change"))]
 ProductsApprover = Annotated[StaffSession, Depends(require_confirmed("products.change"))]
+InvestmentsViewer = Annotated[StaffSession, Depends(require_permission("investments.view"))]
 
 
 @asynccontextmanager
@@ -397,6 +450,71 @@ async def client_bond_quote(
     return _quote_out(code, found)
 
 
+def _holding_out(view: holdings.ClientHolding) -> BondHoldingOut:
+    return BondHoldingOut(
+        id=view.id,
+        code=view.code,
+        name=view.name,
+        currency=view.face.currency,
+        face_minor=view.face.minor,
+        price=view.price,
+        accrued_minor=view.accrued.minor,
+        cost_minor=view.cost.minor,
+        status=view.status,
+        created_at=view.created_at,
+        pay_by=view.pay_by,
+        start_date=view.start_date,
+        maturity_date=view.maturity_date,
+        coupon_minor=view.coupon_net.minor,
+        coupons_left=view.coupons_left,
+        next_coupon_date=view.next_coupon_date,
+        still_to_come_minor=view.still_to_come.minor,
+    )
+
+
+@client_router.post("/bond-holdings", status_code=201)
+async def client_buy_bond(
+    request: Request, client: CurrentClient, clock: AppClock, key: IdempotencyKey, body: BuyBondIn
+) -> BondHoldingOut:
+    """Buy a face value of a live issue at today's price, as the quote showed. Nothing is paid
+    yet: pay the cost within `pay_by` with `POST /client/bond-holdings/{id}/payments/...`.
+
+    422 with a field code, as the quote refuses. 409 with five purchases already waiting.
+    """
+    async with _transaction(request, client.actor) as session:
+        holding = await holdings.request_purchase(
+            session,
+            client.actor,
+            idempotency_key=key,
+            code=body.code,
+            face=Money(body.face_minor, body.currency),
+            clock=clock,
+        )
+        return _holding_out(
+            await holdings.client_holding(session, client.client_id, holding.id, clock)
+        )
+
+
+@client_router.get("/bond-holdings")
+async def client_bond_holdings(
+    request: Request, client: CurrentClient, clock: AppClock
+) -> list[BondHoldingOut]:
+    """The client's holdings, unpaid and active, newest first."""
+    async with _transaction(request, client.actor) as session:
+        found = await holdings.client_holdings(session, client.client_id, clock)
+    return [_holding_out(h) for h in found]
+
+
+@client_router.get("/bond-holdings/{holding_id}")
+async def client_bond_holding(
+    request: Request, client: CurrentClient, clock: AppClock, holding_id: PushId
+) -> BondHoldingOut:
+    async with _transaction(request, client.actor) as session:
+        return _holding_out(
+            await holdings.client_holding(session, client.client_id, holding_id, clock)
+        )
+
+
 # Staff ------------------------------------------------------------------------------------------
 
 staff_router = APIRouter(prefix="/staff", tags=["staff bonds"], responses=_REFUSALS)
@@ -424,6 +542,36 @@ async def staff_bond_quote(
             session, code, Money(face_minor, view.issue.currency), clock
         )
     return _staff_quote_out(code, found)
+
+
+@staff_router.get("/bond-holdings")
+async def staff_bond_holdings(
+    request: Request,
+    staff: InvestmentsViewer,
+    status: HoldingStatus | None = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[StaffBondHoldingOut]:
+    """Clients' holdings, newest first, with what each paid. Optionally only one status."""
+    async with _transaction(request, staff.actor) as session:
+        found = await holdings.staff_holdings(session, staff.actor, status, limit)
+    return [
+        StaffBondHoldingOut(
+            id=h.id,
+            client_id=h.client_id,
+            code=h.code,
+            currency=h.face.currency,
+            face_minor=h.face.minor,
+            price=h.price,
+            accrued_minor=h.accrued.minor,
+            cost_minor=h.cost.minor,
+            quoted_on=h.quoted_on,
+            status=h.status,
+            created_at=h.created_at,
+            pay_by=h.pay_by,
+            start_date=h.start_date,
+        )
+        for h in found
+    ]
 
 
 @staff_router.get("/bond-changes")

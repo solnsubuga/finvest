@@ -25,6 +25,7 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.infrastructure.jobs import JobRequest, enqueue, publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
+from app.modules.bonds.events import START_ON_DEPOSIT as BOND_ON_DEPOSIT
 from app.modules.closures.pending import refuse_if_closing
 from app.modules.documents.events import RECEIPT_ON_DEPOSIT
 from app.modules.investments.events import START_ON_DEPOSIT
@@ -157,6 +158,9 @@ _INSERT = text(
 _SELECT = text(f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id")  # noqa: S608
 # Created by migration 0021. An investment has at most one deposit that has not failed.
 LIVE_INVESTMENT_INDEX = "uq_payment_deposits_live_investment"
+LIVE_BOND_INDEX = "uq_payment_deposits_live_bond"
+# What is paid for once, whichever way: one live deposit each, and the index that holds it.
+_PAID_ONCE = {"investment": LIVE_INVESTMENT_INDEX, "bond": LIVE_BOND_INDEX}
 # A deposit taken back, by a reversal or a refund to the card, no longer counts as live.
 _LIVE = "status <> 'failed' AND reversal_id IS NULL AND provider_refund_id IS NULL"
 _HAS_LIVE = text(
@@ -168,7 +172,7 @@ _HAS_LIVE_ID = text(
     f"AND purpose_id = :purpose_id AND {_LIVE} ORDER BY id DESC LIMIT 1"
 )
 _SELECT_LIVE = text(
-    "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "  # noqa: S608
+    "SELECT id, status FROM payment_deposits WHERE purpose_type = :purpose_type "  # noqa: S608
     f"AND purpose_id = :purpose_id AND {_LIVE} LIMIT 1"
 )
 _SELECT_LOCKED = text(
@@ -406,17 +410,24 @@ async def request_system_deposit(
 async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> None:
     """Save a new deposit, or raise `DepositExists` if its investment already has a live one.
 
-    An investment is paid for once, whichever way. Only a failed deposit frees it for another
-    try. For the payments module's own commands, inside their idempotent command.
+    An investment or a bond holding is paid for once, whichever way. Only a failed deposit
+    frees it for another try. For the payments module's own commands, inside their idempotent
+    command.
     """
 
     async def live_deposit() -> DepositExists | None:
-        row = (await session.execute(_SELECT_LIVE, {"purpose_id": values["purpose_id"]})).first()
+        row = (
+            await session.execute(
+                _SELECT_LIVE,
+                {"purpose_type": values["purpose_type"], "purpose_id": values["purpose_id"]},
+            )
+        ).first()
         return DepositExists(row.id, DepositStatus(row.status)) if row else None
 
     # No money comes in while two people check the account is clear to close, whichever way.
     await refuse_if_closing(session, str(values["client_id"]))
-    if values["purpose_type"] == Purpose.INVESTMENT.value:
+    index = _PAID_ONCE.get(str(values["purpose_type"]))
+    if index is not None:
         existing = await live_deposit()
         if existing:
             raise existing
@@ -425,7 +436,7 @@ async def insert_deposit(session: AsyncSession, values: dict[str, object]) -> No
         async with session.begin_nested():
             await session.execute(_INSERT, values)
     except IntegrityError as error:
-        if LIVE_INVESTMENT_INDEX not in str(error.orig):
+        if index is None or index not in str(error.orig):
             raise
         raise (await live_deposit()) or DepositExists(None, None) from None
 
@@ -801,7 +812,7 @@ async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: dateti
             # The business day of the ledger entry. An investment earns from this day.
             "confirmed_on": business_date(now).isoformat(),
         },
-        consumers=[START_ON_DEPOSIT, RECEIPT_ON_DEPOSIT, MONITOR_DEPOSIT],
+        consumers=[START_ON_DEPOSIT, BOND_ON_DEPOSIT, RECEIPT_ON_DEPOSIT, MONITOR_DEPOSIT],
         now=now,
     )
 

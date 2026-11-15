@@ -128,11 +128,35 @@ export const BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.o
 });
 export type BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.infer<typeof BodyUploadProofClientPayoutDestinationsDestinationIdProofPost>;
 
-export const BondStatus = z.enum(["draft", "live", "paused"]);
-export type BondStatus = z.infer<typeof BondStatus>;
-
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
+
+export const HoldingStatus = z.enum(["unpaid", "active", "cancelled"]);
+export type HoldingStatus = z.infer<typeof HoldingStatus>;
+
+export const BondHoldingOut = z.object({
+  accrued_minor: z.number().int(),
+  code: z.string(),
+  cost_minor: z.number().int(),
+  coupon_minor: z.number().int(),
+  coupons_left: z.number().int(),
+  created_at: z.string(),
+  currency: Currency,
+  face_minor: z.number().int(),
+  id: z.string(),
+  maturity_date: z.string(),
+  name: z.string(),
+  next_coupon_date: z.string().nullable(),
+  pay_by: z.string().nullable(),
+  price: z.number().int(),
+  start_date: z.string().nullable(),
+  status: HoldingStatus,
+  still_to_come_minor: z.number().int(),
+});
+export type BondHoldingOut = z.infer<typeof BondHoldingOut>;
+
+export const BondStatus = z.enum(["draft", "live", "paused"]);
+export type BondStatus = z.infer<typeof BondStatus>;
 
 export const BondOut = z.object({
   can_buy: z.boolean(),
@@ -167,6 +191,13 @@ export const BondQuoteOut = z.object({
   total_back_minor: z.number().int(),
 });
 export type BondQuoteOut = z.infer<typeof BondQuoteOut>;
+
+export const BuyBondIn = z.object({
+  code: z.string(),
+  currency: Currency,
+  face_minor: z.number().int(),
+});
+export type BuyBondIn = z.infer<typeof BuyBondIn>;
 
 export const CardOffer = z.object({
   amount: MoneyView,
@@ -1139,6 +1170,7 @@ export const PaymentView = z.object({
   on_page: z.boolean().optional(),
   page_url: z.string().nullable().optional(),
   payer: z.string().nullable(),
+  purpose: z.enum(["investment", "bond"]).optional(),
   receipt: ReceiptView.nullable(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
 });
@@ -1722,6 +1754,93 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: z.array(BankOut),
+  },
+  "GET /client/bond-holdings": {
+    method: "GET",
+    path: "/client/bond-holdings",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BondHoldingOut),
+  },
+  "POST /client/bond-holdings": {
+    method: "POST",
+    path: "/client/bond-holdings",
+    params: z.object({}),
+    query: z.object({}),
+    body: BuyBondIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: BondHoldingOut,
+  },
+  "GET /client/bond-holdings/{holding_id}": {
+    method: "GET",
+    path: "/client/bond-holdings/{holding_id}",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BondHoldingOut,
+  },
+  "GET /client/bond-holdings/{holding_id}/payment": {
+    method: "GET",
+    path: "/client/bond-holdings/{holding_id}/payment",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PaymentView,
+  },
+  "GET /client/bond-holdings/{holding_id}/payments/card": {
+    method: "GET",
+    path: "/client/bond-holdings/{holding_id}/payments/card",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CardOffer,
+  },
+  "POST /client/bond-holdings/{holding_id}/payments/card": {
+    method: "POST",
+    path: "/client/bond-holdings/{holding_id}/payments/card",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 201,
+    response: PaymentView,
+  },
+  "POST /client/bond-holdings/{holding_id}/payments/mobile-money": {
+    method: "POST",
+    path: "/client/bond-holdings/{holding_id}/payments/mobile-money",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: MobileMoneyPayment,
+    bodyKind: "json",
+    idempotent: true,
+    status: 201,
+    response: PaymentView,
   },
   "GET /client/bonds": {
     method: "GET",

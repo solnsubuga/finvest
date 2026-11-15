@@ -37,6 +37,8 @@ Coupon dates are every six calendar months back from the maturity date, on the m
 | Tax on a coupon | The issue's tax rate applied to the coupon, rounded down. Clients see only the coupon after tax. |
 | Accrued interest | The coming coupon × days since the last coupon date ÷ days in the period (actual/actual), rounded down. A buyer pays it on top of the price and gets it back in the full coupon. A seller is paid it on top of the sale price. |
 
+Accrued interest rounds down on a buy as well as on a sale, on purpose: on a buy that favours the client by under a shilling, and the clean amount, which rounds up, is the figure Finvest's spread is in. One rule for every accrued figure is easier to check than two.
+
 Worked example, `UG12K1405378` (16% coupon, 10% tax, matures 14 May 2037), UGX 1,000,000 of face value bought on 16 November 2026 at 98.5:
 
 | | UGX |
@@ -80,6 +82,24 @@ Clients cannot buy in the last coupon period, when only the face value and one c
 
 Issues and prices are readable on every API transaction, including the website's with nobody signed in.
 
+## Buying
+
+A client buys a face value of a live issue at the price in force, as a quote shows it. The purchase is saved as a holding that waits for one payment (`app/modules/bonds/holdings.py`, rules in `domain/holdings.py`):
+
+    unpaid ──► active
+       │
+       └─► cancelled
+
+* The face value, price, accrued interest (as at the day of the quote) and cost are fixed when the client confirms. They hold for 24 hours, shorter than a bill's 72 because a bond's price moves with the market. A client has at most five purchases waiting.
+* The client pays exactly the cost by mobile money (ioTec or Pesapal, as Settings choose) or by card, through the payments module's routes under `/client/bond-holdings/{id}/payments/...`. The payment has purpose `bond` and the holding's ID. Bank transfers are not offered for bonds yet.
+* When the payment is confirmed, the money is in the client's `client.awaiting_start` account under the holding's ID, as for an investment. The worker (`bonds.start_from_deposit`, a consumer of `payments.deposit_confirmed`) moves it to `client.bond_holding` in one entry, `bond.bought`, and the holding is active from that business day. Coupons dated after that day are paid to it.
+* A quote is only good while its next coupon is still to come: the client paid interest up to the quote, and that coupon pays it back. A payment cannot be started on or after the next coupon date, and a payment confirmed then does not start the holding: the money stays waiting, for staff.
+* Anything but the whole cost waiting is not started either. An unpaid holding is cancelled an hour after its window closes (`bonds.cancel_unpaid`, every 15 minutes), unless money or a payment that may still confirm is there.
+
+The database (migration 0491) lets only the client save a holding, for themselves, while the issue is live and at the latest price, and only the worker move one on, once. What was bought never changes, and no holding is removed. Clients see only their own holdings.
+
+The client's view is after tax: the coupon after tax, the coupons still to be paid and everything still to come (those coupons and the face value). It never shows the tax.
+
 ## HTTP routes
 
 | Route | Who | What |
@@ -88,11 +108,15 @@ Issues and prices are readable on every API transaction, including the website's
 | `GET /public/bonds/{code}/quote?face_minor=` | Anyone | What buying that face value costs today (price and accrued interest) and pays to maturity, after tax. 422 with the field code when it cannot be bought. |
 | `GET /client/bonds`, `GET /client/bonds/{code}`, `GET /client/bonds/{code}/quote` | Signed-in client | The same. |
 | `GET /staff/bonds`, `GET /staff/bonds/{code}/quote` | `products.view` | Every issue with its tax, price and when it was set, and Bank of Uganda's usual tax for comparison; a quote with the clean amount. |
+| `POST /client/bond-holdings` | Signed-in client, with an idempotency key | Buy a face value at today's price. 422 as the quote refuses, 409 with five waiting. |
+| `GET /client/bond-holdings`, `GET /client/bond-holdings/{id}` | Signed-in client | Their holdings, unpaid and active, after tax. |
+| `GET` and `POST /client/bond-holdings/{id}/payments/card`, `POST .../payments/mobile-money`, `GET .../payment` | Signed-in client | Paying the cost, as for an investment. The payment shows `purpose: "bond"`, with the holding's ID in `investment_id`. |
+| `GET /staff/bond-holdings?status=` | `investments.view` | Every client's holdings with what each paid. |
 | `GET /staff/bond-changes?status=` | `products.view` | New issues, prices, pauses and openings, newest first. |
 | `POST /staff/bond-changes/new-issue`, `/price`, `/status`, `POST /staff/bond-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding, with the second person enforced in the database. Approving asks the person to confirm it is them. |
 
-Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price.
+Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested` and `bonds.holding_started`.
 
 ## Not built yet
 
-Buying (paid for like an investment), the coupon run, selling early through the dealing desk, maturity, and the client app and console screens. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.
+The coupon run, selling early through the dealing desk, maturity, and the client app screens. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.

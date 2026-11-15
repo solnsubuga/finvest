@@ -79,7 +79,7 @@ class InvestmentJobs:
         data = data if isinstance(data, Mapping) else {}
         purpose_type, investment_id = data.get("purpose_type"), data.get("purpose_id")
         if purpose_type != "investment":
-            # A payment for a goal. Not ours.
+            # A payment for a goal or a bond holding. Not ours.
             await context.apply(_nothing)
             return
         if not isinstance(investment_id, str):
