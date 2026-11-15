@@ -1,22 +1,22 @@
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, TextInput, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { byMonth, longDay, shortDay } from "@/activity/build";
 import { useActivity } from "@/activity/ActivityProvider";
 import { saveCsv } from "@/activity/saveCsv";
-import { toCsv } from "@/activity/table";
+import { matches, toCsv } from "@/activity/table";
 import { shownRows, WideActivity, WideFilter } from "@/activity/WideActivity";
 import { ActivityItem, ActivityKind } from "@/activity/types";
 import { AppPage } from "@/components/AppPage";
 import { Card, Notice } from "@/components/Blocks";
-import { Button } from "@/components/Button";
+import { Button, TextLink } from "@/components/Button";
 import { Icon, IconName } from "@/components/Icon";
 import { PillButton } from "@/components/PillButton";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
-import { colors, COLUMN_WIDTH, fontSizes, radii } from "@/theme";
+import { colors, COLUMN_WIDTH, fontFor, fontSizes, radii } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
 
 type State = { status: "loading" } | { status: "error" } | { status: "ready"; items: ActivityItem[]; since: string | null; /** When it was read, for "Last 30 days". */ readAt: number };
@@ -68,7 +68,11 @@ export default function Activity() {
     }, [client, attempt]),
   );
 
-  const shown = state.status === "ready" ? state.items.filter((item) => filter === "all" || item.kind === filter) : [];
+  const [phoneQuery, setPhoneQuery] = useState("");
+  const shown =
+    state.status === "ready"
+      ? state.items.filter((item) => (filter === "all" || item.kind === filter) && matches(item, phoneQuery))
+      : [];
   const wideShown = state.status === "ready" ? shownRows(state.items, wideFilter, recent, query, state.readAt) : [];
 
   const download = async () => {
@@ -159,10 +163,19 @@ export default function Activity() {
                 );
               })}
             </View>
+            <TextInput
+              accessibilityLabel="Search activity"
+              placeholder="Search by what, how or amount"
+              placeholderTextColor={colors.muted}
+              value={phoneQuery}
+              onChangeText={setPhoneQuery}
+              style={styles.search}
+              testID="activity-search"
+            />
             {shown.length === 0 ? (
               <Card>
                 <Txt color={colors.muted} testID="activity-empty">
-                  {EMPTY[filter]}
+                  {phoneQuery.trim() ? "Nothing matches. Try another search." : EMPTY[filter]}
                 </Txt>
               </Card>
             ) : (
@@ -191,6 +204,7 @@ export default function Activity() {
                 {`This list goes back to ${longDay(state.since)}. For anything older, ask for a statement in Documents.`}
               </Txt>
             ) : null}
+            <TextLink label="Get a statement" onPress={() => router.navigate("/documents")} testID="activity-statement" />
           </>
         ) : null}
       </View>
@@ -201,7 +215,8 @@ export default function Activity() {
 function Row({ item, first, onPress }: { item: ActivityItem; first: boolean; onPress?: () => void }) {
   const tone =
     item.status === "failed" ? colors.danger : item.status === "under_way" ? colors.warningText : colors.muted;
-  const amount = `${item.direction === "in" ? "+" : ""}${formatMoney(item.amount)}`;
+  // Signed as on the canvas: money to the client is plus, money the client paid is minus.
+  const amount = `${item.direction === "in" ? "+" : "\u2212"}${formatMoney(item.amount)}`;
   const content = (
     <>
       <View style={[styles.icon, item.kind === "interest" && { backgroundColor: colors.lime }]}>
@@ -260,6 +275,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipActive: { backgroundColor: colors.black, borderColor: colors.black },
+  search: {
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    fontFamily: fontFor("medium"),
+    fontSize: 14,
+    color: colors.ink,
+  },
   row: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16, minHeight: 68 },
   divider: { borderTopWidth: 1, borderTopColor: colors.divider },
   icon: {

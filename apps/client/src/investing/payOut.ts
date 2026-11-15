@@ -7,7 +7,8 @@ export type Elsewhere = { title: string; message: string; action: { label: strin
 
 /**
  * What to say when this investment has nothing waiting to be paid out: it may still be running,
- * not yet paid for, or already paid. Only the last is "on its way".
+ * not yet paid for, never paid for, sent to someone, reversed, or already paid. Only money that
+ * was paid out is "on its way".
  */
 export function nothingToPayOut(investment: Investment): Elsewhere {
   if (investment.status === "active" && investment.withdrawalRequestedAt) {
@@ -38,5 +39,27 @@ export function nothingToPayOut(investment: Investment): Elsewhere {
       action: { label: "Pay now", href: `/pay/${investment.id}`, testID: "pay-out-pay" },
     };
   }
-  return { title: "Already paid out", message: describeInvestingError(new InvestingError("already_sent")), action: null };
+  if (investment.status === "cancelled") {
+    return {
+      title: "Nothing to pay out",
+      message: "This investment was not paid for in time, so it never started and holds no money. You can start a new one.",
+      action: { label: "Invest again", href: `/invest/${investment.productCode}`, testID: "pay-out-invest-again" },
+    };
+  }
+  if (investment.status === "transferred") {
+    return {
+      title: "Nothing to pay out",
+      message: "You sent this investment to another Finvest client, so it holds no money now. What you kept, if any, is in a new investment on the same terms.",
+      action: { label: "See your investments", href: "/portfolio", testID: "pay-out-portfolio" },
+    };
+  }
+  if (investment.status === "unwound") {
+    // The API never sends one to a client; said plainly in case a link to it is opened.
+    return {
+      title: "Nothing to pay out",
+      message: "Finvest reversed this investment, so it holds no money. If any of your money is to come back to you, we tell you when it is sent.",
+      action: null,
+    };
+  }
+  return { title: investment.status === "withdrawn" ? "Withdrawn early" : "Already paid out", message: describeInvestingError(new InvestingError("already_sent")), action: null };
 }

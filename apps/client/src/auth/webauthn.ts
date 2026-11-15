@@ -1,4 +1,5 @@
 import { Platform } from "react-native";
+import { loadNativePasskeys, type NativePasskeys } from "./nativePasskeys";
 
 /**
  * Passkeys. The API sends the options as JSON with base64url strings where
@@ -17,22 +18,10 @@ import { Platform } from "react-native";
 
 type Json = Record<string, unknown>;
 
-type NativePasskeys = {
-  isSupported(): boolean;
-  create(request: Json): Promise<Json>;
-  get(request: Json): Promise<Json>;
-};
-
-/** The native module, loaded only on a phone. A web build never bundles a call to it. */
+/** The native module, loaded only on a phone. The web build has its own file with none. */
 function nativePasskeys(): NativePasskeys | null {
   if (Platform.OS === "web" || process.env.EXPO_PUBLIC_NATIVE_PASSKEYS !== "1") return null;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    return (require("react-native-passkey") as { Passkey: NativePasskeys }).Passkey;
-  } catch {
-    // Expo Go and other builds without the native module.
-    return null;
-  }
+  return loadNativePasskeys();
 }
 
 /**

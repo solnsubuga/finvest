@@ -140,3 +140,50 @@ describe("rates screen", () => {
     expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
   });
 });
+
+describe("last bought tile", () => {
+  const buys = [
+    { productCode: "TREA-91", atAuction: false, settledOn: "2026-11-06", maturesOn: "2027-02-05", yieldBps: 1185 },
+    { productCode: "TREA-182", atAuction: true, settledOn: "2026-11-13", maturesOn: "2027-05-14", yieldBps: 1312 },
+  ];
+  const api = () => createStubCatalogueApi({ me: ME, today: TODAY });
+
+  it("shows the yield of the newest settled purchase", async () => {
+    render(<RatesScreen api={api()} me={ME} canChange today={() => TODAY} lastBuys={async () => buys} />);
+    expect(await screen.findByText("13.12%")).toBeInTheDocument();
+    expect(screen.getByText("182 Day Treasury Bill, at auction, 13 Nov 2026. Yield before tax")).toBeInTheDocument();
+  });
+
+  it("says when nothing has been bought", async () => {
+    render(<RatesScreen api={api()} me={ME} canChange today={() => TODAY} lastBuys={async () => []} />);
+    expect(await screen.findByText("Nothing yet")).toBeInTheDocument();
+  });
+
+  it("keeps the rates on screen when the dealing figures cannot be read", async () => {
+    render(<RatesScreen api={api()} me={ME} canChange today={() => TODAY} lastBuys={() => Promise.reject(new Error("offline"))} />);
+    expect(await screen.findByText("The dealing figures could not be read")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Rate history" })).toBeInTheDocument();
+  });
+
+  it("is left out without a reader", async () => {
+    renderRates();
+    await waitingCard();
+    expect(screen.queryByText("Last bought")).not.toBeInTheDocument();
+  });
+});
+
+describe("last bill auction tile", () => {
+  it("shows the Bank of Uganda's yields before tax, shortest term first", async () => {
+    const auction = {
+      heldOn: "2026-10-21",
+      source: "Bank of Uganda, issue 1236",
+      securities: [
+        { termDays: 182 as const, isin: "B", maturesOn: "2027-04-22", netYieldPercent: "10.72", grossYieldPercent: "13.400", taxPercent: "20", acceptedBillions: "37.7" },
+        { termDays: 91 as const, isin: "A", maturesOn: "2027-01-21", netYieldPercent: "9.00", grossYieldPercent: "11.249", taxPercent: "20", acceptedBillions: "23.1" },
+      ],
+    };
+    render(<RatesScreen api={createStubCatalogueApi({ me: ME, today: TODAY })} me={ME} canChange today={() => TODAY} auction={auction} />);
+    expect(await screen.findByText("21 Oct 2026")).toBeInTheDocument();
+    expect(screen.getByText("91 day 11.249%, 182 day 13.400%. Before tax, Bank of Uganda")).toBeInTheDocument();
+  });
+});

@@ -113,6 +113,7 @@ describe("investing", () => {
     const bill = await screen.findByTestId("product-TREA-91");
     expect(within(bill).getByText("10.62%")).toBeTruthy();
     expect(within(bill).getByText("From UGX 100,000")).toBeTruthy();
+    expect(within(bill).getByText("Interest paid at maturity")).toBeTruthy();
     expect(within(screen.getByTestId("product-USD-BOND")).getByText("Paused for new investments")).toBeTruthy();
     expect(screen.queryByText(/15%/)).toBeNull();
     expect(screen.queryByText(/12\.5%/)).toBeNull();
@@ -128,6 +129,17 @@ describe("investing", () => {
     expect(within(quote).getByLabelText("You get back: UGX 1,026,490")).toBeTruthy();
     expect(within(quote).getByLabelText("Matures on: 12 Feb 2027")).toBeTruthy();
     expect(screen.getByTestId("amount").props.value).toBe("1,000,000");
+  });
+
+  it("shows the product's terms in a facts table", async () => {
+    await signIn();
+    await fireEvent.press(screen.getByLabelText("Invest"));
+    await fireEvent.press(await screen.findByTestId("product-TREA-91"));
+    const facts = await screen.findByTestId("product-facts");
+    expect(within(facts).getByLabelText("Term: 91 days")).toBeTruthy();
+    expect(within(facts).getByLabelText("Smallest amount: UGX 100,000")).toBeTruthy();
+    expect(within(facts).getByLabelText("Interest: Interest paid at maturity")).toBeTruthy();
+    expect(within(facts).getByLabelText("Starts: The day your payment is confirmed")).toBeTruthy();
   });
 
   it("refuses an amount below the minimum", async () => {
@@ -217,6 +229,30 @@ describe("investing", () => {
     expect(screen.getByLabelText("Interest at maturity, after tax: UGX 132,448")).toBeTruthy();
     expect(screen.getByLabelText("When the term ends: Roll over")).toBeTruthy();
     expect(screen.queryByText(/tax:|15%/)).toBeNull();
+  });
+
+  it("shows each running investment's progress through its term in the portfolio", async () => {
+    mockSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    const card = await screen.findByLabelText(/^91 Day Treasury Bill, Running, worth UGX [\d,]+, day \d+ of 91$/);
+    expect(within(card).getByText(/^Day \d+ of 91$/)).toBeTruthy();
+  });
+
+  it("shows what each maturity choice comes to, and what happens if nothing changes", async () => {
+    mockSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await fireEvent.press(await screen.findByLabelText(/^91 Day Treasury Bill, Running/));
+    await fireEvent.press(await screen.findByTestId("change-maturity"));
+    expect(await screen.findByTestId("maturity-roll_over-amount")).toHaveTextContent(/^UGX [\d,]+ starts a new term$/);
+    expect(screen.getByTestId("maturity-pay_out-amount")).toHaveTextContent(/^UGX [\d,]+ paid to you$/);
+    expect(screen.getByTestId("maturity-pay_interest-amount")).toHaveTextContent(/^UGX 132,448 paid to you, UGX [\d,]+ stays invested$/);
+    expect(screen.getByTestId("maturity-if-nothing")).toHaveTextContent(/^If you do nothing, on .+ everything starts a new term at the rate on that day\.$/);
   });
 
   it("shows how far through its term a running investment is, and adds more to the same product", async () => {

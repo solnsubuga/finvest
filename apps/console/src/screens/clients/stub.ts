@@ -167,6 +167,36 @@ function samples(now: number): ClientPage[] {
   ];
 }
 
+/** Sample records a client might quote a short reference for, with the client they belong to. */
+const SAMPLE_RECORDS: readonly { id: string; clientId: string; kind: string; prefix: string }[] = [
+  { id: "-NstubPayment0000042", clientId: "-NstubClient00000042", kind: "Payment", prefix: "FV" },
+  { id: "-NstubPayout00000017", clientId: "-NstubClient00000017", kind: "Payout", prefix: "FV" },
+  { id: "-NstubStatement00058", clientId: "-NstubClient00000058", kind: "Statement", prefix: "ST" },
+];
+
+/** The API's short reference rule (app/shared/references.py), for the sample records only. */
+export function sampleReference(id: string, prefix: string): string {
+  const push = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz";
+  const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+  let value = 0;
+  for (const char of id.slice(-8)) value = value * 64 + push.indexOf(char);
+  let code = "";
+  for (let i = 0; i < 10; i += 1) {
+    code = crockford[value % 32] + code;
+    value = Math.floor(value / 32);
+  }
+  return `${prefix}-${code.slice(0, 5)}-${code.slice(5)}`;
+}
+
+/** Whatever a person typed for a reference, as the API reads it: any case, spaces, O for 0. */
+function referenceTyped(text: string): { prefix: string | null; code: string } | null {
+  const cleaned = text.toUpperCase().replace(/\s/g, "");
+  const found = /^(?:([A-Z]{2})-?)?([0-9A-Z]{5})-?([0-9A-Z]{5})$/.exec(cleaned);
+  if (!found) return null;
+  const code = `${found[2] ?? ""}${found[3] ?? ""}`.replace(/O/g, "0").replace(/[IL]/g, "1");
+  return { prefix: found[1] ?? null, code };
+}
+
 function digits(value: string): string {
   const only = value.replace(/\D/g, "");
   return only.startsWith("0") ? `256${only.slice(1)}` : only;
@@ -232,8 +262,17 @@ export function createStubClientsApi(
         return name !== "" && words.every((word) => name.includes(word));
       };
       const emailed = (page: ClientPage) => words.length === 1 && (page.account.email?.toLowerCase().includes(text) ?? false);
+      const typed = referenceTyped(query);
+      const byReference = new Map<string, string>();
+      for (const record of SAMPLE_RECORDS) {
+        const reference = sampleReference(record.id, record.prefix);
+        if (typed && (typed.prefix === null || typed.prefix === record.prefix) && reference.replace(/-/g, "").endsWith(typed.code)) {
+          byReference.set(record.clientId, `${record.kind} ${reference}`);
+        }
+      }
       const one = text ? pages.find(exact) : undefined;
-      const found = (one ? [one] : pages.filter((page) => !text || named(page) || emailed(page)))
+      const referenced = pages.filter((page) => byReference.has(page.account.id));
+      const found = (one ? [one] : referenced.length ? referenced : pages.filter((page) => !text || named(page) || emailed(page)))
         .filter((page) => status === null || page.account.status === status)
         .sort((a, b) => b.account.createdAt.localeCompare(a.account.createdAt));
       const start = after ? found.findIndex((page) => page.account.id === after) + 1 : 0;
@@ -248,6 +287,7 @@ export function createStubClientsApi(
           email: page.account.email,
           status: page.account.status,
           createdAt: page.account.createdAt,
+          foundBy: byReference.get(page.account.id) ?? null,
         })),
         nextAfter: !text && last && start + LIST_PAGE < found.length ? last.account.id : null,
         more: false,

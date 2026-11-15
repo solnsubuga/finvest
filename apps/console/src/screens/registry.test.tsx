@@ -5,12 +5,14 @@ import { SCREENS, screensFrom } from "./registry.ts";
 describe("screen registry", () => {
   it("keys a screen by its folder name", () => {
     const Page = () => null;
+    const load = async () => ({ default: Page });
     const screens = screensFrom({
-      "./identity-checks/index.tsx": { default: Page },
-      "./clients/index.tsx": { default: Page },
+      "./identity-checks/index.tsx": load,
+      "./clients/index.tsx": load,
     });
     expect([...screens.keys()]).toEqual(["identity-checks", "clients"]);
-    expect(screens.get("clients")).toBe(Page);
+    // Each screen is fetched only when it is first drawn.
+    expect(screens.get("clients")).toBeDefined();
   });
 
   it("only holds screens that are in the menu", () => {

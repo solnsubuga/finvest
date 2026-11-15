@@ -68,4 +68,21 @@ describe("the pay out screen for an investment with nothing waiting", () => {
     expect(found.title).toBe("Already paid out");
     expect(found.message).toContain("already on its way");
   });
+
+  it("gives a cancelled, sent or reversed investment its own words, never on its way", () => {
+    const cancelled = nothingToPayOut({ ...running, status: "cancelled", startDate: null, canWithdraw: false });
+    expect(cancelled.message).toContain("not paid for in time");
+    expect(cancelled.action?.href).toBe("/invest/TREA-91");
+    const sent = nothingToPayOut({ ...running, status: "transferred", canWithdraw: false, canSend: false });
+    expect(sent.message).toContain("sent this investment to another Finvest client");
+    expect(sent.action?.href).toBe("/portfolio");
+    const reversed = nothingToPayOut({ ...running, status: "unwound", canWithdraw: false });
+    expect(reversed.message).toContain("reversed");
+    expect(reversed.action).toBeNull();
+    for (const found of [cancelled, sent, reversed]) expect(found.message).not.toContain("on its way");
+  });
+
+  it("names an early withdrawal that has been paid", () => {
+    expect(nothingToPayOut({ ...running, status: "withdrawn", canWithdraw: false }).title).toBe("Withdrawn early");
+  });
 });

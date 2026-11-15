@@ -58,6 +58,14 @@ function refusal(status: number, code: string) {
 }
 
 describe("complaints over HTTP", () => {
+  it("exports the register with a POST, which the API records on the audit trail", async () => {
+    const download = vi.fn<typeof fetch>().mockResolvedValue(new Response("Reference\r\n", { status: 200, headers: { "Content-Type": "text/csv" } }));
+    const register = await createHttpComplaintsApi(createHttp("https://api.test", download)).exportRegister();
+    expect(download.mock.calls[0]?.[0]).toBe("https://api.test/staff/complaints.csv");
+    expect(download.mock.calls[0]?.[1]?.method).toBe("POST");
+    expect(register.filename).toMatch(/^finvest-complaints-register-\d{4}-\d{2}-\d{2}\.csv$/);
+  });
+
   it("reads the register with its figures", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       reply(200, {

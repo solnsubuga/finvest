@@ -21,7 +21,8 @@ import {
   type SupportApi,
   type Topic,
 } from "./api.ts";
-import { AboutClient, ChatPanel, InboxItem, UNKNOWN_CLIENT } from "./Chat.tsx";
+import { AboutClient, ChatPanel, InboxItem, UNKNOWN_CLIENT, type ClientMoney } from "./Chat.tsx";
+import { createHttpClientsApi } from "../clients/http.ts";
 import { SavedReplies } from "./SavedReplies.tsx";
 import { createHttpSupportApi } from "./http.ts";
 import { createStubSupportApi } from "./stub.ts";
@@ -41,6 +42,8 @@ interface SupportScreenProps {
   now?: () => Date;
   /** How often the open tab asks for new messages. 0 turns it off, for tests. */
   pollMs?: number;
+  /** What the client has invested and waiting to be paid. Left out when the role cannot see clients. */
+  money?: (clientId: string) => Promise<ClientMoney>;
 }
 
 export function SupportScreen({
@@ -50,7 +53,11 @@ export function SupportScreen({
   newKey = () => crypto.randomUUID(),
   now = () => new Date(),
   pollMs = 15_000,
+  money,
 }: SupportScreenProps) {
+  // Undefined while being read, null when it could not be.
+  const [monies, setMonies] = useState<Record<string, ClientMoney | null>>({});
+  const askedMoney = useRef(new Set<string>());
   const [tab, setTab] = useState<Tab>("open");
   const [inbox, setInbox] = useState<Load<InboxRow[]>>({ state: "loading" });
   const [openCount, setOpenCount] = useState<number | null>(null);
@@ -267,6 +274,16 @@ export function SupportScreen({
   ];
   const savedList = saved.state === "ready" ? saved.value : [];
 
+  const openClient = chat?.state === "ready" ? chat.value.clientId : null;
+  useEffect(() => {
+    if (!money || !openClient || askedMoney.current.has(openClient)) return;
+    askedMoney.current.add(openClient);
+    void money(openClient).then(
+      (found) => setMonies((known) => ({ ...known, [openClient]: found })),
+      () => setMonies((known) => ({ ...known, [openClient]: null })),
+    );
+  }, [money, openClient]);
+
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -377,7 +394,9 @@ export function SupportScreen({
             />
           )}
           <aside aria-label="Client" className="flex min-w-0 flex-[1_1_260px] flex-col gap-4">
-            {chat?.state === "ready" ? <AboutClient card={cards[chat.value.clientId]} /> : null}
+            {chat?.state === "ready" ? (
+              <AboutClient card={cards[chat.value.clientId]} {...(money ? { money: monies[chat.value.clientId] } : {})} />
+            ) : null}
           </aside>
         </div>
       )}
@@ -402,18 +421,36 @@ function Failure({ title, message, onRetry }: { title: string; message: string; 
 export default function SupportPage() {
   const { session } = useAuth();
   // Sample chats under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
-  const [{ api, directory }] = useState<{ api: SupportApi; directory: Directory }>(() => {
+  const [{ api, directory, money }] = useState<{ api: SupportApi; directory: Directory; money?: (clientId: string) => Promise<ClientMoney> }>(() => {
     if (isStubAuth() && session) {
       const me = { id: session.staffId, name: session.name };
       // Under the stub, `?sample=empty` shows the screen with nothing in it and `?sample=offline` as if Finvest could not be reached.
       const sample = new URLSearchParams(window.location.search).get("sample");
       if (sample === "offline") return { api: notConnectedSupportApi, directory: createStubDirectory(me) };
-      return { api: createStubSupportApi(me, Date.now, sample === "empty" ? "empty" : "sample"), directory: createStubDirectory(me) };
+      return { api: createStubSupportApi(me, Date.now, sample === "empty" ? "empty" : "sample"), directory: createStubDirectory(me), money: stubMoney };
     }
     const base = apiBaseUrl();
     if (!base) return { api: notConnectedSupportApi, directory: emptyDirectory };
     const http = createHttp(base);
-    return { api: createHttpSupportApi(http), directory: createHttpDirectory(http) };
+    // The client page carries their ledger balances. Only for a role that may see clients.
+    const clients = session && can(session, "clients.view") ? createHttpClientsApi(http) : null;
+    return {
+      api: createHttpSupportApi(http),
+      directory: createHttpDirectory(http),
+      ...(clients ? { money: async (clientId: string) => (await clients.client(clientId)).owed } : {}),
+    };
   });
-  return <SupportScreen api={api} directory={directory} canReply={session ? can(session, "support.reply") : false} />;
+  return <SupportScreen api={api} directory={directory} canReply={session ? can(session, "support.reply") : false} {...(money ? { money } : {})} />;
+}
+
+/** Sample balances for the sample chats. */
+async function stubMoney(clientId: string): Promise<ClientMoney> {
+  const samples: Record<string, ClientMoney> = {
+    "sample-client-amara": [
+      { accountCode: "client.holding", accountReference: "TB91-0042", minor: 2_500_000, currency: "UGX", productName: null, maturesOn: null },
+      { accountCode: "client.payout_pending", accountReference: null, minor: 150_000, currency: "UGX", productName: null, maturesOn: null },
+    ],
+    "sample-client-peter": [{ accountCode: "client.holding", accountReference: "TB182-0017", minor: 10_000_000, currency: "UGX", productName: null, maturesOn: null }],
+  };
+  return samples[clientId] ?? [];
 }

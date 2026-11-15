@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Notice, StepProgress } from "@/components/Blocks";
@@ -102,6 +102,11 @@ export default function GoalPlanScreen() {
   };
 
   const tooSoon = planState.status === "ready" && planState.plan === null;
+
+  // Opened without step 1, from a saved or typed address: start the goal from the beginning.
+  if (!params.category || !params.name?.trim()) {
+    return <Redirect href="/goals/new" />;
+  }
 
   return (
     <Screen

@@ -98,8 +98,8 @@ Limits are versioned by effective date. The version in force on the business day
 | Limit | Value at launch |
 | --- | --- |
 | Mobile money, one payout | UGX 5,000,000. No version may set it higher. |
-| Mobile money, per day | Not set |
-| Bank, one payout and per day | Not set |
+| Mobile money, per day | Not set, so no limit. The app and the console show "No limit". |
+| Bank, one payout and per day | Not set, so no limit. The app and the console show "No limit". |
 | Held for staff review above | UGX 10,000,000. A working default until the owner confirms it. |
 
 A new version is inserted by the staff member who approves it, names a different staff member as proposer, and is never edited afterwards. The launch version is seeded by migration 0031.

@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "node scripts/face-assets.mjs && expo start --web",
-    "build:web": "node scripts/face-assets.mjs && expo export --platform web && node scripts/route-chunks.mjs && node scripts/start-hints.mjs",
+    "build:web": "node scripts/face-assets.mjs && expo export --platform web && node scripts/route-chunks.mjs && node scripts/start-hints.mjs && node scripts/script-budget.mjs",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "jest"

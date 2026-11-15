@@ -1,14 +1,16 @@
 import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Href, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Icon } from "@/components/Icon";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
+import { PillButton } from "@/components/PillButton";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { useGoals } from "@/goals/GoalsProvider";
+import { kampalaToday, nextPayday } from "@/goals/dates";
 import { LockCard, paydayLine } from "@/goals/Keep";
 import { goalSubtitle, ProgressBar, StandingBadge } from "@/goals/Parts";
 import { savingLine } from "@/goals/savings";
@@ -116,6 +118,8 @@ export default function GoalDetail() {
               </Txt>
             </View>
           </View>
+
+          {open ? <QuickActions goal={goal} onOpen={(href) => router.push(href)} /> : null}
 
           {goal.progress.awaitingPayment.minor > 0 ? (
             <Notice tone="warning">
@@ -322,7 +326,55 @@ function SavingRow({
   );
 }
 
+/**
+ * The canvas's row under the goal's figures: the next saving, and shortcuts to change the plan
+ * or take a saving out. Each saving comes out whole, so Withdraw goes straight to it only when
+ * there is one; with more, the client opens the saving they want from the list below.
+ */
+function QuickActions({ goal, onOpen }: { goal: Goal; onOpen: (href: Href) => void }) {
+  const running = goal.savings.filter((saving) => saving.status === "active");
+  const withdrawable = !goal.lockedUntil && running.length === 1 ? running[0] : null;
+  const next = goal.plan
+    ? goal.payday
+      ? `${formatMoney(goal.plan.saving)} on your payday, ${formatDay(nextPayday(goal.payday, kampalaToday()))}`
+      : `${formatMoney(goal.plan.saving)} whenever you are ready`
+    : null;
+  return (
+    <View style={{ gap: 10 }} testID="goal-quick-actions">
+      {next ? (
+        <View style={styles.next} accessible accessibilityLabel={`Next saving: ${next}`} testID="goal-next-saving">
+          <Txt size={13} color={colors.muted}>
+            Next saving
+          </Txt>
+          <Txt size={14} weight="bold" style={{ flexShrink: 1, textAlign: "right" }}>
+            {next}
+          </Txt>
+        </View>
+      ) : null}
+      <View style={styles.quick}>
+        <PillButton label="Edit plan" onPress={() => onOpen(`/goals/edit/${goal.id}`)} testID="goal-edit-plan" />
+        {withdrawable ? (
+          <PillButton label="Withdraw" onPress={() => onOpen(`/investment/withdraw/${withdrawable.investmentId}`)} testID="goal-withdraw" />
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  next: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  quick: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   hero: { backgroundColor: colors.black, borderRadius: 24, padding: 20, gap: 8 },
   heroHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   amounts: { flexDirection: "row", alignItems: "baseline", gap: 8, flexWrap: "wrap" },

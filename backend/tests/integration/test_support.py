@@ -1052,6 +1052,7 @@ async def test_complaints_over_http(api: Api) -> None:
 
     await api.staff("finance")
     assert (await api.http.get("/staff/complaints")).status_code == 403
+    assert (await api.http.post("/staff/complaints.csv")).status_code == 403
     grace = await api.staff("support")
     register = (await api.http.get("/staff/complaints")).json()
     assert register["summary"]["target_working_days"] == 5
@@ -1085,6 +1086,18 @@ async def test_complaints_over_http(api: Api) -> None:
         },
     )
     assert float_amount.status_code == 422
+    exported = await api.http.post("/staff/complaints.csv")
+    assert exported.status_code == 200, exported.text
+    assert exported.headers["content-type"].startswith("text/csv")
+    assert exported.headers["cache-control"] == "no-store"
+    lines = exported.text.split("\r\n")
+    assert lines[0].startswith("Reference,Received,Received by,Category,Summary,Client account")
+    [mine] = [line for line in lines if line.startswith(complaint["reference"] + ",")]
+    assert ",withdrawals,Payout did not arrive," in mine and ",new," in mine
+    [staff_logged] = [line for line in lines if "Fee was not explained" in line]
+    assert ",5000,UGX," in staff_logged
+    # The free text a client wrote stays out of the file.
+    assert "Since Tuesday." not in exported.text and "Called on Friday." not in exported.text
     route = f"/staff/complaints/{complaint['id']}"
     owned = await api.http.put(f"{route}/owner", json={"owner_id": grace.id})
     assert owned.json()["owner_id"] == grace.id

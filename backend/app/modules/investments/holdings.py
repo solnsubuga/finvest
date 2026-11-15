@@ -917,3 +917,17 @@ async def withdrawable_for_client(
             requested=investment.withdrawal_requested_at is not None,
         )
     ]
+
+
+_INVESTMENTS_WITH_SUFFIX = text(
+    "SELECT id, client_id FROM investments WHERE right(id, 8) = :suffix ORDER BY id DESC"
+)
+
+
+async def investments_with_reference(session: AsyncSession, suffix: str) -> list[tuple[str, str]]:
+    """(investment ID, client ID) for each investment whose short reference leads to this suffix.
+
+    `suffix` comes from `app.shared.references.push_id_suffix`. Almost always one row or none.
+    """
+    rows = await session.execute(_INVESTMENTS_WITH_SUFFIX, {"suffix": suffix})
+    return [(row.id, row.client_id) for row in rows]

@@ -7,6 +7,7 @@ import {
   type Complaint,
   type ComplaintDetail,
   type ComplaintsApi,
+  registerFilename,
   type HistoryItem,
   type PendingOutcome,
   type RejectedOutcome,
@@ -276,6 +277,17 @@ export function createStubComplaintsApi(
   };
 
   return {
+    exportRegister() {
+      const cell = (text: string) => `"${text.replace(/"/g, '""')}"`;
+      const lines = [
+        "Reference,Received,Category,Summary,Status",
+        ...stored.map((item) => {
+          const { complaint } = copy(item);
+          return [complaint.reference, complaint.receivedAt, complaint.category, cell(complaint.summary), complaint.status].join(",");
+        }),
+      ];
+      return Promise.resolve({ file: new Blob([`${lines.join("\r\n")}\r\n`], { type: "text/csv" }), filename: registerFilename() });
+    },
     register(show) {
       const all = stored.map((item) => copy(item).complaint);
       const since = quarterStart(today());

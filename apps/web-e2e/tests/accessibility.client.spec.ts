@@ -98,6 +98,14 @@ test("the screens before sign-in meet WCAG 2.1 AA", async ({ page }) => {
   expect(await violations(page), "we will call you").toEqual([]);
 });
 
+test("the not-found page meets WCAG 2.1 AA", async ({ page }) => {
+  await page.goto("/this-page-does-not-exist");
+  await expect(page.getByText("We could not find that page")).toBeVisible();
+  // The page's start loader fades out for a moment after the first screen is drawn.
+  await expect(page.locator("#finvest-start")).toHaveCount(0);
+  expect(await violations(page), "not found").toEqual([]);
+});
+
 test("every main screen after sign-in meets WCAG 2.1 AA", async ({ page }) => {
   test.setTimeout(180_000);
   await page.goto("/");

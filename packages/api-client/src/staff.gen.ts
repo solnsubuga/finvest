@@ -903,6 +903,7 @@ export const ClientRowView = z.object({
   account_number: z.string().nullable(),
   created_at: z.string(),
   email: z.string().nullable(),
+  found_by: z.string().nullable().optional(),
   id: z.string(),
   phone: z.string(),
   status: z.enum(["unclaimed", "active", "locked", "closed"]),
@@ -1806,6 +1807,23 @@ export type JournalRequest = z.infer<typeof JournalRequest>;
 
 export const Kind = z.enum(["company", "group"]);
 export type Kind = z.infer<typeof Kind>;
+
+export const LastBuyOut = z.object({
+  at_auction: z.boolean(),
+  currency: Currency,
+  face_minor: z.number().int(),
+  matures_on: z.string(),
+  paid_minor: z.number().int(),
+  product_code: z.string(),
+  settled_on: z.string(),
+  yearly_yield_bps: z.number().int().nullable(),
+});
+export type LastBuyOut = z.infer<typeof LastBuyOut>;
+
+export const LastBuysOut = z.object({
+  buys: z.array(LastBuyOut),
+});
+export type LastBuysOut = z.infer<typeof LastBuysOut>;
 
 export const LiftView = z.object({
   address_hash: z.string(),
@@ -4509,6 +4527,17 @@ export const operations = {
     status: 201,
     response: StaffComplaint,
   },
+  "POST /staff/complaints.csv": {
+    method: "POST",
+    path: "/staff/complaints.csv",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: null,
+  },
   "GET /staff/complaints/{complaint_id}": {
     method: "GET",
     path: "/staff/complaints/{complaint_id}",
@@ -4948,6 +4977,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: DeskOut,
+  },
+  "GET /staff/dealing/last-buys": {
+    method: "GET",
+    path: "/staff/dealing/last-buys",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: LastBuysOut,
   },
   "POST /staff/dealing/orders": {
     method: "POST",

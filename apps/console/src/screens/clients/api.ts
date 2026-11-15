@@ -125,6 +125,8 @@ export interface ClientRow {
   email: string | null;
   status: ClientStatus;
   createdAt: string;
+  /** For a search by a short reference, what it named, such as "Payment FV-3R0D5-3X44V". */
+  foundBy: string | null;
 }
 
 export interface ClientList {

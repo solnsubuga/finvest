@@ -943,3 +943,17 @@ async def newest_deposits(
         },
     )
     return [_deposit(row) for row in rows.all()]
+
+
+_DEPOSITS_WITH_SUFFIX = text(
+    "SELECT id, client_id FROM payment_deposits WHERE right(id, 8) = :suffix ORDER BY id DESC"
+)
+
+
+async def deposits_with_reference(session: AsyncSession, suffix: str) -> list[tuple[str, str]]:
+    """(deposit ID, client ID) for each payment whose short reference leads to this suffix.
+
+    `suffix` comes from `app.shared.references.push_id_suffix`. Almost always one row or none.
+    """
+    rows = await session.execute(_DEPOSITS_WITH_SUFFIX, {"suffix": suffix})
+    return [(row.id, row.client_id) for row in rows]

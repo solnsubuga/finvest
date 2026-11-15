@@ -562,7 +562,7 @@ function LimitsTable({ limits, compare }: { limits: Limits; compare?: Limits | u
         <div key={key} className="contents">
           <dt className="text-sm text-muted">{label}</dt>
           <dd className="m-0 flex flex-wrap items-center justify-end gap-y-1 text-right font-bold tabular-nums">
-            <span className="whitespace-nowrap">{shillings(limits[key])}</span>
+            <span className="whitespace-nowrap">{shillings(limits[key], key === "reviewAbove" ? "Not set" : undefined)}</span>
             <Changed on={compare !== undefined && compare[key] !== limits[key]} />
           </dd>
         </div>

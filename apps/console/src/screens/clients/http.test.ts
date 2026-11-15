@@ -69,7 +69,7 @@ describe("clients over HTTP", () => {
   it("lists clients with the search, status and page place in the URL", async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() =>
       reply(200, {
-        clients: [{ id: ACCOUNT.id, verified_name: "Sarah Nakato", account_number: "1004382917", phone: ACCOUNT.phone, email: null, status: "active", created_at: "2026-11-01T08:00:00Z" }],
+        clients: [{ id: ACCOUNT.id, verified_name: "Sarah Nakato", account_number: "1004382917", phone: ACCOUNT.phone, email: null, status: "active", created_at: "2026-11-01T08:00:00Z", found_by: "Payment FV-3R0D5-3X44V" }],
         next_after: "2026-11-01T08:00:00+00:00 -Nclient00000000000A",
         more: false,
       }),
@@ -80,7 +80,7 @@ describe("clients over HTTP", () => {
     expect(url.pathname).toBe("/staff/clients");
     expect(Object.fromEntries(url.searchParams)).toEqual({ q: "nakato", status: "active", after: "2026-11-02T00:00:00+00:00 -Nclient00000000000B" });
     expect(found).toEqual({
-      clients: [{ id: ACCOUNT.id, verifiedName: "Sarah Nakato", accountNumber: "1004382917", phone: ACCOUNT.phone, email: null, status: "active", createdAt: "2026-11-01T08:00:00Z" }],
+      clients: [{ id: ACCOUNT.id, verifiedName: "Sarah Nakato", accountNumber: "1004382917", phone: ACCOUNT.phone, email: null, status: "active", createdAt: "2026-11-01T08:00:00Z", foundBy: "Payment FV-3R0D5-3X44V" }],
       nextAfter: "2026-11-01T08:00:00+00:00 -Nclient00000000000A",
       more: false,
     });

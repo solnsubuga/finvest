@@ -9,10 +9,13 @@ from app.infrastructure.database import Database
 from app.modules.identity.service import create_unclaimed_client
 from app.shared.actors import Actor
 from app.shared.push_ids import push_id
+from app.shared.references import short_reference
+from tests.integration.test_documents import ask as ask_for_statement
 from tests.support.database import TestDatabase
 from tests.support.http import PASSWORD, Api, running_api
-from tests.support.investments import PRESENT
+from tests.support.investments import PRESENT, request
 from tests.support.kyc import verify
+from tests.support.payments import start_deposit
 
 pytestmark = pytest.mark.integration
 
@@ -129,3 +132,34 @@ async def test_a_bad_page_place_is_refused(api: Api) -> None:
     response = await api.http.get("/staff/clients", params={"after": "yesterday"})
     assert response.status_code == 422
     assert response.json()["error"]["fields"][0]["code"] == "bad_after"
+
+
+async def test_a_short_reference_read_out_finds_the_client_it_belongs_to(
+    api: Api, app_database: Database
+) -> None:
+    client = await api.client()
+    await verify(app_database, client, PRESENT)
+    other = await api.client()
+    investment = await request(app_database, client, PRESENT)
+    deposit = await start_deposit(app_database, PRESENT, actor=client, purpose_id=investment.id)
+    statement = await ask_for_statement(app_database, client)
+    await api.staff("support")
+
+    def found(body: dict[str, object]) -> list[tuple[str, str | None]]:
+        return [(row["id"], row["found_by"]) for row in rows(body)]
+
+    paid = short_reference(deposit.id)
+    assert found(await listed(api, q=paid)) == [(client.id, f"Payment {paid}")]
+    # As a client reads it out: any case, spaces, no dashes, O for 0.
+    spoken = paid.lower().replace("-", " ").replace("0", "o")
+    assert found(await listed(api, q=spoken)) == [(client.id, f"Payment {paid}")]
+    invested = short_reference(investment.id)
+    assert found(await listed(api, q=invested)) == [(client.id, f"Investment {invested}")]
+    sent = short_reference(statement.id, "ST")
+    assert found(await listed(api, q=sent)) == [(client.id, f"Statement {sent}")]
+    # The prefix says which kind of record: a statement's code with FV- names no payment.
+    assert ids(await listed(api, q=sent.replace("ST-", "FV-"))) == []
+    assert ids(await listed(api, q=paid.replace("FV-", "RC-"))) == []
+    assert other.id not in ids(await listed(api, q=paid))
+    # A name search shows no reference.
+    assert all(row["found_by"] is None for row in rows(await listed(api, q="nakato")))

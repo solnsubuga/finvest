@@ -198,6 +198,40 @@ describe("about this client", () => {
     );
     expect(screen.queryByText(/Their account is/)).not.toBeInTheDocument();
   });
+
+  it("shows what they have invested and waiting to be paid, by currency", () => {
+    render(
+      <MemoryRouter>
+        <AboutClient
+          card={{ ...card, status: "active" }}
+          money={[
+            { accountCode: "client.holding", accountReference: "A", minor: 2_000_000, currency: "UGX", productName: null, maturesOn: null },
+            { accountCode: "client.holding", accountReference: "B", minor: 500_000, currency: "UGX", productName: null, maturesOn: null },
+            { accountCode: "client.holding", accountReference: "C", minor: 30_000, currency: "USD", productName: null, maturesOn: null },
+            { accountCode: "client.payout_in_flight", accountReference: null, minor: 150_000, currency: "UGX", productName: null, maturesOn: null },
+            { accountCode: "client.interest_accrued", accountReference: "A", minor: 9_000, currency: "UGX", productName: null, maturesOn: null },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByLabelText("Their money")).getByText("UGX 2,500,000 and $300.00")).toBeInTheDocument();
+    expect(within(screen.getByLabelText("Their money")).getByText("UGX 150,000")).toBeInTheDocument();
+  });
+
+  it("says None when nothing is invested, and says when the figures could not be read", () => {
+    const { rerender } = render(
+      <MemoryRouter>
+        <AboutClient card={{ ...card, status: "active" }} money={[]} />
+      </MemoryRouter>,
+    );
+    expect(within(screen.getByLabelText("Their money")).getAllByText("None")).toHaveLength(2);
+    rerender(
+      <MemoryRouter>
+        <AboutClient card={{ ...card, status: "active" }} money={null} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText(/money figures could not be read/)).toBeInTheDocument();
+  });
 });
 
 describe("waited", () => {
