@@ -289,7 +289,7 @@ export function FiguresSection({ api, now }: { api: FiguresApi; now: () => Date 
                       <span className="text-sm text-muted">{text.detail}</span>
                     </span>
                     {text.to ? (
-                      <Link to={text.to} className="shrink-0 text-sm font-bold text-ink">
+                      <Link to={text.to} className="-my-2.5 -mr-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-end px-2 text-sm font-bold text-ink">
                         Open<span className="sr-only">: {text.title}</span>
                       </Link>
                     ) : null}
@@ -331,7 +331,7 @@ export function FiguresSection({ api, now }: { api: FiguresApi; now: () => Date 
               <Fact name="Waiting for a second person" value={balancing.waitingForApproval ? day(balancing.waitingForApproval) : "Nothing"} />
               <Fact name="Days behind" value={String(balancing.daysBehind)} warn={balancing.daysBehind > 1} />
             </dl>
-            <Link to="/reconciliation" className="text-sm font-bold text-ink">
+            <Link to="/reconciliation" className="inline-flex min-h-11 items-center self-start text-sm font-bold text-ink">
               Open reconciliation
             </Link>
           </Card>

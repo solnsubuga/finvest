@@ -37,7 +37,7 @@ function sampleStart(sample: string | null): Sample {
 function defaultApi(staffId: string | null): MigrationApi {
   if (isStubAuth()) {
     // Under the stub, `?sample=` picks the start: `empty` before any trial has been run,
-    // `unconfirmed` Finvest 1.0 totals waiting for a second person, `cleared` a switch awaiting
+    // `unconfirmed` paper register totals waiting for a second person, `cleared` a switch awaiting
     // your approval, `taken` the same refused for a phone number in use, and `switched` clients
     // the switch could not carry over.
     return createStubMigrationApi(150, sampleStart(new URLSearchParams(window.location.search).get("sample")));
@@ -50,7 +50,7 @@ function defaultApi(staffId: string | null): MigrationApi {
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: Overview };
 
-const SUMMARY = "Moving clients and investments from Finvest 1.0, checked before anyone is switched.";
+const SUMMARY = "Moving clients and investments from the paper register, checked before anyone is switched.";
 
 function today(now: Date): string {
   // The business day in Kampala, as YYYY-MM-DD.
@@ -177,7 +177,7 @@ export function MigrationScreen({ api, now = () => new Date() }: { api: Migratio
           <section className="flex max-w-[640px] flex-col gap-2 rounded-xl border border-border bg-surface p-5">
             <h2 className="m-0 text-xl font-extrabold">No trial import yet</h2>
             <p className="m-0 text-md leading-normal text-muted">
-              Export clients and investments from Finvest 1.0, add anything kept by hand, and save the two sheets as CSV. A
+              Copy the clients and investments from the paper register into the two sheets, and save them as CSV. A
               trial import then lists every problem in them. Nothing is saved and no client is changed.
             </p>
             <p className="m-0 text-md leading-normal text-muted">The columns each sheet needs are in docs/migration.md.</p>

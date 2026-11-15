@@ -108,7 +108,7 @@ const PROBLEMS: Record<string, string> = {
   required: "Fill this in.",
   too_long: "Keep it to 500 characters.",
   invalid: "That is not an ID Finvest uses.",
-  carried_over: "This investment came over from Finvest 1.0, so it is never undone here. Ask the migration team.",
+  carried_over: "This investment came over from the paper register, so it is never undone here. Ask the migration team.",
   nothing_waiting: "No money is waiting to be refunded for this investment.",
   not_for_unwind: "An unwind puts the money back for the client. Leave the payout account empty.",
   not_usable: "That is not one of the client's approved payout accounts.",

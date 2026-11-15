@@ -63,7 +63,8 @@ export function Bookings({ api, directory, me, canChange, newKey = () => crypto.
 
   const fetchList = useCallback(
     (): Promise<Load> =>
-      Promise.all([api.list(), api.products()]).then(
+      // Products are only needed to book, so a role that cannot book never asks for the catalogue.
+      Promise.all([api.list(), canChange ? api.products() : Promise.resolve([])]).then(
         ([items, products]) => {
           for (const item of items) {
             for (const staffId of [item.proposedBy, ...(item.decidedBy ? [item.decidedBy] : [])]) {
@@ -86,7 +87,7 @@ export function Bookings({ api, directory, me, canChange, newKey = () => crypto.
         },
         (error: unknown) => ({ state: "failed", message: bookingsErrorMessage(error) }),
       ),
-    [api, directory, me],
+    [api, directory, me, canChange],
   );
 
   useEffect(() => {

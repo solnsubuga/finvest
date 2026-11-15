@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
+import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
@@ -22,10 +24,10 @@ function stubCase(): StubCase {
   return sample === "empty" || sample === "error" ? sample : "sample";
 }
 
-/** Sample goals under `pnpm dev` or a preview build, like sign-in, otherwise the real API. `?sample=empty` and `?sample=error` show those states. */
-const connected = isStubAuth() ? null : connectedGoalsApis();
-const defaultApi: GoalsApi = connected?.goals ?? createStubGoalsApi(today(new Date()), 150, stubCase());
-const defaultGroupsApi: GroupsApi = connected?.groups ?? createStubGroupsApi(today(new Date()), 150, stubCase());
+/** Sample goals under `pnpm dev` or a preview build, like sign-in. `?sample=empty` and `?sample=error` show those states. */
+function sampleApis(): { goals: GoalsApi; groups: GroupsApi } {
+  return { goals: createStubGoalsApi(today(new Date()), 150, stubCase()), groups: createStubGroupsApi(today(new Date()), 150, stubCase()) };
+}
 
 type View = "goals" | "groups";
 
@@ -66,7 +68,7 @@ const SAVING_TONES: Record<SavingStatus, string> = {
   cancelled: "bg-surface-sunken text-muted",
 };
 
-export function GoalsScreen({ api = defaultApi, groupsApi = defaultGroupsApi }: { api?: GoalsApi; groupsApi?: GroupsApi }) {
+export function GoalsScreen({ api, groupsApi }: { api: GoalsApi; groupsApi: GroupsApi }) {
   const [view, setView] = useState<View>(initialView);
 
   return (
@@ -246,7 +248,7 @@ function GoalsTable({ goals, selected, onSelect }: { goals: readonly Goal[]; sel
           {goals.map((goal) => (
             <tr key={goal.id} className={cn("border-t border-divider align-top", selected === goal.id && "bg-surface-sunken")}>
               <th scope="row" className="px-3 py-3 text-left">
-                <button type="button" onClick={() => onSelect(goal.id)} aria-pressed={selected === goal.id} className="text-left font-bold underline-offset-2 hover:underline">
+                <button type="button" onClick={() => onSelect(goal.id)} aria-pressed={selected === goal.id} className="inline-flex min-h-6 items-center text-left font-bold underline-offset-2 hover:underline">
                   {goal.name}
                 </button>
                 <div className="text-xs font-normal text-muted">
@@ -361,5 +363,9 @@ function Detail({ api, goalId }: { api: GoalsApi; goalId: string }) {
 }
 
 export default function GoalsPage() {
-  return <GoalsScreen />;
+  const { session } = useAuth();
+  // Staff without `products.view` name products from the public list, so they never ask for the catalogue.
+  const mayListProducts = session ? can(session, "products.view") : false;
+  const [apis] = useState(() => (isStubAuth() ? sampleApis() : connectedGoalsApis(mayListProducts)));
+  return <GoalsScreen api={apis.goals} groupsApi={apis.groups} />;
 }

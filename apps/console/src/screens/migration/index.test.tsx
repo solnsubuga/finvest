@@ -35,7 +35,7 @@ describe("migration screen", () => {
     expect(done.getByText("Accounts created").nextSibling).toHaveTextContent("1,912");
     expect(done.getByText("Approved by").nextSibling).toHaveTextContent("You");
     const list = within(screen.getByRole("list", { name: "Clients not carried over" }));
-    expect(list.getByText("Finvest 1.0 client C-10482")).toBeInTheDocument();
+    expect(list.getByText("Paper register client C-10482")).toBeInTheDocument();
     expect(list.getByText("Needs a person")).toBeInTheDocument();
   });
 
@@ -72,10 +72,10 @@ describe("migration screen", () => {
   it("retries or closes a client the switch could not carry over, with a second person", async () => {
     const { user } = renderScreen(createStubMigrationApi(0, "switched"));
     const list = within(await screen.findByRole("list", { name: "Clients not carried over" }));
-    const row = (ref: string) => within(list.getByText(`Finvest 1.0 client ${ref}`).closest("li")!);
+    const row = (ref: string) => within(list.getByText(`Paper register client ${ref}`).closest("li")!);
 
     // Noted: anyone who may propose says what was put right.
-    expect(row("C-10482").getByText(/identity document belongs to another Finvest 2.0 client/)).toBeInTheDocument();
+    expect(row("C-10482").getByText(/identity document belongs to another Finvest client/)).toBeInTheDocument();
     await user.click(row("C-10482").getByRole("button", { name: "Retry" }));
     await user.type(row("C-10482").getByLabelText("What was put right for client C-10482"), "The other account was closed");
     await user.click(row("C-10482").getByRole("button", { name: "Propose a retry" }));
@@ -100,9 +100,9 @@ describe("migration screen", () => {
     expect(list.queryAllByRole("button")).toEqual([]);
   });
 
-  it("compares Finvest 1.0 with the latest trial, line by line", async () => {
+  it("compares the paper register with the latest trial, line by line", async () => {
     renderScreen();
-    const table = await screen.findByRole("table", { name: "Finvest 1.0 totals compared with the trial import" });
+    const table = await screen.findByRole("table", { name: "Paper register totals compared with the trial import" });
     const row = (name: string) => within(within(table).getByRole("row", { name: new RegExp(`^${name}`) }));
     expect(row("Number of clients").getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["1,912", "1,909", "3", "Look into"]);
     expect(row("Pending orders").getByText("Agrees")).toBeInTheDocument();
@@ -110,7 +110,7 @@ describe("migration screen", () => {
     expect(row("Money invested, USD").getAllByText("254,500.00")).toHaveLength(2);
     const signed = row("Interest earned so far, before tax, USD");
     expect(signed.getByText("Signed off")).toBeInTheDocument();
-    expect(signed.getByText("Finvest 1.0 rounded each day's dollar interest up.")).toBeInTheDocument();
+    expect(signed.getByText("The paper register rounded each day's dollar interest up.")).toBeInTheDocument();
     expect(screen.getByText("1,909 of 1,912")).toBeInTheDocument();
     expect(screen.getByText("3 missing")).toBeInTheDocument();
     expect(screen.getByText("Differs by UGX 1,240")).toBeInTheDocument();
@@ -145,8 +145,8 @@ describe("migration screen", () => {
       "INV-20977 row 977",
       "INV-19034 row 34",
     ]);
-    expect(differs.getByText("Finvest 1.0 shows 3 more")).toBeInTheDocument();
-    expect(differs.getByText("Finvest 1.0 shows UGX 27,500,000 more")).toBeInTheDocument();
+    expect(differs.getByText("The paper register shows 3 more")).toBeInTheDocument();
+    expect(differs.getByText("The paper register shows UGX 27,500,000 more")).toBeInTheDocument();
     expect(differs.getByText("Tax of 10% stated, the product withholds 15%")).toBeInTheDocument();
     expect(screen.getByText("Signed off by two people").nextSibling).toHaveTextContent("2");
     const blockers = within(screen.getByRole("list", { name: "Still to do before the switch" }));
@@ -187,7 +187,7 @@ describe("migration screen", () => {
     await user.click(form.getByRole("button", { name: "Run the trial" }));
     expect(form.getByText("Choose the clients sheet.")).toBeInTheDocument();
     expect(form.getByText("Choose the investments sheet.")).toBeInTheDocument();
-    expect(form.getByText("Give the day the Finvest 1.0 figures were taken.")).toBeInTheDocument();
+    expect(form.getByText("Give the day the paper register figures were taken.")).toBeInTheDocument();
     expect(form.getByLabelText("Clients sheet (CSV)")).toHaveAttribute("aria-invalid", "true");
     expect(runTrial).not.toHaveBeenCalled();
   });
@@ -236,7 +236,7 @@ describe("migration screen", () => {
     const base = await createStubMigrationApi(0).getOverview();
     const overview: Overview = { ...base, allowed: [] };
     renderScreen({ ...createStubMigrationApi(0), getOverview: () => Promise.resolve(overview) });
-    await screen.findByRole("table", { name: "Finvest 1.0 totals compared with the trial import" });
+    await screen.findByRole("table", { name: "Paper register totals compared with the trial import" });
     expect(screen.queryByRole("button", { name: "Run a trial import" })).not.toBeInTheDocument();
   });
 
@@ -261,7 +261,7 @@ describe("finance checks on the migration screen", () => {
     // The sample totals are confirmed, so the screen first says what entering them again sets aside.
     await user.click(await screen.findByRole("button", { name: "Enter them again" }));
     await user.click(within(screen.getByRole("group", { name: "Enter the totals again" })).getByRole("button", { name: "Enter new totals" }));
-    return within(screen.getByRole("form", { name: "Enter the Finvest 1.0 totals" }));
+    return within(screen.getByRole("form", { name: "Enter the paper register totals" }));
   }
 
   it("says what entering confirmed totals again sets aside, before the form opens", async () => {
@@ -269,7 +269,7 @@ describe("finance checks on the migration screen", () => {
     await user.click(await screen.findByRole("button", { name: "Enter them again" }));
     const warning = within(screen.getByRole("group", { name: "Enter the totals again" }));
     expect(warning.getByText(/These totals are confirmed/)).toHaveTextContent("nothing is compared until someone else confirms the new figures");
-    expect(screen.queryByRole("form", { name: "Enter the Finvest 1.0 totals" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("form", { name: "Enter the paper register totals" })).not.toBeInTheDocument();
     await user.click(warning.getByRole("button", { name: "Keep these" }));
     expect(screen.queryByRole("group", { name: "Enter the totals again" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Enter them again" })).toBeInTheDocument();
@@ -278,7 +278,7 @@ describe("finance checks on the migration screen", () => {
   it("opens the form straight away for totals nobody has confirmed", async () => {
     const { user } = renderScreen(createStubMigrationApi(0, "unconfirmed"));
     await user.click(await screen.findByRole("button", { name: "Enter them again" }));
-    expect(screen.getByRole("form", { name: "Enter the Finvest 1.0 totals" })).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: "Enter the paper register totals" })).toBeInTheDocument();
   });
 
   async function fillTotals(form: ReturnType<typeof within>, user: ReturnType<typeof userEvent.setup>) {
@@ -294,7 +294,7 @@ describe("finance checks on the migration screen", () => {
     await user.type(interestUsd!, "612.7");
   }
 
-  it("enters the Finvest 1.0 totals, which wait for a second person before they count", async () => {
+  it("enters the paper register totals, which wait for a second person before they count", async () => {
     const api = createStubMigrationApi(0);
     const enterTotals = vi.spyOn(api, "enterTotals");
     const { user } = renderScreen(api);
@@ -311,13 +311,13 @@ describe("finance checks on the migration screen", () => {
       invested: { UGX: "18212500000", USD: "25450000" },
       interestBeforeTax: { UGX: "420100000", USD: "61270" },
     });
-    const panel = within((await screen.findByRole("heading", { name: "Finvest 1.0 totals" })).parentElement!);
+    const panel = within((await screen.findByRole("heading", { name: "Paper register totals" })).parentElement!);
     expect(panel.getByText(/Entered by You on/)).toHaveTextContent("Someone else checks them against the report before they count.");
     expect(panel.queryByRole("button", { name: "Confirm these totals" })).not.toBeInTheDocument();
-    const table = screen.getByRole("table", { name: "Finvest 1.0 totals compared with the trial import" });
+    const table = screen.getByRole("table", { name: "Paper register totals compared with the trial import" });
     expect(within(table).getAllByText("Not entered")).toHaveLength(8);
     const blockers = within(screen.getByRole("list", { name: "Still to do before the switch" }));
-    expect(blockers.getByText("A second person confirms the Finvest 1.0 totals")).toBeInTheDocument();
+    expect(blockers.getByText("A second person confirms the paper register totals")).toBeInTheDocument();
   });
 
   it("refuses a total that is not a whole number in the smallest unit", async () => {
@@ -341,7 +341,7 @@ describe("finance checks on the migration screen", () => {
   it("confirms totals a colleague entered, and then compares them", async () => {
     const { user } = renderScreen(createStubMigrationApi(0, "unconfirmed"));
     const confirm = await screen.findByRole("button", { name: "Confirm these totals" });
-    expect(screen.getByText(/Entered by Grace Finance/)).toHaveTextContent("Check each figure against Finvest 1.0's report before confirming.");
+    expect(screen.getByText(/Entered by Grace Finance/)).toHaveTextContent("Check each figure against the paper register before confirming.");
     await user.click(confirm);
     expect(await screen.findByText(/Checked by you\./)).toBeInTheDocument();
     expect(screen.getByText("1,909 of 1,912")).toBeInTheDocument();
@@ -487,7 +487,7 @@ describe("migration labels", () => {
 
   it("describes a difference in words", () => {
     const base = { key: "k", row: 1, legacyInvestmentRef: "A", currency: "UGX" as const, signedOff: null };
-    expect(differenceSummary({ ...base, kind: "interest", old: "100", new: "150" })).toBe("Finvest 1.0 shows UGX 50 less interest");
+    expect(differenceSummary({ ...base, kind: "interest", old: "100", new: "150" })).toBe("The paper register shows UGX 50 less interest");
     expect(differenceSummary({ ...base, kind: "interest", old: "100", new: "100" })).toBe("The tax held differs");
   });
 

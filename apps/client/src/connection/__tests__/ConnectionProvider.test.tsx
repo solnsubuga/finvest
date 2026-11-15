@@ -59,8 +59,10 @@ describe("the offline banner and the maintenance screen", () => {
     await act(async () => reportConnection("offline"));
     expect(screen.getByTestId("offline-banner")).toHaveTextContent(/No connection/);
     expect(screen.getByText("Home")).toBeTruthy();
+    // One way to try again, the screen's own: the banner has no button.
+    expect(screen.queryByRole("button", { name: /Try again/ })).toBeNull();
     setFetch(async () => new Response(JSON.stringify(products), { status: 200 }));
-    await fireEvent.press(screen.getByTestId("offline-retry"));
+    await act(async () => reportConnection("online"));
     expect(screen.queryByTestId("offline-banner")).toBeNull();
   });
 

@@ -2,13 +2,14 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { GoalsError, notConnectedGoalsApi, type GoalsApi } from "./api.ts";
+import { createStubGroupsApi } from "./groupsStub.ts";
 import { GoalsScreen } from "./index.tsx";
 import { createStubGoalsApi, sampleGoals } from "./stub.ts";
 
 const TODAY = "2026-11-13";
 
 function renderScreen(api: GoalsApi = createStubGoalsApi(TODAY, 0)) {
-  render(<GoalsScreen api={api} />);
+  render(<GoalsScreen api={api} groupsApi={createStubGroupsApi(TODAY, 0)} />);
   return userEvent.setup();
 }
 

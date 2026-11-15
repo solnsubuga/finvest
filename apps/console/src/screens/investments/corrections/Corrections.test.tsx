@@ -103,7 +103,7 @@ describe("investments: corrections", () => {
     await user.type(within(form).getByLabelText(/Investment ID/), "-InvCarried000000001");
     await user.type(within(form).getByLabelText(/Why\?/), "Wrong amount.");
     await user.click(within(form).getByRole("button", { name: "Send for approval" }));
-    expect(await within(form).findByText(/came over from Finvest 1.0/)).toBeInTheDocument();
+    expect(await within(form).findByText(/came over from the paper register/)).toBeInTheDocument();
     expect(within(form).getByRole("alert")).toHaveTextContent("Fix what is marked");
   });
 

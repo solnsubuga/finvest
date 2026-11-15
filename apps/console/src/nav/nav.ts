@@ -202,7 +202,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
         path: "migration",
         label: "Migration",
         title: "Migration",
-        summary: "Moving Finvest 1.0 clients across.",
+        summary: "Moving Paper register clients across.",
         permission: "migration.view",
         phase: 3,
       },

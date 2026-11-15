@@ -72,7 +72,7 @@ export function ClientHeader({ page }: { page: ClientPage }) {
       ) : null}
       {account.status === "unclaimed" ? (
         <p className="m-0 max-w-[720px] rounded-md bg-surface-sunken px-3 py-2.5 text-sm">
-          Brought over from Finvest 1.0. The client has not set up a sign-in yet, so there is nothing to lock.
+          Brought over from the paper register. The client has not set up a sign-in yet, so there is nothing to lock.
         </p>
       ) : null}
     </div>

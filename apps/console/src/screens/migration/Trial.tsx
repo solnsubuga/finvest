@@ -39,7 +39,7 @@ export function TrialForm({ busy, error, today, onRun, onCancel }: TrialFormProp
     const found: Errors = {};
     found.clients = sheetProblem(clients, "Choose the clients sheet.");
     found.investments = sheetProblem(investments, "Choose the investments sheet.");
-    if (!asOf) found.asOf = "Give the day the Finvest 1.0 figures were taken.";
+    if (!asOf) found.asOf = "Give the day the paper register figures were taken.";
     else if (asOf > today) found.asOf = "This day has not happened yet.";
     setErrors(found);
     if (clients && investments && Object.values(found).every((problem) => !problem)) onRun({ clients, investments, asOf });
