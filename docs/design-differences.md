@@ -38,4 +38,4 @@ Already on main when checked, though the QA table listed them: the investment de
 - Console Support: Invested and Payout pending in About this client. The staff client routes carry no money figures yet.
 - Console Complaints: Export register. A file of complaints holds personal data, so it should come from an audited backend route, as the compliance register does.
 - Console Rates: Last auction tile. Needs the Bank of Uganda auction results in the API.
-- Console Finance: URA withholding tax and tax return files. Needs URA's file specification.
+- Console Finance: Prepare the URA file and Tax return file buttons. The backend already exports each month's withholding tax payees (`GET /staff/tax/months/{month}/payees.csv`); whether that file matches URA's format, and what a tax return file holds, needs URA's specification and the owner.
