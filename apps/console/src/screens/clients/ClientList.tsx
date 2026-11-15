@@ -107,10 +107,11 @@ export function ClientList({ api, query, onOpen }: ClientListProps) {
         </p>
       ) : (
         <>
-          <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`${title}, table`}>
-            <table className="w-full border-collapse text-left text-md">
+          <div className="sm:overflow-x-auto" tabIndex={0} role="region" aria-label={`${title}, table`}>
+            {/* On a phone each client is a card: the rows stack and each value carries its heading. */}
+            <table className="w-full border-collapse text-left text-md max-sm:block">
               <caption className="sr-only">{title}, newest first</caption>
-              <thead>
+              <thead className="max-sm:sr-only">
                 <tr className="text-xs font-bold tracking-[0.6px] text-muted uppercase">
                   {["Name", "Account number", "Mobile", "Email", "Status", "Joined"].map((heading) => (
                     <th key={heading} scope="col" className="px-2.5 py-2 whitespace-nowrap">
@@ -119,10 +120,10 @@ export function ClientList({ api, query, onOpen }: ClientListProps) {
                   ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-sm:flex max-sm:flex-col max-sm:gap-2.5">
                 {load.rows.map((row) => (
-                  <tr key={row.id} className="border-t border-divider hover:bg-paper">
-                    <th scope="row" className="px-2.5 py-2.5 font-bold">
+                  <tr key={row.id} className="border-t border-divider hover:bg-paper max-sm:flex max-sm:flex-col max-sm:gap-1 max-sm:rounded-lg max-sm:border max-sm:p-3">
+                    <th scope="row" className="px-2.5 py-2.5 font-bold max-sm:p-0">
                       <button
                         type="button"
                         onClick={() => onOpen(row.id)}
@@ -131,13 +132,13 @@ export function ClientList({ api, query, onOpen }: ClientListProps) {
                         {row.verifiedName ?? <span className="font-semibold text-muted">Name not verified yet</span>}
                       </button>
                     </th>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap tabular-nums">{row.accountNumber ? formatAccountNumber(row.accountNumber) : "None yet"}</td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap tabular-nums">{row.phone}</td>
-                    <td className="px-2.5 py-2.5 break-all">{row.email ?? "None given"}</td>
-                    <td className="px-2.5 py-2.5">
+                    <td data-label="Account number" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5 whitespace-nowrap tabular-nums">{row.accountNumber ? formatAccountNumber(row.accountNumber) : "None yet"}</td>
+                    <td data-label="Mobile" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5 whitespace-nowrap tabular-nums">{row.phone}</td>
+                    <td data-label="Email" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5 break-all">{row.email ?? "None given"}</td>
+                    <td data-label="Status" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5">
                       <span className={cn("rounded-pill px-2.5 py-0.5 text-xs font-bold whitespace-nowrap", STATUS_TONE[row.status])}>{STATUS_LABELS[row.status]}</span>
                     </td>
-                    <td className="px-2.5 py-2.5 whitespace-nowrap text-muted">{formatTime(row.createdAt)}</td>
+                    <td data-label="Joined" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5 whitespace-nowrap text-muted">{formatTime(row.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
