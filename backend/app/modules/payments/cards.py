@@ -1,4 +1,9 @@
-"""Card payments: starting one, and settling it from the card provider's own record.
+"""Card payments, and mobile money on the same hosted page: starting one, and settling it from
+the provider's own record.
+
+A mobile money payment that Pesapal collects (Settings, `mobile_money_collector`) is an order
+on the same page, with no charge, and the client's own number as its payer. It is confirmed
+only when the provider names that number as the one that paid.
 
 Nothing here calls the card provider. `request_card_deposit` saves the deposit, its order and a
 job to open the order, in the client's transaction. The job handlers in `card_jobs.py` call the
@@ -40,7 +45,7 @@ from app.modules.payments.domain.deposits import (
 )
 from app.modules.payments.domain.outcomes import StatusReading
 from app.modules.platform_settings import service as platform_settings
-from app.modules.platform_settings.domain.catalogue import Channel
+from app.modules.platform_settings.domain.catalogue import PAY_IN_BY_NETWORK, Channel
 from app.shared.actors import Actor
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
@@ -52,6 +57,7 @@ VERIFY_KIND = "payments.verify_card_deposit"
 CANCEL_KIND = "payments.cancel_card_order"
 SWEEP_KIND = "payments.sweep_card_deposits"
 REQUEST_OPERATION = "payments.request_card_deposit"
+HOSTED_MOBILE_MONEY_OPERATION = service.REQUEST_OPERATION
 CHANNEL: Channel = "card_pay_in"
 
 # The payer has a browser open and is waiting, so opening the order is tried for minutes.
@@ -82,7 +88,8 @@ _SAVE_CARD = text(
 _PAID_BY_CARD = text(
     "SELECT coalesce(sum(o.total_minor), 0) FROM payment_card_orders AS o "
     "JOIN payment_deposits AS d ON d.id = o.deposit_id "
-    "WHERE o.client_id = :client_id AND d.status <> 'failed' AND d.reversal_id IS NULL "
+    "WHERE o.client_id = :client_id AND d.method = 'card' AND d.status <> 'failed' "
+    "AND d.reversal_id IS NULL "
     "AND d.created_at >= :since"
 )
 
@@ -275,6 +282,96 @@ async def request_card_deposit(
     return await service.get_deposit(session, deposit_id)
 
 
+async def request_hosted_mobile_money(
+    session: AsyncSession,
+    actor: Actor,
+    request: service.DepositRequest,
+    *,
+    idempotency_key: str,
+    account_phone: str,
+    provider: str,
+    clock: Clock,
+) -> service.Deposit:
+    """Save a client's mobile money payment to be paid on the provider's hosted page.
+
+    The same checks as `service.request_deposit`: the payer is the number on the client's own
+    account, the network's pay in must be open, and the investment takes one live deposit. The
+    order has no charge: Finvest bears the provider's mobile money fee. The worker opens it and
+    saves the page, as for a card. It shares the mobile money request's idempotency operation,
+    so a key repeated after the collector changed on Settings returns the deposit it made.
+    """
+    if actor.kind != "client" or actor.id is None:
+        raise ApplicationError("forbidden")
+    msisdn, network = service.checked_mobile_money(request, account_phone)
+    client_id = actor.id
+    now = clock.now()
+
+    async def command() -> Receipt:
+        channels = await platform_settings.payment_channels(session, now)
+        if not channels.is_open(PAY_IN_BY_NETWORK[network]):
+            raise ApplicationError(
+                "unavailable", fields=[FieldProblem(field_path=["network"], code="channel_paused")]
+            )
+        deposit_id = push_id()
+        await service.insert_deposit(
+            session,
+            {
+                "id": deposit_id,
+                "client_id": client_id,
+                "purpose_type": request.purpose.value,
+                "purpose_id": request.purpose_id,
+                "method": network,
+                "provider": provider,
+                "currency": request.amount.currency.value,
+                "amount_minor": request.amount.minor,
+                "payer_msisdn": msisdn,
+                "status": DepositStatus.CREATED.value,
+                "now": now,
+            },
+        )
+        await session.execute(
+            _INSERT_ORDER,
+            {
+                "deposit_id": deposit_id,
+                "client_id": client_id,
+                "currency": request.amount.currency.value,
+                "charge_minor": 0,
+                "total_minor": request.amount.minor,
+                "now": now,
+            },
+        )
+        await service.record_event(
+            session, deposit_id, None, DepositStatus.CREATED, None, "request", now
+        )
+        await service.record_requested(session, actor, deposit_id, network, clock)
+        await enqueue(
+            session,
+            JobRequest(
+                kind=SEND_KIND,
+                idempotency_key=deposit_id,
+                payload={"deposit_id": deposit_id},
+                max_attempts=SEND_ATTEMPTS,
+                max_age=SEND_MAX_AGE,
+            ),
+            now=now,
+        )
+        return Receipt(201, {"deposit_id": deposit_id})
+
+    outcome = await run_once(
+        session,
+        actor=actor,
+        operation=HOSTED_MOBILE_MONEY_OPERATION,
+        key=idempotency_key,
+        request=service.request_fingerprint(request, msisdn),
+        now=now,
+        command=command,
+    )
+    deposit_id = str(outcome.receipt.response["deposit_id"])
+    if not outcome.replayed:
+        logger.info("hosted_deposit_requested", deposit_id=deposit_id)
+    return await service.get_deposit(session, deposit_id)
+
+
 async def find_order(session: AsyncSession, deposit_id: str) -> CardOrder | None:
     """The card order of a deposit, if this transaction may see it."""
     row = (await session.execute(_SELECT_ORDER, {"id": deposit_id})).one_or_none()
@@ -341,6 +438,7 @@ async def settle_card_deposit(
     clock: Clock,
     *,
     cause: service.Cause,
+    paid_from: str | None = None,
 ) -> service.Deposit:
     """Move a card deposit on from a status read, in a system transaction.
 
@@ -352,9 +450,18 @@ async def settle_card_deposit(
     if deposit is None:
         raise ApplicationError("not_found")
     order = await find_order(session, deposit_id)
-    if order is None or deposit.method is not Method.CARD:
+    if order is None:
         raise ApplicationError("not_found")
-    move = after_card_status(deposit.status, reading, expected=order.total, credited=deposit.amount)
+    # A mobile money payment must come from the client's own number.
+    payer = deposit.payer_msisdn if deposit.method is not Method.CARD else None
+    move = after_card_status(
+        deposit.status,
+        reading,
+        expected=order.total,
+        credited=deposit.amount,
+        payer=payer,
+        paid_from=paid_from,
+    )
     if move is None:
         return deposit
     return await apply_card_move(session, deposit, order, move, details, clock, cause=cause)
@@ -371,12 +478,15 @@ async def apply_card_move(
     cause: service.Cause,
 ) -> service.Deposit:
     if move.status is DepositStatus.CONFIRMED and details is not None:
+        # Mobile money keeps only the provider's code, which a refund is asked for by: its
+        # "brand" and "last four" would be a network and part of a phone number.
+        card = deposit.method is Method.CARD
         await session.execute(
             _SAVE_CARD,
             {
                 "id": deposit.id,
-                "brand": details.brand,
-                "last_four": details.last_four,
+                "brand": details.brand if card else None,
+                "last_four": details.last_four if card else None,
                 "confirmation_code": details.confirmation_code,
             },
         )

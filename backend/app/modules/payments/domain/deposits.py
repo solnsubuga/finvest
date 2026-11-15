@@ -124,6 +124,8 @@ class Code(StrEnum):
     UNKNOWN_TO_PROVIDER = "unknown_to_provider"  # the provider has no record of it
     APPROVAL_OVERDUE = "approval_overdue"  # still pending after the approval window
     AMOUNT_MISMATCH = "amount_mismatch"  # the provider confirmed a different amount
+    # Paid on a hosted page from a number that is not the client's own, or one we cannot read.
+    PAYER_DIFFERS = "payer_differs"
 
 
 # Every move a deposit may make. The service refuses anything else.

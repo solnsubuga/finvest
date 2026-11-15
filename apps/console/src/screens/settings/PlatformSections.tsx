@@ -16,6 +16,7 @@ import {
   settingsErrorMessage,
   shillings,
   type CardPayments,
+  type MobileMoneyCollector,
   type Channels,
   type Decision,
   type Holiday,
@@ -235,6 +236,7 @@ export function PlatformSections({ settings, limits, directory }: PlatformSectio
           <>
             {item("payment_channels", data, CHANNELS_VIEW)}
             {item("card_payments", data, CARD_VIEW)}
+            {item("mobile_money_collector", data, COLLECTOR_VIEW)}
           </>
         ))}
 
@@ -734,6 +736,45 @@ function CardEditor({ draft, setDraft }: { draft: CardPayments; setDraft: (value
     </>
   );
 }
+
+// Mobile money collector ----------------------------------------------------------------------
+
+const COLLECTORS: readonly { value: MobileMoneyCollector["provider"]; label: string; hint: string }[] = [
+  { value: "iotec", label: "ioTec", hint: "A prompt on the client's own phone. They approve it with their PIN." },
+  {
+    value: "pesapal",
+    label: "Pesapal",
+    hint: "The client pays on Pesapal's page. Only a payment from the client's own number is credited; any other is held for staff.",
+  },
+];
+
+const COLLECTOR_VIEW: ItemView<MobileMoneyCollector> = {
+  label: "Mobile money collected by",
+  summary: (value) => (value.provider === "pesapal" ? "Pesapal" : "ioTec"),
+  effect:
+    "Once approved, new mobile money payments clients make in the app go through this provider. Automatic investing and goal savings always use ioTec, and ioTec stays the fallback whenever Pesapal is not running. Payments already started finish where they began.",
+  check: () => null,
+  editor: ({ draft, setDraft }) => (
+    <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+      <legend className="mb-1 text-sm text-muted">Who collects mobile money</legend>
+      {COLLECTORS.map((option) => (
+        <label key={option.value} className="flex items-start gap-2.5 text-md">
+          <input
+            type="radio"
+            name="mobile-money-collector"
+            className="mt-1"
+            checked={draft.provider === option.value}
+            onChange={() => setDraft({ provider: option.value })}
+          />
+          <span className="flex flex-col">
+            <span className="font-bold">{option.label}</span>
+            <span className="text-sm text-muted">{option.hint}</span>
+          </span>
+        </label>
+      ))}
+    </fieldset>
+  ),
+};
 
 // Calendar ------------------------------------------------------------------------------------
 

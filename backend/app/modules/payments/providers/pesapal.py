@@ -56,6 +56,7 @@ from app.modules.payments.domain.cards import (
     CardSendResult,
     OrderOpened,
 )
+from app.modules.payments.domain.deposits import InvalidDeposit, normalise_msisdn
 from app.modules.payments.domain.outcomes import (
     Confirmed,
     Deferred,
@@ -200,7 +201,9 @@ class PesapalCards:
                 raise _Unreadable
             if code == 1:
                 amount = _amount(data)
-                return CardReading(Confirmed(provider_reference, amount), _details(data))
+                return CardReading(
+                    Confirmed(provider_reference, amount), _details(data), _paid_from(data)
+                )
             if code == 2:
                 return CardReading(Rejected(_refusal(data), provider_reference))
             if code == 3:
@@ -439,6 +442,18 @@ def _details(data: Mapping[str, Any]) -> CardDetails:
     ):
         confirmation = None
     return CardDetails(brand, last_four, confirmation)
+
+
+def _paid_from(data: Mapping[str, Any]) -> str | None:
+    """The number that paid, when the payment was mobile money, as `+256` and nine digits.
+    None for a card, or for anything that does not read as a Ugandan mobile number."""
+    account = data.get("payment_account")
+    if not isinstance(account, str):
+        return None
+    try:
+        return normalise_msisdn(account.strip())
+    except InvalidDeposit:
+        return None
 
 
 def _refusal(data: Mapping[str, Any]) -> RejectionCode:

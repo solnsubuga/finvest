@@ -201,6 +201,43 @@ _INSERT_NOTICE = text(
 )
 
 
+def checked_mobile_money(request: DepositRequest, account_phone: str) -> tuple[str, str]:
+    """The payer's number and the network of a client's mobile money request, or the refusal.
+
+    The payer must be `account_phone`, the number on the client's own account, from their
+    session and never from what they sent.
+    """
+    try:
+        check_mobile_money_amount(request.amount)
+        msisdn = normalise_msisdn(request.phone)
+        validate_push_id(request.purpose_id)
+        if msisdn != normalise_msisdn(account_phone):
+            raise InvalidDeposit("not_account_phone")
+    except InvalidDeposit as error:
+        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
+        raise ApplicationError(
+            "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
+        ) from None
+    except ValueError:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["purpose_id"], code="invalid_id")],
+        ) from None
+    return msisdn, request.network.value
+
+
+def request_fingerprint(request: DepositRequest, msisdn: str) -> dict[str, object]:
+    """What a repeated mobile money request must match, whoever collects it."""
+    return {
+        "purpose": request.purpose.value,
+        "purpose_id": request.purpose_id,
+        "network": request.network.value,
+        "currency": request.amount.currency.value,
+        "amount_minor": request.amount.minor,
+        "msisdn": msisdn,
+    }
+
+
 async def request_deposit(
     session: AsyncSession,
     actor: Actor,
@@ -227,22 +264,7 @@ async def request_deposit(
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
-    try:
-        check_mobile_money_amount(request.amount)
-        msisdn = normalise_msisdn(request.phone)
-        validate_push_id(request.purpose_id)
-        if msisdn != normalise_msisdn(account_phone):
-            raise InvalidDeposit("not_account_phone")
-    except InvalidDeposit as error:
-        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
-        raise ApplicationError(
-            "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
-        ) from None
-    except ValueError:
-        raise ApplicationError(
-            "validation_failed",
-            fields=[FieldProblem(field_path=["purpose_id"], code="invalid_id")],
-        ) from None
+    msisdn, _ = checked_mobile_money(request, account_phone)
     client_id = actor.id
     now = clock.now()
 
@@ -291,14 +313,7 @@ async def request_deposit(
         actor=actor,
         operation=REQUEST_OPERATION,
         key=idempotency_key,
-        request={
-            "purpose": request.purpose.value,
-            "purpose_id": request.purpose_id,
-            "network": request.network.value,
-            "currency": request.amount.currency.value,
-            "amount_minor": request.amount.minor,
-            "msisdn": msisdn,
-        },
+        request=request_fingerprint(request, msisdn),
         now=now,
         command=command,
     )

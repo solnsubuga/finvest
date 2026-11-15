@@ -185,3 +185,67 @@ def test_card_settings_out_of_range_are_refused(value: dict[str, object]) -> Non
 def test_card_settings_round_trip() -> None:
     value = {"charge_basis_points": 0, "max_payment_minor": 5, "max_30_days_minor": 9}
     assert checked("card_payments", value)[1] == value
+
+
+# Mobile money on the hosted page ------------------------------------------------------------------
+
+OWN = "+256772123456"
+
+
+@pytest.mark.parametrize(
+    ("current", "paid_from", "status", "code"),
+    [
+        (S.AWAITING_APPROVAL, OWN, S.CONFIRMED, None),
+        (S.UNCERTAIN, OWN, S.CONFIRMED, None),
+        # Another number, or none the provider names, is held for staff and never credited.
+        (S.AWAITING_APPROVAL, "+256701000000", S.UNCERTAIN, "payer_differs"),
+        (S.AWAITING_APPROVAL, None, S.UNCERTAIN, "payer_differs"),
+        (S.UNCERTAIN, "+256701000000", None, None),
+    ],
+)
+def test_mobile_money_on_the_page_confirms_only_from_the_clients_own_number(
+    current: S, paid_from: str | None, status: S | None, code: str | None
+) -> None:
+    amount = ugx(1_000_000)
+    move = after_card_status(
+        current,
+        Confirmed("t", amount),
+        expected=amount,
+        credited=amount,
+        payer=OWN,
+        paid_from=paid_from,
+    )
+    if status is None:
+        assert move is None
+        return
+    assert move is not None and (move.status, move.code) == (status, code)
+    assert (move.post is not None) == (status is S.CONFIRMED)
+
+
+def test_a_card_is_not_asked_for_a_payer() -> None:
+    amount = ugx(1_000_000)
+    move = after_card_status(
+        S.AWAITING_APPROVAL, Confirmed("t", amount), expected=amount, credited=amount
+    )
+    assert move is not None and move.status is S.CONFIRMED
+
+
+@pytest.mark.parametrize("provider", ["iotec", "pesapal"])
+def test_the_mobile_money_collector_round_trips(provider: str) -> None:
+    assert checked("mobile_money_collector", {"provider": provider})[1] == {"provider": provider}
+
+
+@pytest.mark.parametrize(
+    "value", [{}, {"provider": "mtn"}, {"provider": "pesapal", "extra": 1}, "pesapal", None]
+)
+def test_an_unknown_collector_is_refused(value: object) -> None:
+    with pytest.raises(InvalidSetting):
+        checked("mobile_money_collector", value)
+
+
+def test_iotec_collects_until_staff_choose_pesapal() -> None:
+    from datetime import UTC, datetime
+
+    from app.modules.platform_settings.domain.catalogue import MobileMoneyCollector, default
+
+    assert default("mobile_money_collector", datetime.now(UTC)) == MobileMoneyCollector("iotec")

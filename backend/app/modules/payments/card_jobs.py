@@ -1,4 +1,5 @@
-"""The worker's side of a card deposit: open the order, read it back, cancel it, sweep.
+"""The worker's side of a hosted page order, for a card or for mobile money that the provider
+collects: open the order, read it back, cancel it, sweep.
 
 Each handler calls the card provider with no transaction open, then records what it said in one
 transaction that also completes the job. An order is opened at most once per deposit:
@@ -49,7 +50,6 @@ from app.modules.payments.domain.deposits import (
     UNSENT_EXPIRY,
     Code,
     DepositStatus,
-    Method,
     Move,
     next_uncertain_read,
 )
@@ -68,7 +68,8 @@ SWEEP_BATCH = 200
 DESCRIPTION = "Finvest investment"
 _OPEN = (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN)
 _STRAGGLERS = text(
-    "SELECT id FROM payment_deposits WHERE method = 'card' AND provider = :provider AND ("
+    # The provider's own orders, card or mobile money: an ioTec deposit is never one.
+    "SELECT id FROM payment_deposits WHERE provider = :provider AND ("
     "(status = 'created' AND created_at <= :unsent) "
     "OR (status = 'sending' AND updated_at <= :interrupted) "
     "OR (status = 'awaiting_approval' AND updated_at <= :quiet)) "
@@ -76,7 +77,7 @@ _STRAGGLERS = text(
 )
 _UNCERTAIN = text(
     "SELECT id, updated_at FROM payment_deposits "
-    "WHERE method = 'card' AND status = 'uncertain' AND code <> 'amount_mismatch' "
+    "WHERE status = 'uncertain' AND code NOT IN ('amount_mismatch', 'payer_differs') "
     "AND provider = :provider AND provider_reference IS NOT NULL "
     "AND updated_at <= :quiet AND updated_at > :given_up "
     "AND (updated_at, id) > (:after_at, :after_id) "
@@ -108,7 +109,7 @@ class CardDepositJobs:
             deposit = await service.find_deposit(session, deposit_id, lock=True)
             if deposit is None:
                 raise PermanentJobError(code="deposit_not_found")
-            if deposit.provider != self._provider.name or deposit.method is not Method.CARD:
+            if deposit.provider != self._provider.name:
                 raise PermanentJobError(code="provider_mismatch")
             order = await cards.find_order(session, deposit_id)
             contact = await client_contact(session, deposit.client_id)
@@ -193,7 +194,6 @@ class CardDepositJobs:
         if (
             deposit.status not in _OPEN
             or deposit.provider != self._provider.name
-            or deposit.method is not Method.CARD
             or deposit.provider_reference is None
         ):
             return
@@ -204,7 +204,13 @@ class CardDepositJobs:
 
         async def effect(session: AsyncSession) -> Mapping[str, object]:
             settled = await cards.settle_card_deposit(
-                session, deposit.id, found.reading, found.details, self._clock, cause="status_read"
+                session,
+                deposit.id,
+                found.reading,
+                found.details,
+                self._clock,
+                cause="status_read",
+                paid_from=found.paid_from,
             )
             if settled.status is DepositStatus.AWAITING_APPROVAL:
                 if card_window_over(settled.sent_at, now):
@@ -258,7 +264,13 @@ class CardDepositJobs:
                 )
                 return {"status": moved.status.value}
             settled = await cards.settle_card_deposit(
-                session, deposit_id, reading, found.details, self._clock, cause="sweep"
+                session,
+                deposit_id,
+                reading,
+                found.details,
+                self._clock,
+                cause="sweep",
+                paid_from=found.paid_from,
             )
             return {"status": settled.status.value, "cancel": cancelled.value}
 
