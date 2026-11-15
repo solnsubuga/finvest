@@ -12,6 +12,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.api.app import create_app
 from app.infrastructure.database import Database
+from app.modules.identity import team
 from app.modules.identity.api import COOKIES
 from app.modules.identity.hashing import PasswordHasher
 from app.modules.identity.phone_changes import PROPOSAL_LIFETIME
@@ -326,17 +327,19 @@ async def test_a_disabled_member_of_staff_cannot_decide(api: Api) -> None:
     maker, checker = await a_staff_member(api), await a_staff_member(api)
     _, _, client_id = await a_client(api)
     change_id = (await propose(api, maker, client_id, a_phone())).json()["id"]
-    async with api.owner.transaction() as session:
-        # Set-up only: staff are deactivated by an approved change, which the guard enforces.
-        await session.execute(
-            text("ALTER TABLE identity_staff DISABLE TRIGGER identity_staff_guard")
+    # Deactivated the only way there is: one admin proposes, another approves.
+    first = Actor("staff", (await a_staff_member(api, "admin"))["X-Staff-Id"])
+    second = Actor("staff", (await a_staff_member(api, "admin"))["X-Staff-Id"])
+    async with api.database.actor_transaction(first) as session:
+        change = await team.propose(
+            session,
+            first,
+            team.Proposed(kind="deactivate", reason="Left", staff_id=checker["X-Staff-Id"]),
+            api.clock,
         )
-        await session.execute(
-            text("UPDATE identity_staff SET status = 'disabled' WHERE id = :id"),
-            {"id": checker["X-Staff-Id"]},
-        )
-        await session.execute(
-            text("ALTER TABLE identity_staff ENABLE TRIGGER identity_staff_guard")
+    async with api.database.actor_transaction(second) as session:
+        await team.decide(
+            session, second, change.id, "approved", "Checked", api.clock, console_origin=None
         )
     actor = Actor("staff", checker["X-Staff-Id"])
     with pytest.raises(DBAPIError, match="only active staff"):
