@@ -193,7 +193,9 @@ export function ComplaintsScreen({
   // comes back. Only a real change replaces it, so a half-written note is not dropped for nothing.
   const shown = detail?.state === "ready" ? detail.value : null;
   const latest = useRef<{ shown: ComplaintDetail | null; busy: boolean; show: Show }>({ shown, busy, show });
-  latest.current = { shown, busy, show };
+  useEffect(() => {
+    latest.current = { shown, busy, show };
+  }, [shown, busy, show]);
   const shownId = shown?.complaint.id ?? null;
   useEffect(() => {
     if (pollMs <= 0 || shownId === null) return;
