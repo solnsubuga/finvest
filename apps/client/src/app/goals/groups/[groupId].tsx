@@ -35,6 +35,9 @@ export default function GroupDetail() {
   // A link just made. Its code is shown this once: only its hash is kept.
   const [invite, setInvite] = useState<NewInvite | null>(null);
   const [copied, setCopied] = useState(false);
+  // The link's code lets anyone join, so it is hidden on screen until asked for. Share and Copy
+  // send the whole link either way.
+  const [linkShown, setLinkShown] = useState(false);
   const [busy, setBusy] = useState<"invite" | "stop" | "end" | "remove" | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [confirmEnd, setConfirmEnd] = useState(false);
@@ -233,10 +236,18 @@ export default function GroupDetail() {
                     {`Send this link by WhatsApp or SMS. It works until ${formatDateTime(invite?.expiresAt ?? "")}, and we show it only now.`}
                   </Txt>
                   <View style={styles.link}>
-                    <Txt size={13} weight="bold" selectable testID="group-link">
-                      {link}
+                    <Txt size={13} weight="bold" selectable={linkShown} testID="group-link">
+                      {linkShown ? link : hiddenLink(link)}
                     </Txt>
                   </View>
+                  {linkShown ? null : (
+                    <TextLink
+                      label="Show the whole link"
+                      onPress={() => setLinkShown(true)}
+                      underline={false}
+                      testID="group-link-show"
+                    />
+                  )}
                   <Button label="Share the link" onPress={share} height={48} testID="group-share" />
                   <TextLink label={copied ? "Copied" : "Copy the link"} onPress={copy} underline={false} />
                 </>
@@ -349,6 +360,11 @@ function MemberRow({
       ) : null}
     </View>
   );
+}
+
+/** The link with its code hidden, so a screen someone else sees does not let them join. */
+function hiddenLink(link: string): string {
+  return `${link.slice(0, link.lastIndexOf("#") + 1)}••••••••`;
 }
 
 const styles = StyleSheet.create({
