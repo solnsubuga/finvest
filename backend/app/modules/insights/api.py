@@ -102,6 +102,8 @@ async def client_insights(
 class PortfolioPartView(Contract):
     worth_minor: int
     count: int
+    # The soonest of these matures, or null when none has a date to mature.
+    next_matures_on: date | None
 
 
 class PortfolioProductView(Contract):
@@ -164,10 +166,14 @@ async def client_portfolio(
         active_count=portfolio.active_count,
         awaiting_payment_count=portfolio.awaiting_payment_count,
         outside_goals=PortfolioPartView(
-            worth_minor=portfolio.outside_goals.worth.minor, count=portfolio.outside_goals.count
+            worth_minor=portfolio.outside_goals.worth.minor,
+            count=portfolio.outside_goals.count,
+            next_matures_on=portfolio.outside_goals.next_matures_on,
         ),
         in_goals=PortfolioPartView(
-            worth_minor=portfolio.in_goals.worth.minor, count=portfolio.in_goals.count
+            worth_minor=portfolio.in_goals.worth.minor,
+            count=portfolio.in_goals.count,
+            next_matures_on=portfolio.in_goals.next_matures_on,
         ),
         open_goals=portfolio.open_goals,
         products=[

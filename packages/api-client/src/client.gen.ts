@@ -1297,6 +1297,7 @@ export type PortfolioMaturityView = z.infer<typeof PortfolioMaturityView>;
 
 export const PortfolioPartView = z.object({
   count: z.number().int(),
+  next_matures_on: z.string().nullable(),
   worth_minor: z.number().int(),
 });
 export type PortfolioPartView = z.infer<typeof PortfolioPartView>;

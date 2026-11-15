@@ -230,6 +230,8 @@ class Holding:
 
     worth: Money
     count: int
+    # The soonest any of them matures, so a count of zero never comes with a date.
+    next_matures_on: date | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,6 +334,12 @@ async def client_portfolio(
         key=lambda item: (item.maturity_date, item.id),
     )
     first = maturing[0] if maturing else None
+
+    def holding(items: list[investments.ClientInvestment]) -> Holding:
+        ids = {item.id for item in items}
+        soonest = next((item for item in maturing if item.id in ids), None)
+        return Holding(total(items), len(items), None if soonest is None else soonest.maturity_date)
+
     return ClientPortfolio(
         currency=currency,
         invested=sum((item.amount for item in running), zero),
@@ -343,8 +351,8 @@ async def client_portfolio(
         awaiting_payment_count=sum(
             1 for item in held if item.status is InvestmentStatus.AWAITING_PAYMENT
         ),
-        outside_goals=Holding(total(outside), len(outside)),
-        in_goals=Holding(total(in_goals), len(in_goals)),
+        outside_goals=holding(outside),
+        in_goals=holding(in_goals),
         open_goals=await goals.open_goal_count(session, client.id),
         products=tuple(
             ProductShare(

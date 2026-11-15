@@ -368,7 +368,6 @@ export default function Home() {
             <QuickActions actions={actions} />
             <HoldingRows
               portfolio={ready}
-              nextMaturesOn={ready.nextMaturity?.on ?? null}
               onInvestments={() => router.navigate("/portfolio")}
               onGoals={() => router.navigate("/goals")}
             />
