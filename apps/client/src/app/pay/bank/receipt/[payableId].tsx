@@ -13,6 +13,7 @@ import { newIdempotencyKey } from "@/payments/idempotency";
 import { chooseReceiptFile, photographReceipt } from "@/payments/pickReceipt";
 import {
   checkReceiptFile,
+  daySentToday,
   groupDigits,
   parseDaySent,
   parseShillings,
@@ -36,7 +37,7 @@ export default function UploadReceipt() {
   const [file, setFile] = useState<ReceiptFile | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
-  const [daySent, setDaySent] = useState("");
+  const [daySent, setDaySent] = useState(() => daySentToday(Date.now()));
   const [bankName, setBankName] = useState("");
   const [transactionNumber, setTransactionNumber] = useState("");
   const [submitted, setSubmitted] = useState(false);
@@ -210,9 +211,8 @@ export default function UploadReceipt() {
           label="Date sent"
           value={daySent}
           onChangeText={setDaySent}
-          placeholder="13/11/2026"
           keyboardType="numbers-and-punctuation"
-          hint="Day, month, year."
+          hint="Day, month, year. Change it if you sent the money on another day."
           error={show(problems.day)}
           editable={!locked}
           testID="receipt-day"

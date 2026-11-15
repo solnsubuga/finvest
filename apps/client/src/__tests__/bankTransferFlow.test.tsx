@@ -181,7 +181,9 @@ describe("paying for an investment by bank transfer", () => {
     await fireEvent.press(screen.getByTestId("receipt-submit"));
     await screen.findByText("Add your receipt.");
     expect(screen.getByText("Enter the amount you sent, in shillings.")).toBeTruthy();
-    expect(screen.getByText(/Enter the day you sent it/)).toBeTruthy();
+    // The day starts as today, which is when most clients send.
+    expect(screen.queryByText(/Enter the day you sent it/)).toBeNull();
+    expect(screen.getByTestId("receipt-day").props.value).toBe("13/11/2026");
     expect(screen.getByText("Enter the bank you sent from.")).toBeTruthy();
     expect(screen.getByText("Enter the transaction number on the receipt.")).toBeTruthy();
 

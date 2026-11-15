@@ -2,6 +2,7 @@ import { formatDay, formatFileSize } from "../format";
 import {
   checkReceipt,
   checkReceiptFile,
+  daySentToday,
   groupDigits,
   kampalaToday,
   MAX_RECEIPT_BYTES,
@@ -78,6 +79,12 @@ describe("the day sent", () => {
   it("is today in Kampala, three hours ahead of UTC", () => {
     expect(kampalaToday(Date.parse("2026-11-13T20:59:00Z"))).toBe("2026-11-13");
     expect(kampalaToday(Date.parse("2026-11-13T21:00:00Z"))).toBe("2026-11-14");
+  });
+
+  it("starts the day sent as today in Kampala, written as the form reads it", () => {
+    expect(daySentToday(Date.parse("2026-11-15T09:00:00Z"))).toBe("15/11/2026");
+    expect(daySentToday(Date.parse("2026-11-30T21:30:00Z"))).toBe("01/12/2026");
+    expect(parseDaySent(daySentToday(NOW), NOW)).toBe("2026-11-13");
   });
 
   it("reads day, month, year", () => {
