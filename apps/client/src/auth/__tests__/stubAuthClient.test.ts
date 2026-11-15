@@ -93,12 +93,15 @@ describe("log in", () => {
     expect(await codeOf(auth.startLogin({ phone: NEW_PHONE }, DEMO_PASSWORD))).toBe("invalid_credentials");
   });
 
-  it("logs in by email only with a proved address", async () => {
+  it("logs in by the email on the account, confirmed or not", async () => {
     const auth = client();
     // Joseph proved his address; Amara has not proved hers yet.
     const challenge = await auth.startLogin({ email: "Joseph@Example.com" }, DEMO_PASSWORD);
     expect(challenge).toMatchObject({ phone: null, email: "joseph@example.com" });
-    expect(await codeOf(auth.startLogin({ email: "amara@example.com" }, DEMO_PASSWORD))).toBe(
+    await expect(auth.startLogin({ email: "amara@example.com" }, DEMO_PASSWORD)).resolves.toMatchObject({
+      email: "amara@example.com",
+    });
+    expect(await codeOf(auth.startLogin({ email: "amara@example.com" }, "wrong password"))).toBe(
       "invalid_email_credentials",
     );
   });

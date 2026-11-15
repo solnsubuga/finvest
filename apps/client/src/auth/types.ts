@@ -213,9 +213,9 @@ export interface AuthClient {
   completeClaim(token: string, challengeId: string, code: string, password: string): Promise<Session>;
 
   /**
-   * Log in, step 1: the number or a proved email address, and the password.
-   * Never opens a session on its own. An address the client never proved
-   * fails like a wrong password.
+   * Log in, step 1: the number or the email address on the account, and the
+   * password. Never opens a session on its own. An address not confirmed yet
+   * works too, and the API emails a new link to confirm it.
    */
   startLogin(identifier: LoginIdentifier, password: string): Promise<LoginChallenge>;
   /** Log in, step 2, with a passkey. */
@@ -387,7 +387,7 @@ export interface AuthClient {
 const messages: Record<AuthErrorCode, string> = {
   invalid_credentials: "That number and password do not match. Check both and try again.",
   invalid_email_credentials:
-    "That email and password do not match. Only an email address you confirmed by its link works here.",
+    "That email and password do not match. Check both and try again.",
   invalid_code: "That code is not right. Check it and try again.",
   phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:

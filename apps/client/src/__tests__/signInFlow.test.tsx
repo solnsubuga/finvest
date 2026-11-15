@@ -82,15 +82,19 @@ describe("the shell, from the first screen", () => {
     await screen.findByText(/You signed in with a code/);
   });
 
-  it("refuses an email that was never proved, in words about the email", async () => {
+  it("logs in by an email not confirmed yet, and refuses a wrong password in words about the email", async () => {
     await openApp();
     await press("Log in");
     await screen.findByText("Welcome back");
     await fireEvent.press(screen.getByTestId("switch-identifier"));
     await fireEvent.changeText(screen.getByTestId("email-input"), "amara@example.com");
-    await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
+    await fireEvent.changeText(screen.getByTestId("password-input"), "not the password");
     await fireEvent.press(screen.getByTestId("login-submit"));
     await screen.findByText(/That email and password do not match/);
+
+    await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
+    await fireEvent.press(screen.getByTestId("login-submit"));
+    await screen.findByText("Confirm it is you");
   });
 
   it("shows one message for a wrong password and stays on the form", async () => {
