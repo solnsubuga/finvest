@@ -52,6 +52,8 @@ AccountKind = Literal["client", "staff"]
 ACCOUNT_FROM_ADDRESS_ATTEMPTS = 4  # Solo, 2026-11-15
 ACCOUNT_ATTEMPTS = 20
 ADDRESS_ATTEMPTS = 50
+# Accounts tried for one email address that none of them has proved. Each costs a hash check.
+UNPROVED_HOLDERS_TRIED = 3
 TOUCH_INTERVAL = timedelta(minutes=1)
 # Approving another person's change needs a second step this recent.
 CONFIRMATION_WINDOW = timedelta(minutes=10)
@@ -69,6 +71,8 @@ class _PasswordMatch:
     id: str
     password_hash: str
     proved: bool
+    # The client has proved the email address on their account, so codes may go there.
+    email_proved: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,6 +81,8 @@ class LoginChallenge:
     methods: list[SecondStep]
     # The client, when they signed in by an email address they have not proved yet.
     unproved_email_of: str | None = None
+    # Whether a sign-in code may be emailed: only to an address the client proved.
+    email_codes: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -279,7 +285,10 @@ class IdentityService:
         logger.info("login_started", kind=kind, login_id=challenge_id)
         # In the order to offer them. The person finishes with any one.
         return LoginChallenge(
-            challenge_id, methods, unproved_email_of=None if account.proved else account.id
+            challenge_id,
+            methods,
+            unproved_email_of=None if account.proved else account.id,
+            email_codes=account.email_proved,
         )
 
     async def _check_password(
@@ -304,41 +313,75 @@ class IdentityService:
 
         if kind == "client" and by_email:
             # Only one account can prove an address, but several may hold it unproved. A proved
-            # holder answers for the address, and otherwise the newest account holding it.
+            # holder alone answers for the address. Otherwise every holder is tried, newest
+            # first, so another account giving the same address cannot shut the owner out.
             query = (
-                "SELECT id, phone, password_hash, email_verified_at IS NOT NULL AS proved "
+                "SELECT id, phone, password_hash, email_verified_at IS NOT NULL AS proved, "
+                "email_verified_at IS NOT NULL AS email_proved "
                 "FROM identity_clients WHERE email = :identifier AND status = 'active' "
-                "ORDER BY email_verified_at IS NOT NULL DESC, created_at DESC, id DESC LIMIT 1"
+                "ORDER BY email_verified_at IS NOT NULL DESC, created_at DESC, id DESC "
+                "LIMIT :holders"
             )
         elif kind == "client":
             query = (
-                "SELECT id, phone, password_hash, true AS proved FROM identity_clients "
+                "SELECT id, phone, password_hash, true AS proved, "
+                "email_verified_at IS NOT NULL AS email_proved FROM identity_clients "
                 "WHERE phone = :identifier AND status = 'active'"
             )
         else:
             query = (
-                "SELECT id, email AS phone, password_hash, true AS proved FROM identity_staff "
-                "WHERE email = :identifier AND status = 'active'"
+                "SELECT id, email AS phone, password_hash, true AS proved, false AS email_proved "
+                "FROM identity_staff WHERE email = :identifier AND status = 'active'"
             )
         async with self.database.transaction() as session:
-            account = (await session.execute(text(query), {"identifier": identifier})).one_or_none()
+            rows = list(
+                (
+                    await session.execute(
+                        text(query), {"identifier": identifier, "holders": UNPROVED_HOLDERS_TRIED}
+                    )
+                ).all()
+            )
+        if rows and rows[0].proved:
+            rows = rows[:1]
 
         # A client's attempts count against their number whichever way they sign in, so the
-        # email gives no second budget of guesses. An unknown address counts against itself.
-        counted = account.phone if account is not None and kind == "client" else identifier
-        account_key = throttle_key(f"{kind}-account", counted)
-        pair_key = throttle_key(f"{kind}-account-from", f"{counted}\x00{address}")
-        keys = [(account_key, ACCOUNT_ATTEMPTS), (pair_key, ACCOUNT_FROM_ADDRESS_ATTEMPTS)]
+        # email gives no second budget of guesses. A guess at an address several accounts hold
+        # counts against each of them. An unknown address counts against itself.
+        counted = [row.phone for row in rows] if rows and kind == "client" else [identifier]
+        own_keys = {
+            phone: [
+                throttle_key(f"{kind}-account", phone),
+                throttle_key(f"{kind}-account-from", f"{phone}\x00{address}"),
+            ]
+            for phone in counted
+        }
+        keys = [
+            (key, limit)
+            for account_key, pair_key in own_keys.values()
+            for key, limit in (
+                (account_key, ACCOUNT_ATTEMPTS),
+                (pair_key, ACCOUNT_FROM_ADDRESS_ATTEMPTS),
+            )
+        ]
         if address is not None:
             keys.append((throttle_key("address", address), ADDRESS_ATTEMPTS))
         await reserve_attempts(self.database, self.clock, keys)
 
-        hashed = account.password_hash if account is not None else None
-        if not await self.hasher.verify(password, hashed) or account is None:
+        # One hash check per holder, or one against nothing when there is none.
+        account = None
+        if not rows:
+            await self.hasher.verify(password, None)
+        for row in rows:
+            if await self.hasher.verify(password, row.password_hash):
+                account = row
+                break
+        if account is None:
             logger.info("login_refused", kind=kind, error_code="invalid_credentials")
             raise ApplicationError("invalid_credentials")
-        match = _PasswordMatch(account.id, account.password_hash, bool(account.proved))
-        return match, [account_key, pair_key]
+        match = _PasswordMatch(
+            account.id, account.password_hash, bool(account.proved), bool(account.email_proved)
+        )
+        return match, own_keys[account.phone if kind == "client" else identifier]
 
     # Sessions
 

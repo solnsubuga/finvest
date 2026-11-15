@@ -106,7 +106,7 @@ describe("the sign-in client for the real API", () => {
 
   it("logs in by a proved email and sends the code there", async () => {
     const seen = serve({
-      "POST /client/login/start": { status: 200, body: { login_id: ID, methods: ["code"] } },
+      "POST /client/login/start": { status: 200, body: { login_id: ID, methods: ["code"], email_codes: true } },
       "POST /client/login/code/send": { status: 204 },
     });
     const client = createApiAuthClient();
@@ -117,6 +117,12 @@ describe("the sign-in client for the real API", () => {
       { email: "amara@example.com", password: "pw" },
       { login_id: ID, channel: "email" },
     ]);
+  });
+
+  it("never offers to email a code to an address not proved yet", async () => {
+    serve({ "POST /client/login/start": { status: 200, body: { login_id: ID, methods: ["code"], email_codes: false } } });
+    const challenge = await createApiAuthClient().startLogin({ email: "amara@example.com" }, "pw");
+    expect(challenge).toEqual({ loginId: ID, phone: null, email: null, methods: ["code"] });
   });
 
   it("says an email log in was refused in words about the email", async () => {

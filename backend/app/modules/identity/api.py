@@ -225,6 +225,9 @@ class LoginStarted(Contract):
 
     login_id: PushId
     methods: list[SecondStep]
+    # A "code" can be emailed only when this is true: the client proved their address.
+    # Otherwise it is texted, whatever channel is asked for.
+    email_codes: bool = False
 
 
 class ClientSessionView(Contract):
@@ -318,7 +321,9 @@ async def client_login_start(
             await email_checks.send_link(challenge.unproved_email_of)
         except ApplicationError as error:
             logger.info("login_email_check_not_sent", error_code=error.code)
-    return LoginStarted(login_id=challenge.id, methods=challenge.methods)
+    return LoginStarted(
+        login_id=challenge.id, methods=challenge.methods, email_codes=challenge.email_codes
+    )
 
 
 @client_router.get("/session")

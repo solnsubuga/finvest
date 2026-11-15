@@ -95,6 +95,9 @@ describe("the shell, from the first screen", () => {
     await fireEvent.changeText(screen.getByTestId("password-input"), DEMO_PASSWORD);
     await fireEvent.press(screen.getByTestId("login-submit"));
     await screen.findByText("Confirm it is you");
+    // The address is not confirmed, so a code is texted, never emailed there.
+    expect(screen.queryByText(/By email to/)).toBeNull();
+    expect(screen.getByText("Send me a code")).toBeTruthy();
   });
 
   it("shows one message for a wrong password and stays on the form", async () => {
