@@ -20,7 +20,7 @@ describe("the client money check", () => {
     expect(within(owed).getByText(/UGX 120,000,000 still to come/)).toBeInTheDocument();
     const held = side("Held for clients");
     expect(within(held).getByText("ioTec wallet, MTN, statement")).toBeInTheDocument();
-    expect(within(held).getByText("Trust bank account, Stanbic trust, statement")).toBeInTheDocument();
+    expect(within(held).getByText("Trust bank account, statement")).toBeInTheDocument();
     expect(within(held).getByText(/Custodian statement checked for this day, every maturity matching/)).toBeInTheDocument();
     expect(within(held).getByText("Less: Finvest's own money in the buffer")).toBeInTheDocument();
     expect(within(held).getByText("-UGX 250,000,000")).toBeInTheDocument();
