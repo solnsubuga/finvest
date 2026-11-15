@@ -170,7 +170,7 @@ How an attempt goes (`app/modules/kyc/liveness.py`, `liveness_jobs.py`, `domain/
 - The client is only sent to, and the capture only downloaded from, an https address on `iotec.io` or a subdomain. The API key is only sent to the API's own host. The capture's type is read from its bytes, and it may be at most 10 MiB.
 - ioTec's callback (`/api/face-verification/callback`) is not used. Reading is cheap and a callback is only a hint.
 - To confirm against ioTec's sandbox: that a request with no email still returns `verificationUrl`; that `profileImageUrl` is on an ioTec host and needs no key; whether ioTec Faces can return the client to the app when done; and what ioTec Faces asks of the client (it may also ask for the ID card, which this flow does not use).
-- The development stub passes on the first read with a stand-in capture, and its page is a placeholder.
+- The development stub passes on the first read with a stand-in capture (a grey outline of a head and shoulders, `backend/app/modules/kyc/development-stub-selfie.jpg`, so it shows as a picture), and its page is a placeholder.
 
 ### Regula liveness
 

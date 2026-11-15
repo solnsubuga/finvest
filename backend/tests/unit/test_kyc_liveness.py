@@ -327,3 +327,7 @@ async def test_the_development_stub_passes_with_a_stand_in_capture() -> None:
     result = await stub.result(started.request_id)
     assert isinstance(result, Live)
     assert result.content_type == "image/jpeg"
+    # A whole JPEG, from its start marker to its end marker, so it shows as a picture.
+    assert result.photo.startswith(b"\xff\xd8\xff")
+    assert result.photo.endswith(b"\xff\xd9")
+    assert len(result.photo) > 1000
