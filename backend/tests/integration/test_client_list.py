@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from app.infrastructure.database import Database
+from app.modules.identity.service import create_unclaimed_client
 from app.shared.actors import Actor
 from app.shared.push_ids import push_id
 from tests.support.database import TestDatabase
@@ -14,6 +15,8 @@ from tests.support.investments import PRESENT
 from tests.support.kyc import verify
 
 pytestmark = pytest.mark.integration
+
+IMPORTER = Actor("staff", "-Nabc0000000000000S1")
 
 
 @pytest.fixture
@@ -75,17 +78,50 @@ async def test_an_id_or_mobile_number_finds_one_client(api: Api) -> None:
     assert ids(await listed(api, q=str(client.id))) == [client.id]
 
 
+async def every_page(api: Api, **params: str) -> list[dict[str, Any]]:
+    """Every row of the full list, page by page. Other tests' clients are in it too."""
+    seen: list[dict[str, Any]] = []
+    after: str | None = None
+    for _ in range(500):
+        page = await listed(api, **params, **({"after": after} if after else {}))
+        assert len(rows(page)) <= 25
+        seen += rows(page)
+        if page["next_after"] is None:
+            return seen
+        after = str(page["next_after"])
+    raise AssertionError("the list never ended")
+
+
 async def test_every_client_is_listed_newest_first_a_page_at_a_time(api: Api) -> None:
     made: list[Actor] = [await api.client() for _ in range(3)]
     await api.staff("support")
-    first = await listed(api)
-    assert ids(first)[:3] == [actor.id for actor in reversed(made)]
-    assert len(ids(first)) == 25 or first["next_after"] is None
-    if first["next_after"] is not None:
-        second = await listed(api, after=str(first["next_after"]))
-        assert not set(ids(first)) & set(ids(second))
-    locked = await listed(api, status="closed")
-    assert all(row["status"] == "closed" for row in rows(locked))
+    listed_ids = [row["id"] for row in await every_page(api)]
+    assert len(listed_ids) == len(set(listed_ids)), "a client was on two pages"
+    mine = [client_id for client_id in listed_ids if client_id in {a.id for a in made}]
+    assert mine == [actor.id for actor in reversed(made)]
+    closed = await listed(api, status="closed")
+    assert all(row["status"] == "closed" for row in rows(closed))
+
+
+async def test_a_client_carried_over_from_the_paper_register_is_listed(api: Api) -> None:
+    # Not signed up yet: no password, and an email as it was written down.
+    async with api.database.actor_transaction(IMPORTER) as session:
+        client_id = await create_unclaimed_client(
+            session, api.clock, IMPORTER, phone="+256709460001", email="Ada@Example.com"
+        )
+    await api.staff("support")
+    row = next(row for row in await every_page(api) if row["id"] == client_id)
+    assert (row["status"], row["verified_name"], row["account_number"]) == (
+        "unclaimed",
+        None,
+        None,
+    )
+    unclaimed = await every_page(api, status="unclaimed")
+    assert client_id in [row["id"] for row in unclaimed]
+    assert all(row["status"] == "unclaimed" for row in unclaimed)
+    page = await api.http.get(f"/staff/clients/{client_id}")
+    assert page.status_code == 200, page.text
+    assert page.json()["account"]["status"] == "unclaimed"
 
 
 async def test_a_bad_page_place_is_refused(api: Api) -> None:

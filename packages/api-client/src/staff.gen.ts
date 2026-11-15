@@ -23,7 +23,7 @@ export const AccountView = z.object({
   last_signed_in_at: z.string().nullable(),
   phone: z.string(),
   restricted_until: z.string().nullable(),
-  status: z.enum(["active", "locked", "closed"]),
+  status: z.enum(["unclaimed", "active", "locked", "closed"]),
 });
 export type AccountView = z.infer<typeof AccountView>;
 
@@ -881,7 +881,7 @@ export const ClientCardView = z.object({
   account_number: z.string().nullable(),
   created_at: z.string(),
   id: z.string(),
-  status: z.enum(["active", "locked", "closed"]),
+  status: z.enum(["unclaimed", "active", "locked", "closed"]),
   verified_name: z.string().nullable(),
 });
 export type ClientCardView = z.infer<typeof ClientCardView>;
@@ -905,7 +905,7 @@ export const ClientRowView = z.object({
   email: z.string().nullable(),
   id: z.string(),
   phone: z.string(),
-  status: z.enum(["active", "locked", "closed"]),
+  status: z.enum(["unclaimed", "active", "locked", "closed"]),
   verified_name: z.string().nullable(),
 });
 export type ClientRowView = z.infer<typeof ClientRowView>;
