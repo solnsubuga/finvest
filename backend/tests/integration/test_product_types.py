@@ -342,3 +342,52 @@ async def test_a_change_from_the_release_before_takes_the_built_in_type(
             {"id": change_id},
         )
         assert found.scalar_one() == "FIXED-INCOME"
+
+
+async def test_a_bond_issue_saved_without_a_type_is_given_the_type_its_change_names(
+    migrator_database: Database,
+) -> None:
+    """The release before types names none. The type check fills one in for a new bond issue,
+    from its change, without reading a column only bond changes have (fixed in 0494)."""
+    tag = uuid.uuid4().hex[:8].upper()
+    ids = {
+        "change": f"-TypeFill{tag}Change"[:20].ljust(20, "0"),
+        "issue": f"-TypeFill{tag}Issue0"[:20].ljust(20, "0"),
+        "code": f"BOND-{tag}",
+        "isin": f"UGF{tag}0",
+        "staff": new_staff().id,
+    }
+    async with migrator_database.transaction() as session:
+        await session.execute(
+            text(
+                "INSERT INTO bond_changes (id, action, code, isin, name, currency, coupon_bps, "
+                "tax_bps, issue_date, maturity_date, minimum_face_minor, face_step_minor, price, "
+                "reason, proposed_by, proposed_at) VALUES (:change, 'create', :code, :isin, "
+                "'Test bond', 'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, 100000, "
+                "985000, 'From the auction', :staff, now())"
+            ),
+            ids,
+        )
+        await session.execute(
+            text(
+                "INSERT INTO bond_issues (id, code, isin, name, currency, coupon_bps, tax_bps, "
+                "issue_date, maturity_date, minimum_face_minor, face_step_minor, status, version, "
+                "change_id, created_at, updated_at) VALUES (:issue, :code, :isin, 'Test bond', "
+                "'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, 100000, 'draft', 1, "
+                ":change, now(), now())"
+            ),
+            ids,
+        )
+        filled = (
+            await session.execute(
+                text(
+                    "SELECT c.type_id AS change_type, i.type_id AS issue_type FROM bond_issues i "
+                    "JOIN bond_changes c ON c.id = i.change_id WHERE i.id = :issue"
+                ),
+                ids,
+            )
+        ).one()
+    assert (filled.change_type, filled.issue_type) == (
+        "-PTYPE0000000000000T",
+        "-PTYPE0000000000000T",
+    )

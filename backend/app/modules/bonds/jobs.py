@@ -1,5 +1,5 @@
 """The worker's side of bonds: start a holding when its payment is confirmed, cancel the ones
-nobody paid for, and pay coupons on their dates.
+nobody paid for, pay coupons on their dates, and repay holdings when their bonds mature.
 
 No handler here calls a provider. Each does all its work in the single fenced transaction that
 also completes the job, so a job that is run twice changes nothing the second time.
@@ -21,7 +21,7 @@ from app.infrastructure.jobs import (
     RetryableJobError,
 )
 from app.infrastructure.jobs import queue as job_queue
-from app.modules.bonds import coupons, holdings
+from app.modules.bonds import coupons, holdings, maturity
 from app.modules.bonds.events import START_KIND
 from app.shared.actors import SYSTEM
 from app.shared.business_day import business_date
@@ -30,6 +30,7 @@ from app.shared.errors import ApplicationError
 
 CANCEL_UNPAID_KIND = "bonds.cancel_unpaid"
 PAY_COUPONS_KIND = "bonds.pay_coupons"
+REPAY_MATURED_KIND = "bonds.repay_matured"
 logger = structlog.get_logger()
 
 
@@ -43,6 +44,7 @@ class BondJobs:
             START_KIND: self.start_from_deposit,
             CANCEL_UNPAID_KIND: self.cancel_unpaid,
             PAY_COUPONS_KIND: self.pay_coupons,
+            REPAY_MATURED_KIND: self.repay_matured,
         }
 
     async def start_from_deposit(self, job: ClaimedJob, context: JobContext) -> None:
@@ -115,6 +117,45 @@ class BondJobs:
 
         await context.apply(effect)
         logger.info("bond_coupon_run_finished", run_date=run_date.isoformat(), paid=paid, held=held)
+
+    async def repay_matured(self, job: ClaimedJob, context: JobContext) -> None:
+        """Repay every active holding of an issue that matured on or before the business day
+        this run is for: its face value and last coupon, and first any coupon a run missed.
+
+        Holdings are repaid a batch at a time, each batch in a transaction only the current
+        holder of the job can commit, and a holding repaid once is never repaid again.
+        """
+        run_date = _run_date(job.payload)
+        paid = held = failed = 0
+        after = ""
+        async with context.kept_alive():
+            while True:
+                async with self._database.actor_transaction(SYSTEM) as session:
+                    await job_queue.lock_fenced(session, job)
+                    try:
+                        batch = await maturity.repay_batch(
+                            session, run_date, self._clock, after=after
+                        )
+                    except ApplicationError as error:
+                        raise PermanentJobError(code=f"maturity_run_{error.code}") from error
+                if batch.last_id is None:
+                    break
+                after = batch.last_id
+                paid, held, failed = paid + batch.paid, held + batch.held, failed + batch.failed
+
+        if failed:
+            logger.error(
+                "bond_maturity_run_incomplete", run_date=run_date.isoformat(), failed=failed
+            )
+            raise RetryableJobError(code="maturity_run_incomplete")
+
+        async def effect(_: AsyncSession) -> Mapping[str, object]:
+            return {"run_date": run_date.isoformat(), "paid": paid, "held": held}
+
+        await context.apply(effect)
+        logger.info(
+            "bond_maturity_run_finished", run_date=run_date.isoformat(), paid=paid, held=held
+        )
 
 
 async def _nothing(_: AsyncSession) -> Mapping[str, object]:

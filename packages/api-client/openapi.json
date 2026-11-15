@@ -2895,6 +2895,99 @@
         "title": "BondQuoteOut",
         "type": "object"
       },
+      "BondRepaymentOut": {
+        "additionalProperties": false,
+        "description": "A holding repaid at maturity: the face value and the last coupon, after tax.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "coupon_minor": {
+            "title": "Coupon Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_minor": {
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "held_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Because"
+          },
+          "holding_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Holding Id",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payout_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Id"
+          },
+          "repaid_on": {
+            "format": "date",
+            "title": "Repaid On",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "holding_id",
+          "code",
+          "name",
+          "repaid_on",
+          "currency",
+          "face_minor",
+          "coupon_minor",
+          "amount_minor",
+          "status",
+          "payout_id",
+          "held_because"
+        ],
+        "title": "BondRepaymentOut",
+        "type": "object"
+      },
       "BondStatus": {
         "enum": [
           "draft",
@@ -10945,6 +11038,7 @@
         "enum": [
           "unpaid",
           "active",
+          "matured",
           "cancelled"
         ],
         "title": "HoldingStatus",
@@ -25033,6 +25127,121 @@
         "title": "StaffBondOut",
         "type": "object"
       },
+      "StaffBondRepaymentOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "cost_minor": {
+            "title": "Cost Minor",
+            "type": "integer"
+          },
+          "coupon_gross_minor": {
+            "title": "Coupon Gross Minor",
+            "type": "integer"
+          },
+          "coupon_minor": {
+            "title": "Coupon Minor",
+            "type": "integer"
+          },
+          "coupon_tax_minor": {
+            "title": "Coupon Tax Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_minor": {
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "held_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Because"
+          },
+          "holding_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Holding Id",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payout_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Id"
+          },
+          "repaid_on": {
+            "format": "date",
+            "title": "Repaid On",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "holding_id",
+          "code",
+          "name",
+          "repaid_on",
+          "currency",
+          "face_minor",
+          "coupon_minor",
+          "amount_minor",
+          "status",
+          "payout_id",
+          "held_because",
+          "client_id",
+          "cost_minor",
+          "coupon_gross_minor",
+          "coupon_tax_minor"
+        ],
+        "title": "StaffBondRepaymentOut",
+        "type": "object"
+      },
       "StaffChat": {
         "additionalProperties": false,
         "properties": {
@@ -35058,6 +35267,188 @@
         "summary": "Pay For Bond By Mobile Money",
         "tags": [
           "client payments"
+        ]
+      }
+    },
+    "/client/bond-repayments": {
+      "get": {
+        "description": "The client's bonds repaid at maturity, newest first, after tax.",
+        "operationId": "client_bond_repayments_client_bond_repayments_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BondRepaymentOut"
+                  },
+                  "title": "Response Client Bond Repayments Client Bond Repayments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Bond Repayments",
+        "tags": [
+          "client bonds"
+        ]
+      }
+    },
+    "/client/bond-repayments/{repayment_id}/pay-out": {
+      "post": {
+        "description": "Send on a repayment that is waiting for a destination.\n\nA repeat after it was sent on is refused with 409 `conflict`, never paid twice. 428\n`pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh\nconfirmation for `withdrawal`.",
+        "operationId": "client_pay_out_repayment_client_bond_repayments__repayment_id__pay_out_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "repayment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Repayment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponPayOutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondRepaymentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          }
+        },
+        "summary": "Client Pay Out Repayment",
+        "tags": [
+          "client bonds"
         ]
       }
     },
@@ -50805,6 +51196,113 @@
           }
         },
         "summary": "Staff Bond Holdings",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-repayments": {
+      "get": {
+        "description": "Holdings repaid at maturity, newest first, with the tax on the last coupon. `held` lists\nthose still waiting for a destination.",
+        "operationId": "staff_bond_repayments_staff_bond_repayments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(paid_out|held)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StaffBondRepaymentOut"
+                  },
+                  "title": "Response Staff Bond Repayments Staff Bond Repayments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Bond Repayments",
         "tags": [
           "staff bonds"
         ]

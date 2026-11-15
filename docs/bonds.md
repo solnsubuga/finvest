@@ -2,7 +2,7 @@
 
 Uganda government bonds, sold the way Bank of Uganda sells them. The owner decided on 2026-11-15 that a client buys a part of a specific bond issue, not a bond by tenor counted from the day they pay (see [decisions.md](decisions.md)). The pure rules are in `backend/app/modules/bonds/domain`, the catalogue in `backend/app/modules/bonds/catalogue.py`, the routes in `backend/app/modules/bonds/api.py`, and the database side is migration 0490.
 
-This document covers the catalogue, buying and the coupon run. Selling early and maturity come in later pull requests, and this document grows with them.
+This document covers the catalogue, buying, the coupon run and maturity. Selling early comes in a later pull request, and this document grows with it.
 
 ## How a bond works
 
@@ -114,6 +114,31 @@ Coupons are paid the way an investment's interest is paid at maturity (`app/modu
 
 The database (migration 0492) lets only the worker save a coupon. A held coupon can be marked paid out once, by the worker or the client it belongs to, and only with a payout of that coupon to that client. No figure on a coupon ever changes, and none is removed. A client may change only the coupon destination on their own holding, and not on a cancelled one. Clients see only their own coupons, after tax.
 
+## Maturity
+
+On or after an issue's maturity date each active holding of it is repaid once: the face value and the last coupon after tax (`app/modules/bonds/maturity.py`, rules in `domain/maturity.py`, database side migration 0494). The holding is then `matured`.
+
+* `bonds.repay_matured` runs at 01:15 Kampala time every day and repays every active holding of an issue that matured on or before that business day, so a day the scheduler missed is made up by the next run. The day comes from the time the run was scheduled for.
+* A coupon before maturity that the holding is owed and was never paid is paid first, in its own `bond.coupon` entry, so a holding never closes with a coupon missing.
+* The repayment is one ledger entry, `bond.matured`, dated the day it is repaid, with the holding as its source:
+
+  | Line | Amount |
+  | --- | --- |
+  | Debit `client.bond_holding` | What the client paid: the clean amount and the accrued interest |
+  | Debit `interest.expense` | The last coupon before tax |
+  | Credit `tax.withholding_payable` | The tax on it |
+  | Credit the client's payout pending account for the repayment | The face value and the coupon after tax |
+  | Credit `bond.accrued_interest_bought` | The accrued interest the client paid at purchase, which their first coupon gave back in full |
+  | Debit `bond.bought_below_par`, or credit `bond.bought_above_par` | The face value less the clean amount, or the other way round |
+
+  Only coupons go through `interest.expense`, so the figures for URA and the client's certificate count the coupons as interest and nothing else. Every ledger balance stays at or above zero, which is why the price difference has one account for each direction. Over a holding's life Finvest pays out exactly its coupons and the face value.
+* The repayment is paid out to the destination the client chose for the holding's coupons. With none chosen, or one the payout module refuses, it is **held**: the money waits in payouts, and the client sends it on with their app PIN (`POST /client/bond-repayments/{id}/pay-out`). The reason it waits is kept on the repayment.
+* Holdings are repaid in batches of 200, each holding in its own savepoint and locked while it is repaid. One that fails stays active and is repaid by the retry. A holding is never repaid twice: one repayment per holding, the ledger entry's idempotency key is the holding, and only an active holding is repaid.
+
+Worked example, the holding above: UGX 1,000,000 of face value bought at 98.5 with 883 of accrued interest. At maturity the client is paid 1,072,000 (the face value and the last coupon of 72,000 after tax). Out of the 985,883 they paid, 883 is accrued interest bought, and 15,000 is made up below par.
+
+The database (migration 0494) lets only the worker save a repayment, for an active holding of an issue that has matured by that day, with the holding's face value and cost exactly as bought, and lets only the worker mark a holding matured, and only once its repayment is saved. A held repayment is sent on once, by the worker or its client, only with a payout of that repayment to that client. No figure on a repayment ever changes, and none is removed. A client cannot choose a coupon destination on a matured holding. Clients see only their own repayments, after tax.
+
 ## HTTP routes
 
 | Route | Who | What |
@@ -128,13 +153,16 @@ The database (migration 0492) lets only the worker save a coupon. A held coupon 
 | `PUT /client/bond-holdings/{id}/coupon-destination` | Signed-in client | Choose where the holding's coupons are paid, or clear it with `null`. 422 on a destination that cannot be paid. |
 | `GET /client/bond-coupons` | Signed-in client | Their coupons, newest first, after tax, and whether each is paid out or waiting. |
 | `POST /client/bond-coupons/{id}/pay-out` | Signed-in client, with the app PIN | Send on a held coupon. 428 without the PIN, 422 when payouts refuse the destination, 409 when it is not waiting. |
+| `GET /client/bond-repayments` | Signed-in client | Their holdings repaid at maturity, newest first, after tax, and whether each is paid out or waiting. |
+| `POST /client/bond-repayments/{id}/pay-out` | Signed-in client, with the app PIN | Send on a held repayment. 428 without the PIN, 422 when payouts refuse the destination, 409 when it is not waiting. |
 | `GET /staff/bond-holdings?status=` | `investments.view` | Every client's holdings with what each paid. |
 | `GET /staff/bond-coupons?status=` | `investments.view` | Coupons paid, with the tax, and the held ones with why they wait. |
+| `GET /staff/bond-repayments?status=` | `investments.view` | Repayments at maturity, with what each holding cost and the tax on its last coupon, and the held ones with why they wait. |
 | `GET /staff/bond-changes?status=` | `products.view` | New issues, prices, pauses and openings, newest first. |
 | `POST /staff/bond-changes/new-issue`, `/price`, `/status`, `POST /staff/bond-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding, with the second person enforced in the database. Approving asks the person to confirm it is them. |
 
-Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested`, `bonds.holding_started` and `bonds.coupon_destination_chosen`.
+Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested`, `bonds.holding_started`, `bonds.coupon_destination_chosen` and `bonds.holding_matured`.
 
 ## Not built yet
 
-Selling early through the dealing desk, maturity (the face value and the last coupon), and the client app screens. No notice is sent when a coupon is paid or held. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.
+Selling early through the dealing desk, and the client app screens. No notice is sent when a coupon is paid or held, or when a holding is repaid. The dealing desk's side of bonds (buying them at the custodian, the coupons and face value Bank of Uganda pays in, and the custodian's asset code in the client money check) is not modelled yet. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.

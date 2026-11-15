@@ -264,7 +264,9 @@ async def pay_coupon(
         ),
         clock,
     )
-    payout_id, refusal = await _pay(session, SYSTEM, holding, coupon_id, figures.net, clock)
+    payout_id, refusal = await pay_to_destination(
+        session, SYSTEM, holding, coupon_id, figures.net, clock
+    )
     await session.execute(
         _INSERT,
         {
@@ -292,17 +294,19 @@ async def pay_coupon(
     return CouponStatus.HELD if payout_id is None else CouponStatus.PAID_OUT
 
 
-async def _pay(
+async def pay_to_destination(
     session: AsyncSession,
     actor: Actor,
     holding: holdings.Holding,
-    coupon_id: str,
+    reference_id: str,
     amount: Money,
     clock: Clock,
-    destination_id: str | None = None,
+    *,
+    kind: str = "bond-coupon",
 ) -> tuple[str | None, str | None]:
-    """Pay a coupon already handed to payouts. Returns the payout, or why the money waits."""
-    destination_id = destination_id or holding.payout_destination_id
+    """Pay money already handed to payouts for `reference_id` (a coupon, or the repayment at
+    maturity) to the holding's destination. Returns the payout, or why the money waits."""
+    destination_id = holding.payout_destination_id
     if destination_id is None:
         return None, HoldReason.NO_DESTINATION
     try:
@@ -314,8 +318,8 @@ async def _pay(
                 client_id=holding.client_id,
                 destination_id=destination_id,
                 amount=amount,
-                source_reference=coupon_id,
-                request_key=f"bond-coupon:{coupon_id}:{destination_id}",
+                source_reference=reference_id,
+                request_key=f"{kind}:{reference_id}:{destination_id}",
                 clock=clock,
             )
     except payouts.PayoutRefused as refused:
@@ -340,10 +344,10 @@ async def choose_destination(
     """Choose where the holding's coupons are paid, or clear the choice. Coupons already held
     are sent on one at a time with `pay_out_held`."""
     holding = await _own(session, client, holding_id)
-    if holding.status is HoldingStatus.CANCELLED:
+    if holding.status in (HoldingStatus.CANCELLED, HoldingStatus.MATURED):
         raise ApplicationError("conflict")
     if destination_id is not None:
-        await _usable(session, holding.client_id, destination_id)
+        await usable(session, holding.client_id, destination_id)
     await session.execute(
         _CHOOSE, {"id": holding.id, "destination_id": destination_id, "now": clock.now()}
     )
@@ -385,7 +389,7 @@ async def pay_out_held(
     view = _view(row)
     if view.status != CouponStatus.HELD:
         raise ApplicationError("conflict")
-    await _usable(session, view.client_id, destination_id)
+    await usable(session, view.client_id, destination_id)
     if confirm is not None:
         await confirm()
     payout = await payouts.create_payout(
@@ -439,7 +443,7 @@ async def _own(session: AsyncSession, client: Actor, holding_id: str) -> holding
     return holding
 
 
-async def _usable(session: AsyncSession, client_id: str, destination_id: str) -> None:
+async def usable(session: AsyncSession, client_id: str, destination_id: str) -> None:
     try:
         await destinations.usable_destination(session, client_id, destination_id)
     except ApplicationError as error:

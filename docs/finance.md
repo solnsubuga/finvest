@@ -26,6 +26,7 @@ Finvest charges clients no fee to open an account, to invest or to withdraw earl
 | --- | --- |
 | `dealing.bill_income`, the discount earned on bills held to maturity | `investments.interest_expense`, the interest clients earned |
 | `dealing.sale_gains`, gains on bills sold | `dealing.sale_losses`, `dealing.maturity_losses` |
+| `bond.accrued_interest_bought` and `bond.bought_above_par`, from bonds repaid at maturity ([bonds.md](bonds.md#maturity)) | `bond.bought_below_par`, the face value made up on bonds bought below par |
 | | `fees.provider.iotec`, ioTec's charge on each mobile money payment in, and charges ioTec kept on a sweep between pots |
 
 The net is income less costs and can be negative. A reversal can make one code's movement negative, and it is shown as it is.
