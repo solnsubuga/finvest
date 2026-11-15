@@ -12,7 +12,8 @@ into, why a payout send waited, the account code maps, the deposits taken back a
 what clients owe for them, the runs staff asked for again, staff notes and actions on a
 client, the account freezes, why an investment was sent to another client, the platform
 settings, the withdrawal limit changes, the paydays clients named, the custodian statement
-checks, the choice to save an investment's interest to a goal or the auction calendar."""
+checks, the SMS delivery reports, the choice to save an investment's interest to a goal or
+the auction calendar."""
 
 import os
 from collections.abc import Iterator
@@ -613,6 +614,11 @@ ROWS = {
         "proposed_at) SELECT '-Nabc0000000000000A1', 'T', 'M', 'R', '-Nabc0000000000000A1', now() "
         "FROM acting",
         "refusing to drop announcements",
+    ),
+    "0440_sms_delivery_reports": (
+        "INSERT INTO notification_sms_reports (provider, provider_message_id, status, delivery, "
+        "received_at) VALUES ('africastalking', 'ATXid_1', 'Success', 'delivered', now())",
+        "refusing to drop SMS delivery reports",
     ),
     "0092_email_delivery": (
         "INSERT INTO notification_email_events (svix_id, delivery, email_id, recipients, "
