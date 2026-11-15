@@ -63,7 +63,17 @@ export type Deposit = {
   networkReference: string | null;
   /** Our reference, which support can look up. */
   reference: string;
+  /**
+   * Paid on Pesapal's page rather than by a prompt sent straight to the phone. The client picks
+   * the network there and approves the prompt Pesapal sends to their own number.
+   */
+  onPage: boolean;
+  /** Pesapal's page, while the client may pay on it. */
+  pageUrl: string | null;
 };
+
+/** Which screen a payment back from Pesapal's page belongs on. */
+export type ReturnedPayment = "card" | "mobile_money";
 
 export type MobileMoneyRequest = {
   payableId: string;
@@ -254,8 +264,11 @@ export interface PaymentsClient {
   /** Starts a card payment. The first status is `sending`; poll until `pageUrl` is set. */
   payWithCard?(request: CardPaymentRequest): Promise<CardPayment>;
   getCardPayment?(paymentId: string): Promise<CardPayment>;
-  /** The client is back from Pesapal's page: asks for the result to be read now. */
-  cardReturned?(paymentId: string): Promise<CardPayment>;
+  /**
+   * The client is back from Pesapal's page, after a card or a mobile money payment there: asks
+   * for the result to be read now, and says which kind of payment it is.
+   */
+  cardReturned?(paymentId: string): Promise<ReturnedPayment>;
 
   getPayable(payableId: string): Promise<Payable>;
   /**

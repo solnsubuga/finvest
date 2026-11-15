@@ -151,6 +151,8 @@ export function toDeposit(view: PaymentView, payable: Payable): Deposit {
     // The API keeps the network's reference to itself. Ours is what support looks up.
     networkReference: null,
     reference: shortReference(view.id),
+    onPage: view.on_page ?? false,
+    pageUrl: view.page_url ?? null,
   };
 }
 
@@ -328,7 +330,7 @@ export function createApiPaymentsClient(): PaymentsClient {
         const view = await api("POST /client/payments/{payment_id}/card-return", {
           params: { payment_id: paymentId },
         });
-        return toCardPayment(view, await payableFor(view.investment_id));
+        return view.method === "card" ? "card" : "mobile_money";
       } catch (error) {
         throw toPaymentError(error);
       }
