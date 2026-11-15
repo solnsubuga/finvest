@@ -5,7 +5,7 @@ import { Redirect, Stack, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
-import { Button } from "@/components/Button";
+import { Button, TextLink } from "@/components/Button";
 import { Icon } from "@/components/Icon";
 import { LoadFailed, Loading } from "@/components/Loading";
 import { Screen } from "@/components/Screen";
@@ -30,6 +30,7 @@ import {
 } from "@/identity/types";
 import { useIdentityCheck } from "@/identity/useIdentityCheck";
 import { firstGivenName } from "@/identity/names";
+import { useOpeningOrganisation } from "@/organisations/useOpening";
 import { colors, fontSizes } from "@/theme";
 
 const HOME = "/";
@@ -297,6 +298,7 @@ function Retake({ check, onSent }: { check: IdentityCheck; onSent: (check: Ident
 /** Approved: the account number, and what it is for. */
 function Approved({ check }: { check: IdentityCheck }) {
   const router = useRouter();
+  const opening = useOpeningOrganisation();
   const [copied, setCopied] = useState(false);
   const number = check.accountNumber ?? "";
   const name = firstName(check);
@@ -320,7 +322,22 @@ function Approved({ check }: { check: IdentityCheck }) {
   return (
     <Screen
       signedIn
-      footer={<Button label="Make my first investment" variant="lime" onPress={() => router.replace("/invest")} testID="id-check-invest" />}
+      footer={
+        opening.state === "ready" && opening.value ? (
+          // Signed up to open a company or group account: that application is next.
+          <>
+            <Button
+              label="Open the company or group account"
+              variant="lime"
+              onPress={() => router.replace("/account/organisations/new")}
+              testID="id-check-organisation"
+            />
+            <TextLink label="Make my first investment" onPress={() => router.replace("/invest")} />
+          </>
+        ) : (
+          <Button label="Make my first investment" variant="lime" onPress={() => router.replace("/invest")} testID="id-check-invest" />
+        )
+      }
     >
       <Stack.Screen options={{ title: "You are verified" }} />
       <BackButton fallback={HOME} />
