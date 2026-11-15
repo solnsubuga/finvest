@@ -56,3 +56,13 @@ jobs:
         run: |
           pnpm typecheck
           pnpm test
+      # A failure keeps its screenshot and page snapshot, so a test that fails once can be
+      # understood rather than run again.
+      - name: Keep what a failed test saw
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-test-failures
+          path: apps/web-e2e/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
