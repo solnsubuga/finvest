@@ -36,10 +36,9 @@ All are public and read at build time. None is a secret.
 
 ## Rates
 
-The pages are built with the rates in `src/data/fallback.ts`, so they show at once and still show if the API is down. When a page opens, the browser asks `GET {API}/public/products` and replaces the rates, minimums, the "last updated" date and whether each product is open, wherever an element carries `data-rate`, `data-minimum`, `data-updated`, `data-when-live` or `data-when-paused`. An answer that is not exactly the expected shape is ignored (`src/lib/products.ts`).
+The pages are built with the rates in `src/data/fallback.ts`, so they show at once and still show if the API is down. When a page opens, the browser asks `GET {API}/public/products` and replaces the rates, minimums, the "last updated" date and whether each product is open, wherever an element carries `data-rate`, `data-minimum`, `data-updated`, `data-when-live` or `data-when-paused`. Every product grid (`data-product-grid`) is drawn again from the answer, one card per product in the API's order (`src/scripts/cards.ts`), and the calculator offers every fixed term open in shillings that day. So a product opened, paused or taken away after the build shows as it is now. An answer that is not exactly the expected shape is ignored (`src/lib/products.ts`).
 
-- When an approved rate changes, update `src/data/fallback.ts` too, so the built-in figures do not drift.
-- A product the fallback does not list is not shown. Adding a product means adding it there.
+- The built-in figures in `src/data/fallback.ts` are what shows before the API answers, or when it cannot be reached. Bring them up to date now and then so they do not drift, but a new rate or product does not need a rebuild.
 - A paused product is shown as "Coming soon" with no button to invest.
 - The site only ever holds the yearly rate after tax. It must never carry a rate before tax or a tax rate ([docs/rules.md](../../docs/rules.md)), and a test on the build checks for that.
 

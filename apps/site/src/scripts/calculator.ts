@@ -31,6 +31,31 @@ async function fetchQuote(url: string, product: string, amount: bigint): Promise
   }
 }
 
+/** What the calculator offers: fixed terms in shillings that are open today, shortest first. */
+export function calculatorChoices(products: readonly Product[]): Product[] {
+  return products
+    .filter((p) => p.termDays !== null && p.status === "live" && p.currency === "UGX")
+    .sort((a, b) => (a.termDays ?? 0) - (b.termDays ?? 0));
+}
+
+/** Redraws the term buttons, as Calculator.astro draws them, with `picked` chosen. */
+function showChoices(form: HTMLFormElement, products: readonly Product[], picked: string | undefined): void {
+  const group = form.querySelector<HTMLElement>(".calc__terms .segmented");
+  if (!group) return;
+  group.replaceChildren(
+    ...products.map((product) => {
+      const label = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "product";
+      radio.value = product.code;
+      radio.checked = product.code === picked;
+      label.append(radio, `${product.termDays} days`);
+      return label;
+    }),
+  );
+}
+
 function start(form: HTMLFormElement): void {
   const input = form.querySelector<HTMLInputElement>('input[name="amount"]');
   const error = form.querySelector<HTMLElement>("[data-calc-error]");
@@ -120,13 +145,14 @@ function start(form: HTMLFormElement): void {
     if (amount !== null) input.value = formatWhole(amount);
   });
 
-  // Today's rates arrived from the API: use them for the products this calculator offers.
+  // Today's catalogue arrived from the API: offer every fixed term open in shillings today,
+  // including one added since the site was built, at today's rates.
   document.addEventListener(CATALOGUE_EVENT, (event) => {
-    const live = (event as CustomEvent<Catalogue>).detail.products;
-    products = products.map((mine) => {
-      const theirs = live.find((p) => p.code === mine.code);
-      return theirs && theirs.termDays !== null && theirs.currency === "UGX" ? theirs : mine;
-    });
+    const offered = calculatorChoices((event as CustomEvent<Catalogue>).detail.products);
+    if (offered.length === 0) return;
+    const picked = chosen()?.code;
+    products = offered;
+    showChoices(form, offered, offered.some((p) => p.code === picked) ? picked : offered[0]?.code);
     update();
   });
 

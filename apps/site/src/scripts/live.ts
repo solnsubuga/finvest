@@ -1,11 +1,13 @@
 /**
- * Replaces the rates built into the page with today's from the API.
+ * Replaces the rates and product cards built into the page with today's from the API, so a
+ * new rate or a new product shows without a rebuild of the site.
  *
  * The built-in figures stay if the API is slow, unreachable or sends anything unexpected.
  * Text is only ever written with textContent, and only after parseCatalogue has checked it.
  */
 
 import { formatDay, minimumLabel } from "../lib/format.ts";
+import { showProductGrids } from "./cards.ts";
 import { parseCatalogue, type Catalogue } from "../lib/products.ts";
 
 const TIMEOUT_MS = 6000;
@@ -18,6 +20,8 @@ function each(selector: string, run: (element: HTMLElement) => void): void {
 }
 
 export function showCatalogue(catalogue: Catalogue): void {
+  // The cards first, so a product added since the build gets a card for the lines below to fill.
+  showProductGrids(catalogue);
   for (const product of catalogue.products) {
     const code = CSS.escape(product.code);
     each(`[data-rate="${code}"]`, (el) => (el.textContent = `${product.clientRatePercent}%`));

@@ -5,6 +5,7 @@ import Cta from "../components/Cta.astro";
 import Icon from "../components/Icon.astro";
 import LiveRates from "../components/LiveRates.astro";
 import ProductCard from "../components/ProductCard.astro";
+import { signupUrl } from "../config.ts";
 import { fallback } from "../data/fallback.ts";
 import { billAuction, bondAuction, otherBondTenors } from "../data/market.ts";
 import { formatDay, formatMoney, minimumLabel } from "../lib/format.ts";
@@ -94,7 +95,7 @@ const others = listFormat.format(otherBondTenors.map(String));
         Our rates follow the Bank of Uganda auction and are updated here whenever they change.
         Last updated <span data-updated>{formatDay(fallback.updatedOn)}</span>.
       </p>
-      <div class={`grid ${fallback.products.length > 3 ? "grid--4" : "grid--3"}`}>
+      <div class={`grid ${fallback.products.length > 3 ? "grid--4" : "grid--3"}`} data-product-grid={signupUrl}>
         {products.map((product) => <ProductCard product={product} />)}
       </div>
     </div>
