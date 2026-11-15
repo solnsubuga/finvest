@@ -1,5 +1,6 @@
 """Tests for prepare_release.py. Run with: python3 -m unittest discover -s infra/deployment"""
 
+import json
 import os
 import shutil
 import stat
@@ -158,6 +159,28 @@ class PrepareRelease(unittest.TestCase):
         self.assertEqual(api["FINVEST_CLIENT_PASSKEY_SITE"], "finvestug.com")
         self.assertEqual(api["FINVEST_STAFF_PASSKEY_SITE"], "admin.finvestug.com")
         self.assertEqual(api["FINVEST_TRUSTED_PROXIES"], f'["{pr.EDGE_SUBNET}"]')
+
+    def test_phone_app_passkey_origins_are_off_until_the_apps_exist(self):
+        pr.prepare(self.out, settings())
+        api = read_env(self.out / "runtime" / "api.env")
+        self.assertEqual(api["FINVEST_CLIENT_PASSKEY_APP_ORIGINS"], "[]")
+
+    def test_phone_app_passkey_origins_follow_the_app_identities(self):
+        cert = ":".join(["AB"] * 32)
+        pr.prepare(self.out, settings(APPLE_TEAM_ID="ABCDE12345", ANDROID_CERT_SHA256=f"{cert}, {cert}"))
+        api = read_env(self.out / "runtime" / "api.env")
+        digest = "q6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6s"
+        self.assertEqual(
+            json.loads(api["FINVEST_CLIENT_PASSKEY_APP_ORIGINS"]),
+            ["https://finvestug.com", f"android:apk-key-hash:{digest}", f"android:apk-key-hash:{digest}"],
+        )
+        for service in ("worker", "scheduler", "migrate"):
+            self.assertNotIn("FINVEST_CLIENT_PASSKEY_APP_ORIGINS", read_env(self.out / "runtime" / f"{service}.env"))
+
+    def test_phone_app_identities_are_checked(self):
+        for bad in ({"APPLE_TEAM_ID": "abc"}, {"ANDROID_CERT_SHA256": "AB:CD"}):
+            with self.assertRaises(pr.SettingError):
+                pr.prepare(self.out, settings(**bad))
 
     def test_staging_keeps_its_own_passkey_site(self):
         pr.prepare(
@@ -330,7 +353,11 @@ class PrepareRelease(unittest.TestCase):
     def test_production_holds_the_website_back_until_published(self):
         pr.prepare(self.out, settings())
         site = (self.out / "edge" / "site.caddy").read_text()
-        self.assertNotIn("site_upstream", site)
+        # Only the phone apps' association files reach the site image before it is published.
+        self.assertEqual(site.count("import site_upstream"), 1)
+        self.assertIn(
+            "@app_links path /.well-known/apple-app-site-association /.well-known/assetlinks.json", site
+        )
         self.assertIn(" 503", site)
         self.assertNotIn("FINVEST_SITE_DOMAIN", read_env(self.out / "release.env"))
 

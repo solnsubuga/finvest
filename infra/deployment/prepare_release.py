@@ -11,6 +11,7 @@ anything is written. Nothing secret is printed.
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
@@ -27,6 +28,9 @@ ENVIRONMENTS = ("staging", "production")
 # only from it (FINVEST_TRUSTED_PROXIES), and only Caddy sets that header.
 EDGE_SUBNET = "172.30.0.0/24"
 CA_PATH = "/etc/finvest/database-ca/ca.crt"
+# The phone apps' identities, for passkeys on the website's domain (docs/sign-in.md).
+APPLE_TEAM_ID = r"[A-Z0-9]{10}"
+ANDROID_CERT_SHA256 = r"[0-9A-F]{2}(:[0-9A-F]{2}){31}"
 HOSTNAME = r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+"
 IMAGE = r"[a-z0-9.:/_-]+@sha256:[a-f0-9]{64}"
 ROLES = {"migrate": "migrator", "api": "app", "worker": "worker", "scheduler": "worker"}
@@ -77,6 +81,25 @@ def database_url(env: Mapping[str, str], role: str) -> str:
     return f"postgresql+asyncpg://finvest_{role}:{quote(password, safe='')}@{host}:{port}/{name}"
 
 
+def passkey_app_origins(env: Mapping[str, str], client_site: str) -> str:
+    """The origins the phone apps sign passkeys from: the website's for iPhone, and one
+    android:apk-key-hash per signing certificate. None until the store accounts exist."""
+    team_id = optional(env, "APPLE_TEAM_ID")
+    if team_id and not re.fullmatch(APPLE_TEAM_ID, team_id):
+        raise SettingError("APPLE_TEAM_ID is not valid")
+    certs = [c.strip() for c in optional(env, "ANDROID_CERT_SHA256").split(",") if c.strip()]
+    for cert in certs:
+        if not re.fullmatch(ANDROID_CERT_SHA256, cert):
+            raise SettingError("ANDROID_CERT_SHA256 is not valid")
+    if not team_id and not certs:
+        return "[]"
+    origins = [f"https://{client_site}"]
+    for cert in certs:
+        digest = base64.urlsafe_b64encode(bytes.fromhex(cert.replace(":", ""))).decode().rstrip("=")
+        origins.append(f"android:apk-key-hash:{digest}")
+    return json.dumps(origins)
+
+
 def site_caddy(site_domains: list[str], published: bool, listed: bool) -> str:
     canonical, *others = site_domains
     # Only the production website may be listed by search engines. The pages themselves also
@@ -108,8 +131,15 @@ def site_caddy(site_domains: list[str], published: bool, listed: bool) -> str:
             "\timport origin_tls\n"
             "\timport common_headers\n"
             "\timport unlisted\n"
-            "\theader Cache-Control no-store\n"
-            '\trespond "Finvest\'s new website is on its way." 503\n'
+            "\t# The phone apps read these two files to use passkeys on this domain, published or not.\n"
+            "\t@app_links path /.well-known/apple-app-site-association /.well-known/assetlinks.json\n"
+            "\thandle @app_links {\n"
+            "\t\timport site_upstream\n"
+            "\t}\n"
+            "\thandle {\n"
+            "\t\theader Cache-Control no-store\n"
+            '\t\trespond "Finvest\'s new website is on its way." 503\n'
+            "\t}\n"
             "}\n"
         )
     if others:
@@ -240,7 +270,7 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "FINVEST_STAFF_ALLOWED_ORIGINS": json.dumps([f"https://{admin_domain}"]),
         "FINVEST_CLIENT_PASSKEY_SITE": client_site,
         "FINVEST_STAFF_PASSKEY_SITE": admin_domain,
-        "FINVEST_CLIENT_PASSKEY_APP_ORIGINS": optional(env, "FINVEST_CLIENT_PASSKEY_APP_ORIGINS") or "[]",
+        "FINVEST_CLIENT_PASSKEY_APP_ORIGINS": passkey_app_origins(env, client_site),
         **storage,
     }
     # Client sign-up stays closed unless this is exactly "true": production until switch day,
