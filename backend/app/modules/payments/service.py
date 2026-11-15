@@ -912,3 +912,34 @@ _OPEN_FOR_CLIENT = text(
 async def open_deposit_count(session: AsyncSession, client_id: str) -> int:
     """How many of the client's deposits have not ended, including any whose outcome is unclear."""
     return int(await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id}) or 0)
+
+
+_NEWEST = text(
+    f"SELECT {_COLUMNS} FROM payment_deposits "  # noqa: S608 - constant column list
+    "WHERE (CAST(:statuses AS text[]) IS NULL OR status = ANY(CAST(:statuses AS text[]))) "
+    "AND (CAST(:before_at AS timestamptz) IS NULL "
+    "OR (created_at, id) < (CAST(:before_at AS timestamptz), CAST(:before_id AS text))) "
+    "ORDER BY created_at DESC, id DESC LIMIT :limit"
+)
+
+
+async def newest_deposits(
+    session: AsyncSession,
+    *,
+    statuses: list[DepositStatus] | None,
+    before: tuple[datetime, str] | None,
+    limit: int,
+) -> list[Deposit]:
+    """Deposits newest first, at most `limit`, before (created_at, id) when given, in any of
+    `statuses` when given. For the staff list of every movement: a staff transaction sees
+    every deposit."""
+    rows = await session.execute(
+        _NEWEST,
+        {
+            "statuses": None if statuses is None else [status.value for status in statuses],
+            "before_at": before[0] if before else None,
+            "before_id": before[1] if before else None,
+            "limit": max(1, limit),
+        },
+    )
+    return [_deposit(row) for row in rows.all()]
