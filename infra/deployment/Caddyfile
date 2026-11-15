@@ -33,6 +33,9 @@ import /etc/caddy/upstreams.caddy
 		X-Content-Type-Options nosniff
 		Referrer-Policy strict-origin-when-cross-origin
 		X-Frame-Options DENY
+		# No page from another site that this one opens, or that opens it, keeps a handle on the
+		# other's window.
+		Cross-Origin-Opener-Policy same-origin
 		-Server
 	}
 }
