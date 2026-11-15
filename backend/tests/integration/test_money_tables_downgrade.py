@@ -13,7 +13,7 @@ what clients owe for them, the runs staff asked for again, staff notes and actio
 client, the account freezes, why an investment was sent to another client, the platform
 settings, the withdrawal limit changes, the paydays clients named, the custodian statement
 checks, the SMS delivery reports, the choice to save an investment's interest to a goal, the
-auction calendar, the bond catalogue or clients' bond holdings."""
+auction calendar, the bond catalogue, clients' bond holdings or the coupons paid on them."""
 
 import os
 from collections.abc import Iterator
@@ -26,6 +26,31 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0492_bond_coupons": (
+        "INSERT INTO bond_changes (id, action, code, isin, name, currency, coupon_bps, tax_bps, "
+        "issue_date, maturity_date, minimum_face_minor, face_step_minor, price, reason, "
+        "proposed_by, proposed_at) VALUES ('-Nabc0000000000000A1', 'create', 'BOND-T', "
+        "'UGT000000010', 'Test bond', 'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, "
+        "100000, 985000, 'From the auction', '-Nabc0000000000000S1', now()); "
+        "INSERT INTO bond_issues (id, code, isin, name, currency, coupon_bps, tax_bps, "
+        "issue_date, maturity_date, minimum_face_minor, face_step_minor, status, version, "
+        "change_id, created_at, updated_at) VALUES ('-Nabc0000000000000I1', 'BOND-T', "
+        "'UGT000000010', 'Test bond', 'UGX', 1600, 1000, '2025-05-14', '2037-05-14', 100000, "
+        "100000, 'live', 1, '-Nabc0000000000000A1', now(), now()); "
+        "INSERT INTO bond_prices (id, issue_id, price, change_id, effective_at) VALUES "
+        "('-Nabc0000000000000P1', '-Nabc0000000000000I1', 985000, '-Nabc0000000000000A1', now()); "
+        "INSERT INTO bond_holdings (id, client_id, issue_id, currency, face_minor, price, "
+        "price_id, accrued_minor, cost_minor, quoted_on, created_at, pay_by, updated_at) VALUES "
+        "('-Nabc0000000000000H1', '-Nabc0000000000000B1', '-Nabc0000000000000I1', 'UGX', "
+        "1000000, 985000, '-Nabc0000000000000P1', 883, 985883, CURRENT_DATE, now(), "
+        "now() + interval '1 day', now()); "
+        "INSERT INTO bond_coupons (id, holding_id, client_id, coupon_date, currency, "
+        "gross_minor, tax_minor, net_minor, entry_id, status, payout_refusal, created_at, "
+        "updated_at) VALUES ('-Nabc0000000000000C1', '-Nabc0000000000000H1', "
+        "'-Nabc0000000000000B1', CURRENT_DATE, 'UGX', 80000, 8000, 72000, "
+        "'-Nabc0000000000000E1', 'held', 'no_destination', now(), now())",
+        "refusing to drop the coupons paid to clients",
+    ),
     "0491_bond_holdings": (
         "INSERT INTO bond_changes (id, action, code, isin, name, currency, coupon_bps, tax_bps, "
         "issue_date, maturity_date, minimum_face_minor, face_step_minor, price, reason, "
