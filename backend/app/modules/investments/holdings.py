@@ -157,7 +157,7 @@ class ClientInvestment:
     product_name: str
     status: InvestmentStatus
     amount: Money
-    # "10.63": the yearly rate after tax that this investment earns.
+    # "10.62": the yearly rate after tax that this investment earns.
     rate_percent: str
     term_days: int | None
     at_maturity: AtMaturity | None

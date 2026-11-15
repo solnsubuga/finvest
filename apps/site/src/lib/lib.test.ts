@@ -208,6 +208,12 @@ describe("estimate", () => {
     expect(estimate(100_000n, "11.69", 182)?.interest).toBe(5_828n);
   });
 
+  it("never estimates more than the exact quote, because the label is rounded down", () => {
+    // 12.5% less 15% tax is 10.625%, labelled 10.62%. The exact quote for UGX 1,000,000 over
+    // 91 days is UGX 26,490 (GET /public/quote); the estimate from the label is below it.
+    expect(estimate(1_000_000n, "10.62", 91)?.interest).toBe(26_477n);
+  });
+
   it("stays exact for amounts too large for floating point", () => {
     expect(estimate(9_999_999_999_999n, "10.63", 182)?.interest).toBe(530_043_835_616n);
   });

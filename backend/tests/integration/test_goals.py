@@ -131,7 +131,7 @@ async def test_a_goal_is_set_up_with_the_product_of_its_plan(app_database: Datab
     assert goal.plan.product_code == "TREA-91"
     assert goal.plan.saving.minor % 1_000 == 0
     assert goal.plan.savings == 10
-    assert goal.plan.rate_percent == "10.63"
+    assert goal.plan.rate_percent == "10.62"
     assert goal.plan.put_in + goal.plan.interest >= ugx(2_000_000)
 
 

@@ -38,7 +38,7 @@ export type Product = {
   interestPaid: InterestPaid;
   /** A paused product is shown but takes no new investments. */
   status: ProductStatus;
-  /** The yearly rate after tax, as a label: "10.63". Nothing is worked out from it. */
+  /** The yearly rate after tax, as a label: "10.62". Nothing is worked out from it. */
   ratePercent: string;
 };
 

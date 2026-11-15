@@ -31,7 +31,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     minimum: 100_000,
     annualRateBps: 1250,
     taxBps: 1500,
-    ratePercent: "10.63",
+    ratePercent: "10.62",
   },
   {
     code: "TREA-182",
@@ -40,7 +40,7 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
     minimum: 200_000,
     annualRateBps: 1375,
     taxBps: 1500,
-    ratePercent: "11.69",
+    ratePercent: "11.68",
   },
 ];
 
