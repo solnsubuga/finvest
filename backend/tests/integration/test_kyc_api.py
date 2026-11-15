@@ -347,10 +347,13 @@ async def test_staff_approve_once_with_a_reason_and_the_client_gets_the_number(a
     assert (missing.status_code, missing.json()["error"]["code"]) == (404, "not_found")
 
 
-async def test_the_session_names_the_client_once_approved_in_proper_case(api: Api) -> None:
+async def test_the_session_names_the_client_in_proper_case_from_the_check_they_sent(
+    api: Api,
+) -> None:
     client, check_id = await hand_in(api)
+    # Waiting for review, the client is greeted by the name they sent.
     waiting = (await api.http.get("/client/session", headers=client)).json()
-    assert (waiting["display_name"], waiting["first_name"]) == (None, None)
+    assert (waiting["display_name"], waiting["first_name"]) == ("Amara Nakato", "Amara")
 
     staff = await api.staff("operations")
     queue = (await api.http.get("/staff/identity-checks", headers=staff)).json()["items"]
@@ -362,6 +365,32 @@ async def test_the_session_names_the_client_once_approved_in_proper_case(api: Ap
 
     named = (await api.http.get("/client/session", headers=client)).json()
     assert (named["display_name"], named["first_name"]) == ("Amara Nakato", "Amara")
+
+
+async def test_the_session_has_no_name_before_a_check_is_sent_or_after_it_is_rejected(
+    api: Api,
+) -> None:
+    client = await api.client()
+    base = "/client/identity-check"
+    document = {"document_type": "national_id", "document_country": "UG"}
+    assert (
+        await api.http.put(f"{base}/document", json=document, headers=client)
+    ).status_code == 200
+    saved = await api.http.put(f"{base}/details", json=details(a_number()), headers=client)
+    assert saved.status_code == 200
+    draft = (await api.http.get("/client/session", headers=client)).json()
+    assert (draft["display_name"], draft["first_name"]) == (None, None)
+
+    sent, check_id = await hand_in(api)
+    staff = await api.staff("operations")
+    rejected = await api.http.post(
+        f"/staff/identity-checks/{check_id}/reject",
+        json={"reason": "Forged document", "client_message": "We could not verify your ID."},
+        headers=staff,
+    )
+    assert rejected.status_code == 200
+    after = (await api.http.get("/client/session", headers=sent)).json()
+    assert (after["display_name"], after["first_name"]) == (None, None)
     # The check keeps the name exactly as printed on the ID.
     mine = (await api.http.get("/client/identity-check", headers=client)).json()["check"]
     assert (mine["details"]["surname"], mine["details"]["given_names"]) == ("NAKATO", "Amara")
