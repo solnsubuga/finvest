@@ -20,7 +20,8 @@ from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
 from app.modules.platform_settings import service as platform_settings
 from app.modules.platform_settings.domain.catalogue import STANDARD_LAYOUT
-from app.modules.reconciliation import day_close, statements, wallet
+from app.modules.reconciliation import client_money, day_close, statements, wallet
+from app.modules.reconciliation.domain.client_money import Line
 from app.modules.reconciliation.domain.day_close import CloseError, PotPosition
 from app.modules.reconciliation.domain.formats import FORMATS
 from app.modules.reconciliation.domain.formats import csv_format as layout_format
@@ -269,6 +270,117 @@ async def iotec_wallet(staff: Staff, database: Db, provider: Wallet) -> WalletOu
         difference=None if difference is None else _money(difference),
         read_at=None if found.reading is None else found.reading.read_at,
     )
+
+
+class ClientMoneyPotOut(Contract):
+    """One cash pot on the closed day: its statement is what is counted as held."""
+
+    source: Source
+    account_reference: str
+    name: str
+    statement_closing: MoneyOut
+    ledger_closing: MoneyOut
+    # Differences still open on the day, as the day close signed them.
+    open_differences: MoneyOut
+
+
+class ClientMoneyLineOut(Contract):
+    # The ledger's account code, or "earnings" for Finvest's income less its costs.
+    code: str
+    name: str
+    amount: MoneyOut
+
+
+class ClientMoneyCustodianOut(Contract):
+    """The latest custodian statement check signed off on or before the day."""
+
+    check_id: PushId
+    statement_date: date
+    # Maturities noted as not matching when it was signed off.
+    differences: int
+
+
+class ClientMoneyOut(Contract):
+    """What Finvest owes its clients against what it holds for them, at the end of the last
+    closed day. `check` is null before any day is closed.
+
+    Held is the pots' statements, plus the bills at cost, less what is not client money.
+    `difference` is held less owed; `open_differences` and `not_on_statement` account for it,
+    and `unexplained` is what neither does, which should be zero.
+    """
+
+    business_date: date
+    standing: Literal["ties", "short", "over"]
+    owed: MoneyOut
+    interest_owed: MoneyOut
+    pots: list[ClientMoneyPotOut]
+    on_statements: MoneyOut
+    bills: MoneyOut
+    custodian: ClientMoneyCustodianOut | None
+    discount_to_come: MoneyOut
+    not_client_money: list[ClientMoneyLineOut]
+    not_client_money_total: MoneyOut
+    held: MoneyOut
+    difference: MoneyOut
+    open_differences: MoneyOut
+    not_on_statement: list[ClientMoneyLineOut]
+    not_on_statement_total: MoneyOut
+    unexplained: MoneyOut
+
+
+class ClientMoneyCheckOut(Contract):
+    check: ClientMoneyOut | None
+
+
+@staff_router.get("/client-money")
+async def client_money_check(staff: Staff, database: Db) -> ClientMoneyCheckOut:
+    """The client money check for the last closed day, in shillings. Reads only."""
+    async with database.actor_transaction(staff.actor) as session:
+        found = await client_money.client_money(session)
+    if found is None:
+        return ClientMoneyCheckOut(check=None)
+    figures = found.check
+    return ClientMoneyCheckOut(
+        check=ClientMoneyOut(
+            business_date=figures.business_date,
+            standing=figures.standing.value,
+            owed=_money(figures.owed),
+            interest_owed=_money(figures.interest_owed),
+            pots=[
+                ClientMoneyPotOut(
+                    source=_source(pot.source),
+                    account_reference=pot.account_reference,
+                    name=pot.name,
+                    statement_closing=_money(pot.statement),
+                    ledger_closing=_money(pot.ledger),
+                    open_differences=_money(pot.open_exceptions),
+                )
+                for pot in figures.pots
+            ],
+            on_statements=_money(figures.on_statements),
+            bills=_money(figures.bills),
+            custodian=None
+            if found.custodian is None
+            else ClientMoneyCustodianOut(
+                check_id=found.custodian.check_id,
+                statement_date=found.custodian.statement_date,
+                differences=found.custodian.differences,
+            ),
+            discount_to_come=_money(found.discount_to_come),
+            not_client_money=[_check_line(line) for line in figures.not_client_money],
+            not_client_money_total=_money(figures.not_client_money_total),
+            held=_money(figures.held),
+            difference=_money(figures.difference),
+            open_differences=_money(figures.open_exceptions),
+            not_on_statement=[_check_line(line) for line in figures.not_on_statement],
+            not_on_statement_total=_money(figures.not_on_statement_total),
+            unexplained=_money(figures.unexplained),
+        )
+    )
+
+
+def _check_line(line: Line) -> ClientMoneyLineOut:
+    return ClientMoneyLineOut(code=line.code, name=line.name, amount=_money(line.amount))
 
 
 class StatementFormatOut(Contract):

@@ -1064,6 +1064,62 @@ export const ClientListView = z.object({
 });
 export type ClientListView = z.infer<typeof ClientListView>;
 
+export const ClientMoneyCustodianOut = z.object({
+  check_id: z.string(),
+  differences: z.number().int(),
+  statement_date: z.string(),
+});
+export type ClientMoneyCustodianOut = z.infer<typeof ClientMoneyCustodianOut>;
+
+export const ReconciliationApiMoneyOut = z.object({
+  currency: z.enum(["UGX", "USD"]),
+  minor: z.number().int(),
+});
+export type ReconciliationApiMoneyOut = z.infer<typeof ReconciliationApiMoneyOut>;
+
+export const ClientMoneyLineOut = z.object({
+  amount: ReconciliationApiMoneyOut,
+  code: z.string(),
+  name: z.string(),
+});
+export type ClientMoneyLineOut = z.infer<typeof ClientMoneyLineOut>;
+
+export const ClientMoneyPotOut = z.object({
+  account_reference: z.string(),
+  ledger_closing: ReconciliationApiMoneyOut,
+  name: z.string(),
+  open_differences: ReconciliationApiMoneyOut,
+  source: z.enum(["iotec", "pesapal", "bank"]),
+  statement_closing: ReconciliationApiMoneyOut,
+});
+export type ClientMoneyPotOut = z.infer<typeof ClientMoneyPotOut>;
+
+export const ClientMoneyOut = z.object({
+  bills: ReconciliationApiMoneyOut,
+  business_date: z.string(),
+  custodian: ClientMoneyCustodianOut.nullable(),
+  difference: ReconciliationApiMoneyOut,
+  discount_to_come: ReconciliationApiMoneyOut,
+  held: ReconciliationApiMoneyOut,
+  interest_owed: ReconciliationApiMoneyOut,
+  not_client_money: z.array(ClientMoneyLineOut),
+  not_client_money_total: ReconciliationApiMoneyOut,
+  not_on_statement: z.array(ClientMoneyLineOut),
+  not_on_statement_total: ReconciliationApiMoneyOut,
+  on_statements: ReconciliationApiMoneyOut,
+  open_differences: ReconciliationApiMoneyOut,
+  owed: ReconciliationApiMoneyOut,
+  pots: z.array(ClientMoneyPotOut),
+  standing: z.enum(["ties", "short", "over"]),
+  unexplained: ReconciliationApiMoneyOut,
+});
+export type ClientMoneyOut = z.infer<typeof ClientMoneyOut>;
+
+export const ClientMoneyCheckOut = z.object({
+  check: ClientMoneyOut.nullable(),
+});
+export type ClientMoneyCheckOut = z.infer<typeof ClientMoneyCheckOut>;
+
 export const ConversationSummary = z.object({
   id: z.string(),
   last_message_at: z.string(),
@@ -1380,12 +1436,6 @@ export const DayFlowOut = z.object({
   money_out: OverviewApiAmount,
 });
 export type DayFlowOut = z.infer<typeof DayFlowOut>;
-
-export const ReconciliationApiMoneyOut = z.object({
-  currency: z.enum(["UGX", "USD"]),
-  minor: z.number().int(),
-});
-export type ReconciliationApiMoneyOut = z.infer<typeof ReconciliationApiMoneyOut>;
 
 export const LineOut = z.object({
   amount: ReconciliationApiMoneyOut,
@@ -7799,6 +7849,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ProposalOut,
+  },
+  "GET /staff/reconciliation/client-money": {
+    method: "GET",
+    path: "/staff/reconciliation/client-money",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientMoneyCheckOut,
   },
   "GET /staff/reconciliation/custodian-checks": {
     method: "GET",
