@@ -6,6 +6,12 @@
  * never show a placeholder and never guess. Fill one in here and the line appears wherever
  * it belongs.
  */
+export interface TeamMember {
+  name: string;
+  /** Their job, such as "Chief Executive". */
+  role: string;
+}
+
 export const company = {
   /** How long a person takes to review an identity check. */
   reviewTime: "Usually within one working day",
@@ -26,6 +32,18 @@ export const company = {
   custodian: null,
   /** The firm that audits the accounts each year. */
   auditor: null,
+
+  /**
+   * The people named on About under "The people responsible for your money", in the order
+   * shown. The section is left out while the list is empty.
+   */
+  team: [],
+  /** The address people write to about working at Finvest. The footer's Careers link needs it. */
+  careersEmail: null,
+  /** The client app's App Store page, on apps.apple.com. */
+  appStoreUrl: null,
+  /** The client app's Google Play page, on play.google.com. */
+  playStoreUrl: null,
 } as {
   reviewTime: string;
   complaintWorkingDays: number;
@@ -37,4 +55,8 @@ export const company = {
   licenceNumber: string | null;
   custodian: string | null;
   auditor: string | null;
+  team: TeamMember[];
+  careersEmail: string | null;
+  appStoreUrl: string | null;
+  playStoreUrl: string | null;
 };
