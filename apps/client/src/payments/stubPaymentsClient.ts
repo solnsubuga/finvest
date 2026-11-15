@@ -4,6 +4,9 @@ import { MAX_RECEIPT_BYTES } from "./receipt";
 import {
   BankReceiptSubmission,
   BankTransfer,
+  CardOffer,
+  CardPayment,
+  CardPaymentRequest,
   Deposit,
   DepositStatus,
   FailureReason,
@@ -46,6 +49,41 @@ const DEMO_PAYABLE: Payable = {
 };
 
 /**
+ * Card payments in the demo. Pesapal's page is stood in for by the app's own return page, so a
+ * card "pays" as soon as the client comes back. These payables show the other outcomes:
+ */
+export const DEMO_CARD_DECLINED_ID = "demo-card-declined";
+export const DEMO_CARD_LIMIT_ID = "demo-card-limit";
+export const DEMO_CARDS_PAUSED_ID = "demo-cards-paused";
+/** As the backend's default Settings: 3.5% on top, at most UGX 5,000,000 a card payment. */
+const DEMO_CARD_BASIS_POINTS = 350;
+const DEMO_CARD_MAX = 5_000_000;
+
+const DEMO_CARD_PAYABLES: Record<string, Payable> = {
+  [DEMO_CARD_DECLINED_ID]: { ...DEMO_PAYABLE_BASE(), id: DEMO_CARD_DECLINED_ID },
+  [DEMO_CARD_LIMIT_ID]: {
+    ...DEMO_PAYABLE_BASE(),
+    id: DEMO_CARD_LIMIT_ID,
+    amount: { currency: "UGX", minor: 8_000_000 },
+  },
+  [DEMO_CARDS_PAUSED_ID]: { ...DEMO_PAYABLE_BASE(), id: DEMO_CARDS_PAUSED_ID },
+};
+
+function DEMO_PAYABLE_BASE(): Payable {
+  return {
+    id: "",
+    kind: "investment",
+    title: "91 Day Treasury Bill",
+    amount: { currency: "UGX", minor: 1_000_000 },
+  };
+}
+
+/** The card charge in whole shillings, rounded up, as the backend works it out. */
+export function demoCardCharge(minor: number): number {
+  return Math.ceil((minor * DEMO_CARD_BASIS_POINTS) / 10_000);
+}
+
+/**
  * Other demos can add something to pay for, such as the investment a goal
  * saving makes. They share one store with the demo investing.
  */
@@ -58,8 +96,16 @@ const CHECKING_MS = 14_000;
 
 /** The fixed demo payable, or one the demo investing has saved. */
 function payableFor(payableId: string): Payable | null {
-  return payableId === DEMO_PAYABLE_ID ? DEMO_PAYABLE : demoPayable(payableId);
+  if (payableId === DEMO_PAYABLE_ID) return DEMO_PAYABLE;
+  return DEMO_CARD_PAYABLES[payableId] ?? demoPayable(payableId);
 }
+
+type StoredCard = {
+  request: CardPaymentRequest;
+  id: string;
+  requestedAtMs: number;
+  returnedAtMs: number | null;
+};
 
 type Outcome = { status: DepositStatus; failure: FailureReason | null };
 
@@ -138,7 +184,56 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
   const byKey = new Map<string, string>();
   const transfers = new Map<string, StoredTransfer>();
   const transferByKey = new Map<string, string>();
+  const cardPayments = new Map<string, StoredCard>();
+  const cardByKey = new Map<string, string>();
   let counter = 0;
+
+  function cardOffer(payable: Payable): CardOffer {
+    const charge = { currency: payable.amount.currency, minor: demoCardCharge(payable.amount.minor) };
+    const total = { currency: payable.amount.currency, minor: payable.amount.minor + charge.minor };
+    return {
+      amount: payable.amount,
+      charge,
+      total,
+      maxPayment: { currency: "UGX", minor: DEMO_CARD_MAX },
+      refused:
+        payable.id === DEMO_CARDS_PAUSED_ID
+          ? "channel_paused"
+          : total.minor > DEMO_CARD_MAX
+            ? "above_card_payment_limit"
+            : null,
+    };
+  }
+
+  function readCard(stored: StoredCard): CardPayment {
+    const payable = payableFor(stored.request.payableId) ?? DEMO_PAYABLE;
+    const offer = cardOffer(payable);
+    const declined = payable.id === DEMO_CARD_DECLINED_ID;
+    const sinceAsked = now() - stored.requestedAtMs;
+    const sinceBack = stored.returnedAtMs === null ? null : now() - stored.returnedAtMs;
+    let status: CardPayment["status"] = "sending";
+    if (sinceAsked >= SENDING_MS) status = "awaiting_card";
+    if (sinceBack !== null && sinceBack >= SENDING_MS * 2) status = declined ? "failed" : "confirmed";
+    const confirmedAt =
+      status === "confirmed" && stored.returnedAtMs !== null
+        ? new Date(stored.returnedAtMs + SENDING_MS * 2).toISOString()
+        : null;
+    if (confirmedAt) markDemoPaid(payable.id, confirmedAt);
+    return {
+      id: stored.id,
+      payable,
+      amount: payable.amount,
+      charge: offer.charge,
+      total: offer.total,
+      status,
+      failure: status === "failed" ? "declined" : null,
+      pageUrl: status === "awaiting_card" ? `/pay/card/return?payment=${stored.id}&sandbox=1` : null,
+      card: status === "confirmed" ? { brand: "Visa", lastFour: "0010" } : null,
+      requestedAt: new Date(stored.requestedAtMs).toISOString(),
+      confirmedAt,
+      reference: `FV-DEMO-${stored.id}`,
+    };
+  }
 
   const pause = () =>
     delayMs > 0 ? new Promise<void>((resolve) => setTimeout(resolve, delayMs)) : Promise.resolve();
@@ -202,6 +297,12 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       if (status !== "failed") {
         throw new PaymentError("already_paying", { id: stored.id, method: "mobile_money" });
       }
+    }
+    for (const stored of cardPayments.values()) {
+      if (stored.request.payableId !== payableId) continue;
+      const status = readCard(stored).status;
+      if (status === "confirmed") throw new PaymentError("not_payable");
+      if (status !== "failed") throw new PaymentError("already_paying", { id: stored.id, method: "card" });
     }
     for (const stored of transfers.values()) {
       if (stored.submission.payableId !== payableId) {
@@ -300,6 +401,47 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
         throw new PaymentError("not_found");
       }
       return readTransfer(stored);
+    },
+
+    async getCardOffer(payableId) {
+      await pause();
+      const payable = payableFor(payableId);
+      if (!payable) throw new PaymentError("not_payable");
+      return cardOffer(payable);
+    },
+
+    async payWithCard(request) {
+      await pause();
+      const known = cardByKey.get(request.idempotencyKey);
+      if (known) {
+        const first = cardPayments.get(known) as StoredCard;
+        if (first.request.payableId !== request.payableId) throw new PaymentError("key_reused");
+        return readCard(first);
+      }
+      const payable = payableFor(request.payableId);
+      if (!payable) throw new PaymentError("not_payable");
+      if (cardOffer(payable).refused) throw new PaymentError("card_refused");
+      refuseIfTaken(request.payableId);
+      counter += 1;
+      const stored: StoredCard = { request, id: `c${counter}`, requestedAtMs: now(), returnedAtMs: null };
+      cardPayments.set(stored.id, stored);
+      cardByKey.set(request.idempotencyKey, stored.id);
+      return readCard(stored);
+    },
+
+    async getCardPayment(paymentId) {
+      await pause();
+      const stored = cardPayments.get(paymentId);
+      if (!stored) throw new PaymentError("not_found");
+      return readCard(stored);
+    },
+
+    async cardReturned(paymentId) {
+      await pause();
+      const stored = cardPayments.get(paymentId);
+      if (!stored) throw new PaymentError("not_found");
+      if (stored.returnedAtMs === null) stored.returnedAtMs = now();
+      return readCard(stored);
     },
 
     async getDeposit(depositId) {

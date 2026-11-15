@@ -11,7 +11,12 @@ export function Card({ children, padded = true }: { children: ReactNode; padded?
   return <View style={[styles.card, padded && { padding: 18 }]}>{children}</View>;
 }
 
-type NoticeProps = { tone: "warning" | "danger" | "neutral"; children: string };
+type NoticeProps = {
+  tone: "warning" | "danger" | "neutral";
+  children: string;
+  /** A bold first line, such as "Card payments are paused". */
+  title?: string;
+};
 
 const tones = {
   warning: { background: colors.warningSurface, text: colors.warningText },
@@ -19,7 +24,7 @@ const tones = {
   neutral: { background: colors.surfaceSunken, text: colors.ink },
 };
 
-export function Notice({ tone, children }: NoticeProps) {
+export function Notice({ tone, children, title }: NoticeProps) {
   const palette = tones[tone];
   return (
     <View
@@ -27,6 +32,11 @@ export function Notice({ tone, children }: NoticeProps) {
       accessibilityRole={tone === "danger" ? "alert" : undefined}
       accessibilityLiveRegion={tone === "danger" ? "assertive" : undefined}
     >
+      {title ? (
+        <Txt size={fontSizes.md} weight="bold" color={palette.text}>
+          {title}
+        </Txt>
+      ) : null}
       <Txt size={fontSizes.sm} weight={tone === "danger" ? "semibold" : "regular"} color={palette.text}>
         {children}
       </Txt>
@@ -96,7 +106,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: radii.xl,
   },
-  notice: { borderRadius: radii.lg, paddingVertical: 12, paddingHorizontal: 14 },
+  notice: { borderRadius: radii.lg, paddingVertical: 12, paddingHorizontal: 14, gap: 4 },
   progress: { flex: 1, flexDirection: "row", alignItems: "center", gap: 16 },
   bars: { flex: 1, flexDirection: "row", gap: 6 },
   bar: { flex: 1, height: 6, borderRadius: 3 },
