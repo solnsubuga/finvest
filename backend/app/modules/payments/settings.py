@@ -39,3 +39,22 @@ SANDBOX_ENVIRONMENTS = frozenset({None, "local", "staging"})
 
 class SandboxNotAllowed(RuntimeError):
     """The sandbox provider was configured where real money is expected."""
+
+
+class CardSettings(BaseSettings):
+    """Which card provider this process uses, from `FINVEST_CARDS_*`.
+
+    `disabled` is the default: no card payment can be started and the notification address
+    answers 404. `sandbox` moves no money and must never be set in production. `pesapal` is
+    Pesapal, configured by `FINVEST_PESAPAL_*` (`app.infrastructure.pesapal`).
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="FINVEST_CARDS_", extra="ignore", hide_input_in_errors=True
+    )
+
+    provider: Literal["disabled", "sandbox", "pesapal"] = "disabled"
+    # The token in the sandbox's notification address, for trying notifications locally.
+    sandbox_notice_token: SecretStr | None = None
+    # Where the sandbox's "page" sends the developer: the client app's return page.
+    sandbox_return_url: str = "http://localhost:8081/pay/card/return"

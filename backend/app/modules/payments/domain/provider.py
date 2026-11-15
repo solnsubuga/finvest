@@ -1,4 +1,4 @@
-"""The port a mobile money collections provider implements. Pure: a Protocol and its values.
+"""The ports a collections provider implements, for mobile money and for cards. Pure.
 
 The adapter does the network call and sorts every way it can end into a `SendResult` or a
 `StatusReading`. It never raises for a provider or network failure. An exception that does
@@ -11,6 +11,12 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+from app.modules.payments.domain.cards import (
+    CancelResult,
+    CardOrderRequest,
+    CardReading,
+    CardSendResult,
+)
 from app.modules.payments.domain.deposits import Network
 from app.modules.payments.domain.outcomes import SendResult, StatusReading
 from app.shared.money import Money
@@ -57,4 +63,27 @@ class CollectionsProvider(Protocol):
 
     def read_notice(self, headers: Mapping[str, str], body: bytes) -> ProviderNotice:
         """Check the callback's signature and parse it. Raises `InvalidNotice`."""
+        ...
+
+
+class CardCollectionsProvider(Protocol):
+    """A card provider with a hosted page. Every failure is sorted into a result, never raised.
+
+    Pure types live in `domain/cards.py`. A notification is read from the query and the body,
+    because a card provider may call either way.
+    """
+
+    @property
+    def name(self) -> str:
+        """Stored with each deposit, such as "pesapal" or "card_sandbox"."""
+        ...
+
+    async def open_order(self, request: CardOrderRequest) -> CardSendResult: ...
+
+    async def order_status(self, *, request_id: str, provider_reference: str) -> CardReading: ...
+
+    async def cancel_order(self, *, provider_reference: str) -> CancelResult: ...
+
+    def read_notice(self, token: str, query: Mapping[str, str], body: bytes) -> ProviderNotice:
+        """Check the notification's address token and read it. Raises `InvalidNotice`."""
         ...

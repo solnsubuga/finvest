@@ -29,7 +29,14 @@ from app.modules.closures.pending import refuse_if_closing
 from app.modules.documents.events import RECEIPT_ON_DEPOSIT
 from app.modules.investments.events import START_ON_DEPOSIT
 from app.modules.ledger import service as ledger
-from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
+from app.modules.ledger.domain.entries import (
+    AccountKind,
+    AccountSpec,
+    EntryDraft,
+    Line,
+    credit,
+    debit,
+)
 from app.modules.notifications import contract as notifications
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
@@ -501,7 +508,12 @@ async def deposits_requested_between(
 
 
 async def record_notice(
-    session: AsyncSession, provider: str, notice: ProviderNotice, clock: Clock
+    session: AsyncSession,
+    provider: str,
+    notice: ProviderNotice,
+    clock: Clock,
+    *,
+    verify_kind: str = VERIFY_KIND,
 ) -> bool:
     """Save a provider callback and a job to read the status it hints at.
 
@@ -536,7 +548,7 @@ async def record_notice(
     await enqueue(
         session,
         JobRequest(
-            kind=VERIFY_KIND,
+            kind=verify_kind,
             idempotency_key=f"notice:{provider}:{notice.notice_id}",
             payload=payload,
             max_age=APPROVAL_WINDOW,
@@ -641,11 +653,14 @@ async def apply_move(
     *,
     cause: Cause,
     paid_into: AccountSpec | None = None,
+    recovered_charge: Money | None = None,
 ) -> Deposit:
     """Record `move` on a deposit the caller has locked. Posts to the ledger if it confirms.
 
     `paid_into` is the asset account the money reached. A mobile money deposit leaves it out and
-    the provider's wallet is used. A bank transfer must name the bank account it was found in.
+    the provider's wallet is used. A bank transfer must name the bank account it was found in,
+    and a card payment the card provider's balance. `recovered_charge` is a card charge the
+    client paid on top: it arrives with the payment and is Finvest's income, not the client's.
     """
     if not can_move(deposit.status, move.status):
         raise RuntimeError(f"A deposit cannot move from {deposit.status} to {move.status}")
@@ -654,7 +669,9 @@ async def apply_move(
     if move.post is not None:
         if paid_into is None:
             paid_into = _wallet(deposit, move.post.currency)
-        entry_id = await _post_confirmed(session, deposit, move.post, paid_into, clock)
+        entry_id = await _post_confirmed(
+            session, deposit, move.post, paid_into, clock, recovered_charge=recovered_charge
+        )
         if move.charge is not None:
             await _post_charge(session, deposit, move.charge, paid_into, clock)
     await session.execute(
@@ -689,6 +706,7 @@ _METHOD_LABELS = {
     Method.MTN: "MTN Mobile Money",
     Method.AIRTEL: "Airtel Money",
     Method.BANK_TRANSFER: "your bank",
+    Method.CARD: "your card",
 }
 
 
@@ -771,7 +789,7 @@ async def schedule_status_read(
 
 # The names the expense accounts already carry: reconciliation opened `fees.provider.iotec` as
 # "ioTec fees" for sweeps between pots, and the ledger finds an account by its code.
-_PROVIDER_NAMES = {"iotec": "ioTec"}
+_PROVIDER_NAMES = {"iotec": "ioTec", "pesapal": "Pesapal"}
 
 
 def _wallet(deposit: Deposit, currency: Currency) -> AccountSpec:
@@ -786,10 +804,25 @@ def _wallet(deposit: Deposit, currency: Currency) -> AccountSpec:
     )
 
 
+# Card charges clients pay on top of a card payment: Finvest's income, which meets the card
+# provider's own charge when the provider settles to the trust account.
+CARD_CHARGES_CODE = "payments.card_charges"
+
+
 async def _post_confirmed(
-    session: AsyncSession, deposit: Deposit, amount: Money, paid_into: AccountSpec, clock: Clock
+    session: AsyncSession,
+    deposit: Deposit,
+    amount: Money,
+    paid_into: AccountSpec,
+    clock: Clock,
+    *,
+    recovered_charge: Money | None = None,
 ) -> str:
-    """Money arrived in our wallet or bank account for this client's investment or goal."""
+    """Money arrived in our wallet or bank account for this client's investment or goal.
+
+    With a card charge the client paid on top, the whole payment arrives in one entry: the
+    investment's amount for the client and the charge as Finvest's income.
+    """
     wallet = await ledger.open_account(session, paid_into, clock)
     awaiting_start = await ledger.open_account(
         session,
@@ -803,12 +836,26 @@ async def _post_confirmed(
         ),
         clock,
     )
+    lines: tuple[Line, ...] = (debit(wallet.id, amount), credit(awaiting_start.id, amount))
+    if recovered_charge is not None and recovered_charge.is_positive:
+        charges = await ledger.open_account(
+            session,
+            AccountSpec(
+                CARD_CHARGES_CODE, AccountKind.INCOME, recovered_charge.currency, "Card charges"
+            ),
+            clock,
+        )
+        lines = (
+            debit(wallet.id, amount + recovered_charge),
+            credit(awaiting_start.id, amount),
+            credit(charges.id, recovered_charge),
+        )
     entry = await ledger.post_entry(
         session,
         EntryDraft(
             entry_type="payment.deposit_confirmed",
             effective_date=business_date(clock.now()),
-            lines=(debit(wallet.id, amount), credit(awaiting_start.id, amount)),
+            lines=lines,
             idempotency_key=f"deposit:{deposit.id}",
             source_type="payment.deposit",
             source_id=deposit.id,

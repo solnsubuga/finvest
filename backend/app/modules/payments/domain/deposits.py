@@ -20,7 +20,9 @@ through these states:
 * `uncertain`: we cannot tell. Only a status read from the provider, or reconciliation, moves
   it on. It is never sent again.
 
-A bank transfer has a shorter path of its own, `in_review` to `confirmed` or `failed`, described
+A card payment follows the mobile money path, with `awaiting_approval` meaning the payer has the
+card provider's page open; its own rules are in `cards.py`. A bank transfer has a shorter path
+of its own, `in_review` to `confirmed` or `failed`, described
 in `bank_transfers.py`. A mobile money deposit is never `in_review`, and a bank transfer is never
 in any of the mobile money states. The database holds both to that.
 
@@ -96,10 +98,15 @@ class Method(StrEnum):
     MTN = "mtn"
     AIRTEL = "airtel"
     BANK_TRANSFER = "bank_transfer"
+    # Visa or Mastercard, paid on the card provider's hosted page (`cards.py`).
+    CARD = "card"
 
     @property
     def network(self) -> Network | None:
-        return None if self is Method.BANK_TRANSFER else Network(self.value)
+        """The mobile money network, or None for a bank transfer or a card."""
+        if self in (Method.MTN, Method.AIRTEL):
+            return Network(self.value)
+        return None
 
 
 class Purpose(StrEnum):

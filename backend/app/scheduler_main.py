@@ -35,9 +35,10 @@ from app.modules.kyc.service import SWEEP_UNANSWERED
 from app.modules.migration.jobs import CLAIM_REMINDERS_KIND, CLAIM_REMINDERS_MAX_AGE
 from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
+from app.modules.payments import cards as card_payments
 from app.modules.payments import service as payments
-from app.modules.payments.settings import PaymentsSettings
-from app.modules.payments.wiring import ensure_allowed
+from app.modules.payments.settings import CardSettings, PaymentsSettings
+from app.modules.payments.wiring import ensure_allowed, ensure_cards_allowed
 from app.modules.payouts import payouts
 from app.modules.reports.jobs import QUEUE_KIND as REPORT_SCHEDULES_KIND
 from app.modules.screening.service import RESCREEN_KIND
@@ -180,6 +181,19 @@ def schedules() -> list[Schedule]:
     ]
     payments_settings = PaymentsSettings()
     ensure_allowed(payments_settings)
+    card_settings = CardSettings()
+    ensure_cards_allowed(card_settings)
+    if card_settings.provider != "disabled":
+        # Reads every open card payment again, cancels pages left unpaid and picks up
+        # payments whose own job was lost.
+        runs.append(
+            Schedule(
+                name="payments.sweep_card_deposits",
+                trigger=IntervalTrigger(minutes=1),
+                kind=card_payments.SWEEP_KIND,
+                max_age=timedelta(minutes=5),
+            )
+        )
     if payments_settings.provider != "disabled":
         # Picks up deposits whose own job was lost. One run covers any it missed.
         runs.append(

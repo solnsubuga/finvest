@@ -16,6 +16,8 @@ x-backend-environment: &backend-environment
   FINVEST_LOG_FORMAT: console
   # Local only: a stand-in for ioTec Pay that moves no money. See docs/payments.md.
   FINVEST_PAYMENTS_PROVIDER: sandbox
+  # Local only: a stand-in for Pesapal card payments. Its "page" is the client app's return page.
+  FINVEST_CARDS_PROVIDER: sandbox
 
 x-roles: &role-passwords
   FINVEST_MIGRATOR_PASSWORD: local-migrator

@@ -89,9 +89,9 @@ from app.modules.payments import (
     reversal_routes,
 )
 from app.modules.payments import routes as payment_routes
-from app.modules.payments.domain.provider import CollectionsProvider
-from app.modules.payments.settings import PaymentsSettings
-from app.modules.payments.wiring import collections_provider
+from app.modules.payments.domain.provider import CardCollectionsProvider, CollectionsProvider
+from app.modules.payments.settings import CardSettings, PaymentsSettings
+from app.modules.payments.wiring import card_provider, collections_provider
 from app.modules.payouts import api as payouts_api
 from app.modules.payouts import limits_api as withdrawal_limits_api
 from app.modules.payouts import staff_api as payouts_staff_api
@@ -126,6 +126,7 @@ def create_app(
     hasher: PasswordHasher | None = None,
     *,
     collections: CollectionsProvider | None = None,
+    card_collections: CardCollectionsProvider | None = None,
     storage: FileStorage | None = None,
     email_hooks: WebhookVerifier | None = None,
     identity_sealer: Sealer | None = None,
@@ -143,6 +144,7 @@ def create_app(
     database = database or Database(settings)
     clock = clock or SystemClock()
     collections = collections or collections_provider(PaymentsSettings(), clock)
+    card_collections = card_collections or card_provider(CardSettings(), clock)
     iotec_wallet = iotec_wallet or wallet_balances(PaymentsSettings(), clock)
     storage = storage or StorageSettings().storage()
     email_hooks = email_hooks or ResendHookSettings().verifier()
@@ -278,7 +280,7 @@ def create_app(
         own_changes_api.router,
     ):
         app.include_router(router)
-    app.include_router(payments_api.create_router(collections))
+    app.include_router(payments_api.create_router(collections, card_collections))
     for router in (*goals_api.routers, *autoinvest_api.routers):
         app.include_router(router)
     app.include_router(notification_hooks.create_router(email_hooks))
@@ -287,7 +289,7 @@ def create_app(
             (sms_callbacks or SmsCallbackSettings()).callback_token
         )
     )
-    app.include_router(payment_routes.create_client_router(collections))
+    app.include_router(payment_routes.create_client_router(collections, card_collections))
     app.include_router(payment_routes.staff_router)
     for router in (
         *bank_account_routes.routers,
