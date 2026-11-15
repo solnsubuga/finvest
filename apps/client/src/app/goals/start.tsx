@@ -14,6 +14,7 @@ import { categoryCopy, describeGoalError, GoalCategory, GoalError, outcomeUnknow
 import { formatDay, formatMoney } from "@/payments/format";
 import { DetailList } from "@/payments/Parts";
 import { newIdempotencyKey } from "@/payments/idempotency";
+import { rememberGoalSaving } from "@/payments/payingFor";
 import { colors } from "@/theme";
 import { IdCheckPrompt } from "@/identity/Parts";
 
@@ -81,6 +82,7 @@ export default function StartGoal() {
         savingSent = true;
         const saving = await client.saveToGoal(goal.id, { currency: "UGX", minor: first }, savingKey);
         // Replace, so Back from paying lands on the goal and not on this form.
+        rememberGoalSaving(saving.investmentId, { goalId: goal.id, goalName: goal.name });
         router.replace(`/goals/${goal.id}`);
         router.push(`/pay/${saving.investmentId}`);
       } else {

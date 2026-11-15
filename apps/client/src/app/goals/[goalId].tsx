@@ -17,6 +17,7 @@ import { savingLine } from "@/goals/savings";
 import { describeGoalError, Goal, Saving } from "@/goals/types";
 import { formatDay, formatMoney } from "@/payments/format";
 import { DetailList, Loading } from "@/payments/Parts";
+import { rememberGoalSaving } from "@/payments/payingFor";
 import { colors } from "@/theme";
 
 type State =
@@ -170,7 +171,10 @@ export default function GoalDetail() {
                   key={saving.investmentId}
                   saving={saving}
                   first={index === 0}
-                  onPay={() => router.push(`/pay/${saving.investmentId}`)}
+                  onPay={() => {
+                    rememberGoalSaving(saving.investmentId, { goalId: goal.id, goalName: goal.name });
+                    router.push(`/pay/${saving.investmentId}`);
+                  }}
                   onOpen={() => router.push(`/investment/${saving.investmentId}`)}
                 />
               ))}
