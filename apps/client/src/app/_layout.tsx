@@ -21,24 +21,30 @@ import { OrganisationsProvider } from "@/organisations/OrganisationsProvider";
 import { ProfileProvider } from "@/profile/ProfileProvider";
 import { SupportProvider } from "@/support/SupportProvider";
 import { RoutePrefetch } from "@/navigation/RoutePrefetch";
+import { hideStartLoader } from "@/navigation/startLoader";
+import { START_LOADER_LIMIT_MS } from "@/navigation/useStartLoaderDone";
 import { colors, fontAssets } from "@/theme";
 
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(fontAssets);
+  // If the font fails to load the app still opens, in the system font.
+  const fontsReady = loaded || Boolean(error);
 
   useEffect(() => {
-    if (loaded || error) {
-      void SplashScreen.hideAsync();
+    if (!fontsReady) {
+      return undefined;
     }
-  }, [loaded, error]);
+    void SplashScreen.hideAsync();
+    // The first screen removes the web page's start loader (useStartLoaderDone). This is the
+    // backstop for a screen drawn some other way.
+    const timer = setTimeout(hideStartLoader, START_LOADER_LIMIT_MS);
+    return () => clearTimeout(timer);
+  }, [fontsReady]);
 
-  // If the font fails to load the app still opens, in the system font.
-  if (!loaded && !error) {
-    return null;
-  }
-
+  // The providers start at once, so the session is looked up while the font is still loading,
+  // and only the screens wait for the font. The splash, or the web page's loader, covers both.
   return (
     <SafeAreaProvider>
       <DataSavingProvider>
@@ -58,12 +64,14 @@ export default function RootLayout() {
                                 <ProfileProvider>
                                   <OrganisationsProvider>
                                     <ConnectionProvider>
-                                      <Stack
-                                        screenOptions={{
-                                          headerShown: false,
-                                          contentStyle: { backgroundColor: colors.paper },
-                                        }}
-                                      />
+                                      {fontsReady ? (
+                                        <Stack
+                                          screenOptions={{
+                                            headerShown: false,
+                                            contentStyle: { backgroundColor: colors.paper },
+                                          }}
+                                        />
+                                      ) : null}
                                     </ConnectionProvider>
                                   </OrganisationsProvider>
                                 </ProfileProvider>
