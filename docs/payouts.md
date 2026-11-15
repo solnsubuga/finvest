@@ -504,3 +504,17 @@ What the database enforces:
 | Nothing changes afterwards | A decided return never changes, and nothing is deleted. A client sees only their own approved returns |
 
 The console's Money movement screen proposes and decides returns. The client app's payout screen shows a payout that came back and sends it again to an approved account.
+
+## Every movement, for staff
+
+The top of the console's Money movement screen lists every payment in and every payout, newest first, 50 to a page (QA finding F-010). It only reads: `GET /staff/money-movements?show=&after=` (`money_movement.view`), in `backend/app/modules/console/movements.py`, which joins `payments.service.newest_deposits` and `payouts.payouts.newest_payouts` and names each client through `console.clients.client_cards`.
+
+| `show` | What it lists |
+| --- | --- |
+| `all` (the default) | Every deposit and payout |
+| `deposits` | Payments in |
+| `payouts` | Payouts |
+| `failed` | Deposits and payouts that failed, with the failure code |
+| `unmatched` | Bank transfers not yet found on the statement (`in_review`), and deposits and payouts whose outcome is not known (`uncertain`) |
+
+Each row has the kind, the client's verified name, the channel, the amount, the status, the failure code, when it was asked for and when it ended. Pass `next_after` back as `after` for the next page; each module is read for one more than a page before the same place, so the merged page is what one list of both would hold.

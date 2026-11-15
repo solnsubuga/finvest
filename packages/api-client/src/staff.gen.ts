@@ -2125,6 +2125,12 @@ export const MoveComplaint = z.object({
 });
 export type MoveComplaint = z.infer<typeof MoveComplaint>;
 
+export const MovementAmountOut = z.object({
+  currency: z.string(),
+  minor: z.number().int(),
+});
+export type MovementAmountOut = z.infer<typeof MovementAmountOut>;
+
 export const MovementIn = z.object({
   amount_minor: z.number().int(),
   bank_reference: z.string().nullable().optional(),
@@ -2134,6 +2140,26 @@ export const MovementIn = z.object({
   value_date: z.string().nullable().optional(),
 });
 export type MovementIn = z.infer<typeof MovementIn>;
+
+export const MovementView = z.object({
+  amount: MovementAmountOut,
+  channel: z.string(),
+  client_id: z.string(),
+  client_name: z.string().nullable(),
+  created_at: z.string(),
+  ended_at: z.string().nullable(),
+  failure_code: z.string().nullable(),
+  id: z.string(),
+  kind: z.enum(["deposit", "payout"]),
+  status: z.string(),
+});
+export type MovementView = z.infer<typeof MovementView>;
+
+export const MovementListView = z.object({
+  movements: z.array(MovementView),
+  next_after: z.string().nullable(),
+});
+export type MovementListView = z.infer<typeof MovementListView>;
 
 export const Network = z.enum(["mtn", "airtel"]);
 export type Network = z.infer<typeof Network>;
@@ -5955,6 +5981,20 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: OverviewView,
+  },
+  "GET /staff/money-movements": {
+    method: "GET",
+    path: "/staff/money-movements",
+    params: z.object({}),
+    query: z.object({
+    show: z.enum(["all", "deposits", "payouts", "failed", "unmatched"]).optional(),
+    after: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MovementListView,
   },
   "GET /staff/note-reissues": {
     method: "GET",

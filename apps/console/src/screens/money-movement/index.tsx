@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { useAuth } from "@/auth/context.ts";
 import { isStubAuth } from "@/auth/index.ts";
@@ -29,10 +29,14 @@ import { notConnectedReturnsApi, type ReturnsApi } from "./returns/api.ts";
 import { createHttpReturnsApi } from "./returns/http.ts";
 import { Returns } from "./returns/Returns.tsx";
 import { createStubReturnsApi } from "./returns/stub.ts";
+import { notConnectedMovementsApi, type MovementsApi } from "./movements/api.ts";
+import { createHttpMovementsApi } from "./movements/http.ts";
+import { Movements } from "./movements/Movements.tsx";
+import { createStubMovementsApi } from "./movements/stub.ts";
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 
-const SUMMARY = "Payouts that need a person: those ioTec is not taking, and those it never answered for.";
+const SUMMARY = "Every payment in and payout, and the payouts that need a person: those ioTec is not taking, and those it never answered for.";
 
 interface MoneyMovementScreenProps {
   api: PayoutsApi;
@@ -42,6 +46,8 @@ interface MoneyMovementScreenProps {
   canSettle: boolean;
   /** Makes the idempotency key for one command. Every try at the same command carries the same key. */
   newKey?: () => string;
+  /** Shown under the page header, above the payouts that need a person: the list of every movement. */
+  children?: ReactNode;
 }
 
 function useList<T>(fetch: () => Promise<T[]>, enabled = true) {
@@ -66,7 +72,7 @@ function useList<T>(fetch: () => Promise<T[]>, enabled = true) {
   return [load, reload] as const;
 }
 
-export function MoneyMovementScreen({ api, me, canSettle, newKey = () => crypto.randomUUID() }: MoneyMovementScreenProps) {
+export function MoneyMovementScreen({ api, me, canSettle, newKey = () => crypto.randomUUID(), children }: MoneyMovementScreenProps) {
   const [heldUp, reloadHeldUp] = useList(useCallback(() => api.listHeldUp(), [api]));
   const [stranded, reloadStranded] = useList(
     useCallback(() => api.listStranded(), [api]),
@@ -127,6 +133,7 @@ export function MoneyMovementScreen({ api, me, canSettle, newKey = () => crypto.
   return (
     <>
       <PageHeader title="Money movement" summary={SUMMARY} />
+      {children}
 
       <section aria-labelledby="held-up" className="flex flex-col gap-3">
         <div>
@@ -312,15 +319,25 @@ function defaultBankApis(me: string): { bank: BankPayoutsApi; returns: ReturnsAp
   return { bank: createHttpBankPayoutsApi(http), returns: createHttpReturnsApi(http), directory: createHttpDirectory(http) };
 }
 
+/** Every movement: samples under the stub, the real route otherwise. */
+function defaultMovementsApi(): MovementsApi {
+  if (isStubAuth()) return createStubMovementsApi(Date.now, 150, stubCase());
+  const base = apiBaseUrl();
+  return base ? createHttpMovementsApi(createHttp(base)) : notConnectedMovementsApi;
+}
+
 export default function MoneyMovementPage() {
   const { session } = useAuth();
   const me = session?.staffId ?? "";
   const [api] = useState<PayoutsApi>(() => defaultApi(me));
   const [bank] = useState(() => defaultBankApis(me));
+  const [movements] = useState(defaultMovementsApi);
   const canPayBank = session ? can(session, "bank_payouts.change") : false;
   return (
     <>
-      <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false} />
+      <MoneyMovementScreen api={api} me={me} canSettle={session ? can(session, "reconciliation.change") : false}>
+        <Movements api={movements} />
+      </MoneyMovementScreen>
       <BankPayouts api={bank.bank} me={me} canChange={canPayBank} directory={bank.directory} />
       <Returns api={bank.returns} me={me} canChange={canPayBank} directory={bank.directory} />
     </>
