@@ -35,19 +35,19 @@ describe("products screen", () => {
   it("shows each product's rate before tax, the tax, and what clients see", async () => {
     renderProducts();
     await screen.findByRole("table", { name: "Products" });
-    expect(row("91 Day Treasury Bill")).toEqual(["12.5%", "15%", "10.63%", "UGX 100,000", "Live"]);
-    expect(row("182 Day Treasury Bill")).toEqual(["13.75%", "15%", "11.69%", "UGX 200,000", "Live"]);
-    expect(row("USD Fixed Income")).toEqual(["7.25%", "5%", "6.89%", "$500.00", "Paused"]);
+    expect(row("91 Day Treasury Bill")).toEqual(["12.5%", "15%", "10.62%", "UGX 100,000", "Live"]);
+    expect(row("182 Day Treasury Bill")).toEqual(["13.75%", "15%", "11.68%", "UGX 200,000", "Live"]);
+    expect(row("USD Fixed Income")).toEqual(["7.25%", "5%", "6.88%", "$500.00", "Paused"]);
     expect(screen.getByRole("link", { name: "Change a rate" })).toHaveAttribute("href", "/rates");
   });
 
   it("shows a product as a client sees it, without the tax", async () => {
     const user = renderProducts();
     const panel = await screen.findByRole("region", { name: "91 Day Treasury Bill" });
-    expect(within(panel).getByText("10.63% a year")).toBeInTheDocument();
+    expect(within(panel).getByText("10.62% a year")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "USD Fixed Income" }));
     const usd = screen.getByRole("region", { name: "USD Fixed Income" });
-    expect(within(usd).getByText("6.89% a year")).toBeInTheDocument();
+    expect(within(usd).getByText("6.88% a year")).toBeInTheDocument();
     expect(within(usd).getByText("Open term")).toBeInTheDocument();
     expect(within(usd).getByText(/clients can see it but not invest/)).toBeInTheDocument();
   });
@@ -58,7 +58,7 @@ describe("products screen", () => {
     await api.approve(waiting?.id ?? "");
     renderProducts(api);
     await screen.findByRole("table", { name: "Products" });
-    expect(row("91 Day Treasury Bill")[2]).toBe("10.63%11.05% from 1 Dec 2026");
+    expect(row("91 Day Treasury Bill")[2]).toBe("10.62%11.05% from 1 Dec 2026");
   });
 
   it("offers to try again when products cannot be loaded", async () => {
@@ -113,7 +113,7 @@ describe("changing products", () => {
     await user.type(screen.getByLabelText("Term, days"), "273");
     await user.type(screen.getByLabelText("Minimum, UGX"), "300,000");
     await user.type(screen.getByLabelText("Yearly rate before tax, %"), "14.5");
-    expect(screen.getByText("12.33% a year, after tax")).toBeInTheDocument();
+    expect(screen.getByText("12.32% a year, after tax")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Reason, for the audit trail"), "Clients ask for nine months");
     await user.click(screen.getByRole("button", { name: "Send for approval" }));
     const waiting = await screen.findByRole("region", { name: "273 Day Treasury Bill" });
@@ -140,7 +140,7 @@ describe("changing products", () => {
     await screen.findByRole("heading", { name: "Edit 91 Day Treasury Bill" });
     expect(screen.getByLabelText("Kind")).toBeDisabled();
     expect(screen.getByLabelText("Interest is paid")).toBeDisabled();
-    expect(screen.getByText("12.5% before tax, 15% tax. Clients see 10.63%.")).toBeInTheDocument();
+    expect(screen.getByText("12.5% before tax, 15% tax. Clients see 10.62%.")).toBeInTheDocument();
     const reach = screen.getByRole("complementary", { name: "Who this reaches and availability" });
     expect(await within(reach).findByText("912 clients keep their terms")).toBeInTheDocument();
     const minimum = screen.getByLabelText("Minimum, UGX");
@@ -192,11 +192,12 @@ describe("rate formats", () => {
     expect(parsePercent("")).toBeNull();
   });
 
-  it("previews the client rate rounded as the backend rounds it", () => {
-    expect(previewClientRate(1250, 1500)).toBe("10.63%");
-    expect(previewClientRate(1375, 1500)).toBe("11.69%");
+  it("previews the client rate rounded down, as the backend rounds it", () => {
+    // 10.625% after tax: the backend's label, and the app's, read 10.62%.
+    expect(previewClientRate(1250, 1500)).toBe("10.62%");
+    expect(previewClientRate(1375, 1500)).toBe("11.68%");
     expect(previewClientRate(1300, 1500)).toBe("11.05%");
-    expect(previewClientRate(725, 500)).toBe("6.89%");
+    expect(previewClientRate(725, 500)).toBe("6.88%");
   });
 
   it("reads a typed amount in whole units without floating point", () => {

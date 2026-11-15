@@ -34,13 +34,13 @@ export function parsePercent(text: string): number | null {
 }
 
 /**
- * A preview of the rate a client would see, rounded as the backend rounds it.
- * Only a label while the form is being filled in: once saved, the backend's own figure is shown.
+ * A preview of the rate a client would see, rounded as the backend rounds it: down, so the label
+ * never promises more than the client earns (10.625% is 10.62%). Only a label while the form is
+ * being filled in: once saved, the backend's own figure is shown.
  */
 export function previewClientRate(annualRateBps: number, taxBps: number): string {
   const millionths = annualRateBps * (10_000 - taxBps);
-  let hundredths = Math.trunc(millionths / 10_000);
-  if ((millionths % 10_000) * 2 >= 10_000) hundredths += 1;
+  const hundredths = Math.trunc(millionths / 10_000);
   return `${Math.trunc(hundredths / 100)}.${String(hundredths % 100).padStart(2, "0")}%`;
 }
 
