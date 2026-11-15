@@ -23,7 +23,7 @@ export const AccountView = z.object({
   last_signed_in_at: z.string().nullable(),
   phone: z.string(),
   restricted_until: z.string().nullable(),
-  status: z.enum(["active", "locked", "closed"]),
+  status: z.enum(["unclaimed", "active", "locked", "closed"]),
 });
 export type AccountView = z.infer<typeof AccountView>;
 
@@ -881,7 +881,7 @@ export const ClientCardView = z.object({
   account_number: z.string().nullable(),
   created_at: z.string(),
   id: z.string(),
-  status: z.enum(["active", "locked", "closed"]),
+  status: z.enum(["unclaimed", "active", "locked", "closed"]),
   verified_name: z.string().nullable(),
 });
 export type ClientCardView = z.infer<typeof ClientCardView>;
@@ -898,6 +898,24 @@ export const ClientLimitsView = z.object({
   shared: ConsoleActionsApiLimitsView,
 });
 export type ClientLimitsView = z.infer<typeof ClientLimitsView>;
+
+export const ClientRowView = z.object({
+  account_number: z.string().nullable(),
+  created_at: z.string(),
+  email: z.string().nullable(),
+  id: z.string(),
+  phone: z.string(),
+  status: z.enum(["unclaimed", "active", "locked", "closed"]),
+  verified_name: z.string().nullable(),
+});
+export type ClientRowView = z.infer<typeof ClientRowView>;
+
+export const ClientListView = z.object({
+  clients: z.array(ClientRowView),
+  more: z.boolean(),
+  next_after: z.string().nullable(),
+});
+export type ClientListView = z.infer<typeof ClientListView>;
 
 export const ConversationSummary = z.object({
   id: z.string(),
@@ -4196,6 +4214,21 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: StaffRunList,
+  },
+  "GET /staff/clients": {
+    method: "GET",
+    path: "/staff/clients",
+    params: z.object({}),
+    query: z.object({
+    q: z.string().optional(),
+    status: z.enum(["active", "locked", "unclaimed", "closed"]).nullable().optional(),
+    after: z.string().nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ClientListView,
   },
   "POST /staff/clients/actions/{action_id}/decision": {
     method: "POST",

@@ -30,7 +30,8 @@ RESOURCE = "client_lock"
 MAX_REASON = 500
 LockKind = Literal["lock", "unlock"]
 Decision = Literal["approved", "rejected", "withdrawn"]
-ClientStatus = Literal["active", "locked", "closed"]
+# `unclaimed`: carried over from the paper register and not signed up yet (migration 0009).
+ClientStatus = Literal["unclaimed", "active", "locked", "closed"]
 logger = structlog.get_logger()
 
 
@@ -367,3 +368,54 @@ async def close_account(
         {"now": now, "id": client_id},
     )
     logger.info("client_account_closed", request_id=request_id)
+
+
+# Finding clients for staff ---------------------------------------------------------------
+
+_NEWEST = (
+    _ACCOUNT
+    + "WHERE (CAST(:status AS text) IS NULL OR c.status = :status) "
+    + "AND (CAST(:before_at AS timestamptz) IS NULL OR (c.created_at, c.id) < "
+    + "(CAST(:before_at AS timestamptz), CAST(:before_id AS text))) "
+    + "ORDER BY c.created_at DESC, c.id DESC LIMIT :limit"
+)
+_BY_EMAIL = text(
+    "SELECT id FROM identity_clients WHERE email ILIKE :pattern "
+    "ORDER BY created_at DESC, id DESC LIMIT :limit"
+)
+
+
+def like_pattern(fragment: str) -> str:
+    """`fragment` anywhere, with LIKE's own wildcards taken as plain characters."""
+    escaped = fragment.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+async def newest_clients(
+    session: AsyncSession,
+    *,
+    status: str | None,
+    before: tuple[datetime, str] | None,
+    limit: int,
+) -> list[ClientAccount]:
+    """Clients newest first, optionally of one status, after the `before` place in that order.
+
+    For the staff list. Keyset paged on (joined, ID), so a page never repeats or skips a client
+    who joins while staff read.
+    """
+    rows = await session.execute(
+        text(_NEWEST),
+        {
+            "status": status,
+            "before_at": before[0] if before else None,
+            "before_id": before[1] if before else None,
+            "limit": limit,
+        },
+    )
+    return [_account(row) for row in rows.all()]
+
+
+async def clients_by_email(session: AsyncSession, fragment: str, limit: int) -> list[str]:
+    """IDs of clients whose email holds `fragment`, ignoring case, newest first. For staff."""
+    rows = await session.execute(_BY_EMAIL, {"pattern": like_pattern(fragment), "limit": limit})
+    return [str(row.id) for row in rows.all()]

@@ -847,6 +847,33 @@ async def verified_name(session: AsyncSession, client_id: str) -> str | None:
     return None if row is None else names.full_name(row.surname, row.given_names)
 
 
+_NAMED = text(
+    "SELECT client_id FROM kyc_checks WHERE status = 'approved' "
+    "AND (surname || ' ' || given_names) ILIKE ALL (CAST(:patterns AS text[])) "
+    "ORDER BY decided_at DESC NULLS LAST, client_id LIMIT :limit"
+)
+
+
+def _name_like(word: str) -> str:
+    escaped = word.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
+
+async def clients_named(session: AsyncSession, words: list[str], limit: int) -> list[str]:
+    """IDs of approved clients whose name on their document holds every one of `words`,
+    ignoring case and order, the most recently approved first. For staff finding a client.
+
+    Names are kept as printed on the document, so "amara nak" finds NAKATO Amara.
+    """
+    if not words:
+        return []
+    # Backslash is LIKE's own escape character, so the escaped patterns need no ESCAPE clause.
+    rows = await session.execute(
+        _NAMED, {"patterns": [_name_like(word) for word in words], "limit": limit}
+    )
+    return [str(row.client_id) for row in rows.all()]
+
+
 @dataclass(frozen=True, slots=True)
 class ClientName:
     """An approved client's own name, for the app to greet them by."""
