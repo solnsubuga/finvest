@@ -132,7 +132,7 @@ export default function StartGoal() {
       <View style={{ marginTop: 24, gap: 8 }}>
         <Title>How do you want to start?</Title>
         <Txt color={colors.muted}>
-          Make your first saving now and it starts earning tomorrow. You can add to the goal at any time.
+          Make your first saving now, and its receipt says the day it starts earning. You can add to the goal at any time.
         </Txt>
       </View>
       <View style={{ marginTop: 18, gap: 16 }}>

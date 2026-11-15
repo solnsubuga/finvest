@@ -166,9 +166,10 @@ describe("paying for an investment by mobile money", () => {
     await screen.findByText("Completed");
     expect(screen.getByText("Saved for Daniel's school fees, in 91 Day Treasury Bill")).toBeTruthy();
     expect(screen.queryByText(/school fees: 91 Day/)).toBeNull();
+    // The demo's payments do not reach its investments, so no start date is read here.
     expect(
-      screen.getByText(
-        "Your money is in. It is invested in 91 Day Treasury Bill and starts earning tomorrow. You can follow it on Daniel's school fees.",
+      await screen.findByText(
+        "Your money is in. It is invested in 91 Day Treasury Bill and starts earning the day after the business day it was paid. You can follow it on Daniel's school fees.",
       ),
     ).toBeTruthy();
     await fireEvent.press(screen.getByText("Back to your goal"));
