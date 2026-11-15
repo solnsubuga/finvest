@@ -21,14 +21,20 @@ async function logIn(page: Page, phone = DEMO_PHONE) {
 test("the welcome screen says the sign-in is a demo", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByText("Create an account")).toBeVisible();
-  await expect(page.getByText(/Demo sign-in, not connected to Finvest yet/)).toBeVisible();
+  await expect(
+    page.getByText(/Demo sign-in, not connected to Finvest yet/),
+  ).toBeVisible();
 });
 
-test("a new client signs up with a texted code and a password", async ({ page }) => {
+test("a new client signs up with a texted code and a password", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.getByText("Create an account").click();
   await id(page, "signup-submit").click();
-  await expect(page.getByText("Enter a mobile number like 772 123 456.")).toBeVisible();
+  await expect(
+    page.getByText("Enter a mobile number like 772 123 456."),
+  ).toBeVisible();
 
   await id(page, "phone-input").fill("701555012");
   await id(page, "email-input").fill("new@example.com");
@@ -63,12 +69,16 @@ test("a wrong password does not sign in", async ({ page }) => {
   await expect(id(page, "use-authenticator")).toHaveCount(0);
 });
 
-test("a client signs in with the password and an authenticator code", async ({ page }) => {
+test("a client signs in with the password and an authenticator code", async ({
+  page,
+}) => {
   await logIn(page);
   await id(page, "use-authenticator").click();
   await id(page, "code-input").fill("000000");
   await id(page, "code-submit").click();
-  await expect(page.getByText("That code is not right. Check it and try again.")).toBeVisible();
+  await expect(
+    page.getByText("That code is not right. Check it and try again."),
+  ).toBeVisible();
   await expect(page.getByTestId("home")).toHaveCount(0);
   // A wrong code clears the field for the next try.
   await expect(id(page, "code-input")).toHaveValue("");
@@ -104,13 +114,19 @@ test("a client pays for an investment by mobile money from their own number", as
   await expect(page.getByText("Paid into 91 Day Treasury Bill")).toBeVisible();
 });
 
-test("a client adds a mobile money number to be paid to, and enters the texted code", async ({ page }) => {
+test("a client adds a mobile money number to be paid to, and enters the texted code", async ({
+  page,
+}) => {
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
   await expect(page.getByTestId("home")).toBeVisible();
   // A Profile tab on the phone; the signed-in name at the foot of the wide sidebar.
-  await page.getByRole("tab", { name: "Profile", exact: true }).or(id(page, "sidebar-profile")).first().click();
+  await page
+    .getByRole("tab", { name: "Profile", exact: true })
+    .or(id(page, "sidebar-profile"))
+    .first()
+    .click();
   await id(page, "open-payout-accounts").click();
   await expect(id(page, "payout-account-demo-account-mtn")).toBeVisible();
 
@@ -121,24 +137,40 @@ test("a client adds a mobile money number to be paid to, and enters the texted c
   await id(page, "payout-account-save").click();
 
   // On a phone with a PIN (and in the demo), adding a payout account is confirmed with it.
-  await expect(page.getByText("Enter your PIN to add this payout account")).toBeVisible();
+  await expect(
+    page.getByText("Enter your PIN to add this payout account"),
+  ).toBeVisible();
   await typePin(page, "90817");
-  await expect(page.getByText("That PIN is not right. 4 tries left before this phone is signed out.")).toBeVisible();
+  await expect(
+    page.getByText(
+      "That PIN is not right. 4 tries left before this phone is signed out.",
+    ),
+  ).toBeVisible();
   await typePin(page, DEMO_PIN);
 
-  await expect(page.getByText(/We texted a code to \+256 70• ••• 012/)).toBeVisible();
+  await expect(
+    page.getByText(/We texted a code to \+256 70• ••• 012/),
+  ).toBeVisible();
   await id(page, "code-input").fill("000000");
   await id(page, "payout-code-submit").click();
-  await expect(page.getByText("That code is not right. Check it and try again.")).toBeVisible();
+  await expect(
+    page.getByText("That code is not right. Check it and try again."),
+  ).toBeVisible();
   await id(page, "code-input").fill(DEMO_CODE);
   await id(page, "payout-code-submit").click();
 
   // A mobile money number is checked against the name the network holds, not by proof.
-  await expect(page.getByText(/We are checking the name the network holds for this number/)).toBeVisible();
+  await expect(
+    page.getByText(
+      /We are checking the name the network holds for this number/,
+    ),
+  ).toBeVisible();
   await expect(id(page, "proof-upload")).toHaveCount(0);
 });
 
-test("a PIN that is too simple is refused, and two that differ start again", async ({ page }) => {
+test("a PIN that is too simple is refused, and two that differ start again", async ({
+  page,
+}) => {
   await logIn(page);
   await id(page, "use-passkey").click();
   await expect(page.getByText("Create a 5 digit PIN")).toBeVisible();
@@ -146,12 +178,16 @@ test("a PIN that is too simple is refused, and two that differ start again", asy
   await expect(page.getByText(/That PIN is too easy to guess/)).toBeVisible();
   await typePin(page, DEMO_PIN);
   await typePin(page, "48152");
-  await expect(page.getByText("Those PINs did not match. Choose your PIN again.")).toBeVisible();
+  await expect(
+    page.getByText("Those PINs did not match. Choose your PIN again."),
+  ).toBeVisible();
   await createPin(page);
   await expect(page.getByTestId("home")).toBeVisible();
 });
 
-test("the app locks in the background and opens with the PIN, after a wrong one", async ({ page }) => {
+test("the app locks in the background and opens with the PIN, after a wrong one", async ({
+  page,
+}) => {
   await page.clock.install();
   await logIn(page);
   await id(page, "use-passkey").click();
@@ -159,17 +195,23 @@ test("the app locks in the background and opens with the PIN, after a wrong one"
   await expect(page.getByTestId("home")).toBeVisible();
 
   await leaveForSixMinutes(page);
-  await expect(page.getByText("Enter your PIN to open the app on this phone")).toBeVisible();
+  await expect(
+    page.getByText("Enter your PIN to open the app on this phone"),
+  ).toBeVisible();
   await expect(page.getByTestId("home")).toHaveCount(0);
   await typePin(page, "90817");
   await expect(
-    page.getByText("That PIN is not right. 4 tries left before this phone is signed out."),
+    page.getByText(
+      "That PIN is not right. 4 tries left before this phone is signed out.",
+    ),
   ).toBeVisible();
   await typePin(page, DEMO_PIN);
   await expect(page.getByTestId("home")).toBeVisible();
 });
 
-test("a client turns on fingerprint or face unlock, and the locked app opens with it", async ({ page }) => {
+test("a client turns on fingerprint or face unlock, and the locked app opens with it", async ({
+  page,
+}) => {
   await page.clock.install();
   await logIn(page);
   await id(page, "use-passkey").click();
@@ -183,9 +225,13 @@ test("a client turns on fingerprint or face unlock, and the locked app opens wit
   });
   await id(page, "open-fingerprint").click();
   await id(page, "fingerprint-on").click();
-  await expect(page.getByText("Enter your PIN to turn on fingerprint or face unlock")).toBeVisible();
+  await expect(
+    page.getByText("Enter your PIN to turn on fingerprint or face unlock"),
+  ).toBeVisible();
   await typePin(page, DEMO_PIN);
-  await expect(page.getByText("Fingerprint or face unlock is on")).toBeVisible();
+  await expect(
+    page.getByText("Fingerprint or face unlock is on"),
+  ).toBeVisible();
   await id(page, "done").click();
   await expect(page.getByLabel("Fingerprint or face unlock: on")).toBeVisible();
 
@@ -193,10 +239,14 @@ test("a client turns on fingerprint or face unlock, and the locked app opens wit
   // The demo's fingerprint answers after a moment; meanwhile the lock screen offers the button.
   await expect(id(page, "unlock-biometric")).toBeVisible();
   await page.clock.runFor(2000);
-  await expect(page.getByText("Enter your PIN to open the app on this phone")).toHaveCount(0);
+  await expect(
+    page.getByText("Enter your PIN to open the app on this phone"),
+  ).toHaveCount(0);
 });
 
-test("five wrong PINs sign the phone out, and the client logs in again", async ({ page }) => {
+test("five wrong PINs sign the phone out, and the client logs in again", async ({
+  page,
+}) => {
   await page.clock.install();
   await logIn(page);
   await id(page, "use-passkey").click();
@@ -206,7 +256,9 @@ test("five wrong PINs sign the phone out, and the client logs in again", async (
   await leaveForSixMinutes(page);
   for (let tries = 5; tries > 1; tries -= 1) {
     await typePin(page, "90817");
-    await expect(page.getByText(new RegExp(`${tries - 1} tr(y|ies) left`))).toBeVisible();
+    await expect(
+      page.getByText(new RegExp(`${tries - 1} tr(y|ies) left`)),
+    ).toBeVisible();
   }
   await typePin(page, "90817");
   await expect(page.getByText("Signed out for your safety")).toBeVisible();
@@ -214,22 +266,30 @@ test("five wrong PINs sign the phone out, and the client logs in again", async (
   await expect(page.getByText("Welcome back")).toBeVisible();
 });
 
-test("a client who lost their phone asks to be called back", async ({ page }) => {
+test("a client who lost their phone asks to be called back", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.getByText("Log in", { exact: true }).first().click();
   await page.getByText("I changed my number or cannot get in").click();
-  await expect(page.getByText("Get back into your account").last()).toBeVisible();
+  await expect(
+    page.getByText("Get back into your account").last(),
+  ).toBeVisible();
   await id(page, "recover-phone").click();
 
   await shown(page, "call-back-submit").click();
-  await expect(page.getByText("Enter the number on your account, like 772 123 456.")).toBeVisible();
+  await expect(
+    page.getByText("Enter the number on your account, like 772 123 456."),
+  ).toBeVisible();
   await shown(page, "reason-new_number").click();
   await shown(page, "account-phone-input").fill(DEMO_PHONE);
   await shown(page, "contact-phone-input").fill("701555013");
   await shown(page, "call-back-submit").click();
 
   await expect(page.getByText("We will call you").last()).toBeVisible();
-  await expect(page.getByText(/If that number has a Finvest account/)).toBeVisible();
+  await expect(
+    page.getByText(/If that number has a Finvest account/),
+  ).toBeVisible();
 });
 
 // A 1 by 1 pixel PNG: the browser reads it as a picture, and the demo takes any photo.
@@ -239,12 +299,15 @@ const PHOTO = Buffer.from(
 );
 
 /** The step on top. Earlier steps stay in the page, hidden, while the stack holds them. */
-const shown = (page: Page, testId: string) => page.getByTestId(testId).filter({ visible: true });
+const shown = (page: Page, testId: string) =>
+  page.getByTestId(testId).filter({ visible: true });
 
 async function photograph(page: Page, name: string) {
   const chooser = page.waitForEvent("filechooser");
   await shown(page, "photo-take").click();
-  await (await chooser).setFiles({ name, mimeType: "image/png", buffer: PHOTO });
+  await (
+    await chooser
+  ).setFiles({ name, mimeType: "image/png", buffer: PHOTO });
   await expect(shown(page, "photo-preview")).toBeVisible();
   await shown(page, "photo-use").click();
 }
@@ -277,39 +340,57 @@ async function upToTheSelfie(page: Page) {
   await expect(page.getByText("5 of 5")).toBeVisible();
 }
 
-test("a new client hands in their ID, details and a live selfie for checking", async ({ page }) => {
+test("a new client hands in their ID, details and a live selfie for checking", async ({
+  page,
+}) => {
   await upToTheSelfie(page);
 
   // The selfie is a live check on the partner's page. The demo page is a stand-in, so its
   // tab is closed again, and the demo check passes after a couple of reads.
   await expect(shown(page, "live-start")).toBeVisible();
   await shown(page, "live-start").click();
-  await expect(page.getByText("Your live check is ready").filter({ visible: true })).toBeVisible();
+  await expect(
+    page.getByText("Your live check is ready").filter({ visible: true }),
+  ).toBeVisible();
   const popup = page.waitForEvent("popup");
   await shown(page, "live-open").click();
   await (await popup).close();
-  await expect(page.getByText("Finish the check, then come back").filter({ visible: true })).toBeVisible();
+  await expect(
+    page
+      .getByText("Finish the check, then come back")
+      .filter({ visible: true }),
+  ).toBeVisible();
   await expect(async () => {
     await shown(page, "live-finished").click();
-    await expect(page.getByText("Live selfie done").filter({ visible: true })).toBeVisible({ timeout: 2000 });
+    await expect(
+      page.getByText("Live selfie done").filter({ visible: true }),
+    ).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 20_000 });
   await shown(page, "live-continue").click();
 
-  await expect(page.getByText("Thanks, Peter. We are checking now.")).toBeVisible();
+  await expect(
+    page.getByText("Thanks, Peter. We are checking now."),
+  ).toBeVisible();
   await shown(page, "id-check-home").click();
   await expect(page.getByText("We are checking your ID")).toBeVisible();
 });
 
-test("a client who cannot take the live check hands in a camera selfie instead", async ({ page }) => {
+test("a client who cannot take the live check hands in a camera selfie instead", async ({
+  page,
+}) => {
   await upToTheSelfie(page);
 
   await shown(page, "live-camera").click();
   await photograph(page, "selfie.png");
 
-  await expect(page.getByText("Thanks, Peter. We are checking now.")).toBeVisible();
+  await expect(
+    page.getByText("Thanks, Peter. We are checking now."),
+  ).toBeVisible();
 });
 
-test("a client sends part of an investment to another client after checking the details", async ({ page }) => {
+test("a client sends part of an investment to another client after checking the details", async ({
+  page,
+}) => {
   await logIn(page);
   await id(page, "use-passkey").click();
   await createPin(page);
@@ -324,11 +405,15 @@ test("a client sends part of an investment to another client after checking the 
   await id(page, "send-to").fill("0772 555 170");
   await id(page, "find-recipient").click();
   await expect(id(page, "recipient")).toContainText("Brian K.");
-  await expect(id(page, "recipient")).toContainText("Finvest account 1001005170");
+  await expect(id(page, "recipient")).toContainText(
+    "Finvest account 1001005170",
+  );
   await id(page, "send-amount").fill("1000000");
   await id(page, "send-purpose-gift").click();
   await id(page, "review-send").click();
-  await expect(id(page, "send-confirm")).toContainText("You are sending UGX 1,000,000 to Brian K.");
+  await expect(id(page, "send-confirm")).toContainText(
+    "You are sending UGX 1,000,000 to Brian K.",
+  );
   await id(page, "confirm-send").click();
 
   await expect(page.getByText("To Brian K.")).toBeVisible();
@@ -351,3 +436,41 @@ async function openToSend(page: Page) {
     await page.getByTestId("detail-send").click();
   }
 }
+
+test("a tablet held upright gets the sidebar, and no screen is wider than the window", async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "client-wide",
+    "a tablet width, checked once",
+  );
+  await page.setViewportSize({ width: 768, height: 1024 });
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByTestId("home")).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+  for (const path of [
+    "/",
+    "/portfolio",
+    "/invest",
+    "/goals",
+    "/activity",
+    "/insights",
+    "/documents",
+    "/profile",
+  ]) {
+    // The app's own router, as a link does: loading an address drops the sample session.
+    await page.evaluate((to) => {
+      window.history.pushState({}, "", to);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, path);
+    await expect(page).toHaveURL(new RegExp(`${path}$`));
+    await expect(page.getByRole("navigation", { name: "Main" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 }).first()).toBeVisible();
+    const tooWide = await page.evaluate(
+      () => document.documentElement.scrollWidth > window.innerWidth,
+    );
+    expect(tooWide, `${path} is wider than the window`).toBe(false);
+  }
+});
