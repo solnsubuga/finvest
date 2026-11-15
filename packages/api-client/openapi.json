@@ -11141,6 +11141,20 @@
           "currency": {
             "$ref": "#/components/schemas/Currency"
           },
+          "destination_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Id"
+          },
           "product_code": {
             "maxLength": 32,
             "minLength": 1,

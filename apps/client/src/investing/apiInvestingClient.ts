@@ -279,6 +279,7 @@ export function createApiInvestingClient(): InvestingClient {
               amount_minor: request.amount.minor,
               currency: request.amount.currency,
               at_maturity: request.atMaturity,
+              ...(request.destinationId ? { destination_id: request.destinationId } : {}),
             },
             idempotencyKey: request.idempotencyKey,
           }),

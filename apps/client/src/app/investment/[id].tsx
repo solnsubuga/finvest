@@ -125,7 +125,12 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
     }
   }
   if (investment.atMaturity && toMaturity) {
-    rows.push({ label: "When the term ends", value: atMaturityLabel[investment.atMaturity] });
+    const paidNowhere =
+      (investment.atMaturity === "pay_out" || investment.atMaturity === "pay_interest") && investment.payoutDestinationId === null;
+    rows.push({
+      label: "When the term ends",
+      value: paidNowhere ? `${atMaturityLabel[investment.atMaturity]}, no account chosen yet` : atMaturityLabel[investment.atMaturity],
+    });
   }
   if (investment.lockedUntil) {
     // Locked through its goal: not taken out early or sent to anyone before then.
