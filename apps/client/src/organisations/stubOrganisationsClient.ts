@@ -3,6 +3,7 @@ import { checkReceipt } from "@/payments/receipt";
 import { checkName, checkRegistration, DOCUMENTS, MAX_ROLE, problemsOf } from "./rules";
 import {
   Application,
+  approvalChoices,
   MAX_SIGNATORIES,
   Organisation,
   OrganisationError,
@@ -210,6 +211,9 @@ export function createStubOrganisationsClient(account: string | null): Organisat
         if (changes.approvalsNeeded < 1 || changes.approvalsNeeded > MAX_SIGNATORIES) {
           throw invalid("approvals_needed", "out_of_range");
         }
+        // As the API: never more than the strictest choice the screen offers.
+        const most = Math.max(...approvalChoices(found).map((choice) => choice.value));
+        if (changes.approvalsNeeded > most) throw invalid("approvals_needed", "more_than_signatories");
         approvalsNeeded = changes.approvalsNeeded;
       }
       return save({ ...found, name, registrationNumber, approvalsNeeded });

@@ -401,6 +401,35 @@ async def test_a_new_product_takes_two_people_over_http(api: Api) -> None:
     }
 
 
+async def test_a_second_new_product_with_a_waiting_code_is_refused_over_http(api: Api) -> None:
+    # QA F-033: two people proposing the same new code leave one waiting, not two.
+    _, first = await signed_in_staff(api, "finance")
+    _, second = await signed_in_staff(api, "admin")
+    body = {
+        "code": f"DUP-{secrets.randbelow(10**6)}",
+        "name": "273 Day Treasury Bill",
+        "kind": "treasury_bill",
+        "currency": "UGX",
+        "term_days": 273,
+        "minimum_minor": 500_000,
+        "interest_paid": "at_maturity",
+        "annual_rate_bps": 1500,
+        "tax_bps": 1500,
+        "reason": "A new term",
+    }
+    proposed = await api.http.post("/staff/product-changes/new-product", json=body, headers=first)
+    assert proposed.status_code == 201, proposed.text
+    again = await api.http.post("/staff/product-changes/new-product", json=body, headers=second)
+    assert again.status_code == 422, again.text
+    assert again.json()["error"]["fields"][0]["code"] == "code_taken"
+    waiting = await api.http.get(
+        "/staff/product-changes", params={"status": "proposed"}, headers=second
+    )
+    assert [item["id"] for item in waiting.json() if item["product_code"] == body["code"]] == [
+        proposed.json()["id"]
+    ]
+
+
 async def test_new_terms_over_http_are_sent_back_with_a_note(api: Api) -> None:
     _, first = await signed_in_staff(api, "finance")
     _, second = await signed_in_staff(api, "admin")
