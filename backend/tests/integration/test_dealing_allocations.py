@@ -33,7 +33,7 @@ from tests.integration.test_dealing_settlement import (
     recorded,
 )
 from tests.support.clock import AsyncBarrier
-from tests.support.investments import PRESENT, started
+from tests.support.investments import PRESENT, draft_bill, started
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 
@@ -96,10 +96,10 @@ async def check(worker: Database) -> int:
     return waiting
 
 
-async def buy(app: Database, cost: int) -> str:
-    """Buy a lot of the 182 day bill costing exactly `cost`, and return its ID."""
+async def buy(app: Database, cost: int, *, code: str = CODE) -> str:
+    """Buy a lot of the 182 day bill (or of `code`) costing exactly `cost`, and return its ID."""
     face = (cost * 103 // 100 // LOT + 1) * LOT
-    order = await bought(app, face, cost, MATURES_ON, code=CODE)
+    order = await bought(app, face, cost, MATURES_ON, code=code)
     async with app.actor_transaction(new_staff()) as session:
         return str(
             (
@@ -133,12 +133,15 @@ async def test_a_new_lot_covers_what_waits_oldest_first_then_the_newest_investme
 async def test_a_lot_due_to_mature_stands_behind_nothing_even_before_it_is_posted(
     app_database: Database, worker_database: Database
 ) -> None:
-    lot = await buy(app_database, 5 * LOT)
+    # A bill of its own: no investment takes this lot, and a free 182 day lot left behind would
+    # take what the sale test allocates, so the lot it sells would stand behind too little.
+    code = await draft_bill(app_database)
+    lot = await buy(app_database, 5 * LOT, code=code)
     async with worker_database.actor_transaction(SYSTEM) as session:
         day_before = await holdings.allocatable_lots(
-            session, CODE, on=MATURES_ON - timedelta(days=1)
+            session, code, on=MATURES_ON - timedelta(days=1)
         )
-        on_the_day = await holdings.allocatable_lots(session, CODE, on=MATURES_ON)
+        on_the_day = await holdings.allocatable_lots(session, code, on=MATURES_ON)
     assert lot in {held.id for held in day_before}
     assert lot not in {held.id for held in on_the_day}
 
@@ -194,7 +197,8 @@ async def test_the_database_refuses_what_a_lot_does_not_hold_and_any_change(
 ) -> None:
     await run(worker_database)
     await check(worker_database)
-    lot = await buy(app_database, 5 * LOT)
+    # A bill of its own, so the lot it leaves free takes nothing another test allocates.
+    lot = await buy(app_database, 5 * LOT, code=await draft_bill(app_database))
     investment_id = push_id()
     insert = text(
         "INSERT INTO dealing_allocations (id, investment_id, lot_id, cost_minor, allocated_at) "
