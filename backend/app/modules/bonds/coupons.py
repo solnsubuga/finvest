@@ -97,12 +97,17 @@ _ISSUES = text(
     "b.maturity_date, b.minimum_face_minor, b.face_step_minor, b.status FROM bond_issues b "
     "WHERE EXISTS (SELECT FROM bond_holdings h WHERE h.issue_id = b.id AND h.status = 'active')"
 )
+# A holding whose early sale is approved is left to the sale, which pays it to the day it sold.
+SALE_APPROVED = (
+    "NOT EXISTS (SELECT FROM bond_sales s WHERE s.holding_id = h.id AND s.status = 'approved')"
+)
 # Holdings owed any of the coupons given as (issue, date) pairs, and not yet paid it.
 _DUE = text(
-    "SELECT DISTINCT h.id FROM bond_holdings h "
+    "SELECT DISTINCT h.id FROM bond_holdings h "  # noqa: S608 - constant SQL
     "JOIN unnest(CAST(:issue_ids AS text[]), CAST(:dates AS date[])) AS d(issue_id, coupon_date) "
     "ON d.issue_id = h.issue_id "
     "WHERE h.status = 'active' AND h.start_date < d.coupon_date AND h.id > :after "
+    f"AND {SALE_APPROVED} "
     "AND NOT EXISTS (SELECT FROM bond_coupons c WHERE c.holding_id = h.id "
     "AND c.coupon_date = d.coupon_date) ORDER BY h.id LIMIT :limit"
 )
@@ -306,7 +311,31 @@ async def pay_to_destination(
 ) -> tuple[str | None, str | None]:
     """Pay money already handed to payouts for `reference_id` (a coupon, or the repayment at
     maturity) to the holding's destination. Returns the payout, or why the money waits."""
-    destination_id = holding.payout_destination_id
+    return await pay_to(
+        session,
+        actor,
+        holding.client_id,
+        holding.payout_destination_id,
+        reference_id,
+        amount,
+        clock,
+        kind=kind,
+    )
+
+
+async def pay_to(
+    session: AsyncSession,
+    actor: Actor,
+    client_id: str,
+    destination_id: str | None,
+    reference_id: str,
+    amount: Money,
+    clock: Clock,
+    *,
+    kind: str,
+) -> tuple[str | None, str | None]:
+    """Pay money already handed to payouts for `reference_id` to `destination_id`. Returns the
+    payout, or why the money waits."""
     if destination_id is None:
         return None, HoldReason.NO_DESTINATION
     try:
@@ -315,7 +344,7 @@ async def pay_to_destination(
             payout = await payouts.create_payout(
                 session,
                 actor,
-                client_id=holding.client_id,
+                client_id=client_id,
                 destination_id=destination_id,
                 amount=amount,
                 source_reference=reference_id,
@@ -344,7 +373,7 @@ async def choose_destination(
     """Choose where the holding's coupons are paid, or clear the choice. Coupons already held
     are sent on one at a time with `pay_out_held`."""
     holding = await _own(session, client, holding_id)
-    if holding.status in (HoldingStatus.CANCELLED, HoldingStatus.MATURED):
+    if holding.status in (HoldingStatus.CANCELLED, HoldingStatus.MATURED, HoldingStatus.SOLD):
         raise ApplicationError("conflict")
     if destination_id is not None:
         await usable(session, holding.client_id, destination_id)

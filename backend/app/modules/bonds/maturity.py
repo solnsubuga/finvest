@@ -94,9 +94,17 @@ class Batch:
 
 
 _DUE = text(
-    "SELECT h.id FROM bond_holdings h JOIN bond_issues b ON b.id = h.issue_id "
+    "SELECT h.id FROM bond_holdings h JOIN bond_issues b ON b.id = h.issue_id "  # noqa: S608 - constant SQL
     "WHERE h.status = 'active' AND b.maturity_date <= :run_date AND h.id > :after "
-    "ORDER BY h.id LIMIT :limit"
+    f"AND {coupons.SALE_APPROVED} ORDER BY h.id LIMIT :limit"
+)
+_SALE_WAITING = text(
+    "SELECT 1 FROM bond_sales WHERE holding_id = :holding_id AND status = 'approved'"
+)
+# A sale asked for, or priced, is closed: the bond matured first and is repaid instead.
+_CLOSE_SALES = text(
+    "UPDATE bond_sales SET status = 'closed', closed_at = :now, updated_at = :now "
+    "WHERE holding_id = :holding_id AND status IN ('requested', 'priced')"
 )
 _LOCK_HOLDING = text("SELECT id FROM bond_holdings WHERE id = :id FOR UPDATE")
 _PAID_DATES = text("SELECT coupon_date FROM bond_coupons WHERE holding_id = :holding_id")
@@ -185,6 +193,9 @@ async def repay(session: AsyncSession, holding_id: str, run_date: date, clock: C
     holding = await holdings.get_holding(session, holding_id)
     issue = holding.issue
     if holding.status is not HoldingStatus.ACTIVE or not has_matured(issue, run_date):
+        return None
+    if (await session.execute(_SALE_WAITING, {"holding_id": holding.id})).first() is not None:
+        # Approved for sale before it matured: the sale pays it.
         return None
     # A coupon before maturity that a run missed is paid first, in its own entry.
     paid_dates = set(
@@ -278,6 +289,7 @@ async def repay(session: AsyncSession, holding_id: str, run_date: date, clock: C
         },
     )
     await session.execute(_MATURE, {"id": holding.id, "now": now})
+    await session.execute(_CLOSE_SALES, {"holding_id": holding.id, "now": now})
     await audit.record(
         session,
         AuditEvent(

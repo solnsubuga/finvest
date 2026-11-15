@@ -2,7 +2,7 @@
 
 Uganda government bonds, sold the way Bank of Uganda sells them. The owner decided on 2026-11-15 that a client buys a part of a specific bond issue, not a bond by tenor counted from the day they pay (see [decisions.md](decisions.md)). The pure rules are in `backend/app/modules/bonds/domain`, the catalogue in `backend/app/modules/bonds/catalogue.py`, the routes in `backend/app/modules/bonds/api.py`, and the database side is migration 0490.
 
-This document covers the catalogue, buying, the coupon run and maturity. Selling early comes in a later pull request, and this document grows with it.
+This document covers the catalogue, buying, the coupon run, maturity and selling early.
 
 ## How a bond works
 
@@ -139,6 +139,38 @@ Worked example, the holding above: UGX 1,000,000 of face value bought at 98.5 wi
 
 The database (migration 0494) lets only the worker save a repayment, for an active holding of an issue that has matured by that day, with the holding's face value and cost exactly as bought, and lets only the worker mark a holding matured, and only once its repayment is saved. A held repayment is sent on once, by the worker or its client, only with a payout of that repayment to that client. No figure on a repayment ever changes, and none is removed. A client cannot choose a coupon destination on a matured holding. Clients see only their own repayments, after tax.
 
+## Selling early
+
+A client who wants their money before maturity asks Finvest to sell their whole holding. The dealing desk sells that face value on the secondary market, and two members of staff record and approve the sale before the client is paid (`app/modules/bonds/sales.py`, rules in `domain/sales.py`, database side migration 0495).
+
+    requested ──► priced ──► approved ──► sold
+        │  ▲         │
+        │  └─────────┘ sent back, or withdrawn by whoever priced it
+        ├─► cancelled  by the client, before it is priced
+        └─► closed     the bond matured first, and was repaid instead
+
+1. **The ask.** The client asks for an active holding before its maturity date, naming one of their approved payout destinations (`POST /client/bond-holdings/{id}/sale`, with an idempotency key, and the app PIN for `withdrawal` on the phone, as an early withdrawal asks for it). One ask waits per holding at a time. Nothing moves, and coupons are still paid to the holding while the desk sells it. The client may cancel until the sale is priced.
+2. **The price.** One member of staff with `dealing_orders.change` records the price the desk sold at, per 100 of face value as a catalogue price is, the day the sale settled and the desk's reference for the trade. The day is on or after the day the holding started, before maturity, not in the future, and no coupon date may have passed since it: the holding was paid that coupon while it waited, and the buyer gets it (`coupon_since_sale`). They may withdraw it while it waits.
+3. **The decision.** A different member of staff approves it, confirming it is them, or sends it back with a note, and it waits to be priced again. Approving checks the day again, and queues `bonds.settle_sale` in the same transaction. From then on the coupon run and the maturity run leave the holding alone. Waiting sales appear in the console's approvals inbox as `bond_sale`.
+4. **The payment.** The worker pays first any coupon dated up to the day it sold that a run missed, then posts one ledger entry, `bond.sold`, dated the day it is paid, with the holding as its source:
+
+   | Line | Amount |
+   | --- | --- |
+   | Debit `client.bond_holding` | What the client paid: the clean amount and the accrued interest |
+   | Debit `interest.expense` | The accrued interest to the day it sold |
+   | Credit `tax.withholding_payable` | Tax on it at the issue's rate |
+   | Credit the client's payout pending account for the sale | The price and the accrued interest, less the tax |
+   | Credit `bond.accrued_interest_bought` | The accrued interest the client paid at purchase |
+   | Debit `bond.sold_above_cost`, or credit `bond.sold_below_cost` | The price less the clean amount the client paid, or the other way round |
+
+   The price is not taxed, and only the accrued interest goes through `interest.expense`, so it is in the figures for URA and on the client's certificate. The proceeds are paid to the destination the client named. If payouts refuse it then (for example the number was removed), they are **held**, and the client sends them on with their app PIN (`POST /client/bond-sales/{id}/pay-out`). The holding is then `sold`.
+
+Worked example, the holding above sold on 14 February 2027 at 97.25, 92 of the 181 days since the coupon of 14 November: the price is 972,500, the accrued interest 40,662 and its tax 4,066, so the client is paid 1,009,096. Out of the 985,883 they paid, 883 is accrued interest bought and 12,500 is the clean amount they paid above the price.
+
+An ask that is waiting or priced when the bond matures is closed, and the holding is repaid at maturity instead. A sale approved before maturity is paid as a sale.
+
+The database (migration 0495) lets only the client ask, for a whole active holding of their own, and cancel before a price; only the member of staff signed in price a sale; a different one approve it exactly as priced, or send it back with a note; and only the worker pay an approved sale or close an ask whose bond matured. Only the worker marks a holding sold, and only once its sale is paid. A held sale is sent on once, by the worker or its client, only with a payout of that sale to that client. What was asked and what a sale paid never change, and none is removed. Clients see only their own sales, after tax; staff see every one.
+
 ## HTTP routes
 
 | Route | Who | What |
@@ -155,14 +187,20 @@ The database (migration 0494) lets only the worker save a repayment, for an acti
 | `POST /client/bond-coupons/{id}/pay-out` | Signed-in client, with the app PIN | Send on a held coupon. 428 without the PIN, 422 when payouts refuse the destination, 409 when it is not waiting. |
 | `GET /client/bond-repayments` | Signed-in client | Their holdings repaid at maturity, newest first, after tax, and whether each is paid out or waiting. |
 | `POST /client/bond-repayments/{id}/pay-out` | Signed-in client, with the app PIN | Send on a held repayment. 428 without the PIN, 422 when payouts refuse the destination, 409 when it is not waiting. |
+| `POST /client/bond-holdings/{id}/sale` | Signed-in client, with an idempotency key and the app PIN | Ask to sell the whole holding early. 422 `holding_id` / `holding_not_active` or `matured`, 409 `holding_id` / `sale_already_asked`, 422 `destination_id` when it cannot be paid, 428 without the PIN. |
+| `GET /client/bond-sales` | Signed-in client | Their asks to sell, newest first, with the price, the day it settled and what it paid after tax once sold. |
+| `POST /client/bond-sales/{id}/cancel` | Signed-in client | Cancel an ask. 409 once it is priced. |
+| `POST /client/bond-sales/{id}/pay-out` | Signed-in client, with the app PIN | Send on proceeds that wait. 428 without the PIN, 422 when payouts refuse the destination, 409 when they do not wait. |
 | `GET /staff/bond-holdings?status=` | `investments.view` | Every client's holdings with what each paid. |
 | `GET /staff/bond-coupons?status=` | `investments.view` | Coupons paid, with the tax, and the held ones with why they wait. |
 | `GET /staff/bond-repayments?status=` | `investments.view` | Repayments at maturity, with what each holding cost and the tax on its last coupon, and the held ones with why they wait. |
+| `GET /staff/bond-sales?status=` | `dealing_desk.view` | Clients' asks to sell, newest first, with the price, who priced and decided it, and what it paid with the tax. |
+| `POST /staff/bond-sales/{id}/price`, `/send-back`, `/withdraw`; `POST /staff/bond-sales/{id}/approve` | `dealing_orders.change` | Recording a sale and deciding it, with the second person enforced in the database. Approving asks the person to confirm it is them. 422 `sold_on` / `sold_on_in_future`, `sold_on_before_start`, `sold_on_at_maturity` or `coupon_since_sale`; 422 `price` / `price_out_of_range`. |
 | `GET /staff/bond-changes?status=` | `products.view` | New issues, prices, pauses and openings, newest first. |
 | `POST /staff/bond-changes/new-issue`, `/price`, `/status`, `POST /staff/bond-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding, with the second person enforced in the database. Approving asks the person to confirm it is them. |
 
-Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested`, `bonds.holding_started`, `bonds.coupon_destination_chosen` and `bonds.holding_matured`.
+Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested`, `bonds.holding_started`, `bonds.coupon_destination_chosen`, `bonds.holding_matured` and `bonds.holding_sold`. On resource `bond_sale`: `bonds.sale_requested`, `.sale_cancelled`, `.sale_priced` (with the price and day), `.sale_approved`, `.sale_sent_back` and `.sale_withdrawn`.
 
 ## Not built yet
 
-Selling early through the dealing desk, and the client app screens. No notice is sent when a coupon is paid or held, or when a holding is repaid. The dealing desk's side of bonds (buying them at the custodian, the coupons and face value Bank of Uganda pays in, and the custodian's asset code in the client money check) is not modelled yet. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.
+The console screen for bond sales, and the client app screens. No notice is sent when a coupon is paid or held, when a holding is repaid, or when a sale is priced or paid. The dealing desk's side of bonds (buying them at the custodian, the coupons and face value Bank of Uganda pays in, and the custodian's asset code in the client money check) is not modelled yet. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.

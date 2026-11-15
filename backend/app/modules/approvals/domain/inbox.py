@@ -24,6 +24,7 @@ Kind = Literal[
     "rate_change",
     "product_change",
     "bond_change",
+    "bond_sale",
     "migration_totals",
     "migration_sign_off",
     "phone_change",
@@ -91,6 +92,8 @@ SOURCES: dict[Kind, Source] = {
     "product_change": Source("products.view", "products.change"),
     # A new bond issue, its price, a pause or an opening, decided as product changes are.
     "bond_change": Source("products.view", "products.change"),
+    # A client's bond sold early, priced by the dealing desk, decided as dealing orders are.
+    "bond_sale": Source("dealing_desk.view", "dealing_orders.change"),
     "migration_totals": Source("migration.view", "migration.sign_off"),
     "migration_sign_off": Source("migration.view", "migration.sign_off"),
     "phone_change": Source("client_phones.change", "client_phones.change"),

@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
 from app.modules.bonds import catalogue as bonds
+from app.modules.bonds import sales as bond_sales
 from app.modules.bonds.domain.changes import BondChangeStatus
+from app.modules.bonds.domain.sales import SaleStatus
 from app.modules.closures import service as closures
 from app.modules.console import actions as client_actions
 from app.modules.dealing import auctions, buffer, capital
@@ -73,6 +75,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _product_changes(session, staff)
     if "bond_change" in kinds:
         found += await _bond_changes(session, staff)
+    if "bond_sale" in kinds:
+        found += await _bond_sales(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
         found += await _migration(session)
     if "phone_change" in kinds:
@@ -297,6 +301,15 @@ async def _bond_changes(session: AsyncSession, staff: StaffSession) -> list[Wait
     return [
         Waiting("bond_change", c.id, c.code, c.proposed_by, c.proposed_at)
         for c in await bonds.list_changes(session, staff.actor, status=BondChangeStatus.PROPOSED)
+    ]
+
+
+async def _bond_sales(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    return [
+        Waiting("bond_sale", s.id, s.code, s.priced_by or "", s.priced_at or s.requested_at)
+        for s in await bond_sales.staff_sales(
+            session, staff.actor, SaleStatus.PRICED, bond_sales.CLIENT_PAGE
+        )
     ]
 
 

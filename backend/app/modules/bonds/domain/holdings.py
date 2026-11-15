@@ -1,7 +1,8 @@
 """A client's holding of one bond issue: bought at a quoted price, paid once. Pure: no I/O.
 
     unpaid ──► active ──► matured
-       │
+       │          │
+       │          └─► sold
        └─► cancelled
 
 * `unpaid`: the client confirmed a quote. The face value, price, accrued interest and cost are
@@ -11,6 +12,8 @@
   every coupon dated after the day it started.
 * `matured`: the issue matured and the holding was paid its face value and last coupon
   (`domain/maturity.py`). Final.
+* `sold`: the dealing desk sold it early, at the client's ask, and the client was paid the
+  price and the accrued interest (`domain/sales.py`). Final.
 * `cancelled`: it was not paid for in time. Final. No money ever moved.
 
 The client pays the accrued interest as at the day of the quote, and is then paid the whole
@@ -41,6 +44,7 @@ class HoldingStatus(StrEnum):
     UNPAID = "unpaid"
     ACTIVE = "active"
     MATURED = "matured"
+    SOLD = "sold"
     CANCELLED = "cancelled"
 
 
