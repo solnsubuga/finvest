@@ -270,7 +270,7 @@ export function createApiPaymentsClient(): PaymentsClient {
       try {
         view = await api("POST /client/investments/{investment_id}/payments/mobile-money", {
           params: { investment_id: request.payableId },
-          body: { network: request.network },
+          body: { network: request.network, phone: request.payer },
           idempotencyKey: request.idempotencyKey,
         });
       } catch (error) {

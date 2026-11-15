@@ -88,7 +88,7 @@ describe("the payments client for the real API", () => {
     });
     const deposit = await createApiPaymentsClient().payWithMobileMoney(request);
     expect(seen[0]!.headers["Idempotency-Key"]).toBe("key-1");
-    expect(JSON.parse(String(seen[0]!.body))).toEqual({ network: "mtn" });
+    expect(JSON.parse(String(seen[0]!.body))).toEqual({ network: "mtn", phone: "+256772123456" });
     expect(deposit).toMatchObject({
       id: PAYMENT,
       network: "mtn",

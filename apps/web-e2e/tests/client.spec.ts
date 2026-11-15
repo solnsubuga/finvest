@@ -105,8 +105,8 @@ test("a client pays for an investment by mobile money from their own number", as
 
   await expect(page.getByText("Pay UGX 1,000,000")).toBeVisible();
   await expect(page.getByText("+256 772 123 456")).toBeVisible();
-  // The number is the account's own: there is nothing to type it into.
-  await expect(id(page, "phone-input")).toHaveCount(0);
+  // The account's own number is prompted unless the client chooses another.
+  await expect(id(page, "pay-other-number")).toHaveCount(0);
   await id(page, "pay-submit").click();
 
   await expect(page.getByText("Approve on your phone")).toBeVisible();

@@ -740,11 +740,11 @@ function CardEditor({ draft, setDraft }: { draft: CardPayments; setDraft: (value
 // Mobile money collector ----------------------------------------------------------------------
 
 const COLLECTORS: readonly { value: MobileMoneyCollector["provider"]; label: string; hint: string }[] = [
-  { value: "iotec", label: "ioTec", hint: "A prompt on the client's own phone. They approve it with their PIN." },
+  { value: "iotec", label: "ioTec", hint: "A prompt on the client's phone, or on another number they give, approved with the mobile money PIN." },
   {
     value: "pesapal",
     label: "Pesapal",
-    hint: "The client pays on Pesapal's page. Only a payment from the client's own number is credited; any other is held for staff.",
+    hint: "The client pays on Pesapal's page, from their own number or anyone else's. Every payment counts at once, and the number that paid is kept.",
   },
 ];
 
