@@ -4,7 +4,7 @@ import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
 import { notConnectedClientsApi, type ClientsApi } from "./api.ts";
 import { ClientsScreen } from "./index.tsx";
-import { createStubClientsApi } from "./stub.ts";
+import { createStubClientsApi, sampleReference } from "./stub.ts";
 import type { SuppressionsApi } from "./suppressions.ts";
 import { createStubSuppressionsApi } from "./suppressionsStub.ts";
 
@@ -84,6 +84,23 @@ describe("clients", () => {
     await user.clear(screen.getByLabelText("Find a client"));
     await find(user, "nobody here");
     expect(await screen.findByText("No client's verified name or email matches “nobody here”.")).toBeInTheDocument();
+  });
+
+  it("finds the client a short reference belongs to, typed as a client reads it out", async () => {
+    const { user } = renderClients();
+    const payment = sampleReference("-NstubPayment0000042", "FV");
+    await find(user, payment.toLowerCase().replace(/-/g, " ").replace(/0/g, "o"));
+    expect(await screen.findByText(`Found by Payment ${payment}`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sarah Nakato" })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Find a client"));
+    // A statement's code is an ST- reference, so with FV- it names nothing.
+    const statement = sampleReference("-NstubStatement00058", "ST");
+    await find(user, statement.replace("ST-", "FV-"));
+    expect(await screen.findByText(/No client's verified name or email matches/)).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Find a client"));
+    await find(user, statement);
+    expect(await screen.findByText(`Found by Statement ${statement}`)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Annet Namuli" })).toBeInTheDocument();
   });
 
   it("says when the list cannot be loaded", async () => {

@@ -131,6 +131,7 @@ export function ClientList({ api, query, onOpen }: ClientListProps) {
                       >
                         {row.verifiedName ?? <span className="font-semibold text-muted">Name not verified yet</span>}
                       </button>
+                      {row.foundBy ? <span className="block text-sm font-semibold text-muted">Found by {row.foundBy}</span> : null}
                     </th>
                     <td data-label="Account number" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5 whitespace-nowrap tabular-nums">{row.accountNumber ? formatAccountNumber(row.accountNumber) : "None yet"}</td>
                     <td data-label="Mobile" className="max-sm:flex max-sm:gap-2 max-sm:p-0 max-sm:before:min-w-[120px] max-sm:before:text-sm max-sm:before:font-bold max-sm:before:text-muted max-sm:before:content-[attr(data-label)] px-2.5 py-2.5 whitespace-nowrap tabular-nums">{row.phone}</td>
