@@ -140,7 +140,7 @@ export type BankTransfer = {
   /** ISO 8601, UTC. */
   submittedAt: string;
   confirmedAt: string | null;
-  /** The reference the client was asked to put on the transfer. */
+  /** Our short reference for the payment, such as "FV-3R0D5-3X44V", which support can look up. */
   reference: string;
 };
 

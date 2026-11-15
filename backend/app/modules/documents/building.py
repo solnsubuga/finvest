@@ -41,6 +41,7 @@ from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
+from app.shared.references import short_reference
 
 
 class NotReady(Exception):
@@ -138,7 +139,7 @@ async def receipt(
             method=building.method_name(deposit.method.value),
             paid_from=masked(deposit.payer_msisdn) if deposit.payer_msisdn else None,
             provider_reference=deposit.provider_reference,
-            payment_reference=deposit.id,
+            payment_reference=short_reference(deposit.id),
             paid_for=paid_for,
         ),
         account,

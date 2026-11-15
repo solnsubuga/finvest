@@ -52,7 +52,7 @@ export default function BankTransferStatus() {
     const rows = [
       { label: "Confirmed", value: formatDateTime(transfer.confirmedAt) },
       { label: "Paid by", value: "Bank transfer" },
-      { label: "Reference", value: transfer.reference },
+      { label: "Finvest reference", value: transfer.reference },
     ];
     const share = async () =>
       setShared(
@@ -124,7 +124,7 @@ export default function BankTransferStatus() {
             rows={[
               { label: "You said you sent", value: formatMoney(transfer.amountSent) },
               { label: "For", value: transfer.payable.title },
-              { label: "Reference", value: transfer.reference },
+              { label: "Finvest reference", value: transfer.reference },
               { label: "Receipt sent", value: formatDateTime(transfer.submittedAt) },
             ]}
           />
@@ -147,9 +147,9 @@ export default function BankTransferStatus() {
           <Notice tone="neutral">We could not refresh this just now. Trying again.</Notice>
         ) : null}
         <AmountCard
-          title={`Bank transfer, reference ${transfer.reference}`}
+          title="Bank transfer"
           amount={transfer.amountSent}
-          note={`For your ${transfer.payable.title}`}
+          note={`For your ${transfer.payable.title}. Finvest reference ${transfer.reference}`}
         />
         <Timeline
           steps={[
