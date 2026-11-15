@@ -24,6 +24,7 @@ from app.modules.platform_settings.domain.catalogue import (
     KEYS,
     MAX_REASON,
     BankPayoutCutoff,
+    CardPayments,
     InvalidSetting,
     Key,
     MaturityReminders,
@@ -234,6 +235,10 @@ async def _typed[V: Value](session: AsyncSession, key: Key, kind: type[V], now: 
 
 async def payment_channels(session: AsyncSession, now: datetime) -> PaymentChannels:
     return await _typed(session, "payment_channels", PaymentChannels, now)
+
+
+async def card_payments(session: AsyncSession, now: datetime) -> CardPayments:
+    return await _typed(session, "card_payments", CardPayments, now)
 
 
 async def public_holidays(session: AsyncSession, now: datetime) -> PublicHolidays:

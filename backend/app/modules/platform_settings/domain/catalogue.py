@@ -29,6 +29,7 @@ Key = Literal[
     "staff_idle_minutes",
     "office_networks",
     "statement_layouts",
+    "card_payments",
 ]
 KEYS: tuple[Key, ...] = get_args(Key)
 
@@ -43,6 +44,7 @@ SECTIONS: dict[Key, Section] = {
     "staff_idle_minutes": "staff_security",
     "office_networks": "staff_security",
     "statement_layouts": "statement_import",
+    "card_payments": "channels",
 }
 PERMISSIONS: dict[Section, Permission] = {
     "channels": "payment_channels.change",
@@ -69,9 +71,18 @@ def _refuse(path: list[str | int], code: str) -> InvalidSetting:
 # Payment channels ------------------------------------------------------------------------------
 
 Channel = Literal[
-    "mtn_pay_in", "airtel_pay_in", "bank_pay_in", "mtn_payout", "airtel_payout", "bank_payout"
+    "mtn_pay_in",
+    "airtel_pay_in",
+    "bank_pay_in",
+    "card_pay_in",
+    "mtn_payout",
+    "airtel_payout",
+    "bank_payout",
 ]
 CHANNELS: tuple[Channel, ...] = get_args(Channel)
+# Channels added after values were first approved. A stored value from before one was added
+# reads it as paused: a new way to pay opens only when two people open it.
+_ADDED_LATER: frozenset[Channel] = frozenset({"card_pay_in"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,6 +105,8 @@ PAYOUT_BY_NETWORK: dict[str, Channel] = {"mtn": "mtn_payout", "airtel": "airtel_
 
 
 def _channels(value: Any) -> PaymentChannels:
+    if isinstance(value, dict) and set(CHANNELS) - set(value) <= _ADDED_LATER:
+        value = dict.fromkeys(_ADDED_LATER, False) | value
     if not isinstance(value, dict) or set(value) != set(CHANNELS):
         raise _refuse(["value"], "channels_incomplete")
     for channel in CHANNELS:
@@ -517,6 +530,54 @@ def _dump_layouts(value: StatementLayouts) -> list[dict[str, str | None]]:
 
 # The catalogue ---------------------------------------------------------------------------------
 
+# Card payments ---------------------------------------------------------------------------------
+
+# The largest a card limit may be set to, UGX 100,000,000. The card provider has its own.
+MAX_CARD_LIMIT_MINOR = 100_000_000
+MAX_CARD_CHARGE_BASIS_POINTS = 1000
+
+
+@dataclass(frozen=True, slots=True)
+class CardPayments:
+    """The charge a client pays on top of a card payment, and the limits on paying by card.
+
+    The charge is in basis points (350 is 3.5%), turned into whole shillings for each payment;
+    a client sees only the shillings. 0 means Finvest bears the card provider's charge. The
+    limits count the investment and the charge together, in whole shillings.
+    """
+
+    charge_basis_points: int
+    max_payment_minor: int
+    max_30_days_minor: int
+
+
+def _card_payments(value: Any) -> CardPayments:
+    fields = ("charge_basis_points", "max_payment_minor", "max_30_days_minor")
+    if not isinstance(value, dict) or set(value) != set(fields):
+        raise _refuse(["value"], "card_payments_incomplete")
+    for field in fields:
+        if type(value[field]) is not int:
+            raise _refuse(["value", field], "not_a_whole_number")
+    if not 0 <= value["charge_basis_points"] <= MAX_CARD_CHARGE_BASIS_POINTS:
+        raise _refuse(["value", "charge_basis_points"], "out_of_range")
+    for field in ("max_payment_minor", "max_30_days_minor"):
+        if not 1 <= value[field] <= MAX_CARD_LIMIT_MINOR:
+            raise _refuse(["value", field], "out_of_range")
+    if value["max_payment_minor"] > value["max_30_days_minor"]:
+        raise _refuse(["value", "max_payment_minor"], "above_30_day_limit")
+    return CardPayments(
+        value["charge_basis_points"], value["max_payment_minor"], value["max_30_days_minor"]
+    )
+
+
+def _dump_card_payments(value: CardPayments) -> dict[str, int]:
+    return {
+        "charge_basis_points": value.charge_basis_points,
+        "max_payment_minor": value.max_payment_minor,
+        "max_30_days_minor": value.max_30_days_minor,
+    }
+
+
 Value = (
     PaymentChannels
     | PublicHolidays
@@ -525,6 +586,7 @@ Value = (
     | StaffIdleMinutes
     | OfficeNetworks
     | StatementLayouts
+    | CardPayments
 )
 
 
@@ -582,6 +644,14 @@ DEFINITIONS: dict[Key, Definition] = {
         _layouts,
         _dump_layouts,
         lambda _year: StatementLayouts(()),
+    ),
+    # Decided for now: the client pays a 3.5% card charge, shown in shillings before paying,
+    # at most UGX 5,000,000 a payment and UGX 10,000,000 a client in any 30 days.
+    "card_payments": Definition(
+        "card_payments",
+        _card_payments,
+        _dump_card_payments,
+        lambda _year: CardPayments(350, 5_000_000, 10_000_000),
     ),
 }
 

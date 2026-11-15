@@ -44,10 +44,11 @@ from app.modules.notifications.settings import EmailHashSettings
 from app.modules.notifications.sms_delivery import SmsReportJobs
 from app.modules.organisations.jobs import OrganisationJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
+from app.modules.payments.card_jobs import CardDepositJobs
 from app.modules.payments.jobs import DepositJobs
 from app.modules.payments.reversals import ReversalJobs
-from app.modules.payments.settings import PaymentsSettings
-from app.modules.payments.wiring import collections_provider
+from app.modules.payments.settings import CardSettings, PaymentsSettings
+from app.modules.payments.wiring import card_provider, collections_provider
 from app.modules.payouts.jobs import PayoutJobs, release_screened
 from app.modules.payouts.name_lookup_jobs import NameLookupJobs
 from app.modules.payouts.wiring import PayoutNameSettings, disbursements_provider
@@ -159,6 +160,10 @@ def handlers(
     collections = collections_provider(PaymentsSettings(), clock)
     if collections is not None:
         kinds.update(DepositJobs(database, collections, clock).handlers())
+    # Cards have a provider of their own, chosen apart from mobile money's.
+    cards_provider = card_provider(CardSettings(), clock)
+    if cards_provider is not None:
+        kinds.update(CardDepositJobs(database, cards_provider, clock).handlers())
     # Runs ask for mobile money payments, so they are asked for only with a provider.
     kinds.update(
         AutoinvestJobs(

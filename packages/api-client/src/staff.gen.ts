@@ -324,6 +324,12 @@ export const BankPayoutOut = z.object({
 });
 export type BankPayoutOut = z.infer<typeof BankPayoutOut>;
 
+export const CardView = z.object({
+  brand: z.string().nullable(),
+  last_four: z.string().nullable(),
+});
+export type CardView = z.infer<typeof CardView>;
+
 export const ReceiptView = z.object({
   bank_name: z.string(),
   byte_size: z.number().int(),
@@ -336,12 +342,16 @@ export type ReceiptView = z.infer<typeof ReceiptView>;
 export const BankTransferInQueue = z.object({
   amount: MoneyView,
   awaiting: z.enum(["check", "second_person", "posting"]),
+  card: CardView.nullable().optional(),
+  card_charge: MoneyView.nullable().optional(),
+  card_page_url: z.string().nullable().optional(),
+  card_total: MoneyView.nullable().optional(),
   confirmed_at: z.string().nullable(),
   created_at: z.string(),
   failure: z.string().nullable(),
   id: z.string(),
   investment_id: z.string(),
-  method: z.enum(["mtn", "airtel", "bank_transfer"]),
+  method: z.enum(["mtn", "airtel", "bank_transfer", "card"]),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
   receipt_used_before: z.boolean(),
@@ -361,12 +371,16 @@ export type EarlierUseOut = z.infer<typeof EarlierUseOut>;
 
 export const PaymentView = z.object({
   amount: MoneyView,
+  card: CardView.nullable().optional(),
+  card_charge: MoneyView.nullable().optional(),
+  card_page_url: z.string().nullable().optional(),
+  card_total: MoneyView.nullable().optional(),
   confirmed_at: z.string().nullable(),
   created_at: z.string(),
   failure: z.string().nullable(),
   id: z.string(),
   investment_id: z.string(),
-  method: z.enum(["mtn", "airtel", "bank_transfer"]),
+  method: z.enum(["mtn", "airtel", "bank_transfer", "card"]),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
@@ -651,6 +665,23 @@ export const CancelIn = z.object({
   reason: z.string(),
 });
 export type CancelIn = z.infer<typeof CancelIn>;
+
+export const CardPaymentsValue = z.object({
+  charge_basis_points: z.number().int(),
+  max_30_days_minor: z.number().int(),
+  max_payment_minor: z.number().int(),
+});
+export type CardPaymentsValue = z.infer<typeof CardPaymentsValue>;
+
+export const CardPaymentsProposal = z.object({
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  value: CardPaymentsValue,
+  yours: z.boolean(),
+});
+export type CardPaymentsProposal = z.infer<typeof CardPaymentsProposal>;
 
 export const CaseAmountOut = z.object({
   currency: z.enum(["UGX", "USD"]),
@@ -2410,6 +2441,7 @@ export const PaymentChannelsValue = z.object({
   airtel_payout: z.boolean(),
   bank_pay_in: z.boolean(),
   bank_payout: z.boolean(),
+  card_pay_in: z.boolean().optional(),
   mtn_pay_in: z.boolean(),
   mtn_payout: z.boolean(),
 });
@@ -3293,8 +3325,8 @@ export const StatementLayoutsProposal = z.object({
 export type StatementLayoutsProposal = z.infer<typeof StatementLayoutsProposal>;
 
 export const SettingProposalOut = z.object({
-  key: z.enum(["payment_channels", "public_holidays", "bank_payout_cutoff", "maturity_reminders", "staff_idle_minutes", "office_networks", "statement_layouts"]),
-  proposal: z.union([PaymentChannelsProposal, PublicHolidaysProposal, BankPayoutCutoffProposal, MaturityRemindersProposal, StaffIdleMinutesProposal, OfficeNetworksProposal, StatementLayoutsProposal]),
+  key: z.enum(["payment_channels", "public_holidays", "bank_payout_cutoff", "maturity_reminders", "staff_idle_minutes", "office_networks", "statement_layouts", "card_payments"]),
+  proposal: z.union([PaymentChannelsProposal, PublicHolidaysProposal, BankPayoutCutoffProposal, MaturityRemindersProposal, StaffIdleMinutesProposal, OfficeNetworksProposal, StatementLayoutsProposal, CardPaymentsProposal]),
 });
 export type SettingProposalOut = z.infer<typeof SettingProposalOut>;
 

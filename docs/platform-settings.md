@@ -16,7 +16,8 @@ Only one change per setting waits at a time, so an approver always approves the 
 
 | Setting | Section | Default | What it means |
 | --- | --- | --- | --- |
-| `payment_channels` | Payment channels | All open | Which of MTN pay in, Airtel pay in, bank transfer pay in, MTN payout, Airtel payout and bank payout are open. A paused channel refuses new client requests. A mobile money payout not yet sent to the provider, such as a maturity payout, waits queued until its network reopens. Money already handed to the provider finishes as it would have. |
+| `payment_channels` | Payment channels | All open | Which of MTN pay in, Airtel pay in, bank transfer pay in, card pay in, MTN payout, Airtel payout and bank payout are open. A paused channel refuses new client requests. A mobile money payout not yet sent to the provider, such as a maturity payout, waits queued until its network reopens. Money already handed to the provider finishes as it would have. |
+| `card_payments` | Payment channels | 3.5% charge, UGX 5,000,000 a payment, UGX 10,000,000 a client in 30 days | `charge_basis_points` (0 to 1000; 350 is 3.5%; 0 means Finvest bears Pesapal's charge), `max_payment_minor` and `max_30_days_minor` in whole shillings, investment and charge together. The client sees the charge only in shillings. A stored channel value from before card pay in existed reads it as paused, so cards open only when two people open them. |
 | `public_holidays` | Calendar | Uganda's fixed-date holidays, Good Friday and Easter Monday, for this year and next | Days that are not working days, besides Saturday and Sunday, at most 60. The two Eid holidays follow the moon and are gazetted each year, so staff add them when announced. |
 | `bank_payout_cutoff` | Calendar | 14:00 | The Kampala time after which a bank payout is paid on the next working day. Between 08:00 and 17:00. |
 | `maturity_reminders` | Calendar | 7 days and 1 day before | How many days before an investment matures the client is reminded, up to three days between 1 and 30. Empty sends none. |
@@ -77,4 +78,4 @@ Complaint deadlines still count Monday to Friday only. Whether public holidays a
 
 ## For other modules
 
-Read a setting through `platform_settings.service`: `payment_channels`, `public_holidays`, `bank_payout_cutoff`, `maturity_reminders`, `staff_idle_minutes`, `office_networks` and `statement_layouts`, each taking the session and the time now. Never read the table.
+Read a setting through `platform_settings.service`: `payment_channels`, `card_payments`, `public_holidays`, `bank_payout_cutoff`, `maturity_reminders`, `staff_idle_minutes`, `office_networks` and `statement_layouts`, each taking the session and the time now. Never read the table.

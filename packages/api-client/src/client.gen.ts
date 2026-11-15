@@ -128,6 +128,21 @@ export const BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.o
 });
 export type BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.infer<typeof BodyUploadProofClientPayoutDestinationsDestinationIdProofPost>;
 
+export const CardOffer = z.object({
+  amount: MoneyView,
+  charge: MoneyView,
+  max_payment: MoneyView,
+  refused: z.string().nullable(),
+  total: MoneyView,
+});
+export type CardOffer = z.infer<typeof CardOffer>;
+
+export const CardView = z.object({
+  brand: z.string().nullable(),
+  last_four: z.string().nullable(),
+});
+export type CardView = z.infer<typeof CardView>;
+
 export const CategoryChannels = z.object({
   always_on: z.boolean(),
   category: z.enum(["money", "investments", "earnings", "account", "security", "support", "news"]),
@@ -1074,12 +1089,16 @@ export type ReceiptView = z.infer<typeof ReceiptView>;
 
 export const PaymentView = z.object({
   amount: MoneyView,
+  card: CardView.nullable().optional(),
+  card_charge: MoneyView.nullable().optional(),
+  card_page_url: z.string().nullable().optional(),
+  card_total: MoneyView.nullable().optional(),
   confirmed_at: z.string().nullable(),
   created_at: z.string(),
   failure: z.string().nullable(),
   id: z.string(),
   investment_id: z.string(),
-  method: z.enum(["mtn", "airtel", "bank_transfer"]),
+  method: z.enum(["mtn", "airtel", "bank_transfer", "card"]),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
@@ -2384,6 +2403,32 @@ export const operations = {
     status: 201,
     response: PaymentView,
   },
+  "GET /client/investments/{investment_id}/payments/card": {
+    method: "GET",
+    path: "/client/investments/{investment_id}/payments/card",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CardOffer,
+  },
+  "POST /client/investments/{investment_id}/payments/card": {
+    method: "POST",
+    path: "/client/investments/{investment_id}/payments/card",
+    params: z.object({
+    investment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 201,
+    response: PaymentView,
+  },
   "POST /client/investments/{investment_id}/payments/mobile-money": {
     method: "POST",
     path: "/client/investments/{investment_id}/payments/mobile-money",
@@ -2798,6 +2843,19 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
+    response: PaymentView,
+  },
+  "POST /client/payments/{payment_id}/card-return": {
+    method: "POST",
+    path: "/client/payments/{payment_id}/card-return",
+    params: z.object({
+    payment_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 202,
     response: PaymentView,
   },
   "GET /client/payout-destinations": {

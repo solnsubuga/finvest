@@ -1619,6 +1619,47 @@
             "title": "Awaiting",
             "type": "string"
           },
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "card_charge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "card_page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Page Url"
+          },
+          "card_total": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "confirmed_at": {
             "anyOf": [
               {
@@ -1665,7 +1706,8 @@
             "enum": [
               "mtn",
               "airtel",
-              "bank_transfer"
+              "bank_transfer",
+              "card"
             ],
             "title": "Method",
             "type": "string"
@@ -3010,6 +3052,228 @@
           "allowed"
         ],
         "title": "CancellationOut",
+        "type": "object"
+      },
+      "CardOffer": {
+        "additionalProperties": false,
+        "description": "What paying for an investment by card would cost, shown before the client goes on.",
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "charge": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "max_payment": {
+            "$ref": "#/components/schemas/MoneyView"
+          },
+          "refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refused"
+          },
+          "total": {
+            "$ref": "#/components/schemas/MoneyView"
+          }
+        },
+        "required": [
+          "amount",
+          "charge",
+          "total",
+          "max_payment",
+          "refused"
+        ],
+        "title": "CardOffer",
+        "type": "object"
+      },
+      "CardPaymentsProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/CardPaymentsValue"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "CardPaymentsProposal",
+        "type": "object"
+      },
+      "CardPaymentsSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "card_payments",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardPaymentsProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/CardPaymentsValue"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "CardPaymentsSetting",
+        "type": "object"
+      },
+      "CardPaymentsValue": {
+        "additionalProperties": false,
+        "description": "The card charge rate the client pays on top (basis points: 350 is 3.5%, 0 means Finvest\nbears it) and the card limits in whole shillings, investment and charge together.",
+        "properties": {
+          "charge_basis_points": {
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Charge Basis Points",
+            "type": "integer"
+          },
+          "max_30_days_minor": {
+            "maximum": 100000000.0,
+            "minimum": 1.0,
+            "title": "Max 30 Days Minor",
+            "type": "integer"
+          },
+          "max_payment_minor": {
+            "maximum": 100000000.0,
+            "minimum": 1.0,
+            "title": "Max Payment Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "charge_basis_points",
+          "max_payment_minor",
+          "max_30_days_minor"
+        ],
+        "title": "CardPaymentsValue",
+        "type": "object"
+      },
+      "CardView": {
+        "additionalProperties": false,
+        "description": "The card that paid, as the client may see it. Never the card number.",
+        "properties": {
+          "brand": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brand"
+          },
+          "last_four": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Four"
+          }
+        },
+        "required": [
+          "brand",
+          "last_four"
+        ],
+        "title": "CardView",
         "type": "object"
       },
       "CaseAmountOut": {
@@ -14359,6 +14623,11 @@
             "title": "Bank Payout",
             "type": "boolean"
           },
+          "card_pay_in": {
+            "default": false,
+            "title": "Card Pay In",
+            "type": "boolean"
+          },
           "mtn_pay_in": {
             "title": "Mtn Pay In",
             "type": "boolean"
@@ -14417,6 +14686,47 @@
           "amount": {
             "$ref": "#/components/schemas/MoneyView"
           },
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CardView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "card_charge": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "card_page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Page Url"
+          },
+          "card_total": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MoneyView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "confirmed_at": {
             "anyOf": [
               {
@@ -14463,7 +14773,8 @@
             "enum": [
               "mtn",
               "airtel",
-              "bank_transfer"
+              "bank_transfer",
+              "card"
             ],
             "title": "Method",
             "type": "string"
@@ -16240,6 +16551,32 @@
           "reason"
         ],
         "title": "ProposeBankPayoutCutoff",
+        "type": "object"
+      },
+      "ProposeCardPayments": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "card_payments",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/CardPaymentsValue"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeCardPayments",
         "type": "object"
       },
       "ProposeChange": {
@@ -21576,7 +21913,8 @@
               "maturity_reminders",
               "staff_idle_minutes",
               "office_networks",
-              "statement_layouts"
+              "statement_layouts",
+              "card_payments"
             ],
             "title": "Key",
             "type": "string"
@@ -21603,6 +21941,9 @@
               },
               {
                 "$ref": "#/components/schemas/StatementLayoutsProposal"
+              },
+              {
+                "$ref": "#/components/schemas/CardPaymentsProposal"
               }
             ],
             "title": "Proposal"
@@ -21639,6 +21980,7 @@
               "discriminator": {
                 "mapping": {
                   "bank_payout_cutoff": "#/components/schemas/BankPayoutCutoffSetting",
+                  "card_payments": "#/components/schemas/CardPaymentsSetting",
                   "maturity_reminders": "#/components/schemas/MaturityRemindersSetting",
                   "office_networks": "#/components/schemas/OfficeNetworksSetting",
                   "payment_channels": "#/components/schemas/PaymentChannelsSetting",
@@ -21669,6 +22011,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/StatementLayoutsSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/CardPaymentsSetting"
                 }
               ]
             },
@@ -36407,6 +36752,214 @@
         ]
       }
     },
+    "/client/investments/{investment_id}/payments/card": {
+      "get": {
+        "description": "The card charge and total for paying this investment by card, before paying.\n\n`refused` says when the client may not pay by card now, so the app can explain and\noffer mobile money. 404 if the investment is not the client's, 409 if it cannot be paid.",
+        "operationId": "card_offer_client_investments__investment_id__payments_card_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Investment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardOffer"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Card Offer",
+        "tags": [
+          "client payments"
+        ]
+      },
+      "post": {
+        "description": "Start a card payment for exactly the amount owed, and the card charge shown.\n\nThe worker opens the order at the card provider within seconds. Poll\n`GET /client/payments/{payment_id}` until `card_page_url` is set, then send the client\nthere: the card is typed only on that page. 503 `channel_paused` while card payments\nare paused, 422 when over a card limit, 409 if the investment already has a payment.",
+        "operationId": "pay_by_card_client_investments__investment_id__payments_card_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "investment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Investment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Pay By Card",
+        "tags": [
+          "client payments"
+        ]
+      }
+    },
     "/client/investments/{investment_id}/payments/mobile-money": {
       "post": {
         "description": "Ask for a mobile money prompt on the client's own number, for exactly the amount owed.\n\n409 if the investment already has a payment under way or paid: fetch it from\n`GET /client/investments/{investment_id}/payment`.",
@@ -39594,6 +40147,102 @@
           }
         },
         "summary": "Get Payment",
+        "tags": [
+          "client payments"
+        ]
+      }
+    },
+    "/client/payments/{payment_id}/card-return": {
+      "post": {
+        "description": "The client is back from the card provider's page. Asks for the result to be read\nnow; it changes nothing by itself. Poll the payment for the outcome.",
+        "operationId": "card_return_client_payments__payment_id__card_return_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaymentView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Card Return",
         "tags": [
           "client payments"
         ]
@@ -72894,6 +73543,7 @@
                 "discriminator": {
                   "mapping": {
                     "bank_payout_cutoff": "#/components/schemas/ProposeBankPayoutCutoff",
+                    "card_payments": "#/components/schemas/ProposeCardPayments",
                     "maturity_reminders": "#/components/schemas/ProposeMaturityReminders",
                     "office_networks": "#/components/schemas/ProposeOfficeNetworks",
                     "payment_channels": "#/components/schemas/ProposePaymentChannels",
@@ -72924,6 +73574,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ProposeStatementLayouts"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeCardPayments"
                   }
                 ],
                 "title": "Body"

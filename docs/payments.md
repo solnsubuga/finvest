@@ -55,6 +55,57 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 | `awaiting_approval` and quiet for two minutes | A status read is queued. After fifteen minutes with no result it becomes `uncertain` with `approval_overdue`. |
 | `uncertain`, for up to 24 hours | The next status read is queued: every minute for the first fifteen minutes, every ten minutes for two hours, then hourly. Each read is numbered and due at a fixed time, so repeated sweeps queue it once. The sweep pages through every uncertain deposit in the window, oldest first, so none waits behind newer ones. A read only asks the provider. It never sends. After 24 hours the reads stop and the deposit waits for reconciliation. A deposit held for `amount_mismatch` is not read again, because it needs staff. |
 
+## A card payment, step by step
+
+Visa and Mastercard are taken through Pesapal, on Pesapal's own hosted page. The card number, expiry and security code are typed only there and never reach Finvest, which keeps us in the smallest card security scope (PCI DSS SAQ A, to be confirmed with Pesapal). Mobile money stays on ioTec: Pesapal cannot prompt a client's phone, and on its page a payer could pay from any number. A card payment pays for one investment, as every deposit does. There is still no wallet.
+
+1. **The client sees the cost.** `GET /client/investments/{id}/payments/card` gives the investment's amount, the card charge on top in shillings, the total and the per payment limit. `refused` says when the client may not pay by card now. The charge rate comes from the `card_payments` setting ([platform-settings.md](platform-settings.md)) and is never shown as a rate.
+2. **The client asks to pay by card.** `POST /client/investments/{id}/payments/card` with an `Idempotency-Key`. In the client's own transaction, payments saves the deposit as `created` (method `card`, provider `pesapal`, no payer number), its order in `payment_card_orders` (the charge and the total, fixed from now on) and a job to open it. Refused with `503` `channel_paused` while card payments are paused, and with `422` `above_card_payment_limit` or `above_card_30_day_limit` over a limit. The one live deposit per investment rule covers cards.
+3. **The worker opens the order.** It marks the deposit `sending` and commits, then calls `SubmitOrderRequest` with no transaction open. Our deposit ID is Pesapal's merchant reference, the amount is the total in whole shillings and the client's phone is the only detail sent. It saves Pesapal's `order_tracking_id` as the provider reference and the page address, and the deposit becomes `awaiting_approval`: waiting for the client's card payment.
+4. **The client pays on Pesapal's page.** The app polls `GET /client/payments/{id}` until `card_page_url` appears, then sends the client there. Pesapal sends them back to `https://app.finvestug.com/pay/card/return?payment=<id>`. The app then calls `POST /client/payments/{id}/card-return`, which asks for a status read now and changes nothing by itself.
+5. **The worker reads the result.** A notification, the client's return, the reads queued after the order opened and the sweep all queue a status read. Only `GetTransactionStatus` decides. Completed (`status_code` 1) for exactly the total confirms the deposit and posts the entry in that transaction, then the investment starts as for any payment. Failed (2) fails the deposit (`declined`, `insufficient_funds` or `limit_exceeded`). A different amount holds the deposit `uncertain` with `amount_mismatch` for staff. Unpaid (0) leaves it waiting.
+
+### Why a lost answer fails instead of being uncertain
+
+Pesapal documents no idempotency on `SubmitOrderRequest`, and a status read needs Pesapal's tracking ID. A card can be charged only on the page whose address came back in the answer, and the payer only ever gets it from our saved answer. So a send whose answer was lost, or a deposit a crash left `sending`, cannot have been paid: it fails with `provider_unavailable` and the client may try again. It is never sent again.
+
+### A page left unpaid
+
+| Found | Action |
+| --- | --- |
+| `awaiting_approval` | Reads 20, 40, 60, 90, 120 and 180 seconds after the order opened, then on every sweep (every minute). |
+| `awaiting_approval` for 30 minutes | `CancelOrder` is sent once (a job with an external effect), then the status is read again. If Pesapal took the cancel and nothing was paid, the deposit fails with `approval_timed_out`. If it was paid at the last moment, it is confirmed. If we cannot tell, it is `uncertain` with `approval_overdue`. |
+| Still `awaiting_approval` an hour after it opened | `uncertain` with `approval_overdue`, in case the cancel never ran. |
+| `uncertain` | Read on the same back-off as mobile money for 24 hours, then settled by reconciliation from Pesapal's statement. |
+
+### Notifications from Pesapal
+
+Pesapal's notifications (IPN) are not signed, and carry only `OrderTrackingId`, `OrderMerchantReference` and `OrderNotificationType`. They come to `GET` or `POST /provider-callbacks/cards/pesapal/<FINVEST_PESAPAL_IPN_TOKEN>`: the long random token in the path keeps out anyone who does not know the address, and the request log records only the route template, never the token. A notice is recorded once a minute per order and change, queues a status read, and is answered with the JSON Pesapal asks for. It never changes a deposit. The address is registered with Pesapal by the worker the first time it opens an order (found again by its address after a restart), so no IPN ID has to be copied into settings.
+
+### Ledger entries for a card payment
+
+| Event | Debit | Credit |
+| --- | --- | --- |
+| Card payment confirmed (`payment.deposit_confirmed`) | Asset `pesapal.balance` with the total | Liability `client.awaiting_start` with the investment's amount, and income `payments.card_charges` with the card charge the client paid |
+
+Pesapal holds the money until it settles to the trust account. Its own charge is not reported per payment, so it is booked when the settlement arrives (see Not built yet).
+
+### Pesapal settings
+
+`FINVEST_CARDS_PROVIDER` chooses the card adapter: `disabled` (the default: no card payment can start and the notification address answers 404), `sandbox` or `pesapal`. It is separate from `FINVEST_PAYMENTS_PROVIDER`, so ioTec runs mobile money and Pesapal runs cards. The card sandbox, and Pesapal's own sandbox address, are refused outside local development and staging. In the card sandbox the last three digits of the total choose the result: `001` declined, `002` not enough money, `003` never paid (cancelled after the window), `004` lost answer, `005` busy, `006` a different amount, anything else paid with a Visa ending 1111. Its page is the client app's own return address.
+
+From `FINVEST_PESAPAL_*`:
+
+| Setting | Meaning |
+| --- | --- |
+| `CONSUMER_KEY`, `CONSUMER_SECRET` | The API credentials from Pesapal. Secrets: GitHub environment secrets only. API and worker. |
+| `IPN_TOKEN` | At least 32 random characters, the token in the notification address. A secret. API and worker. |
+| `BASE_URL` | `https://pay.pesapal.com/v3` (the default) or `https://cybqa.pesapal.com/pesapalv3` for the sandbox, which only staging may use. |
+| `PUBLIC_API_URL`, `RETURN_URL` | Default to `https://api.finvestug.com` and `https://app.finvestug.com/pay/card/return`. |
+| `TIMEOUT_SECONDS` | 30 by default. |
+
+The scheduler needs only `FINVEST_CARDS_PROVIDER` and `FINVEST_PESAPAL_BASE_URL`, for the sandbox check and the card sweep.
+
 ## A bank transfer, step by step
 
 The client sends money from their own bank account, then tells us about it. The code is in `bank_transfers.py` and `domain/bank_transfers.py`.
@@ -84,9 +135,12 @@ Client routes, signed in as the client. Each `POST` needs an `Idempotency-Key`.
 | `POST /client/investments/{id}/payments/mobile-money` | `{"network": "mtn" or "airtel"}`. Prompts the number on the client's own account for exactly the investment's amount. The request cannot name a number or an amount. |
 | `POST /client/investments/{id}/payments/bank-transfer` | A `multipart/form-data` body: the `receipt` file (PDF, JPEG or PNG, at most 10 MiB), `amount_minor`, `sent_on`, `bank_name` and `transaction_number`. The amount must be the investment's, or it is refused with `amount_differs_from_investment`. First, `preflight_bank_receipt` runs the whole submission in a savepoint it rolls back. That covers the details, an investment already being paid, and a reused key. A replayed key gets the earlier transfer back without storing anything. The file's first bytes must match its claimed type (PDF, JPEG or PNG), or it is refused as `content_does_not_match_type`. Only then is the file stored, outside any transaction, under `payments/receipts/<deposit ID>`, and the transfer is saved pointing at it. So a saved transfer always has its file. If saving still fails, or a simultaneous identical request saved first, the stored file is deleted. If the store cannot be reached to delete it, `receipt_orphaned` is logged with the deposit ID. If storage is down when storing, the answer is `503` and nothing is saved. The body limit for this path is 11 MiB, and the edge allows 12 MiB. A client stores at most 10 receipts in any 24 hours, counted under a lock per client; the 11th is refused with `429` `rate_limited` before its file is stored, because a goal takes any number of payments and each file is kept for good. |
 | `GET /client/investments/{id}/bank-transfer-details` | Where to send a bank transfer: `bank_name`, `account_name`, `account_number`, `branch` (may be null), `reference` and `amount`. The `reference` is the client's Finvest account number, for the client to write on the transfer so staff can find the line on the statement. The same refusals as paying: `404` if it is not the client's, `409` if it can no longer be paid or already has a payment (fetch that one). `503` if no account is set for the investment's currency. The account is the one staff last approved on the console's Settings screen (see [The account clients pay into](#the-account-clients-pay-into)). |
+| `GET /client/investments/{id}/payments/card` | The card charge and total before paying, and `refused` (`channel_paused`, `cards_unavailable`, `above_card_payment_limit`, `above_card_30_day_limit`) when the client may not pay by card now. |
+| `POST /client/investments/{id}/payments/card` | Starts a card payment for exactly the investment's amount and the charge shown. See [A card payment, step by step](#a-card-payment-step-by-step). |
+| `POST /client/payments/{id}/card-return` | The client is back from Pesapal's page: queues a status read. `202` with the payment. |
 | `GET /client/investments/{id}/payment` | The investment's payment that has not failed. A `409` from either `POST` means one exists: show this one instead of asking the client to pay again. |
 | `GET /client/payments` | The client's own payments, newest first, 50 a page, for the Activity list. Each is the same shape as below without its `receipt`. Pass `next_before` back as `before` for the next page; it is null on the last. |
-| `GET /client/payments/{id}` | One payment, the client's own only. |
+| `GET /client/payments/{id}` | One payment, the client's own only. A card payment also has `card_charge`, `card_total`, `card_page_url` (while it waits for the client) and `card` (brand and last four digits, once paid). |
 
 Every payment leaves a trail in the audit log. A client asking to pay, by mobile money or by bank receipt, writes `payments.deposit_requested` as the client, with the method. A deposit the worker asks for on the client's behalf, for an automatic investing run, writes the same event as the system. When the deposit settles, the system writes `payments.deposit_confirmed` or `payments.deposit_failed`, with the method, what settled it (such as `status_read` or `staff_review`) and, for a failure, the failure code. Amounts and phone numbers are not put in these events: the deposit holds them.
 
@@ -304,6 +358,8 @@ ioTec's test numbers: `011177777x` succeed, `011177799x` fail, `011177778x` stay
 Staff can pause MTN, Airtel or bank transfer pay ins on Settings, two people agreeing ([platform-settings.md](platform-settings.md)). While one is paused, a new mobile money payment on that network is refused with 503 and field code `channel_paused` on `network`, and the bank transfer details with 503 and `channel_paused` on `method`, so the app offers another way. A request already made returns its deposit when repeated with its key, a payment already started finishes as it would have, and a receipt for a transfer already made can still be handed in.
 
 ## Not built yet
+
+- Cards: the Pesapal balance as a pot in reconciliation and the close of day, settlement to the trust account with Pesapal's charge, card refunds and chargebacks by two people, and the console screens for them. The client app screens. Trying the adapter against Pesapal's sandbox, which needs the sandbox keys.
 
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.

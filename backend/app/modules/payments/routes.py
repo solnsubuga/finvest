@@ -23,7 +23,7 @@ from app.modules.identity.api import CurrentClient, require_confirmed, require_p
 from app.modules.identity.service import ClientSession, StaffSession
 from app.modules.investments import holdings
 from app.modules.kyc import service as kyc
-from app.modules.payments import bank_accounts, service
+from app.modules.payments import bank_accounts, cards, service
 from app.modules.payments import bank_transfers as bank
 from app.modules.payments.domain.bank_transfers import (
     MAX_RECEIPT_BYTES,
@@ -41,13 +41,14 @@ from app.modules.payments.domain.deposits import (
     Purpose,
     mask_msisdn,
 )
-from app.modules.payments.domain.provider import CollectionsProvider
+from app.modules.payments.domain.provider import CardCollectionsProvider, CollectionsProvider
 from app.modules.payments.service import Deposit, DepositRequest
 from app.modules.platform_settings import service as platform_settings
 from app.modules.reconciliation.statements import StatementLineView
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
 from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
+from app.shared.money import Money
 
 logger = structlog.get_logger()
 
@@ -99,10 +100,17 @@ class ReceiptView(Contract):
     byte_size: int
 
 
+class CardView(Contract):
+    """The card that paid, as the client may see it. Never the card number."""
+
+    brand: str | None
+    last_four: str | None
+
+
 class PaymentView(Contract):
     id: PushId
     investment_id: PushId
-    method: Literal["mtn", "airtel", "bank_transfer"]
+    method: Literal["mtn", "airtel", "bank_transfer", "card"]
     status: Literal[
         "created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"
     ]
@@ -114,6 +122,29 @@ class PaymentView(Contract):
     receipt: ReceiptView | None
     created_at: datetime
     confirmed_at: datetime | None
+    # A card payment only: the card charge the client pays on top, which may be zero, and the
+    # total the card pays. Shown in shillings only, never as a rate.
+    card_charge: MoneyView | None = None
+    card_total: MoneyView | None = None
+    # A card payment waiting for the client: the card provider's page to pay on. The card is
+    # typed only there. None once the payment has ended.
+    card_page_url: str | None = None
+    # A paid card payment: the card's brand and last four digits.
+    card: CardView | None = None
+
+
+class CardOffer(Contract):
+    """What paying for an investment by card would cost, shown before the client goes on."""
+
+    amount: MoneyView
+    # The card charge on top, in shillings. Zero when Finvest bears it.
+    charge: MoneyView
+    total: MoneyView
+    # The most one card payment may be, investment and charge together.
+    max_payment: MoneyView
+    # None when the client may pay this by card now. Otherwise why not: `channel_paused`,
+    # `cards_unavailable`, `above_card_payment_limit` or `above_card_30_day_limit`.
+    refused: str | None
 
 
 class BankTransferDetails(Contract):
@@ -170,9 +201,29 @@ def _receipt_problem(code: str) -> ApplicationError:
     )
 
 
-def _view(deposit: Deposit, receipt: bank.BankReceipt | None = None) -> PaymentView:
+def _money(value: Money) -> MoneyView:
+    return MoneyView(minor=value.minor, currency=value.currency.value)
+
+
+def _view(
+    deposit: Deposit,
+    receipt: bank.BankReceipt | None = None,
+    order: cards.CardOrder | None = None,
+) -> PaymentView:
     final_failure = deposit.code if deposit.status is DepositStatus.FAILED else None
+    card_fields: dict[str, object] = {}
+    if order is not None:
+        waiting = deposit.status is DepositStatus.AWAITING_APPROVAL
+        card_fields = {
+            "card_charge": _money(order.charge),
+            "card_total": _money(order.total),
+            "card_page_url": order.page_url if waiting else None,
+            "card": CardView(brand=order.card.brand, last_four=order.card.last_four)
+            if order.card is not None and deposit.status is DepositStatus.CONFIRMED
+            else None,
+        }
     return PaymentView(
+        **card_fields,  # type: ignore[arg-type]
         id=deposit.id,
         investment_id=deposit.purpose_id,
         method=deposit.method.value,
@@ -207,11 +258,83 @@ async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     if deposit.method is Method.BANK_TRANSFER:
         # A transfer moved here from another client's payment has no receipt of its own.
         return _view(deposit, await bank.find_receipt(session, deposit.id))
+    if deposit.method is Method.CARD:
+        return _view(deposit, order=await cards.find_order(session, deposit.id))
     return _view(deposit)
 
 
-def create_client_router(collections: CollectionsProvider | None) -> APIRouter:
+def create_client_router(
+    collections: CollectionsProvider | None,
+    card_provider: CardCollectionsProvider | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/client", tags=["client payments"], responses=_REFUSALS)
+
+    @router.get("/investments/{investment_id}/payments/card")
+    async def card_offer(
+        investment_id: PushId, client: CurrentClient, database: Db, clock: Time
+    ) -> CardOffer:
+        """The card charge and total for paying this investment by card, before paying.
+
+        `refused` says when the client may not pay by card now, so the app can explain and
+        offer mobile money. 404 if the investment is not the client's, 409 if it cannot be paid.
+        """
+        async with database.actor_transaction(client.actor) as session:
+            payable = await holdings.payable_investment(
+                session, client_id=client.client_id, investment_id=investment_id, clock=clock
+            )
+            offer = await cards.card_offer(session, client.client_id, payable.amount, clock)
+        return CardOffer(
+            amount=_money(offer.quote.amount),
+            charge=_money(offer.quote.charge),
+            total=_money(offer.quote.total),
+            max_payment=_money(offer.terms.max_payment),
+            refused="cards_unavailable" if card_provider is None else offer.refused,
+        )
+
+    @router.post("/investments/{investment_id}/payments/card", status_code=201)
+    async def pay_by_card(
+        investment_id: PushId, client: CurrentClient, key: IdempotencyKey, database: Db, clock: Time
+    ) -> PaymentView:
+        """Start a card payment for exactly the amount owed, and the card charge shown.
+
+        The worker opens the order at the card provider within seconds. Poll
+        `GET /client/payments/{payment_id}` until `card_page_url` is set, then send the client
+        there: the card is typed only on that page. 503 `channel_paused` while card payments
+        are paused, 422 when over a card limit, 409 if the investment already has a payment.
+        """
+        if card_provider is None:
+            raise ApplicationError("unavailable")
+        async with database.actor_transaction(client.actor) as session:
+            payable = await holdings.payable_investment(
+                session, client_id=client.client_id, investment_id=investment_id, clock=clock
+            )
+            deposit = await cards.request_card_deposit(
+                session,
+                client.actor,
+                purpose=Purpose.INVESTMENT,
+                purpose_id=payable.investment_id,
+                amount=payable.amount,
+                idempotency_key=key,
+                provider=card_provider.name,
+                clock=clock,
+            )
+            return await _payment_view(session, deposit)
+
+    @router.post("/payments/{payment_id}/card-return", status_code=202)
+    async def card_return(
+        payment_id: PushId, client: CurrentClient, database: Db, clock: Time
+    ) -> PaymentView:
+        """The client is back from the card provider's page. Asks for the result to be read
+        now; it changes nothing by itself. Poll the payment for the outcome."""
+        async with database.actor_transaction(client.actor) as session:
+            deposit = await service.get_deposit(session, payment_id)
+            view = await _payment_view(session, deposit)
+        if deposit.method is not Method.CARD:
+            raise ApplicationError("not_found")
+        if deposit.status in (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN):
+            async with database.actor_transaction(client.actor) as session:
+                await cards.hurry_read(session, deposit.id, clock)
+        return view
 
     @router.get("/investments/{investment_id}/bank-transfer-details")
     async def bank_transfer_details(

@@ -54,9 +54,10 @@ SWEEP_BATCH = 200
 _OPEN = (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN)
 _STRAGGLERS = text(
     "SELECT id, status, created_at, updated_at FROM payment_deposits "
-    "WHERE (status = 'created' AND created_at <= :unsent) "
+    # Card deposits have their own sweep, in `card_jobs.py`.
+    "WHERE method IN ('mtn', 'airtel') AND ((status = 'created' AND created_at <= :unsent) "
     "OR (status = 'sending' AND updated_at <= :interrupted) "
-    "OR (status = 'awaiting_approval' AND updated_at <= :quiet) "
+    "OR (status = 'awaiting_approval' AND updated_at <= :quiet)) "
     "ORDER BY updated_at LIMIT :limit FOR UPDATE SKIP LOCKED"
 )
 # Uncertain deposits a status read can still settle. A different confirmed amount is for staff:

@@ -81,9 +81,21 @@ class PaymentChannelsValue(Contract):
     mtn_pay_in: bool
     airtel_pay_in: bool
     bank_pay_in: bool
+    # Visa and Mastercard through the card provider. Left out means paused, so a console that
+    # does not know the card channel yet never opens it by mistake.
+    card_pay_in: bool = False
     mtn_payout: bool
     airtel_payout: bool
     bank_payout: bool
+
+
+class CardPaymentsValue(Contract):
+    """The card charge rate the client pays on top (basis points: 350 is 3.5%, 0 means Finvest
+    bears it) and the card limits in whole shillings, investment and charge together."""
+
+    charge_basis_points: Annotated[int, Field(ge=0, le=1000)]
+    max_payment_minor: Annotated[int, Field(ge=1, le=100_000_000)]
+    max_30_days_minor: Annotated[int, Field(ge=1, le=100_000_000)]
 
 
 class HolidayValue(Contract):
@@ -177,6 +189,12 @@ class ProposeStatementLayouts(Contract):
     reason: Reason
 
 
+class ProposeCardPayments(Contract):
+    key: Literal["card_payments"]
+    value: CardPaymentsValue
+    reason: Reason
+
+
 ProposeSetting = Annotated[
     ProposePaymentChannels
     | ProposePublicHolidays
@@ -184,7 +202,8 @@ ProposeSetting = Annotated[
     | ProposeMaturityReminders
     | ProposeStaffIdleMinutes
     | ProposeOfficeNetworks
-    | ProposeStatementLayouts,
+    | ProposeStatementLayouts
+    | ProposeCardPayments,
     Field(discriminator="key"),
 ]
 
@@ -285,6 +304,16 @@ class StatementLayoutsSetting(_Setting):
     proposal: StatementLayoutsProposal | None
 
 
+class CardPaymentsProposal(_Proposal):
+    value: CardPaymentsValue
+
+
+class CardPaymentsSetting(_Setting):
+    key: Literal["card_payments"]
+    value: CardPaymentsValue
+    proposal: CardPaymentsProposal | None
+
+
 SettingView = Annotated[
     PaymentChannelsSetting
     | PublicHolidaysSetting
@@ -292,7 +321,8 @@ SettingView = Annotated[
     | MaturityRemindersSetting
     | StaffIdleMinutesSetting
     | OfficeNetworksSetting
-    | StatementLayoutsSetting,
+    | StatementLayoutsSetting
+    | CardPaymentsSetting,
     Field(discriminator="key"),
 ]
 ProposalView = Annotated[
@@ -302,7 +332,8 @@ ProposalView = Annotated[
     | MaturityRemindersProposal
     | StaffIdleMinutesProposal
     | OfficeNetworksProposal
-    | StatementLayoutsProposal,
+    | StatementLayoutsProposal
+    | CardPaymentsProposal,
     Field(union_mode="left_to_right"),
 ]
 _SETTING = TypeAdapter[SettingView](SettingView)
@@ -314,6 +345,7 @@ _PROPOSALS: dict[Key, type[_Proposal]] = {
     "staff_idle_minutes": StaffIdleMinutesProposal,
     "office_networks": OfficeNetworksProposal,
     "statement_layouts": StatementLayoutsProposal,
+    "card_payments": CardPaymentsProposal,
 }
 
 
