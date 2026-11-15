@@ -429,6 +429,24 @@
         "title": "AllocationReportOut",
         "type": "object"
       },
+      "AmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "AmountOut",
+        "type": "object"
+      },
       "AnnouncementList": {
         "additionalProperties": false,
         "properties": {
@@ -2028,7 +2046,7 @@
         "additionalProperties": false,
         "properties": {
           "cost": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "custodian_reference": {
             "title": "Custodian Reference",
@@ -2263,17 +2281,17 @@
         "additionalProperties": false,
         "properties": {
           "closing": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "code": {
             "title": "Code",
             "type": "string"
           },
           "credits": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "debits": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "kind": {
             "title": "Kind",
@@ -2284,7 +2302,7 @@
             "type": "string"
           },
           "opening": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -2534,16 +2552,16 @@
         "additionalProperties": false,
         "properties": {
           "after_promised": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "balance": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "floor": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "from_buffer_up_to": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "level": {
             "$ref": "#/components/schemas/BufferLevel"
@@ -2553,13 +2571,13 @@
             "type": "integer"
           },
           "short": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "target": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "to_raise": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -2580,13 +2598,13 @@
         "additionalProperties": false,
         "properties": {
           "buffer": {
-            "$ref": "#/components/schemas/app__modules__dealing__buffer_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "currency": {
             "$ref": "#/components/schemas/Currency"
           },
           "finvest_money": {
-            "$ref": "#/components/schemas/app__modules__dealing__buffer_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "in_force": {
             "$ref": "#/components/schemas/RulesOut"
@@ -6887,7 +6905,7 @@
         "additionalProperties": false,
         "properties": {
           "bills_held": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "buffer": {
             "$ref": "#/components/schemas/BufferOut"
@@ -6907,7 +6925,7 @@
             "title": "Matches Custodian"
           },
           "money_to_place": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "orders": {
             "items": {
@@ -8221,7 +8239,7 @@
             "type": "string"
           },
           "debit_total": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "exported_at": {
             "format": "date-time",
@@ -8410,14 +8428,14 @@
         "additionalProperties": false,
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "custodian_reference": {
             "title": "Custodian Reference",
             "type": "string"
           },
           "face": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "matures_on": {
             "format": "date",
@@ -9395,7 +9413,7 @@
         "additionalProperties": false,
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "code": {
             "title": "Code",
@@ -9418,7 +9436,7 @@
         "additionalProperties": false,
         "properties": {
           "cost_total": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "costs": {
             "items": {
@@ -9435,10 +9453,10 @@
             "type": "array"
           },
           "income_total": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "net": {
-            "$ref": "#/components/schemas/app__modules__finance__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -9671,7 +9689,7 @@
           "total": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+                "$ref": "#/components/schemas/AmountOut"
               },
               {
                 "type": "null"
@@ -11016,17 +11034,17 @@
         "additionalProperties": false,
         "properties": {
           "allocated": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "cost": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "custodian_reference": {
             "title": "Custodian Reference",
             "type": "string"
           },
           "face": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "investments": {
             "title": "Investments",
@@ -11047,7 +11065,7 @@
             "type": "string"
           },
           "unallocated": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -12054,20 +12072,20 @@
             "type": "string"
           },
           "outstanding": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "overdue": {
             "title": "Overdue",
             "type": "boolean"
           },
           "remitted": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "waiting": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "withheld": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -12089,7 +12107,7 @@
             "$ref": "#/components/schemas/Currency"
           },
           "gross": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "month": {
             "title": "Month",
@@ -12110,7 +12128,7 @@
             "type": "boolean"
           },
           "withheld": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -12220,6 +12238,25 @@
         "title": "MoveComplaint",
         "type": "object"
       },
+      "MovementAmountOut": {
+        "additionalProperties": false,
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "minor": {
+            "title": "Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "minor",
+          "currency"
+        ],
+        "title": "MovementAmountOut",
+        "type": "object"
+      },
       "MovementIn": {
         "additionalProperties": false,
         "properties": {
@@ -12318,7 +12355,7 @@
         "additionalProperties": false,
         "properties": {
           "amount": {
-            "$ref": "#/components/schemas/app__modules__console__movements__AmountOut"
+            "$ref": "#/components/schemas/MovementAmountOut"
           },
           "channel": {
             "title": "Channel",
@@ -13407,7 +13444,7 @@
             "type": "array"
           },
           "face": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "id": {
             "title": "Id",
@@ -14059,7 +14096,7 @@
             "type": "string"
           },
           "gross": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "name": {
             "anyOf": [
@@ -14073,7 +14110,7 @@
             "title": "Name"
           },
           "tax": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "tin": {
             "anyOf": [
@@ -15427,13 +15464,13 @@
         "additionalProperties": false,
         "properties": {
           "allocated": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "cost_held": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "covered": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "investments": {
             "title": "Investments",
@@ -15451,17 +15488,17 @@
             "type": "array"
           },
           "owed": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "product_code": {
             "title": "Product Code",
             "type": "string"
           },
           "unallocated": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "waiting": {
-            "$ref": "#/components/schemas/app__modules__dealing__allocations_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -18336,7 +18373,7 @@
             "type": "array"
           },
           "amount": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "bank_reference": {
             "title": "Bank Reference",
@@ -20092,17 +20129,17 @@
             "type": "string"
           },
           "floor": {
-            "$ref": "#/components/schemas/app__modules__dealing__buffer_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "from_buffer_up_to": {
-            "$ref": "#/components/schemas/app__modules__dealing__buffer_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "pay_within_working_days": {
             "title": "Pay Within Working Days",
             "type": "integer"
           },
           "target": {
-            "$ref": "#/components/schemas/app__modules__dealing__buffer_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -26596,7 +26633,7 @@
             "$ref": "#/components/schemas/Currency"
           },
           "held_for_ura": {
-            "$ref": "#/components/schemas/app__modules__tax__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "months": {
             "items": {
@@ -27710,7 +27747,7 @@
         "additionalProperties": false,
         "properties": {
           "asked": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "clients": {
             "title": "Clients",
@@ -28160,61 +28197,6 @@
         "title": "FreezeView",
         "type": "object"
       },
-      "app__modules__console__movements__AmountOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "AmountOut",
-        "type": "object"
-      },
-      "app__modules__dealing__allocations_api__AmountOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "AmountOut",
-        "type": "object"
-      },
-      "app__modules__dealing__api__AmountOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "AmountOut",
-        "type": "object"
-      },
       "app__modules__dealing__api__NoteIn": {
         "additionalProperties": false,
         "properties": {
@@ -28235,10 +28217,10 @@
         "additionalProperties": false,
         "properties": {
           "bills_held": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "clients_owed": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "cover": {
             "$ref": "#/components/schemas/Cover"
@@ -28248,10 +28230,10 @@
             "type": "boolean"
           },
           "face_held": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "lot_size": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "next_auction": {
             "anyOf": [
@@ -28266,7 +28248,7 @@
             "title": "Next Auction"
           },
           "on_order": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "product_code": {
             "title": "Product Code",
@@ -28277,7 +28259,7 @@
             "type": "string"
           },
           "to_buy": {
-            "$ref": "#/components/schemas/app__modules__dealing__api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           }
         },
         "required": [
@@ -28312,24 +28294,6 @@
         "title": "DeclineIn",
         "type": "object"
       },
-      "app__modules__dealing__buffer_api__AmountOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "AmountOut",
-        "type": "object"
-      },
       "app__modules__dealing__buffer_api__DeclineIn": {
         "additionalProperties": false,
         "properties": {
@@ -28357,7 +28321,7 @@
             "type": "array"
           },
           "amount": {
-            "$ref": "#/components/schemas/app__modules__dealing__buffer_api__AmountOut"
+            "$ref": "#/components/schemas/AmountOut"
           },
           "bank_reference": {
             "anyOf": [
@@ -28483,24 +28447,6 @@
         ],
         "title": "Step",
         "type": "string"
-      },
-      "app__modules__finance__api__AmountOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "AmountOut",
-        "type": "object"
       },
       "app__modules__goals__api__PlanView": {
         "additionalProperties": false,
@@ -29861,24 +29807,6 @@
           "target_working_days"
         ],
         "title": "ComplaintSummary",
-        "type": "object"
-      },
-      "app__modules__tax__api__AmountOut": {
-        "additionalProperties": false,
-        "properties": {
-          "currency": {
-            "$ref": "#/components/schemas/Currency"
-          },
-          "minor": {
-            "title": "Minor",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "minor",
-          "currency"
-        ],
-        "title": "AmountOut",
         "type": "object"
       },
       "app__modules__tax__api__DeclineIn": {

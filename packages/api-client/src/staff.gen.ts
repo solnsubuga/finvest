@@ -81,36 +81,36 @@ export type ActionsView = z.infer<typeof ActionsView>;
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
-export const DealingAllocationsApiAmountOut = z.object({
+export const AmountOut = z.object({
   currency: Currency,
   minor: z.number().int(),
 });
-export type DealingAllocationsApiAmountOut = z.infer<typeof DealingAllocationsApiAmountOut>;
+export type AmountOut = z.infer<typeof AmountOut>;
 
 export const LotOut = z.object({
-  allocated: DealingAllocationsApiAmountOut,
-  cost: DealingAllocationsApiAmountOut,
+  allocated: AmountOut,
+  cost: AmountOut,
   custodian_reference: z.string(),
-  face: DealingAllocationsApiAmountOut,
+  face: AmountOut,
   investments: z.number().int(),
   lot_id: z.string(),
   matures_on: z.string(),
   settled_on: z.string(),
-  unallocated: DealingAllocationsApiAmountOut,
+  unallocated: AmountOut,
 });
 export type LotOut = z.infer<typeof LotOut>;
 
 export const ProductAllocationOut = z.object({
-  allocated: DealingAllocationsApiAmountOut,
-  cost_held: DealingAllocationsApiAmountOut,
-  covered: DealingAllocationsApiAmountOut,
+  allocated: AmountOut,
+  cost_held: AmountOut,
+  covered: AmountOut,
   investments: z.number().int(),
   investments_waiting: z.number().int(),
   lots: z.array(LotOut),
-  owed: DealingAllocationsApiAmountOut,
+  owed: AmountOut,
   product_code: z.string(),
-  unallocated: DealingAllocationsApiAmountOut,
-  waiting: DealingAllocationsApiAmountOut,
+  unallocated: AmountOut,
+  waiting: AmountOut,
 });
 export type ProductAllocationOut = z.infer<typeof ProductAllocationOut>;
 
@@ -451,7 +451,7 @@ export const BatchOut = z.object({
 export type BatchOut = z.infer<typeof BatchOut>;
 
 export const BillsOut = z.object({
-  cost: DealingAllocationsApiAmountOut,
+  cost: AmountOut,
   custodian_reference: z.string(),
   lot_id: z.string(),
   matures_on: z.string(),
@@ -479,20 +479,14 @@ export const BodyUploadStaffReconciliationCustodianChecksPost = z.object({
 });
 export type BodyUploadStaffReconciliationCustodianChecksPost = z.infer<typeof BodyUploadStaffReconciliationCustodianChecksPost>;
 
-export const FinanceApiAmountOut = z.object({
-  currency: Currency,
-  minor: z.number().int(),
-});
-export type FinanceApiAmountOut = z.infer<typeof FinanceApiAmountOut>;
-
 export const BookLineOut = z.object({
-  closing: FinanceApiAmountOut,
+  closing: AmountOut,
   code: z.string(),
-  credits: FinanceApiAmountOut,
-  debits: FinanceApiAmountOut,
+  credits: AmountOut,
+  debits: AmountOut,
   kind: z.string(),
   name: z.string(),
-  opening: FinanceApiAmountOut,
+  opening: AmountOut,
 });
 export type BookLineOut = z.infer<typeof BookLineOut>;
 
@@ -530,37 +524,25 @@ export type BookingOut = z.infer<typeof BookingOut>;
 export const BufferLevel = z.enum(["on_target", "under_target", "below_floor"]);
 export type BufferLevel = z.infer<typeof BufferLevel>;
 
-export const DealingApiAmountOut = z.object({
-  currency: Currency,
-  minor: z.number().int(),
-});
-export type DealingApiAmountOut = z.infer<typeof DealingApiAmountOut>;
-
 export const BufferOut = z.object({
-  after_promised: DealingApiAmountOut,
-  balance: DealingApiAmountOut,
-  floor: DealingApiAmountOut,
-  from_buffer_up_to: DealingApiAmountOut,
+  after_promised: AmountOut,
+  balance: AmountOut,
+  floor: AmountOut,
+  from_buffer_up_to: AmountOut,
   level: BufferLevel,
   pay_within_working_days: z.number().int(),
-  short: DealingApiAmountOut,
-  target: DealingApiAmountOut,
-  to_raise: DealingApiAmountOut,
+  short: AmountOut,
+  target: AmountOut,
+  to_raise: AmountOut,
 });
 export type BufferOut = z.infer<typeof BufferOut>;
 
-export const DealingBufferApiAmountOut = z.object({
-  currency: Currency,
-  minor: z.number().int(),
-});
-export type DealingBufferApiAmountOut = z.infer<typeof DealingBufferApiAmountOut>;
-
 export const RulesOut = z.object({
   effective_from: z.string(),
-  floor: DealingBufferApiAmountOut,
-  from_buffer_up_to: DealingBufferApiAmountOut,
+  floor: AmountOut,
+  from_buffer_up_to: AmountOut,
   pay_within_working_days: z.number().int(),
-  target: DealingBufferApiAmountOut,
+  target: AmountOut,
 });
 export type RulesOut = z.infer<typeof RulesOut>;
 
@@ -592,7 +574,7 @@ export type MovementStatus = z.infer<typeof MovementStatus>;
 
 export const DealingBufferApiMovementOut = z.object({
   allowed: z.array(DealingBufferApiStep),
-  amount: DealingBufferApiAmountOut,
+  amount: AmountOut,
   bank_reference: z.string().nullable(),
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
@@ -608,9 +590,9 @@ export const DealingBufferApiMovementOut = z.object({
 export type DealingBufferApiMovementOut = z.infer<typeof DealingBufferApiMovementOut>;
 
 export const BufferScreenOut = z.object({
-  buffer: DealingBufferApiAmountOut,
+  buffer: AmountOut,
   currency: Currency,
-  finvest_money: DealingBufferApiAmountOut,
+  finvest_money: AmountOut,
   in_force: RulesOut,
   level: BufferLevel,
   movements: z.array(DealingBufferApiMovementOut),
@@ -1406,9 +1388,9 @@ export const DecisionRequest = z.object({
 export type DecisionRequest = z.infer<typeof DecisionRequest>;
 
 export const FillOut = z.object({
-  amount: DealingApiAmountOut,
+  amount: AmountOut,
   custodian_reference: z.string(),
-  face: DealingApiAmountOut,
+  face: AmountOut,
   matures_on: z.string(),
   settled_on: z.string(),
 });
@@ -1422,7 +1404,7 @@ export type OrderStatus = z.infer<typeof OrderStatus>;
 
 export const OrderOut = z.object({
   allowed: z.array(Action),
-  face: DealingApiAmountOut,
+  face: AmountOut,
   id: z.string(),
   kind: OrderKind,
   note: z.string().nullable(),
@@ -1437,32 +1419,32 @@ export const OrderOut = z.object({
 export type OrderOut = z.infer<typeof OrderOut>;
 
 export const WithdrawalsOut = z.object({
-  asked: DealingApiAmountOut,
+  asked: AmountOut,
   clients: z.number().int(),
 });
 export type WithdrawalsOut = z.infer<typeof WithdrawalsOut>;
 
 export const DealingApiPositionOut = z.object({
-  bills_held: DealingApiAmountOut,
-  clients_owed: DealingApiAmountOut,
+  bills_held: AmountOut,
+  clients_owed: AmountOut,
   cover: Cover,
   discount_only: z.boolean(),
-  face_held: DealingApiAmountOut,
-  lot_size: DealingApiAmountOut,
+  face_held: AmountOut,
+  lot_size: AmountOut,
   next_auction: z.string().nullable(),
-  on_order: DealingApiAmountOut,
+  on_order: AmountOut,
   product_code: z.string(),
   product_name: z.string(),
-  to_buy: DealingApiAmountOut,
+  to_buy: AmountOut,
 });
 export type DealingApiPositionOut = z.infer<typeof DealingApiPositionOut>;
 
 export const DeskOut = z.object({
-  bills_held: DealingApiAmountOut,
+  bills_held: AmountOut,
   buffer: BufferOut,
   early_withdrawals: WithdrawalsOut,
   matches_custodian: z.boolean().nullable(),
-  money_to_place: DealingApiAmountOut,
+  money_to_place: AmountOut,
   orders: z.array(OrderOut),
   positions: z.array(DealingApiPositionOut),
 });
@@ -1598,7 +1580,7 @@ export type Format = z.infer<typeof Format>;
 export const ExportOut = z.object({
   date_from: z.string(),
   date_to: z.string(),
-  debit_total: FinanceApiAmountOut,
+  debit_total: AmountOut,
   exported_at: z.string(),
   exported_by: z.string(),
   exported_by_name: z.string().nullable(),
@@ -1643,18 +1625,18 @@ export const FormatOut = z.object({
 export type FormatOut = z.infer<typeof FormatOut>;
 
 export const IncomeLineOut = z.object({
-  amount: FinanceApiAmountOut,
+  amount: AmountOut,
   code: z.string(),
   name: z.string(),
 });
 export type IncomeLineOut = z.infer<typeof IncomeLineOut>;
 
 export const IncomeOut = z.object({
-  cost_total: FinanceApiAmountOut,
+  cost_total: AmountOut,
   costs: z.array(IncomeLineOut),
   income: z.array(IncomeLineOut),
-  income_total: FinanceApiAmountOut,
-  net: FinanceApiAmountOut,
+  income_total: AmountOut,
+  net: AmountOut,
 });
 export type IncomeOut = z.infer<typeof IncomeOut>;
 
@@ -1807,7 +1789,7 @@ export type InterestRunOut = z.infer<typeof InterestRunOut>;
 export const InvestmentBillsOut = z.object({
   bills: z.array(BillsOut),
   investment_id: z.string(),
-  total: DealingAllocationsApiAmountOut.nullable(),
+  total: AmountOut.nullable(),
 });
 export type InvestmentBillsOut = z.infer<typeof InvestmentBillsOut>;
 
@@ -2087,41 +2069,35 @@ export const MonthClosesOut = z.object({
 });
 export type MonthClosesOut = z.infer<typeof MonthClosesOut>;
 
-export const TaxApiAmountOut = z.object({
-  currency: Currency,
-  minor: z.number().int(),
-});
-export type TaxApiAmountOut = z.infer<typeof TaxApiAmountOut>;
-
 export const MonthOut = z.object({
   due_on: z.string(),
   month: z.string(),
-  outstanding: TaxApiAmountOut,
+  outstanding: AmountOut,
   overdue: z.boolean(),
-  remitted: TaxApiAmountOut,
-  waiting: TaxApiAmountOut,
-  withheld: TaxApiAmountOut,
+  remitted: AmountOut,
+  waiting: AmountOut,
+  withheld: AmountOut,
 });
 export type MonthOut = z.infer<typeof MonthOut>;
 
 export const PayeeOut = z.object({
   account_number: z.string().nullable(),
   client_id: z.string(),
-  gross: TaxApiAmountOut,
+  gross: AmountOut,
   name: z.string().nullable(),
-  tax: TaxApiAmountOut,
+  tax: AmountOut,
   tin: z.string().nullable(),
 });
 export type PayeeOut = z.infer<typeof PayeeOut>;
 
 export const MonthReportOut = z.object({
   currency: Currency,
-  gross: TaxApiAmountOut,
+  gross: AmountOut,
   month: z.string(),
   payees: z.array(PayeeOut),
   summary: MonthOut,
   tins_shown: z.boolean(),
-  withheld: TaxApiAmountOut,
+  withheld: AmountOut,
 });
 export type MonthReportOut = z.infer<typeof MonthReportOut>;
 
@@ -2130,6 +2106,12 @@ export const MoveComplaint = z.object({
   status: z.enum(["investigating", "waiting_for_client", "escalated"]),
 });
 export type MoveComplaint = z.infer<typeof MoveComplaint>;
+
+export const MovementAmountOut = z.object({
+  currency: z.string(),
+  minor: z.number().int(),
+});
+export type MovementAmountOut = z.infer<typeof MovementAmountOut>;
 
 export const MovementIn = z.object({
   amount_minor: z.number().int(),
@@ -2141,14 +2123,8 @@ export const MovementIn = z.object({
 });
 export type MovementIn = z.infer<typeof MovementIn>;
 
-export const ConsoleMovementsAmountOut = z.object({
-  currency: z.string(),
-  minor: z.number().int(),
-});
-export type ConsoleMovementsAmountOut = z.infer<typeof ConsoleMovementsAmountOut>;
-
 export const MovementView = z.object({
-  amount: ConsoleMovementsAmountOut,
+  amount: MovementAmountOut,
   channel: z.string(),
   client_id: z.string(),
   client_name: z.string().nullable(),
@@ -2939,7 +2915,7 @@ export type TaxApiStep = z.infer<typeof TaxApiStep>;
 
 export const RemittanceOut = z.object({
   allowed: z.array(TaxApiStep),
-  amount: TaxApiAmountOut,
+  amount: AmountOut,
   bank_reference: z.string(),
   decided_at: z.string().nullable(),
   decided_by: z.string().nullable(),
@@ -3856,7 +3832,7 @@ export type SwitchRequest = z.infer<typeof SwitchRequest>;
 
 export const TaxScreenOut = z.object({
   currency: Currency,
-  held_for_ura: TaxApiAmountOut,
+  held_for_ura: AmountOut,
   months: z.array(MonthOut),
   remittances: z.array(RemittanceOut),
 });

@@ -134,7 +134,7 @@ async def movements(
     return MovementPage(page, (last.created_at, last.id) if last else None)
 
 
-class AmountOut(Contract):
+class MovementAmountOut(Contract):
     minor: int
     currency: str
 
@@ -146,7 +146,7 @@ class MovementView(Contract):
     # The name on the client's approved identity document, or None until it is approved.
     client_name: str | None
     channel: str
-    amount: AmountOut
+    amount: MovementAmountOut
     status: str
     failure_code: str | None
     created_at: datetime
@@ -200,7 +200,7 @@ async def list_movements(
                 client_id=item.client_id,
                 client_name=names.get(item.client_id),
                 channel=item.channel,
-                amount=AmountOut(minor=item.amount_minor, currency=item.currency),
+                amount=MovementAmountOut(minor=item.amount_minor, currency=item.currency),
                 status=item.status,
                 failure_code=item.failure_code,
                 created_at=item.created_at,
