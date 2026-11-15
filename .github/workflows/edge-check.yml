@@ -2,16 +2,12 @@ name: Edge Check
 
 # Reads production's security headers and TLS from outside (infra/deployment/check-edge.sh). It
 # sends only GET and HEAD requests and TLS handshakes and holds no secrets. It runs after every
-# production deploy, on demand, and on a pull request that changes the check itself. A pull
-# request run reads what is live now, not the change under review, so it reports without blocking.
+# production deploy and on demand. It does not run on pull requests: it reads what is live, not the
+# change under review, and GitHub also starts it on unrelated PRs when main is merged into them.
 
 on:
   workflow_dispatch:
   workflow_call:
-  pull_request:
-    paths:
-      - .github/workflows/edge-check.yml
-      - infra/deployment/check-edge.sh
 
 permissions:
   contents: read
@@ -21,7 +17,6 @@ jobs:
     name: Production headers and TLS
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    continue-on-error: ${{ github.event_name == 'pull_request' }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
