@@ -177,6 +177,20 @@ export function createApiAuthClient(): AuthClient {
         return signedIn(await api("POST /client/login/passkey/verify", { body: { login_id: loginId, credential } }));
       }),
 
+    canLogInWithPasskey: () => passkeysSupported(),
+
+    logInWithPasskey: () =>
+      wrap(async () => {
+        if (!passkeysSupported()) throw new AuthError("passkey_unsupported");
+        const options = await api("POST /client/login/passkey-only/options", {});
+        const credential = await signWithPasskey(options.public_key);
+        return signedIn(
+          await api("POST /client/login/passkey-only/verify", {
+            body: { attempt_id: options.attempt_id, credential },
+          }),
+        );
+      }),
+
     verifyWithAuthenticator: (loginId, code) =>
       wrap(async () =>
         signedIn(await api("POST /client/login/authenticator/verify", { body: { login_id: loginId, code } })),

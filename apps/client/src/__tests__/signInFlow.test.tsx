@@ -54,6 +54,14 @@ describe("the shell, from the first screen", () => {
     await screen.findByTestId("home");
   });
 
+  it("logs in with a passkey alone, with no number or password", async () => {
+    await openApp();
+    await press("Log in");
+    await screen.findByText("Welcome back");
+    await fireEvent.press(screen.getByTestId("login-passkey"));
+    await screen.findByTestId("home");
+  });
+
   it("logs in with a proved email and a code sent to that address", async () => {
     await openApp();
     await press("Log in");

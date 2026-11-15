@@ -18,7 +18,7 @@ import { colors, fontSizes } from "@/theme";
 
 export default function LoginStart() {
   const router = useRouter();
-  const { client, setLogin } = useAuth();
+  const { client, setLogin, setSession } = useAuth();
   const params = useLocalSearchParams<{ with?: string }>();
   // The design's "Use email instead": a proved address in place of the number.
   const [byEmail, setByEmail] = useState(params.with === "email");
@@ -27,6 +27,7 @@ export default function LoginStart() {
   const [password, setPassword] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The right password with an email not confirmed yet: offer a new link instead of a refusal.
   const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
@@ -88,11 +89,35 @@ export default function LoginStart() {
     }
   };
 
+  // A passkey alone logs in: the device checks the fingerprint, face or screen lock, so it
+  // counts as both steps. The passkey the client picks says whose account it is.
+  const logInWithPasskey = async () => {
+    setSubmitted(false);
+    setError(null);
+    setUnconfirmed(null);
+    setPasskeyBusy(true);
+    try {
+      const session = await client.logInWithPasskey();
+      setPassword("");
+      setLogin(null);
+      setSession(session);
+    } catch (caught) {
+      setError(passkeyProblem(caught));
+      setPasskeyBusy(false);
+    }
+  };
+
   return (
     <Screen
       footer={
         <>
-          <Button label="Continue" onPress={submit} loading={busy} testID="login-submit" />
+          <Button
+            label="Continue"
+            onPress={submit}
+            loading={busy}
+            disabled={passkeyBusy}
+            testID="login-submit"
+          />
           <TextLink label="New here? Create an account" onPress={() => router.replace("/signup")} />
           <TextLink
             label="I changed my number or cannot get in"
@@ -171,6 +196,26 @@ export default function LoginStart() {
         />
         <TextLink label="Forgot password?" onPress={() => router.push("/reset")} />
       </View>
+      {client.canLogInWithPasskey() ? (
+        <View style={{ marginTop: 4, gap: 14 }}>
+          <View style={styles.or}>
+            <View style={styles.rule} />
+            <Txt size={fontSizes.sm} color={colors.muted}>
+              or
+            </Txt>
+            <View style={styles.rule} />
+          </View>
+          <Button
+            label="Log in with a passkey"
+            icon="key"
+            variant="secondary"
+            onPress={logInWithPasskey}
+            loading={passkeyBusy}
+            disabled={busy}
+            testID="login-passkey"
+          />
+        </View>
+      ) : null}
       <View style={{ marginTop: 8 }}>
         <Card padded={false}>
           <View style={styles.twoStep}>
@@ -182,7 +227,7 @@ export default function LoginStart() {
                 Two steps, every time.
               </Txt>{" "}
               After your password we confirm it is you with your passkey, your authenticator app
-              or a code by SMS or email.
+              or a code by SMS or email. A passkey on this device does both at once.
             </Txt>
           </View>
         </Card>
@@ -191,7 +236,20 @@ export default function LoginStart() {
   );
 }
 
+/** What to say when a passkey log in did not finish. Closing the prompt is not a failure. */
+function passkeyProblem(caught: unknown): string {
+  if (caught instanceof AuthError && caught.code === "cancelled") {
+    return "No passkey was used. Try again, or log in with your number and password.";
+  }
+  if (caught instanceof AuthError && caught.code === "passkey_failed") {
+    return "That passkey is not saved to a Finvest account. Log in with your number and password, then add a passkey in Sign in and security.";
+  }
+  return describeAuthError(caught);
+}
+
 const styles = StyleSheet.create({
+  or: { flexDirection: "row", alignItems: "center", gap: 12 },
+  rule: { flex: 1, height: 1, backgroundColor: colors.border },
   links: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   twoStep: {
     flexDirection: "row",

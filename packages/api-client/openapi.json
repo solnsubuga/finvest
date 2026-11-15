@@ -13628,6 +13628,54 @@
         "title": "PasskeyItem",
         "type": "object"
       },
+      "PasskeyLogin": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "credential": {
+            "additionalProperties": true,
+            "maxProperties": 16,
+            "title": "Credential",
+            "type": "object"
+          }
+        },
+        "required": [
+          "attempt_id",
+          "credential"
+        ],
+        "title": "PasskeyLogin",
+        "type": "object"
+      },
+      "PasskeyLoginOptions": {
+        "additionalProperties": false,
+        "description": "Pass `public_key` to `navigator.credentials.get`. Send the answer with `attempt_id`.",
+        "properties": {
+          "attempt_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Attempt Id",
+            "type": "string"
+          },
+          "public_key": {
+            "additionalProperties": true,
+            "title": "Public Key",
+            "type": "object"
+          }
+        },
+        "required": [
+          "attempt_id",
+          "public_key"
+        ],
+        "title": "PasskeyLoginOptions",
+        "type": "object"
+      },
       "PasskeyOptions": {
         "additionalProperties": false,
         "description": "Pass `public_key` to `navigator.credentials.create` or `.get` (after decoding base64url).",
@@ -36728,6 +36776,180 @@
           }
         },
         "summary": "Login Code Verify",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/login/passkey-only/options": {
+      "post": {
+        "description": "Start logging in with a passkey alone: no number or password, the passkey says who.",
+        "operationId": "client_passkey_login_options_client_login_passkey_only_options_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasskeyLoginOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Passkey Login Options",
+        "tags": [
+          "client sign-in"
+        ]
+      }
+    },
+    "/client/login/passkey-only/verify": {
+      "post": {
+        "description": "Finish logging in with a passkey alone. A browser is given a cookie, never the token.",
+        "operationId": "client_passkey_login_verify_client_login_passkey_only_verify_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasskeyLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientSignedIn"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Client Passkey Login Verify",
         "tags": [
           "client sign-in"
         ]

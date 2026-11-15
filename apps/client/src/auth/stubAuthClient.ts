@@ -498,6 +498,19 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       return sessionFor(phone, false);
     },
 
+    canLogInWithPasskey: () => true,
+
+    async logInWithPasskey(): Promise<Session> {
+      await wait();
+      // The demo device holds the passkey of the demo account that has one.
+      const phone = [...accounts].find(([, held]) => held.hasPasskey)?.[0];
+      if (!phone) {
+        throw new AuthError("passkey_failed");
+      }
+      confirmedWith = "passkey";
+      return sessionFor(phone, false);
+    },
+
     async verifyWithAuthenticator(loginId, code): Promise<Session> {
       await wait();
       const phone = logins.get(loginId);
