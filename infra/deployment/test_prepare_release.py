@@ -197,6 +197,15 @@ class PrepareRelease(unittest.TestCase):
             found = read_env(self.out / "runtime" / f"{service}.env")
             self.assertFalse([name for name in sms if name in found])
 
+    def test_the_sms_callback_token_reaches_the_api_only(self):
+        token = "t" * 43
+        pr.prepare(self.out, settings(FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN=token))
+        api = read_env(self.out / "runtime" / "api.env")
+        self.assertEqual(api["FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN"], token)
+        for service in ("worker", "scheduler", "migrate"):
+            found = read_env(self.out / "runtime" / f"{service}.env")
+            self.assertNotIn("FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN", found)
+
     def test_iotec_settings_reach_only_the_processes_that_read_them(self):
         everywhere = {"FINVEST_PAYMENTS_PROVIDER": "iotec", "FINVEST_IOTEC_CURRENCY_CODE": "UGX"}
         api_and_worker = {

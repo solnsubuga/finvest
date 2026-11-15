@@ -215,6 +215,7 @@ In each of the `prod` and `dev` GitHub environments, beside what Terraform write
 | `FINVEST_SMS_AFRICASTALKING_USERNAME` | Variable | The username of the Africa's Talking app (the live app, never `sandbox`, which production refuses). |
 | `FINVEST_SMS_AFRICASTALKING_API_KEY` | Secret | The API key of that app, from the Africa's Talking dashboard (Settings, API Key). Worker only. |
 | `FINVEST_SMS_AFRICASTALKING_SENDER_ID` | Variable, optional | The registered alphanumeric sender name, `FINVEST`, once Africa's Talking has approved it. Unset, Africa's Talking sends from its shared sender. |
+| `FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN` | Secret, optional | `python3 -c "import secrets; print(secrets.token_urlsafe(32))"`. Turns on SMS delivery reports: enter `https://api.finvestug.com/provider-callbacks/sms/africastalking/<token>` in the Africa's Talking dashboard under SMS, Callback URLs, Delivery Reports. Africa's Talking signs nothing, so the token is the only proof a report is theirs. Unset, the address answers 404. API only. |
 | `FINVEST_SMS_AFRICASTALKING_BASE_URL` | Variable, optional | Defaults to `https://api.africastalking.com`. The host's firewall already allows outbound HTTPS. |
 | `FINVEST_SMS_IOTEC_CLIENT_ID` | Variable | The client id from the ioTec Messaging portal (Management, Settings, Configuration), for the fallback. |
 | `FINVEST_SMS_IOTEC_API_KEY` | Secret | The ioTec Messaging API key from the same page. Worker only. |

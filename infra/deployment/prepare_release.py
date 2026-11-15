@@ -233,6 +233,12 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     # event with it; nothing else needs it.
     if optional(env, "RESEND_HOOK_SECRET"):
         api["RESEND_HOOK_SECRET"] = optional(env, "RESEND_HOOK_SECRET")
+    # The secret in the address Africa's Talking posts SMS delivery reports to. Only the API
+    # answers that address.
+    if optional(env, "FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN"):
+        api["FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN"] = optional(
+            env, "FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN"
+        )
     for name in (
         "FINVEST_EMAIL_BACKEND",
         "FINVEST_EMAIL_FROM",

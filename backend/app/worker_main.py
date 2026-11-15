@@ -41,6 +41,7 @@ from app.modules.notifications.delivery import DeliveryJobs
 from app.modules.notifications.email_delivery import DeliveryEventJobs
 from app.modules.notifications.keyed_backfill import KeyedBackfillJobs
 from app.modules.notifications.settings import EmailHashSettings
+from app.modules.notifications.sms_delivery import SmsReportJobs
 from app.modules.organisations.jobs import OrganisationJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.jobs import DepositJobs
@@ -187,6 +188,7 @@ def handlers(
     # Read at start-up, so production refuses to start without the key.
     email_hash_key = EmailHashSettings().key()
     kinds.update(DeliveryEventJobs(database, clock, email_hash_key).handlers())
+    kinds.update(SmsReportJobs(database, clock).handlers())
     kinds.update(KeyedBackfillJobs(database, clock, email_hash_key).handlers())
     kinds.update(
         DeliveryJobs(database, clock, PushSettings().transport(), client_contact).handlers()

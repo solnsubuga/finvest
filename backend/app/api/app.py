@@ -76,7 +76,7 @@ from app.modules.migration import claims_api as migration_claims_api
 from app.modules.notifications import api as notifications_api
 from app.modules.notifications import hooks as notification_hooks
 from app.modules.notifications import suppressions_api
-from app.modules.notifications.settings import EmailHashSettings
+from app.modules.notifications.settings import EmailHashSettings, SmsCallbackSettings
 from app.modules.organisations import api as organisations_api
 from app.modules.overview import api as overview_api
 from app.modules.payments import api as payments_api
@@ -132,6 +132,7 @@ def create_app(
     face_matcher: FaceMatcher | None = None,
     face_quality: FaceQuality | None = None,
     email_hash: EmailHashSettings | None = None,
+    sms_callbacks: SmsCallbackSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
     payout_names: bool | None = None,
 ) -> FastAPI:
@@ -276,6 +277,11 @@ def create_app(
     for router in (*goals_api.routers, *autoinvest_api.routers):
         app.include_router(router)
     app.include_router(notification_hooks.create_router(email_hooks))
+    app.include_router(
+        notification_hooks.create_sms_router(
+            (sms_callbacks or SmsCallbackSettings()).callback_token
+        )
+    )
     app.include_router(payment_routes.create_client_router(collections))
     app.include_router(payment_routes.staff_router)
     for router in (

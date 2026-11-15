@@ -182,6 +182,16 @@ An address on the suppression list gets no email. When a client whose address bo
 - **Two people.** The database refuses a lift decided by its proposer, and one open lift per address.
 - **Hashes only.** Staff transactions may read the suppression list and the events' hashes, delivery, permanence and time. Nothing else about an event, and nothing without a staff actor.
 
+## SMS delivery reports
+
+Africa's Talking reports what happened to each text it sent (sent, submitted, buffered, delivered, failed, rejected, expired). Its dashboard posts each report, as a form, to the address under SMS, Callback URLs, Delivery Reports: `https://api.finvestug.com/provider-callbacks/sms/africastalking/<token>`. For each report:
+
+1. Africa's Talking signs nothing, so the route believes a report only when the token in the address matches `FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN` (32 to 128 letters, digits, `-` or `_`, compared in constant time). A wrong token, or none set, gets 404. The request log keeps the route's template, never the token.
+2. It saves the report in `notification_sms_reports` under its message id and status, and queues `notifications.sms_report`, in one transaction, then answers 204. The same status for the same message is saved once. A status we do not know gets 204 and is dropped. A body we cannot read gets 422, and one over 4 KB gets 413.
+3. The worker sets `delivery`, `delivery_at` and, for a failure, `delivery_reason` (Africa's Talking's one-word reason, such as `UserInBlacklist`) on the text Africa's Talking sent under that id. Delivery moves forward, except that a failure can still turn into a delivery, because Africa's Talking retries and "Success" is the last word. If no text has that id yet, the job retries for ten minutes and then keeps the report as unmatched. A report never matches an email or a text ioTec sent.
+
+Only the id, the status and the reason are kept. The phone number in the report is read past and never stored. A report changes nothing about sending: a failed text is not sent again, and the person asks for a new code as before. ioTec has no delivery callback built.
+
 ## Words
 
 Each event has a title and a body, used in the app, in a push notification and in an email, and a shorter text for SMS. The built-in words are in `domain/wording.py`.
@@ -228,3 +238,4 @@ Staff can tell every client something, such as an office closure, as an `announc
 | `POST /staff/announcements` | Staff with `announcements.send` | Proposes a title and a message, with a reason |
 | `POST /staff/announcements/{id}/decision` | Staff with `announcements.send` | `approved`, which starts sending, or `rejected` with a reason, by someone else, or `withdrawn` by the proposer |
 | `POST /webhooks/resend` | Resend's webhook, by Svix signature | One Resend delivery event. See "Email delivery events". |
+| `POST /provider-callbacks/sms/africastalking/{token}` | Africa's Talking, by the token in the address | One SMS delivery report. See "SMS delivery reports". |

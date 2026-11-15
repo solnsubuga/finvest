@@ -7,12 +7,15 @@ plain hash (`domain/email_events.keyed_hash`). Moving to it is spread over three
 (docs/notifications.md#how-addresses-are-hashed).
 """
 
+import re
 from typing import Self
 
 from pydantic import SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.infrastructure.sealing import key_from_text
+
+CALLBACK_TOKEN = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
 
 
 class EmailHashSettings(BaseSettings):
@@ -51,3 +54,32 @@ class EmailHashSettings(BaseSettings):
         if self.email_hash_key is None:
             return None
         return key_from_text(self.email_hash_key.get_secret_value())
+
+
+class SmsCallbackSettings(BaseSettings):
+    """The token in the address Africa's Talking posts delivery reports to. Read by the API.
+
+    Africa's Talking signs nothing, so the address itself is the secret:
+    `https://api.finvestug.com/provider-callbacks/sms/africastalking/<token>`. The request log
+    keeps the route's template, never the token. Unset, the address answers 404.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="FINVEST_SMS_AFRICASTALKING_", extra="ignore", hide_input_in_errors=True
+    )
+
+    callback_token: SecretStr | None = None
+
+    @field_validator("callback_token", mode="before")
+    @classmethod
+    def blank_is_unset(cls, value: object) -> object:
+        text = value.get_secret_value() if isinstance(value, SecretStr) else value
+        return None if text == "" else value
+
+    @field_validator("callback_token")
+    @classmethod
+    def long_and_plain(cls, value: SecretStr | None) -> SecretStr | None:
+        # Long enough that it cannot be guessed, and only characters that sit in a path as is.
+        if value is not None and not CALLBACK_TOKEN.fullmatch(value.get_secret_value()):
+            raise ValueError("The callback token needs 32 to 128 letters, digits, - or _")
+        return value
