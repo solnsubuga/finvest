@@ -125,16 +125,19 @@ function Preview({ annualRateBps, taxBps, note }: { annualRateBps: number | null
 }
 
 interface NewProductFormProps {
+  /** The type chosen above the form. Without it the form asks for the kind itself. */
+  kind?: ProductKind;
   busy: boolean;
   error: string | null;
   onSubmit(draft: NewProductDraft): void;
 }
 
 /** A new product, sent for a second person to approve. It is created as a draft. */
-export function NewProductForm({ busy, error, onSubmit }: NewProductFormProps) {
+export function NewProductForm({ kind: chosen, busy, error, onSubmit }: NewProductFormProps) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
-  const [kind, setKind] = useState<ProductKind>("treasury_bill");
+  const [picked, setKind] = useState<ProductKind>("treasury_bill");
+  const kind = chosen ?? picked;
   const [currency, setCurrency] = useState<Currency>("UGX");
   const [terms, setTerms] = useState<Terms>({ termText: "", openTerm: false, minimumText: "", interestPaid: "at_maturity" });
   const [rateText, setRateText] = useState("");
@@ -186,15 +189,17 @@ export function NewProductForm({ busy, error, onSubmit }: NewProductFormProps) {
           <Field id="product-name" label="Name" problem={checked ? problems.name : null}>
             <Input id="product-name" value={name} onChange={(event) => setName(event.target.value)} aria-invalid={checked && !!problems.name} />
           </Field>
-          <Field id="product-kind" label="Kind" problem={null}>
-            <select id="product-kind" value={kind} onChange={(event) => setKind(event.target.value as ProductKind)} className={SELECT}>
-              {(Object.keys(KIND_LABELS) as ProductKind[]).map((value) => (
-                <option key={value} value={value}>
-                  {KIND_LABELS[value]}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {chosen ? null : (
+            <Field id="product-kind" label="Kind" problem={null}>
+              <select id="product-kind" value={kind} onChange={(event) => setKind(event.target.value as ProductKind)} className={SELECT}>
+                {(Object.keys(KIND_LABELS) as ProductKind[]).map((value) => (
+                  <option key={value} value={value}>
+                    {KIND_LABELS[value]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field
             id="product-currency"
             label="Currency"

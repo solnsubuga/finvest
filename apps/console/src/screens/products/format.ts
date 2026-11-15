@@ -72,6 +72,20 @@ export const KIND_LABELS: Record<ProductKind, string> = {
   fixed_income: "Fixed income",
 };
 
+/** What staff pick first when adding a product. A Treasury bond is a Bank of Uganda issue with
+ * its own form; the others are products with a term and a rate. */
+export type NewProductType = ProductKind | "treasury_bond";
+
+export const NEW_PRODUCT_TYPES: readonly { value: NewProductType; label: string; hint: string }[] = [
+  { value: "treasury_bill", label: "Treasury bill", hint: "A term in days and a rate before tax, paid at maturity." },
+  { value: "fixed_income", label: "Fixed income", hint: "A term and a rate before tax, paid at maturity or monthly." },
+  { value: "treasury_bond", label: "Treasury bond", hint: "A Bank of Uganda issue: ISIN, coupon, dates and today's price. Coupons every six months." },
+];
+
+export function isNewProductType(value: string | null): value is NewProductType {
+  return NEW_PRODUCT_TYPES.some((type) => type.value === value);
+}
+
 export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
   draft: "Draft",
   live: "Live",

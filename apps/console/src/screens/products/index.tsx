@@ -14,7 +14,10 @@ import {
   formatExact,
   formatTerm,
   INTEREST_PAID_LABELS,
+  isNewProductType,
   KIND_LABELS,
+  NEW_PRODUCT_TYPES,
+  type NewProductType,
   PRODUCT_STATUS_LABELS,
 } from "./format.ts";
 import { BondsError, bondsErrorMessage, type BondsApi } from "./bonds/api.ts";
@@ -53,8 +56,9 @@ interface ProductsScreenProps {
 
 /**
  * The catalogue, and with `products.change` new products and edits sent for a second person.
- * `?new` opens the New product form, `?edit=CODE` the Edit form for one product, and `?new-bond`
- * the New bond form.
+ * `?new` opens the New product form, with `&type=` choosing the type (a Treasury bond has a form
+ * of its own), and `?edit=CODE` the Edit form for one product. `?new-bond` is the same as
+ * `?new&type=treasury_bond`.
  */
 export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: ProductsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
@@ -144,29 +148,51 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi }: Pr
   );
 
   const editing = params.get("edit");
-  if (canChange && bondsApi && params.has("new-bond")) {
+  if (canChange && (params.has("new") || params.has("new-bond"))) {
+    const asked = params.has("new-bond") ? "treasury_bond" : params.get("type");
+    const offered = NEW_PRODUCT_TYPES.filter((type) => type.value !== "treasury_bond" || bondsApi);
+    const type: NewProductType = isNewProductType(asked) && offered.some((t) => t.value === asked) ? asked : "treasury_bill";
+    const chosen = offered.find((t) => t.value === type);
     return (
       <>
         <Back />
-        <PageHeader title="New bond" summary="Enter a Bank of Uganda issue from the auction results. A second person approves it, and it starts as a draft." />
-        <NewBondForm
-          busy={busy === "new-bond"}
-          error={failed?.on === "new-bond" ? failed.message : null}
-          onSubmit={(draft) => void run("new-bond", () => bondsApi.proposeBond(draft), () => void navigate("/products"))}
-        />
-      </>
-    );
-  }
-  if (canChange && params.has("new")) {
-    return (
-      <>
-        <Back />
-        <PageHeader title="New product" summary="One person proposes a product and a second person approves it. It starts as a draft." />
-        <NewProductForm
-          busy={busy === "new"}
-          error={failed?.on === "new" ? failed.message : null}
-          onSubmit={(draft) => void run("new", () => api.proposeNewProduct(draft), () => void navigate("/products"))}
-        />
+        <PageHeader title="New product" summary="Choose the type of product, then fill in its terms. A second person approves it, and it starts as a draft." />
+        <div className="flex max-w-[480px] flex-col gap-1.5">
+          <label htmlFor="new-product-type" className="text-sm font-bold">
+            Type
+          </label>
+          <select
+            id="new-product-type"
+            value={type}
+            aria-describedby="new-product-type-hint"
+            onChange={(event) => void navigate(`/products?new&type=${event.target.value}`, { replace: true })}
+            className="h-[54px] w-full rounded-lg border border-border-strong bg-surface px-3 text-lg font-semibold text-ink"
+          >
+            {offered.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p id="new-product-type-hint" className="m-0 text-sm text-muted">
+            {chosen?.hint}
+          </p>
+        </div>
+        {type === "treasury_bond" && bondsApi ? (
+          <NewBondForm
+            busy={busy === "new-bond"}
+            error={failed?.on === "new-bond" ? failed.message : null}
+            onSubmit={(draft) => void run("new-bond", () => bondsApi.proposeBond(draft), () => void navigate("/products"))}
+          />
+        ) : (
+          <NewProductForm
+            key={type}
+            kind={type === "treasury_bond" ? "treasury_bill" : type}
+            busy={busy === "new"}
+            error={failed?.on === "new" ? failed.message : null}
+            onSubmit={(draft) => void run("new", () => api.proposeNewProduct(draft), () => void navigate("/products"))}
+          />
+        )}
       </>
     );
   }
