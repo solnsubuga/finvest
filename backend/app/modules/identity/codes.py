@@ -297,6 +297,7 @@ class CodeService:
         problem = password_problem(password, (pending.phone, pending.email))
         if problem is not None:
             raise _field("password", problem)
+        await self.identity.refuse_breached(password, "password")
         hashed = await self.hasher.hash(password)
         client_id = push_id(self.clock)
         try:
@@ -562,6 +563,7 @@ class CodeService:
         problem = password_problem(password)
         if problem is not None:
             raise _field("password", problem)
+        await self.identity.refuse_breached(password, "password")
         hashed = await self.hasher.hash(password)
         now = self.clock.now()
         async with self.database.transaction() as session:
@@ -669,6 +671,7 @@ class CodeService:
         problem = password_problem(password, (account.phone, account.email))
         if problem is not None:
             raise _field("password", problem)
+        await self.identity.refuse_breached(password, "password")
         hashed = await self.hasher.hash(password)
         now = self.clock.now()
         client = Actor("client", account.id)

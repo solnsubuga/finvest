@@ -121,6 +121,7 @@ class AuthenticatorService:
         self._require()
         enrolment = await self.enrolments.enrolment(token, address=address)
         check_enrolment_password(enrolment, password)
+        await self.identity.refuse_breached(password, "password")
         await self._count_attempt(enrolment.staff_id)
         async with self.database.transaction() as session:
             pending = (

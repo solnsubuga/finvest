@@ -18,6 +18,7 @@ from app.api.request_id import RequestIdMiddleware
 from app.api.request_log import RequestLogMiddleware
 from app.infrastructure.database import Database
 from app.infrastructure.email.webhooks import ResendHookSettings, WebhookVerifier
+from app.infrastructure.pwned_passwords import PwnedPasswords
 from app.infrastructure.sealing import Sealer
 from app.infrastructure.settings import Settings
 from app.infrastructure.storage import FileStorage, StorageSettings
@@ -50,6 +51,7 @@ from app.modules.identity import (
     terms_api,
 )
 from app.modules.identity.authenticators import AuthenticatorService
+from app.modules.identity.breached import BreachedPasswords
 from app.modules.identity.codes import CodeService
 from app.modules.identity.devices import DeviceMiddleware
 from app.modules.identity.email_checks import EmailCheckService
@@ -135,6 +137,7 @@ def create_app(
     sms_callbacks: SmsCallbackSettings | None = None,
     iotec_wallet: WalletBalances | None = None,
     payout_names: bool | None = None,
+    breached_passwords: BreachedPasswords | None = None,
 ) -> FastAPI:
     owned = database is None
     database = database or Database(settings)
@@ -185,7 +188,9 @@ def create_app(
     hasher = hasher or PasswordHasher(
         memory_kib=settings.password_memory_kib, time_cost=settings.password_time_cost
     )
-    identity = IdentityService(database, clock, settings, hasher)
+    if breached_passwords is None and settings.breach_list_on():
+        breached_passwords = PwnedPasswords(settings.breach_list_url)
+    identity = IdentityService(database, clock, settings, hasher, breached_passwords)
     app.state.identity = identity
     passkeys = PasskeyService(database, clock, settings, identity, hasher)
     app.state.passkeys = passkeys

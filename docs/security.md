@@ -16,7 +16,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | 6 | Caddy sets no request body limit, so an oversize body still reaches the API process before it is refused. | Low | Fixed: `request_body { max_size 1MB }` on the API host (`infra/deployment/Caddyfile`), answered with 413 at the edge. `BODY_LIMITS` is empty today; a path added there with a larger limit needs a matching raise in the Caddyfile. The rehearsal checks the 413. |
 | 7 | `pnpm audit --prod` reports 1 low and 4 moderate advisories (`deepmerge`, `glob`, `minimatch`), all reached through Expo and Jest build and test tooling. None is in code sent to a browser or phone. | Low | Open: clear them when Expo and Jest release fixed versions. Check again before the test. |
 | 8 | Secret scanning with push protection and Dependabot alerts are repository settings, not files. Their state could not be confirmed from the code. | Low | Open: Solo, in the repository's Settings, Code security. |
-| 9 | New passwords are checked against a short built-in list, not a full breached-password list as ASVS 2.1.7 asks. | Low | Open: Solo picks the source, behind `too_common`. Recommended: the top one million passwords from a published breach corpus, kept as a hashed file in the image, so nothing about a password leaves the server. |
+| 9 | New passwords are checked against a short built-in list, not a full breached-password list as ASVS 2.1.7 asks. | Low | Fixed: the owner chose Have I Been Pwned's Pwned Passwords (2026-11-15). A new password is looked up by the first five characters of its SHA-1 digest, so the password never leaves the server; when the service cannot answer, the built-in list stands alone (`app/infrastructure/pwned_passwords.py`). |
 | 10 | Importing statements, pairing by hand, both signatures on a day close, and every step of settling a stranded payout were allowed by `reconciliation.view`, a permission named and given out for seeing. | Medium | Fixed: these need `reconciliation.change`, held by finance and admin (#331). A test checks a view-only role is refused each one. |
 
 `make audit` (pip-audit on the locked backend dependencies) found no known vulnerabilities on 2026-11-13.
@@ -28,7 +28,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | Requirement | Status | Where |
 | --- | --- | --- |
 | Passwords of at least 10 characters with no composition rules | Met | `backend/app/modules/identity/domain/passwords.py`, [rules](rules.md) |
-| New passwords checked against breached passwords | Partly | A built-in list of the most common leaked passwords and patterns. A full breached-password list is finding 9. |
+| New passwords checked against breached passwords | Met | The built-in list of the most common leaked passwords and patterns, then Have I Been Pwned's Pwned Passwords range API where deployed (finding 9). |
 | Passwords hashed with a memory-hard function | Met | Argon2id, 64 MiB, 3 passes ([decisions](decisions.md)) |
 | Attempt limits on password, code and passkey steps, counted before the work is done and shared by every process | Met | `backend/app/infrastructure/throttling.py` |
 | The same answer and the same work for an unknown account and a wrong password | Met | `IdentityService.start_login` |

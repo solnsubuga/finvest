@@ -67,6 +67,11 @@ class Settings(BaseSettings):
     staff_session_idle_minutes: int = Field(default=15, ge=5, le=240)
     staff_session_absolute_hours: int = Field(default=12, ge=1, le=24)
     password_memory_kib: int = Field(default=65_536, ge=19_456, le=1_048_576)
+    # New passwords are also looked up in Have I Been Pwned's breach list (only five characters
+    # of the password's SHA-1 digest leave the API). Unreachable means the built-in list alone.
+    # Unset: on where deployed, off on a developer's machine and in tests (`breach_list_on`).
+    breach_list_check: bool | None = None
+    breach_list_url: str = "https://api.pwnedpasswords.com"
     password_time_cost: int = Field(default=3, ge=2, le=10)
     # Reverse proxies whose X-Forwarded-For names the caller, as IP addresses or networks.
     # Attempt limits key on that address, so the header is believed from nobody else.
@@ -183,6 +188,11 @@ class Settings(BaseSettings):
         if self.database_ssl_root_cert is not None and self.database_ssl_mode != "verify-full":
             raise ValueError("A database root certificate is used only with verify-full TLS")
         return self
+
+    def breach_list_on(self) -> bool:
+        if self.breach_list_check is not None:
+            return self.breach_list_check
+        return self.environment not in (None, "", "local")
 
     def signup_open(self) -> bool:
         if self.client_signup_open is not None:

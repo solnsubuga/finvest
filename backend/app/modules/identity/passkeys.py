@@ -692,6 +692,7 @@ class PasskeyService:
         enrolment = await self.enrolment(token, address=address)
         # Checked before the device's answer is spent, so a weak password costs no retry.
         check_enrolment_password(enrolment, password)
+        await self.identity.refuse_breached(password, "password")
         actor = Actor("staff", enrolment.staff_id)
         row = await self._verify_registration(actor, enrolment.id, credential)
 
