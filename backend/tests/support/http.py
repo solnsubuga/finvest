@@ -22,6 +22,7 @@ from app.shared.actors import Actor
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 CLIENT_ORIGIN = "https://app.finvestug.com"
 STAFF_ORIGIN = "https://admin.finvestug.com"
@@ -39,9 +40,8 @@ class Api:
 
     async def client(self) -> Actor:
         """A new client, signed in on the phone app from here on."""
-        tail = f"{abs(hash(push_id())) % 10**6:06d}{next(_numbers) % 100:02d}"
         client_id = await self.identity.create_client(
-            phone=f"+2567{tail}", email=None, password=PASSWORD
+            phone=unique_phone(), email=None, password=PASSWORD
         )
         actor = Actor("client", client_id)
         await self.as_client(actor)

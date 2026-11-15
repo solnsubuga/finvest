@@ -28,6 +28,7 @@ from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
 from tests.support.ledger import key
 from tests.support.ledger import staff as new_staff
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -90,9 +91,7 @@ def identity(
 
 
 async def active_client(identity: IdentityService) -> str:
-    return await identity.create_client(
-        phone=f"+2567{uuid.uuid4().int % 10**8:08d}", email=None, password=PASSWORD
-    )
+    return await identity.create_client(phone=unique_phone(), email=None, password=PASSWORD)
 
 
 # Sending -----------------------------------------------------------------------------------------

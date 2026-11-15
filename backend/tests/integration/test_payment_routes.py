@@ -49,6 +49,7 @@ from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 from tests.support.payments import FakeCollections, drain, use_bank_account
+from tests.support.phones import unique_phone
 from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
@@ -100,7 +101,7 @@ class Api:
 
     async def client(self, http: httpx.AsyncClient) -> tuple[Actor, str]:
         """A signed-in client who passed the identity check. Returns them and their phone."""
-        phone = "+2567" + "".join(secrets.choice("0123456789") for _ in range(8))
+        phone = unique_phone()
         client_id = await self.identity.create_client(phone=phone, email=None, password=PASSWORD)
         actor = Actor("client", client_id)
         async with self.database.actor_transaction(actor) as session:
