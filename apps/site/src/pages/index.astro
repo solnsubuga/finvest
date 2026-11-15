@@ -171,7 +171,7 @@ const questions = [
           Compare all products <Icon name="arrow" size={18} />
         </a>
       </div>
-      <div class={`grid ${fallback.products.length > 3 ? "grid--4" : "grid--3"}`}>
+      <div class={`grid ${fallback.products.length > 3 ? "grid--4" : "grid--3"}`} data-product-grid={signupUrl}>
         {fallback.products.map((product) => <ProductCard product={product} />)}
       </div>
     </div>
