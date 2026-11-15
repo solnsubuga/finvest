@@ -19,6 +19,7 @@ from app.infrastructure.database import Database
 from app.infrastructure.settings import Settings
 from app.infrastructure.throttling import clear_attempts, reserve_attempts, throttle_key
 from app.modules.identity import trail
+from app.modules.identity.breached import BreachedPasswords, NoBreachList
 from app.modules.identity.devices import current_device
 from app.modules.identity.domain.accounts import InvalidIdentifier, normalize_email, normalize_phone
 from app.modules.identity.domain.devices import UNKNOWN as UNKNOWN_DEVICE
@@ -148,11 +149,17 @@ class IssuedSession:
 
 class IdentityService:
     def __init__(
-        self, database: Database, clock: Clock, settings: Settings, hasher: PasswordHasher
+        self,
+        database: Database,
+        clock: Clock,
+        settings: Settings,
+        hasher: PasswordHasher,
+        breached: BreachedPasswords | None = None,
     ) -> None:
         self.database = database
         self.clock = clock
         self.hasher = hasher
+        self.breached: BreachedPasswords = breached or NoBreachList()
         self._policies: dict[tuple[AccountKind, Transport], SessionPolicy] = {
             ("client", "cookie"): SessionPolicy(
                 timedelta(minutes=settings.client_web_session_idle_minutes),
@@ -168,6 +175,21 @@ class IdentityService:
             ),
         }
 
+    async def refuse_breached(self, password: str, field: str) -> None:
+        """Refuse a new password found in a breach. Call it outside any transaction.
+
+        It only adds a refusal: when the list cannot be asked, the built-in rules stand alone.
+        """
+        if await self.is_breached(password):
+            raise _invalid(field, "leaked_password")
+
+    async def is_breached(self, password: str) -> bool:
+        """Whether a breach list holds the password. False when the list cannot be asked."""
+        if await self.breached.seen(password):
+            logger.info("password_refused", error_code="leaked_password")
+            return True
+        return False
+
     # Accounts
 
     async def create_client(self, *, phone: str, email: str | None, password: str) -> str:
@@ -180,6 +202,7 @@ class IdentityService:
         problem = password_problem(password, (phone, email))
         if problem is not None:
             raise _invalid("password", problem)
+        await self.refuse_breached(password, "password")
         hashed = await self.hasher.hash(password)
         client_id = push_id(self.clock)
         now = self.clock.now()

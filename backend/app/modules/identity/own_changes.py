@@ -75,6 +75,8 @@ class OwnChangeService:
         problem = password_problem(new, (client.phone, client.email))
         if problem is not None:
             raise _field("new_password", problem)
+        if await self.codes.identity.is_breached(new):
+            raise _field("new_password", "leaked_password")
         hashed = await self.hasher.hash(new)
         now = self.clock.now()
         change_id = push_id(self.clock)
