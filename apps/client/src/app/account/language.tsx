@@ -57,7 +57,7 @@ export default function LanguageAndData() {
     return (
       <Screen signedIn>
         <BackButton fallback="/profile" />
-        <SignInAgain returnTo="/account/language" />
+        <SignInAgain returnTo="/account/language" before="download a copy of your data" />
       </Screen>
     );
   }

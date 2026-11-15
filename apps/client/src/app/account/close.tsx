@@ -142,7 +142,7 @@ export default function CloseAccount() {
     return (
       <Screen signedIn>
         <BackButton fallback="/profile" />
-        <SignInAgain returnTo="/account/close" />
+        <SignInAgain returnTo="/account/close" before="close your account" />
       </Screen>
     );
   }

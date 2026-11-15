@@ -122,7 +122,7 @@ export default function CreatePin() {
     return (
       <Screen>
         <Stack.Screen options={{ title: "Create your PIN" }} />
-        <SignInAgain returnTo="/setup/pin" />
+        <SignInAgain returnTo="/setup/pin" before="choose your app PIN" />
       </Screen>
     );
   }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 
 import { ReturnTo, useAuth } from "@/auth/AuthProvider";
-import { AuthError, describeAuthError } from "@/auth/types";
+import { AuthError } from "@/auth/types";
 
 import { Notice } from "./Blocks";
 import { Button } from "./Button";
@@ -14,19 +14,23 @@ export function needsSignInAgain(error: unknown): boolean {
 }
 
 /**
- * Shown in place of a set-up when the session is too old to change how the
- * client signs in. Logging out lands on the welcome screen, ready to log in.
+ * Shown in place of a step that needs a fresh log in, such as changing how the client signs
+ * in or downloading their data. Logging out lands on the welcome screen, ready to log in, and
+ * logging in brings the client back to `returnTo`.
  */
-export function SignInAgain({ returnTo }: { returnTo: ReturnTo }) {
+export function SignInAgain({ returnTo, before = "change how you sign in" }: { returnTo: ReturnTo; before?: string }) {
   const { client, setSession, setReturnTo } = useAuth();
   const [busy, setBusy] = useState(false);
 
   const logOut = async () => {
     setBusy(true);
-    setReturnTo(returnTo);
     try {
       await client.signOut();
     } finally {
+      // Set together with the end of the session, in one update. Set before, while the client
+      // was still signed in, the screen's own layout took it as already spent and dropped it,
+      // so the log in went Home.
+      setReturnTo(returnTo);
       setSession(null);
     }
   };
@@ -34,7 +38,7 @@ export function SignInAgain({ returnTo }: { returnTo: ReturnTo }) {
   return (
     <View style={{ marginTop: 28, gap: 12 }}>
       <Title>Log in again first</Title>
-      <Notice tone="warning">{describeAuthError(new AuthError("sign_in_again"))}</Notice>
+      <Notice tone="warning">{`For your safety, log in again before you ${before}. We will bring you straight back here.`}</Notice>
       <Button label="Log in again" height={52} onPress={logOut} loading={busy} testID="sign-in-again" />
     </View>
   );
