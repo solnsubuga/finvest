@@ -110,3 +110,13 @@ export function earnedLabel(investment: { daysEarned: number; termDays: number |
   }
   return `${investment.daysEarned} days earned`;
 }
+
+/**
+ * When a paid investment starts earning: the day after its start date, which is the Kampala
+ * business day its payment was confirmed, so a weekend payment does not earn tomorrow.
+ */
+export function earningFrom(startDate: string | null): string {
+  if (!startDate) return "starts earning the day after the business day it was paid";
+  const next = new Date(Date.parse(`${startDate}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  return `starts earning on ${formatDay(next)}`;
+}

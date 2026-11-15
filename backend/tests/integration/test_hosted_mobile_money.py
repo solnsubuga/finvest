@@ -78,7 +78,7 @@ async def test_pesapal_collects_mobile_money_on_its_page_from_the_clients_own_nu
         ("client.awaiting_start", -AMOUNT),
         ("pesapal.balance", AMOUNT),
     ]
-    assert setup.fake.sends == 1
+    assert setup.fake.sends_for(deposit_id) == 1
 
 
 async def test_a_payment_from_another_number_is_held_for_staff_and_not_credited(
