@@ -43,7 +43,7 @@ def test_a_confirmed_matched_transfer_moves_to_another_clients_waiting_investmen
 
 @pytest.mark.parametrize("method", [Method.MTN, Method.AIRTEL])
 def test_mobile_money_is_never_moved_to_another_client(method: Method) -> None:
-    # It came from the first client's own number. It goes back there as a refund.
+    # It goes back to the number that paid it, as a refund.
     assert refusal(replace(GOOD, method=method)) is Refusal.MOBILE_MONEY_REFUND_INSTEAD
 
 

@@ -172,7 +172,7 @@ def key() -> dict[str, str]:
     return {"Idempotency-Key": f"key-{push_id()}"}
 
 
-async def test_a_client_pays_by_mobile_money_from_their_own_number(api: Api) -> None:
+async def test_a_client_pays_by_mobile_money_and_may_name_the_number(api: Api) -> None:
     async with api.http() as http:
         investment_id = push_id()
         refused = await http.post(
@@ -200,13 +200,21 @@ async def test_a_client_pays_by_mobile_money_from_their_own_number(api: Api) -> 
         assert body["amount"] == {"minor": investment.amount.minor, "currency": "UGX"}
         assert body["method"] == "mtn" and body["status"] == "created"
         assert body["payer"].startswith("+256 ") and phone not in body["payer"]
-        # The number is the account's own. The request cannot name one.
+        # Any number may pay, but a number that is not a Ugandan mobile one is refused first.
+        invalid = await http.post(
+            f"/client/investments/{investment.id}/payments/mobile-money",
+            json={"network": "mtn", "phone": "12345"},
+            headers=key(),
+        )
+        assert invalid.status_code == 422
+        assert invalid.json()["error"]["fields"][0]["code"] == "invalid_phone"
+        # Another number is accepted, but the investment already has a payment under way.
         other = await http.post(
             f"/client/investments/{investment.id}/payments/mobile-money",
             json={"network": "mtn", "phone": "+256772000000"},
             headers=key(),
         )
-        assert other.status_code == 422
+        assert other.status_code == 409
         again = await http.post(
             f"/client/investments/{investment.id}/payments/mobile-money",
             json={"network": "airtel"},

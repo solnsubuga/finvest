@@ -189,6 +189,10 @@ export function toPaymentError(error: unknown, call: Call = "read"): PaymentErro
       return new PaymentError("key_reused");
     case "validation_failed": {
       const fields = error.fields.map((problem) => problem.field);
+      // Too many prompts to other people's numbers today: the client's own still works.
+      if (error.fields.some((problem) => problem.code === "other_number_limit")) {
+        return new PaymentError("other_number_limit");
+      }
       if (fields.some((field) => field.endsWith("receipt"))) return new PaymentError("receipt_not_accepted");
       // A bank receipt for another amount than the investment's would be refused by staff later.
       if (fields.some((field) => field.endsWith("amount_minor"))) return new PaymentError("amount_differs");
@@ -270,7 +274,7 @@ export function createApiPaymentsClient(): PaymentsClient {
       try {
         view = await api("POST /client/investments/{investment_id}/payments/mobile-money", {
           params: { investment_id: request.payableId },
-          body: { network: request.network },
+          body: { network: request.network, phone: request.payer },
           idempotencyKey: request.idempotencyKey,
         });
       } catch (error) {

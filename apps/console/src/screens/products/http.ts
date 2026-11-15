@@ -42,6 +42,8 @@ export function toProduct(json: StaffProductOut): Product {
     status: json.status,
     rate: json.rate ? toRate(json.rate) : null,
     nextRate: json.next_rate ? toRate(json.next_rate) : null,
+    typeCode: json.type_code || undefined,
+    typeName: json.type_name || undefined,
   };
 }
 
@@ -112,6 +114,9 @@ const FIELD_CODES: readonly CatalogueErrorCode[] = [
   "no_rate",
   "currency_not_open",
   "product_changed",
+  "unknown_type",
+  "wrong_model",
+  "type_retired",
 ];
 
 export function toCatalogueError(error: unknown): CatalogueError {
@@ -199,6 +204,7 @@ export function createHttpCatalogueApi(http: Http): CatalogueApi {
             annual_rate_bps: draft.annualRateBps,
             tax_bps: draft.taxBps,
             reason: draft.reason,
+            type_code: draft.typeCode,
           }),
         ),
       ),

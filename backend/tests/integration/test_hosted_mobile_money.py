@@ -6,8 +6,12 @@ mobile money payment goes to Pesapal whatever Settings say.
 """
 
 import pytest
+from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 
+from app.modules.payments import cards
 from app.modules.payments.domain.deposits import DepositStatus as S
+from app.shared.actors import SYSTEM
 from tests.integration.test_card_deposits import (
     Setup,
     as_deposit,
@@ -17,7 +21,7 @@ from tests.integration.test_card_deposits import (
 )
 from tests.integration.test_card_deposits import setup as card_setup  # noqa: F401 - a fixture
 from tests.support.investments import request as request_investment
-from tests.support.payments import drain, reload
+from tests.support.payments import drain
 from tests.support.settings import set_setting
 
 pytestmark = pytest.mark.integration
@@ -55,7 +59,7 @@ def pay_from(setup: Setup, deposit_id: str, phone: str) -> None:
     order["payment_account"] = phone.removeprefix("+")
 
 
-async def test_pesapal_collects_mobile_money_on_its_page_from_the_clients_own_number(
+async def test_pesapal_collects_mobile_money_on_its_page(
     setup: Setup,
 ) -> None:
     await set_setting(
@@ -78,25 +82,69 @@ async def test_pesapal_collects_mobile_money_on_its_page_from_the_clients_own_nu
         ("client.awaiting_start", -AMOUNT),
         ("pesapal.balance", AMOUNT),
     ]
-    assert setup.fake.sends == 1
+    assert setup.fake.sends_for(deposit_id) == 1
 
 
-async def test_a_payment_from_another_number_is_held_for_staff_and_not_credited(
-    setup: Setup,
-) -> None:
+async def test_a_payment_from_another_number_counts_and_keeps_who_paid(setup: Setup) -> None:
+    # The owner accepts money from any payer (2026-11-15): a relative's number pays.
     await set_setting(
         setup.database, "mobile_money_collector", {"provider": "pesapal"}, setup.clock
     )
     deposit_id, _ = await start(setup)
     deposit = await as_deposit(setup, deposit_id)
     pay_from(setup, deposit_id, "+256701999999")
-    held = await until(setup, deposit, S.UNCERTAIN, S.CONFIRMED)
-    assert (held.status, held.code) == (S.UNCERTAIN, "payer_differs")
-    assert await entry_lines(setup.system, deposit_id) == []
-    # Reading it again changes nothing: it is for staff now.
-    setup.clock.advance(seconds=3600)
-    await drain(setup.worker)
-    assert (await reload(setup.system, deposit)).status is S.UNCERTAIN
+    confirmed = await until(setup, deposit, S.CONFIRMED, S.FAILED, S.UNCERTAIN)
+    assert (confirmed.status, confirmed.code) == (S.CONFIRMED, None)
+    assert await entry_lines(setup.system, deposit_id) == [
+        ("client.awaiting_start", -AMOUNT),
+        ("pesapal.balance", AMOUNT),
+    ]
+    # The client's own number stays the deposit's; the order keeps the number that paid.
+    assert confirmed.payer_msisdn == deposit.payer_msisdn
+    async with setup.system.actor_transaction(SYSTEM) as session:
+        order = await cards.find_order(session, deposit_id)
+    assert order is not None and order.paid_from == "+256701999999"
+    # It is kept once and never changed.
+    with pytest.raises(DBAPIError, match="never changed"):
+        async with setup.system.actor_transaction(SYSTEM) as session:
+            await session.execute(
+                text(
+                    "UPDATE payment_card_orders SET paid_from_msisdn = '+256772000000' "
+                    "WHERE deposit_id = :id"
+                ),
+                {"id": deposit_id},
+            )
+
+
+async def test_a_payment_whose_payer_is_not_named_still_counts(setup: Setup) -> None:
+    await set_setting(
+        setup.database, "mobile_money_collector", {"provider": "pesapal"}, setup.clock
+    )
+    deposit_id, _ = await start(setup)
+    deposit = await as_deposit(setup, deposit_id)
+    setup.fake.pay(deposit_id)
+    setup.fake.orders[setup.fake.tracking_id(deposit_id)]["payment_method"] = "MTN"
+    confirmed = await until(setup, deposit, S.CONFIRMED, S.FAILED, S.UNCERTAIN)
+    assert confirmed.status is S.CONFIRMED
+    async with setup.system.actor_transaction(SYSTEM) as session:
+        order = await cards.find_order(session, deposit_id)
+    assert order is not None and order.paid_from is None
+
+
+async def test_the_client_may_name_another_number_to_pay_from(setup: Setup) -> None:
+    await set_setting(
+        setup.database, "mobile_money_collector", {"provider": "pesapal"}, setup.clock
+    )
+    async with setup.http() as http:
+        client = await setup.client(http)
+        investment = await request_investment(setup.database, client, setup.clock)
+        started = await http.post(
+            f"/client/investments/{investment.id}/payments/mobile-money",
+            json={"network": "airtel", "phone": "0701 999 999"},
+            headers=key(),
+        )
+    assert started.status_code == 201, started.text
+    assert (await as_deposit(setup, started.json()["id"])).payer_msisdn == "+256701999999"
 
 
 async def test_with_no_iotec_running_mobile_money_falls_back_to_pesapal(setup: Setup) -> None:

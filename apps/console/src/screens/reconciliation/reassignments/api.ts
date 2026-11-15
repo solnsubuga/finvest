@@ -113,7 +113,7 @@ export class ReassignmentError extends Error {
 /** What a refusal means, worded for staff. Used for the live check on a proposal too. */
 export const REFUSALS: Record<Refusal, string> = {
   mobile_money_refund_instead:
-    "This is a mobile money payment. It came from the first client's own number, so it cannot be credited to anyone else. Refund it to that number instead.",
+    "This is a mobile money payment, so it cannot be credited to anyone else. Refund it to the number that paid it instead.",
   not_confirmed: "This payment is not confirmed, so no money was credited. Check it on the bank transfers list instead.",
   not_for_an_investment: "This payment is not for an investment.",
   not_matched_to_a_line: "This payment was not matched to a bank statement line by two people, so there is no evidence to move it on.",

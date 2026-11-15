@@ -1,7 +1,7 @@
 """Bond maturity: each holding repaid its face value and last coupon, once.
 
 Revision ID: 0494_bond_maturity
-Revises: 0493_product_types
+Revises: 0485_payment_payer_names
 
 * `bond_redemptions`: one row per holding, written by the worker on or after its issue's
   maturity date, for an active holding, with its face value and cost exactly as bought, the
@@ -24,7 +24,7 @@ from types import ModuleType
 from alembic import op
 
 revision: str = "0494_bond_maturity"
-down_revision: str | None = "0493_product_types"
+down_revision: str | None = "0485_payment_payer_names"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

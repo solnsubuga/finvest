@@ -127,13 +127,15 @@ function Preview({ annualRateBps, taxBps, note }: { annualRateBps: number | null
 interface NewProductFormProps {
   /** The type chosen above the form. Without it the form asks for the kind itself. */
   kind?: ProductKind;
+  /** The chosen type's usual tax, which the tax field starts with. */
+  defaultTaxBps?: number;
   busy: boolean;
   error: string | null;
   onSubmit(draft: NewProductDraft): void;
 }
 
 /** A new product, sent for a second person to approve. It is created as a draft. */
-export function NewProductForm({ kind: chosen, busy, error, onSubmit }: NewProductFormProps) {
+export function NewProductForm({ kind: chosen, defaultTaxBps = 1500, busy, error, onSubmit }: NewProductFormProps) {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [picked, setKind] = useState<ProductKind>("treasury_bill");
@@ -141,7 +143,7 @@ export function NewProductForm({ kind: chosen, busy, error, onSubmit }: NewProdu
   const [currency, setCurrency] = useState<Currency>("UGX");
   const [terms, setTerms] = useState<Terms>({ termText: "", openTerm: false, minimumText: "", interestPaid: "at_maturity" });
   const [rateText, setRateText] = useState("");
-  const [taxText, setTaxText] = useState("15");
+  const [taxText, setTaxText] = useState(formatBps(defaultTaxBps).replace("%", ""));
   const [reason, setReason] = useState("");
   const [checked, setChecked] = useState(false);
 

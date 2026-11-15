@@ -77,6 +77,8 @@ export interface NewBondDraft {
   faceStepMinor: number;
   price: Price;
   reason: string;
+  /** The product type chosen on the New product page. Without it, Treasury bond. */
+  typeCode?: string | undefined;
 }
 
 export interface BondsApi {
@@ -104,6 +106,9 @@ export type BondsErrorCode =
   | "matured"
   | "currency_not_open"
   | "stale"
+  | "unknown_type"
+  | "wrong_model"
+  | "type_retired"
   | "invalid"
   | "conflict"
   | "not_found"
@@ -134,6 +139,9 @@ const MESSAGES: Record<BondsErrorCode, string> = {
   matured: "This bond is in its last coupon period, so clients can no longer buy it.",
   currency_not_open: "Finvest cannot take payments or pay out in this currency yet.",
   stale: "The bond changed after this was proposed. Propose it again.",
+  unknown_type: "That product type does not exist. Reload the page and choose the type again.",
+  wrong_model: "That product type is not a bond type. Choose the type again.",
+  type_retired: "That product type is retired, so no new bonds of it can be added.",
   invalid: "Finvest did not accept these details. Check the ISIN, dates and amounts.",
   conflict: "Someone else has decided this change, or another change for this bond is waiting. The list has been reloaded.",
   not_found: "This bond or change no longer exists.",

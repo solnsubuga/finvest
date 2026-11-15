@@ -2,8 +2,8 @@
 the provider's own record.
 
 A mobile money payment that Pesapal collects (Settings, `mobile_money_collector`) is an order
-on the same page, with no charge, and the client's own number as its payer. It is confirmed
-only when the provider names that number as the one that paid.
+on the same page, with no charge, and the number the client gave as its payer. Any number may
+pay on the page; the one the provider names as having paid is kept on the order.
 
 Nothing here calls the card provider. `request_card_deposit` saves the deposit, its order and a
 job to open the order, in the client's transaction. The job handlers in `card_jobs.py` call the
@@ -73,7 +73,8 @@ _INSERT_ORDER = text(
 )
 _SELECT_ORDER = text(
     "SELECT deposit_id, charge_minor, total_minor, currency, page_url, card_brand, "
-    "card_last_four, confirmation_code FROM payment_card_orders WHERE deposit_id = :id"
+    "card_last_four, confirmation_code, paid_from_msisdn FROM payment_card_orders "
+    "WHERE deposit_id = :id"
 )
 _SAVE_PAGE = text(
     "UPDATE payment_card_orders SET page_url = :page_url "
@@ -82,7 +83,8 @@ _SAVE_PAGE = text(
 _SAVE_CARD = text(
     "UPDATE payment_card_orders SET card_brand = coalesce(card_brand, :brand), "
     "card_last_four = coalesce(card_last_four, :last_four), "
-    "confirmation_code = coalesce(confirmation_code, :confirmation_code) WHERE deposit_id = :id"
+    "confirmation_code = coalesce(confirmation_code, :confirmation_code), "
+    "paid_from_msisdn = coalesce(paid_from_msisdn, :paid_from) WHERE deposit_id = :id"
 )
 # Every card payment of the client's in the period that has not failed, at what the card paid.
 _PAID_BY_CARD = text(
@@ -102,6 +104,8 @@ class CardOrder:
     # The provider's page, while the payer may still pay on it.
     page_url: str | None
     card: CardDetails | None
+    # For mobile money, the number the provider says paid, once confirmed. It may be anyone's.
+    paid_from: str | None = None
 
 
 def provider_balance(provider: str, currency: Currency = Currency.UGX) -> AccountSpec:
@@ -288,21 +292,21 @@ async def request_hosted_mobile_money(
     request: service.DepositRequest,
     *,
     idempotency_key: str,
-    account_phone: str,
     provider: str,
     clock: Clock,
 ) -> service.Deposit:
     """Save a client's mobile money payment to be paid on the provider's hosted page.
 
-    The same checks as `service.request_deposit`: the payer is the number on the client's own
-    account, the network's pay in must be open, and the investment takes one live deposit. The
-    order has no charge: Finvest bears the provider's mobile money fee. The worker opens it and
-    saves the page, as for a card. It shares the mobile money request's idempotency operation,
-    so a key repeated after the collector changed on Settings returns the deposit it made.
+    The same checks as `service.request_deposit`: the payer's number is the one the client gave
+    (on the page any number may pay), the network's pay in must be open, and the investment
+    takes one live deposit. The order has no charge: Finvest bears the provider's mobile money
+    fee. The worker opens it and saves the page, as for a card. It shares the mobile money
+    request's idempotency operation, so a key repeated after the collector changed on Settings
+    returns the deposit it made.
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
-    msisdn, network = service.checked_mobile_money(request, account_phone)
+    msisdn, network = service.checked_mobile_money(request)
     client_id = actor.id
     now = clock.now()
 
@@ -387,6 +391,7 @@ async def find_order(session: AsyncSession, deposit_id: str) -> CardOrder | None
         total=Money(int(row.total_minor), currency),
         page_url=row.page_url,
         card=card,
+        paid_from=row.paid_from_msisdn,
     )
 
 
@@ -452,19 +457,12 @@ async def settle_card_deposit(
     order = await find_order(session, deposit_id)
     if order is None:
         raise ApplicationError("not_found")
-    # A mobile money payment must come from the client's own number.
-    payer = deposit.payer_msisdn if deposit.method is not Method.CARD else None
-    move = after_card_status(
-        deposit.status,
-        reading,
-        expected=order.total,
-        credited=deposit.amount,
-        payer=payer,
-        paid_from=paid_from,
-    )
+    move = after_card_status(deposit.status, reading, expected=order.total, credited=deposit.amount)
     if move is None:
         return deposit
-    return await apply_card_move(session, deposit, order, move, details, clock, cause=cause)
+    return await apply_card_move(
+        session, deposit, order, move, details, clock, cause=cause, paid_from=paid_from
+    )
 
 
 async def apply_card_move(
@@ -476,18 +474,21 @@ async def apply_card_move(
     clock: Clock,
     *,
     cause: service.Cause,
+    paid_from: str | None = None,
 ) -> service.Deposit:
-    if move.status is DepositStatus.CONFIRMED and details is not None:
+    card = deposit.method is Method.CARD
+    if move.status is DepositStatus.CONFIRMED and (details is not None or not card):
         # Mobile money keeps only the provider's code, which a refund is asked for by: its
-        # "brand" and "last four" would be a network and part of a phone number.
-        card = deposit.method is Method.CARD
+        # "brand" and "last four" would be a network and part of a phone number. It keeps the
+        # number that paid instead, for screening and audit, which may not be the client's.
         await session.execute(
             _SAVE_CARD,
             {
                 "id": deposit.id,
-                "brand": details.brand if card else None,
-                "last_four": details.last_four if card else None,
-                "confirmation_code": details.confirmation_code,
+                "brand": details.brand if card and details else None,
+                "last_four": details.last_four if card and details else None,
+                "confirmation_code": details.confirmation_code if details else None,
+                "paid_from": None if card else paid_from,
             },
         )
     return await service.apply_move(
@@ -500,4 +501,5 @@ async def apply_card_move(
         if move.post is not None
         else None,
         recovered_charge=order.charge if move.post is not None else None,
+        paid_from=None if card else paid_from,
     )

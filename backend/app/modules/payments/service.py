@@ -39,8 +39,12 @@ from app.modules.ledger.domain.entries import (
     debit,
 )
 from app.modules.notifications import contract as notifications
+from app.modules.payments import payer_names
+from app.modules.payments.domain.cards import HOSTED_PROVIDERS
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
+    OTHER_NUMBER_PERIOD,
+    OTHER_NUMBER_PROMPTS,
     UNSENT_EXPIRY,
     DepositStatus,
     InvalidDeposit,
@@ -205,20 +209,19 @@ _INSERT_NOTICE = text(
 )
 
 
-def checked_mobile_money(request: DepositRequest, account_phone: str) -> tuple[str, str]:
+def checked_mobile_money(request: DepositRequest) -> tuple[str, str]:
     """The payer's number and the network of a client's mobile money request, or the refusal.
 
-    The payer must be `account_phone`, the number on the client's own account, from their
-    session and never from what they sent.
+    The payer may be any Ugandan mobile number, not only the one on the client's account: the
+    owner accepts money from any payer (2026-11-15). The payment is still the client's, matched
+    to them by the deposit, and the number that paid is kept on it.
     """
     try:
         check_mobile_money_amount(request.amount)
         msisdn = normalise_msisdn(request.phone)
         validate_push_id(request.purpose_id)
-        if msisdn != normalise_msisdn(account_phone):
-            raise InvalidDeposit("not_account_phone")
     except InvalidDeposit as error:
-        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
+        field = "phone" if error.code == "invalid_phone" else "amount"
         raise ApplicationError(
             "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
         ) from None
@@ -248,9 +251,9 @@ async def request_deposit(
     request: DepositRequest,
     *,
     idempotency_key: str,
-    account_phone: str,
     provider: str,
     clock: Clock,
+    account_phone: str | None = None,
 ) -> Deposit:
     """Save a client's mobile money payment for one investment or goal, and a job to send it.
 
@@ -258,9 +261,9 @@ async def request_deposit(
     provider to prompt the payer. Calling again with the same key returns the same deposit and
     creates nothing. The same key with different details is refused.
 
-    `account_phone` is the number on the client's own account, from their session and never
-    from what they sent. The payer must be that number: a payment from a number registered to
-    someone else is refused.
+    The payer is the number the client gave, theirs or anyone else's (`checked_mobile_money`).
+    `account_phone`, the number on the client's account from their session, limits prompts to
+    other numbers: at most `OTHER_NUMBER_PROMPTS` a day, refused with `other_number_limit`.
 
     An investment takes one deposit. While one is open, uncertain or confirmed, a request with
     a new key raises `DepositExists` and no second prompt is sent. A failed deposit does not
@@ -268,7 +271,7 @@ async def request_deposit(
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
-    msisdn, _ = checked_mobile_money(request, account_phone)
+    msisdn, _ = checked_mobile_money(request)
     client_id = actor.id
     now = clock.now()
 
@@ -280,6 +283,8 @@ async def request_deposit(
             raise ApplicationError(
                 "unavailable", fields=[FieldProblem(field_path=["network"], code="channel_paused")]
             )
+        if account_phone is not None and msisdn != normalise_msisdn(account_phone):
+            await _limit_other_numbers(session, client_id, normalise_msisdn(account_phone), now)
         deposit_id = push_id()
         await insert_deposit(
             session,
@@ -325,6 +330,35 @@ async def request_deposit(
     if not outcome.replayed:
         logger.info("deposit_requested", deposit_id=deposit_id)
     return await get_deposit(session, deposit_id)
+
+
+_CLIENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
+# The client's phone prompts to numbers other than the one on their account, in the period. A
+# payment on a hosted page is not a prompt we send, so it does not count.
+_OTHER_NUMBER_PROMPTS = text(
+    "SELECT count(*) FROM payment_deposits WHERE client_id = :client_id "
+    "AND method IN ('mtn', 'airtel') AND payer_msisdn <> :account AND created_at > :since "
+    "AND provider NOT IN ('pesapal', 'card_sandbox')"
+)
+
+
+async def _limit_other_numbers(
+    session: AsyncSession, client_id: str, account: str, now: datetime
+) -> None:
+    """Refuse a prompt to another number once the client has had `OTHER_NUMBER_PROMPTS` today.
+
+    Taken under a lock on the client, so two requests at once cannot both slip under it.
+    """
+    await session.execute(_CLIENT_LOCK, {"lock": f"payments.other-number:{client_id}"})
+    count = await session.scalar(
+        _OTHER_NUMBER_PROMPTS,
+        {"client_id": client_id, "account": account, "since": now - OTHER_NUMBER_PERIOD},
+    )
+    if int(count or 0) >= OTHER_NUMBER_PROMPTS:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["phone"], code="other_number_limit")],
+        )
 
 
 async def request_system_deposit(
@@ -688,6 +722,7 @@ async def apply_move(
     cause: Cause,
     paid_into: AccountSpec | None = None,
     recovered_charge: Money | None = None,
+    paid_from: str | None = None,
 ) -> Deposit:
     """Record `move` on a deposit the caller has locked. Posts to the ledger if it confirms.
 
@@ -695,6 +730,10 @@ async def apply_move(
     the provider's wallet is used. A bank transfer must name the bank account it was found in,
     and a card payment the card provider's balance. `recovered_charge` is a card charge the
     client paid on top: it arrives with the payment and is Finvest's income, not the client's.
+
+    A confirmed mobile money payment from a number other than the client's own asks for the
+    name behind that number (`payer_names`). On a hosted page the number is `paid_from`, the
+    one the provider says paid; otherwise it is the number that was prompted.
     """
     if not can_move(deposit.status, move.status):
         raise RuntimeError(f"A deposit cannot move from {deposit.status} to {move.status}")
@@ -727,6 +766,15 @@ async def apply_move(
         await _tell_client(session, deposit, move.status, now)
     if move.status is DepositStatus.CONFIRMED:
         await publish_confirmed(session, deposit, now)
+        if deposit.method in (Method.MTN, Method.AIRTEL):
+            hosted = deposit.provider in HOSTED_PROVIDERS
+            await payer_names.ask_if_another(
+                session,
+                deposit.id,
+                deposit.client_id,
+                paid_from if hosted else deposit.payer_msisdn,
+                clock,
+            )
     logger.info(
         "deposit_moved", deposit_id=deposit.id, status=move.status.value, error_code=move.code
     )

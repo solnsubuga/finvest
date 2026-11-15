@@ -58,7 +58,9 @@ HASHER = PasswordHasher(memory_kib=19_456, time_cost=2)
 @dataclass
 class FakePesapal:
     orders: dict[str, dict[str, object]] = field(default_factory=dict)
-    sends: int = 0
+    # The merchant reference (the deposit's ID) of each order sent, in order. Tests share one
+    # database, so a drain can also send a deposit another test left behind: count by deposit.
+    sent: list[str] = field(default_factory=list)
     cancels: int = 0
     registrations: int = 0
     lose_the_answer: bool = False
@@ -72,6 +74,9 @@ class FakePesapal:
                 order["confirmation_code"] = "PSP" + secrets.token_hex(4)
                 if amount is not None:
                     order["amount"] = amount
+
+    def sends_for(self, deposit_id: str) -> int:
+        return self.sent.count(deposit_id)
 
     def tracking_id(self, deposit_id: str) -> str:
         return next(
@@ -94,8 +99,8 @@ class FakePesapal:
             assert body["url"].endswith(f"/provider-callbacks/cards/pesapal/{IPN_TOKEN}")
             return httpx.Response(200, json={"ipn_id": "ipn-1", "status": "200"})
         if path == "/api/Transactions/SubmitOrderRequest":
-            self.sends += 1
             body = json.loads(request.content, parse_float=Decimal)
+            self.sent.append(body["id"])
             assert body["notification_id"] == "ipn-1"
             reference = str(uuid.uuid4())
             self.orders[reference] = {
@@ -266,7 +271,7 @@ async def test_a_card_payment_is_paid_on_pesapal_and_confirmed_only_by_its_statu
         waiting = (await http.get(f"/client/payments/{body['id']}")).json()
         assert waiting["status"] == "awaiting_approval"
         assert waiting["card_page_url"].startswith("https://pay.pesapal.test/")
-        assert setup.fake.sends == 1 and setup.fake.registrations == 1
+        assert setup.fake.sends_for(body["id"]) == 1 and setup.fake.registrations == 1
         deposit = await as_deposit(setup, body["id"])
         tracking = setup.fake.tracking_id(deposit.id)
 
@@ -306,7 +311,7 @@ async def test_a_card_payment_is_paid_on_pesapal_and_confirmed_only_by_its_statu
         assert (await http.get(url, params=notice)).status_code == 200
         await drain(setup.worker)
         assert len(await entry_lines(setup.system, deposit.id)) == 3
-    assert setup.fake.sends == 1
+    assert setup.fake.sends_for(deposit.id) == 1
 
 
 async def test_a_lost_answer_fails_the_payment_and_is_never_sent_again(setup: Setup) -> None:
@@ -324,7 +329,7 @@ async def test_a_lost_answer_fails_the_payment_and_is_never_sent_again(setup: Se
         assert failed.status is S.FAILED and failed.code == "provider_unavailable"
         setup.clock.advance(seconds=600)
         await drain(setup.worker)
-        assert setup.fake.sends == 1
+        assert setup.fake.sends_for(deposit.id) == 1
         # The investment is free to be paid again.
         setup.fake.lose_the_answer = False
         again = await http.post(f"/client/investments/{investment.id}/payments/card", headers=key())
@@ -443,6 +448,8 @@ async def test_a_card_order_cannot_be_changed_once_filled_in(
         "UPDATE payment_card_orders SET page_url = 'https://elsewhere.test/' "
         "WHERE deposit_id = :id",
         "UPDATE payment_card_orders SET charge_minor = 0 WHERE deposit_id = :id",
+        # Only a mobile money order keeps the number that paid.
+        "UPDATE payment_card_orders SET paid_from_msisdn = '+256701999999' WHERE deposit_id = :id",
         "DELETE FROM payment_card_orders WHERE deposit_id = :id",
     ):
         with pytest.raises(DBAPIError, match=r"card order|does not allow|permission denied"):

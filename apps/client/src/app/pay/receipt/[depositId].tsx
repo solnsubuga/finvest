@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -8,6 +8,8 @@ import { DocumentLink, useDocumentFor } from "@/documents/DocumentLink";
 import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Txt } from "@/components/Txt";
+import { earningFrom } from "@/investing/format";
+import { useInvesting } from "@/investing/InvestingProvider";
 import { formatDateTime, formatMoney, networkName, networkProduct } from "@/payments/format";
 import { goalSavingFor } from "@/payments/payingFor";
 import { Detail, DetailList, Loading, ShareNote } from "@/payments/Parts";
@@ -25,6 +27,26 @@ export default function Receipt() {
   // A saving goes back to its goal, where the client was. Anything else goes Home.
   const done = () => (goal ? router.dismissTo(`/goals/${goal.goalId}`) : router.replace("/"));
   const [shared, setShared] = useState<ShareOutcome | null>(null);
+  // The investment starts on the Kampala business day its payment was confirmed, and earns
+  // from the day after, so a weekend payment does not earn tomorrow.
+  const investing = useInvesting();
+  const [startDate, setStartDate] = useState<string | null>(null);
+  const investmentId = deposit?.status === "confirmed" ? deposit.payable.id : null;
+  useEffect(() => {
+    if (!investmentId) return;
+    let live = true;
+    investing
+      .getInvestment(investmentId)
+      .then((investment) => {
+        if (live) setStartDate(investment.startDate);
+      })
+      .catch(() => {
+        // The receipt stands without it, and says so in general words.
+      });
+    return () => {
+      live = false;
+    };
+  }, [investing, investmentId]);
 
   if (missing) {
     return (
@@ -55,6 +77,7 @@ export default function Receipt() {
   }
 
   const network = networkName[deposit.network];
+  const earning = earningFrom(startDate);
   // A saving's title already leads with its goal ("Daniel's school fees: 91 Day Treasury Bill").
   const product = goal && deposit.payable.title.startsWith(`${goal.goalName}: `)
     ? deposit.payable.title.slice(goal.goalName.length + 2)
@@ -121,8 +144,8 @@ export default function Receipt() {
       <View style={{ marginTop: 20 }}>
         <Notice tone="neutral">
           {goal
-            ? `Your money is in. It is invested in ${product} and starts earning tomorrow. You can follow it on ${goal.goalName}.`
-            : `Your money is in. It is invested in ${deposit.payable.title} and starts earning tomorrow. You can follow it in Portfolio.`}
+            ? `Your money is in. It is invested in ${product} and ${earning}. You can follow it on ${goal.goalName}.`
+            : `Your money is in. It is invested in ${deposit.payable.title} and ${earning}. You can follow it in Portfolio.`}
         </Notice>
       </View>
       <View style={{ marginTop: 24 }}>
