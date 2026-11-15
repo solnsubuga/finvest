@@ -20,7 +20,7 @@ export default function LoginStart() {
   const router = useRouter();
   const { client, setLogin, setSession } = useAuth();
   const params = useLocalSearchParams<{ with?: string }>();
-  // The design's "Use email instead": a proved address in place of the number.
+  // The design's "Use email instead": the account's email address in place of the number.
   const [byEmail, setByEmail] = useState(params.with === "email");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -29,10 +29,6 @@ export default function LoginStart() {
   const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // The right password with an email not confirmed yet: offer a new link instead of a refusal.
-  const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
-  const [linkSent, setLinkSent] = useState(false);
-  const [sending, setSending] = useState(false);
 
   const e164 = toE164(phone);
   const emailOk = isValidEmail(email);
@@ -45,14 +41,11 @@ export default function LoginStart() {
     setByEmail(email);
     setSubmitted(false);
     setError(null);
-    setUnconfirmed(null);
   };
 
   const submit = async () => {
     setSubmitted(true);
     setError(null);
-    setUnconfirmed(null);
-    setLinkSent(false);
     if ((byEmail ? !emailOk : !e164) || password.length === 0) {
       return;
     }
@@ -64,28 +57,9 @@ export default function LoginStart() {
       setPassword("");
       router.push("/login/verify");
     } catch (caught) {
-      if (caught instanceof AuthError && caught.code === "email_not_confirmed") {
-        setUnconfirmed(email.trim());
-      } else {
-        setError(describeAuthError(caught));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const sendLink = async () => {
-    if (!unconfirmed) return;
-    setSending(true);
-    setError(null);
-    try {
-      await client.sendEmailLinkFromLogin(unconfirmed, password);
-      setLinkSent(true);
-    } catch (caught) {
-      setUnconfirmed(null);
       setError(describeAuthError(caught));
     } finally {
-      setSending(false);
+      setBusy(false);
     }
   };
 
@@ -94,7 +68,6 @@ export default function LoginStart() {
   const logInWithPasskey = async () => {
     setSubmitted(false);
     setError(null);
-    setUnconfirmed(null);
     setPasskeyBusy(true);
     try {
       const session = await client.logInWithPasskey();
@@ -142,32 +115,12 @@ export default function LoginStart() {
 
       <View style={{ marginTop: 20, gap: 14 }}>
         {error ? <Notice tone="danger">{error}</Notice> : null}
-        {unconfirmed && !linkSent ? (
-          <View style={{ gap: 10 }} testID="email-not-confirmed">
-            <Notice tone="warning">{describeAuthError(new AuthError("email_not_confirmed"))}</Notice>
-            <Button
-              label="Email me a new link"
-              variant="secondary"
-              height={48}
-              onPress={sendLink}
-              loading={sending}
-              testID="send-email-link"
-            />
-          </View>
-        ) : null}
-        {unconfirmed && linkSent ? (
-          <View testID="email-link-sent">
-            <Notice tone="neutral">
-              {`We sent a new link to ${unconfirmed}. It works for 24 hours. Open it on any device, then log in here with your email.`}
-            </Notice>
-          </View>
-        ) : null}
         {byEmail ? (
           <TextField
             label="Email"
             value={email}
             onChangeText={setEmail}
-            hint="The address you confirmed by the link we emailed you."
+            hint="The email address on your Finvest account."
             error={emailError}
             keyboardType="email-address"
             inputMode="email"

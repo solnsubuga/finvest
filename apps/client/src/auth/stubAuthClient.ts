@@ -187,11 +187,6 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
   const logins = new Map<string, string>();
   /** Email links sent, and the number of the account each proves. */
   const emailLinks = new Map<string, string>();
-  /** The number of the account an address logs in to: a proved holder first, as on the server. */
-  const holderOf = (email: string): string | undefined => {
-    const held = [...accounts].filter(([, account]) => account.email === email);
-    return (held.find(([, account]) => account.emailVerified) ?? held[held.length - 1])?.[0];
-  };
   /** Reset challenges and the number each was for. A number with no account gets one too. */
   const resets = new Map<string, string>();
   /** Claim links not used yet, by token, and the open claim challenges with their token. */
@@ -457,34 +452,18 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       await wait();
       const byEmail = "email" in identifier;
       const email = byEmail ? identifier.email.trim().toLowerCase() : null;
-      // Like the API, only a proved address logs in. The right password with an
-      // unproved one is told to confirm it.
-      const phone = byEmail ? holderOf(email as string) : identifier.phone;
+      // Like the API, the address on the account, proved or not, with a proved holder first.
+      const held = byEmail ? [...accounts].filter(([, account]) => account.email === email) : [];
+      const phone = byEmail
+        ? (held.find(([, account]) => account.emailVerified) ?? held[held.length - 1])?.[0]
+        : identifier.phone;
       const account = phone ? accounts.get(phone) : undefined;
       if (!phone || !account || account.password !== password) {
         throw new AuthError(byEmail ? "invalid_email_credentials" : "invalid_credentials");
       }
-      if (byEmail && !account.emailVerified) {
-        throw new AuthError("email_not_confirmed");
-      }
       const loginId = nextId("login");
       logins.set(loginId, phone);
       return { loginId, phone: byEmail ? null : phone, email, methods: methodsFor(account) };
-    },
-
-    async sendEmailLinkFromLogin(email, password): Promise<void> {
-      await wait();
-      const phone = holderOf(email.trim().toLowerCase());
-      const account = phone ? accounts.get(phone) : undefined;
-      if (!phone || !account || account.password !== password || account.emailVerified) {
-        throw new AuthError("invalid_email_credentials");
-      }
-      for (const [token, held] of emailLinks) {
-        if (held === phone) emailLinks.delete(token);
-      }
-      const token = `${nextId("email_link")}_demo_link_token`;
-      emailLinks.set(token, phone);
-      options.onEmailLink?.(token);
     },
 
     async verifyWithPasskey(loginId): Promise<Session> {

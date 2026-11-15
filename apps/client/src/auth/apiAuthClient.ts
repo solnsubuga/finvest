@@ -15,7 +15,6 @@ import { createPasskey, PasskeyCancelled, passkeysSupported, signWithPasskey } f
 
 const PASSTHROUGH: ReadonlySet<AuthErrorCode> = new Set([
   "invalid_credentials",
-  "email_not_confirmed",
   "invalid_code",
   "phone_taken",
   "leaked_password",
@@ -157,16 +156,6 @@ export function createApiAuthClient(): AuthClient {
         } catch (error) {
           const refused = toAuthError(error);
           throw byEmail && refused.code === "invalid_credentials" ? new AuthError("invalid_email_credentials") : refused;
-        }
-      }),
-
-    sendEmailLinkFromLogin: (email, password) =>
-      wrap(async () => {
-        try {
-          await api("POST /client/email/verification/from-login", { body: { email: email.trim(), password } });
-        } catch (error) {
-          const refused = toAuthError(error);
-          throw refused.code === "invalid_credentials" ? new AuthError("invalid_email_credentials") : refused;
         }
       }),
 

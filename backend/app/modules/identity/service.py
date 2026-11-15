@@ -75,6 +75,8 @@ class _PasswordMatch:
 class LoginChallenge:
     id: str
     methods: list[SecondStep]
+    # The client, when they signed in by an email address they have not proved yet.
+    unproved_email_of: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,21 +235,15 @@ class IdentityService:
     ) -> LoginChallenge:
         """Check the number or email and the password. Opens nothing.
 
-        A client signs in with their mobile number, or with `by_email` and an email address they
-        have proved. Staff always use their email. Every failure is the same
+        A client signs in with their mobile number, or with `by_email` and the email address on
+        their account, proved or not. Staff always use their email. Every failure is the same
         `invalid_credentials`, after the same amount of work, whether the account is missing,
-        inactive or the password is wrong. The one exception is the right password with an
-        address the client has not proved yet: that is `email_not_confirmed`, so they know to
-        open the link rather than doubt their password. Only the owner of the password learns it.
+        inactive or the password is wrong. A sign-in by an address not proved yet says so in
+        `unproved_email_of`, so the caller can send a new link to confirm it.
         """
         account, keys = await self._check_password(
             kind, identifier, password, address=address, by_email=by_email
         )
-        if not account.proved:
-            # The right password, so the wrong-guess counts go, as for any right password.
-            await clear_attempts(self.database, keys)
-            logger.info("login_refused", kind=kind, error_code="email_not_confirmed")
-            raise ApplicationError("email_not_confirmed")
         table = "identity_clients" if kind == "client" else "identity_staff"
         now = self.clock.now()
         challenge_id = push_id(self.clock)
@@ -282,21 +278,9 @@ class IdentityService:
         await clear_attempts(self.database, keys)
         logger.info("login_started", kind=kind, login_id=challenge_id)
         # In the order to offer them. The person finishes with any one.
-        return LoginChallenge(challenge_id, methods)
-
-    async def unproved_email_owner(self, email: str, password: str, *, address: str | None) -> str:
-        """The client whose password this is, when `email` is on their account but not proved.
-
-        For sending a new link from the log in screen. Counts as a sign-in attempt, and every
-        other outcome, including an address that is already proved, is `invalid_credentials`.
-        """
-        account, keys = await self._check_password(
-            "client", email, password, address=address, by_email=True
+        return LoginChallenge(
+            challenge_id, methods, unproved_email_of=None if account.proved else account.id
         )
-        if account.proved:
-            raise ApplicationError("invalid_credentials")
-        await clear_attempts(self.database, keys)
-        return account.id
 
     async def _check_password(
         self,
@@ -319,13 +303,12 @@ class IdentityService:
             identifier = ""  # still do the work below, then fail like any wrong password
 
         if kind == "client" and by_email:
-            # Only a proved address signs a client in, and only one account can have proved it.
-            # An account that holds the address unproved is still found, so the right password
-            # can be told to confirm it. A proved holder comes first, then the newest.
+            # Only one account can prove an address, but several may hold it unproved. A proved
+            # holder answers for the address, and otherwise the newest account holding it.
             query = (
                 "SELECT id, phone, password_hash, email_verified_at IS NOT NULL AS proved "
                 "FROM identity_clients WHERE email = :identifier AND status = 'active' "
-                "ORDER BY email_verified_at IS NOT NULL DESC, created_at DESC LIMIT 1"
+                "ORDER BY email_verified_at IS NOT NULL DESC, created_at DESC, id DESC LIMIT 1"
             )
         elif kind == "client":
             query = (

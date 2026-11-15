@@ -29,7 +29,6 @@ export type ApiErrorCode =
   | "not_found"
   | "unauthorized"
   | "invalid_credentials"
-  | "email_not_confirmed"
   | "invalid_code"
   | "passkey_failed"
   | "second_step_missing"
@@ -59,7 +58,6 @@ const KNOWN_CODES = new Set<string>([
   "not_found",
   "unauthorized",
   "invalid_credentials",
-  "email_not_confirmed",
   "invalid_code",
   "passkey_failed",
   "second_step_missing",

@@ -576,12 +576,6 @@ export const EmailConfirm = z.object({
 });
 export type EmailConfirm = z.infer<typeof EmailConfirm>;
 
-export const EmailLinkFromLogin = z.object({
-  email: z.string(),
-  password: z.string(),
-});
-export type EmailLinkFromLogin = z.infer<typeof EmailLinkFromLogin>;
-
 export const EmailLinkSent = z.object({
   sent: z.boolean(),
 });
@@ -1865,17 +1859,6 @@ export const operations = {
     idempotent: false,
     status: 204,
     response: null,
-  },
-  "POST /client/email/verification/from-login": {
-    method: "POST",
-    path: "/client/email/verification/from-login",
-    params: z.object({}),
-    query: z.object({}),
-    body: EmailLinkFromLogin,
-    bodyKind: "json",
-    idempotent: false,
-    status: 200,
-    response: EmailLinkSent,
   },
   "GET /client/goal-groups": {
     method: "GET",

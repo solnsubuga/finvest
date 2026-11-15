@@ -126,26 +126,6 @@ describe("the sign-in client for the real API", () => {
     );
   });
 
-  it("tells the right password that the email is not confirmed, and sends a new link", async () => {
-    const seen = serve({
-      "POST /client/login/start": refused(403, "email_not_confirmed"),
-      "POST /client/email/verification/from-login": { status: 200, body: { sent: true } },
-    });
-    const client = createApiAuthClient();
-    await expect(client.startLogin({ email: "a@example.com" }, "pw")).rejects.toEqual(
-      new AuthError("email_not_confirmed"),
-    );
-    await client.sendEmailLinkFromLogin(" a@example.com ", "pw");
-    expect(seen.at(-1)!.body).toEqual({ email: "a@example.com", password: "pw" });
-  });
-
-  it("says a refused link request in words about the email", async () => {
-    serve({ "POST /client/email/verification/from-login": refused(401, "invalid_credentials") });
-    await expect(createApiAuthClient().sendEmailLinkFromLogin("a@example.com", "x")).rejects.toEqual(
-      new AuthError("invalid_email_credentials"),
-    );
-  });
-
   it("resets a password with the texted code and forgets this device's token", async () => {
     await saveToken("old-token");
     const seen = serve({
