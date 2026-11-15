@@ -377,10 +377,10 @@ async def test_a_web_session_ends_when_idle_and_use_keeps_it_alive(api: Api) -> 
         Actor("client", client_id), second_step="passkey", transport="cookie"
     )
     api.http.cookies.set(COOKIES["client"], issued.token)
-    for _ in range(4):
-        api.clock.advance(minutes=10)
+    for _ in range(8):
+        api.clock.advance(minutes=5)
         assert (await api.http.get("/client/session")).status_code == 200
-    api.clock.advance(minutes=15, seconds=1)
+    api.clock.advance(minutes=10, seconds=1)
     assert (await api.http.get("/client/session")).status_code == 401
 
 
@@ -390,10 +390,10 @@ async def test_a_session_ends_at_its_absolute_limit_however_busy(api: Api) -> No
         Actor("staff", staff_id), second_step="passkey", transport="cookie"
     )
     api.http.cookies.set(COOKIES["staff"], issued.token)
-    for _ in range(12 * 60 // 20 - 1):
-        api.clock.advance(minutes=20)
+    for _ in range(12 * 60 // 10 - 1):
+        api.clock.advance(minutes=10)
         assert (await api.http.get("/staff/session")).status_code == 200
-    api.clock.advance(minutes=20)
+    api.clock.advance(minutes=10)
     assert (await api.http.get("/staff/session")).status_code == 401
 
 
