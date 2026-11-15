@@ -20,6 +20,7 @@ import { formatBps, formatDay, formatStamp, parsePercent, previewClientRate } fr
 import { connectedCatalogueApi } from "../products/http.ts";
 import { Reach } from "../products/Reach.tsx";
 import { createStubCatalogueApi, sampleFrom } from "../products/stub.ts";
+import { connectedLastBuys, latestBuy, stubLastBuys, type LastBuy, type LastBuysReader } from "./lastBuys.ts";
 
 const SUMMARY = "Every rate change is proposed by one person, approved by another, and starts on a set date.";
 
@@ -39,12 +40,17 @@ interface RatesScreenProps {
   canChange: boolean;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
+  /** The latest bills bought for each product. Left out when the person cannot see dealing. */
+  lastBuys?: LastBuysReader | undefined;
 }
+
+type Buys = { state: "loading" } | { state: "failed" } | { state: "ready"; buys: readonly LastBuy[] };
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
 
-export function RatesScreen({ api, me, canChange, today = kampalaToday }: RatesScreenProps) {
+export function RatesScreen({ api, me, canChange, today = kampalaToday, lastBuys }: RatesScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
+  const [buys, setBuys] = useState<Buys>({ state: "loading" });
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(null);
   const [round, setRound] = useState(0);
@@ -69,6 +75,19 @@ export function RatesScreen({ api, me, canChange, today = kampalaToday }: RatesS
       current = false;
     };
   }, [fetchBook]);
+
+  // Read on its own, so the rates still show when the dealing figures cannot be read.
+  useEffect(() => {
+    if (!lastBuys) return;
+    let current = true;
+    lastBuys().then(
+      (found) => current && setBuys({ state: "ready", buys: found }),
+      () => current && setBuys({ state: "failed" }),
+    );
+    return () => {
+      current = false;
+    };
+  }, [lastBuys]);
 
   async function run(on: string, command: () => Promise<unknown>): Promise<boolean> {
     setBusy(on);
@@ -135,6 +154,7 @@ export function RatesScreen({ api, me, canChange, today = kampalaToday }: RatesS
         />
         <Tile name="Next change takes effect" value={upcoming ? formatDay(upcoming) : "None approved"} note={upcoming ? "At the start of the day, Kampala time" : "Every rate is in force"} />
         <Tile name="Clients affected" value="New investments only" note="Running ones keep their rate" />
+        {lastBuys ? <LastBought buys={buys} names={names} /> : null}
       </div>
       <div className="flex flex-wrap items-start gap-5">
         <div className="flex min-w-0 flex-[3_1_520px] flex-col gap-4">
@@ -464,6 +484,22 @@ function Tile({ name, value, note }: { name: string; value: string; note: string
   );
 }
 
+/** Finvest's own latest settled purchase, before tax: the backend holds no Bank of Uganda cut-off rates. */
+function LastBought({ buys, names }: { buys: Buys; names: ReadonlyMap<string, string> }) {
+  if (buys.state === "loading") return <Tile name="Last bought" value="Loading" note="Yield before tax" />;
+  if (buys.state === "failed") return <Tile name="Last bought" value="Not available" note="The dealing figures could not be read" />;
+  const latest = latestBuy(buys.buys);
+  if (!latest) return <Tile name="Last bought" value="Nothing yet" note="No bills bought and settled" />;
+  const how = latest.atAuction ? "at auction" : "on the secondary market";
+  return (
+    <Tile
+      name="Last bought"
+      value={latest.yieldBps === null ? "Not worked out" : formatBps(latest.yieldBps)}
+      note={`${names.get(latest.productCode) ?? latest.productCode}, ${how}, ${formatDay(latest.settledOn)}. Yield before tax`}
+    />
+  );
+}
+
 function Row({ name, value }: { name: string; value: string }) {
   return (
     <div className="flex justify-between gap-3 border-t border-divider pt-2.5 text-md">
@@ -485,7 +521,16 @@ export default function RatesPage() {
         })
       : connectedCatalogueApi(),
   );
+  // The route needs `rates.view`, which every person who can open this page holds.
+  const [lastBuys] = useState<LastBuysReader | undefined>(() =>
+    isStubAuth() && session ? stubLastBuys(new URLSearchParams(window.location.search).get("buys")) : connectedLastBuys(),
+  );
   return (
-    <RatesScreen api={api} me={session?.staffId ?? ""} canChange={session ? can(session, "rates.change") : false} />
+    <RatesScreen
+      api={api}
+      me={session?.staffId ?? ""}
+      canChange={session ? can(session, "rates.change") : false}
+      lastBuys={lastBuys}
+    />
   );
 }

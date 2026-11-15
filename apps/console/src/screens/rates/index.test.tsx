@@ -140,3 +140,34 @@ describe("rates screen", () => {
     expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
   });
 });
+
+describe("last bought tile", () => {
+  const buys = [
+    { productCode: "TREA-91", atAuction: false, settledOn: "2026-11-06", maturesOn: "2027-02-05", yieldBps: 1185 },
+    { productCode: "TREA-182", atAuction: true, settledOn: "2026-11-13", maturesOn: "2027-05-14", yieldBps: 1312 },
+  ];
+  const api = () => createStubCatalogueApi({ me: ME, today: TODAY });
+
+  it("shows the yield of the newest settled purchase", async () => {
+    render(<RatesScreen api={api()} me={ME} canChange today={() => TODAY} lastBuys={async () => buys} />);
+    expect(await screen.findByText("13.12%")).toBeInTheDocument();
+    expect(screen.getByText("182 Day Treasury Bill, at auction, 13 Nov 2026. Yield before tax")).toBeInTheDocument();
+  });
+
+  it("says when nothing has been bought", async () => {
+    render(<RatesScreen api={api()} me={ME} canChange today={() => TODAY} lastBuys={async () => []} />);
+    expect(await screen.findByText("Nothing yet")).toBeInTheDocument();
+  });
+
+  it("keeps the rates on screen when the dealing figures cannot be read", async () => {
+    render(<RatesScreen api={api()} me={ME} canChange today={() => TODAY} lastBuys={() => Promise.reject(new Error("offline"))} />);
+    expect(await screen.findByText("The dealing figures could not be read")).toBeInTheDocument();
+    expect(screen.getByRole("table", { name: "Rate history" })).toBeInTheDocument();
+  });
+
+  it("is left out without a reader", async () => {
+    renderRates();
+    await waitingCard();
+    expect(screen.queryByText("Last bought")).not.toBeInTheDocument();
+  });
+});
