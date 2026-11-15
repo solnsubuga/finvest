@@ -4,11 +4,12 @@ Everything here is read through the functions the owning modules expose. Nothing
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.documents.service import documents_with_reference
 from app.modules.identity.client_locks import (
     ClientAccount,
     LockChange,
@@ -21,7 +22,7 @@ from app.modules.identity.client_locks import (
 )
 from app.modules.identity.freezes import Freeze
 from app.modules.identity.freezes import freezes as client_freezes
-from app.modules.investments.holdings import get_investments
+from app.modules.investments.holdings import get_investments, investments_with_reference
 from app.modules.kyc.service import (
     CheckSummary,
     check_summary,
@@ -31,10 +32,13 @@ from app.modules.kyc.service import (
 )
 from app.modules.kyc.service import verified_name as kyc_verified_name
 from app.modules.ledger.statements import ClientOwed, client_owed_as_of
+from app.modules.payments.service import deposits_with_reference
 from app.modules.payouts.destinations import DestinationView, destinations_for_client
+from app.modules.payouts.payouts import payouts_with_reference
 from app.modules.support.complaints import ComplaintView, complaints_for_client
 from app.modules.support.conversations import ConversationView, conversation_for_client
 from app.shared.push_ids import PUSH_ID_PATTERN
+from app.shared.references import push_id_suffix, short_reference
 
 _PUSH_ID = re.compile(PUSH_ID_PATTERN)
 _ACCOUNT_NUMBER = re.compile(r"\d{10}")
@@ -133,6 +137,46 @@ class ClientList:
     next_after: tuple[datetime, str] | None
     # True when a search found more than it shows.
     more: bool
+    # For a search by a short reference: what each client was found by, such as
+    # "Payment FV-3R0D5-3X44V", by client ID.
+    found_by: dict[str, str] = field(default_factory=dict)
+
+
+_DOCUMENT_NAMES = {
+    "ST": "Statement",
+    "RC": "Receipt",
+    "TC": "Tax certificate",
+    "IN": "Investment note",
+}
+_TYPED_PREFIX = re.compile(r"^\s*([A-Za-z]{2})\s*-")
+
+
+async def found_by_reference(session: AsyncSession, query: str) -> dict[str, str]:
+    """What a short reference a client read out leads to, as a label by client ID.
+
+    "FV-" is a payment, payout or investment; "ST-", "RC-", "TC-" and "IN-" are documents, as
+    their PDFs print them (app.shared.references). Without a prefix every kind is looked at.
+    The reference is a label, not proof: staff still check who they are speaking to.
+    """
+    suffix = push_id_suffix(query)
+    if suffix is None:
+        return {}
+    typed = _TYPED_PREFIX.match(query)
+    prefix = typed.group(1).upper() if typed else None
+    found: dict[str, str] = {}
+    if prefix in (None, "FV"):
+        for record_id, client_id in await deposits_with_reference(session, suffix):
+            found.setdefault(client_id, f"Payment {short_reference(record_id)}")
+        for record_id, client_id in await payouts_with_reference(session, suffix):
+            found.setdefault(client_id, f"Payout {short_reference(record_id)}")
+        for record_id, client_id in await investments_with_reference(session, suffix):
+            found.setdefault(client_id, f"Investment {short_reference(record_id)}")
+    if prefix is None or prefix in _DOCUMENT_NAMES:
+        for record_id, client_id, kind in await documents_with_reference(session, suffix):
+            if prefix in (None, kind):
+                label = f"{_DOCUMENT_NAMES[kind]} {short_reference(record_id, kind)}"
+                found.setdefault(client_id, label)
+    return found
 
 
 async def list_clients(
@@ -146,8 +190,10 @@ async def list_clients(
     """Clients for the staff Clients screen.
 
     No query: every client, newest first, a page at a time. An ID, account number or mobile
-    number: that one client. Anything else: clients whose verified name holds every word, or
-    whose email holds the text, newest first.
+    number: that one client. A short reference such as "FV-3R0D5-3X44V": the client whose
+    payment, payout, investment or document it names. Anything else, or a reference that names
+    nothing: clients whose verified name holds every word, or whose email holds the text,
+    newest first.
     """
     cleaned = " ".join(query.split())
     if not cleaned:
@@ -157,8 +203,11 @@ async def list_clients(
         last = page[-1] if len(accounts) > limit else None
         return ClientList(cards, (last.created_at, last.id) if last else None, more=False)
     exact = await find_client(session, cleaned)
+    referenced = {} if exact is not None else await found_by_reference(session, cleaned)
     if exact is not None:
         found = [exact.id]
+    elif referenced:
+        found = list(referenced)
     else:
         named = await clients_named(session, cleaned.split(" "), MATCH_LIMIT + 1)
         # An email has no spaces, so only a one-word search can match one.
@@ -172,7 +221,7 @@ async def list_clients(
         if status is None or card.account.status == status
     ]
     cards.sort(key=lambda card: (card.account.created_at, card.account.id), reverse=True)
-    return ClientList(cards[:MATCH_LIMIT], None, more=len(cards) > MATCH_LIMIT)
+    return ClientList(cards[:MATCH_LIMIT], None, more=len(cards) > MATCH_LIMIT, found_by=referenced)
 
 
 async def client_page(

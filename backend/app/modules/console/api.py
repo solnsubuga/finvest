@@ -189,6 +189,8 @@ class ClientRowView(Contract):
     email: str | None
     status: client_locks.ClientStatus
     created_at: datetime
+    # For a search by a short reference, what it named, such as "Payment FV-3R0D5-3X44V".
+    found_by: str | None = None
 
 
 class ClientListView(Contract):
@@ -245,6 +247,7 @@ async def list_clients(
                 email=card.account.email,
                 status=card.account.status,
                 created_at=card.account.created_at,
+                found_by=found.found_by.get(card.account.id),
             )
             for card in found.cards
         ],
