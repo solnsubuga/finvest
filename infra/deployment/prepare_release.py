@@ -380,11 +380,33 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         ),
         # Checks ioTec's collection callbacks, which only the API receives.
         (("FINVEST_IOTEC_CALLBACK_TOKEN",), (api,)),
+        # Card payments (docs/payments.md). The scheduler reads only the provider and Pesapal's
+        # address, for its start-up checks; the API and the worker talk to Pesapal.
+        (("FINVEST_CARDS_PROVIDER", "FINVEST_PESAPAL_BASE_URL"), (api, worker, scheduler)),
+        (
+            (
+                "FINVEST_PESAPAL_CONSUMER_KEY",
+                "FINVEST_PESAPAL_CONSUMER_SECRET",
+                "FINVEST_PESAPAL_IPN_TOKEN",
+                "FINVEST_PESAPAL_TIMEOUT_SECONDS",
+            ),
+            (api, worker),
+        ),
     ):
         for name in names:
             if optional(env, name):
                 for target in targets:
                     target[name] = single_line(name, optional(env, name))
+    # Pesapal calls this environment's own API and sends the payer back to its own app, so
+    # staging never points Pesapal at production. A value set by hand still wins.
+    if optional(env, "FINVEST_CARDS_PROVIDER") == "pesapal":
+        for name, value in (
+            ("FINVEST_PESAPAL_PUBLIC_API_URL", f"https://{api_domain}"),
+            ("FINVEST_PESAPAL_RETURN_URL", f"https://{app_domain}/pay/card/return"),
+        ):
+            chosen = single_line(name, optional(env, name) or value)
+            api[name] = chosen
+            worker[name] = chosen
 
     runtime = {
         "migrate": {**database, "FINVEST_DATABASE_URL": urls["migrate"]},
