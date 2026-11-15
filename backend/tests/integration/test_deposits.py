@@ -1173,7 +1173,6 @@ async def test_a_bad_request_saves_nothing_and_does_not_echo_what_was_sent(
                 actor,
                 DepositRequest(**values),  # type: ignore[arg-type]
                 idempotency_key=f"key-{push_id()}",
-                account_phone=str(values["phone"]) if "phone" not in changes else phone(),
                 provider=PROVIDER,
                 clock=fake_clock,
             )
@@ -1190,34 +1189,18 @@ async def test_a_bad_request_saves_nothing_and_does_not_echo_what_was_sent(
     )
 
 
-async def test_a_payment_from_a_number_that_is_not_the_accounts_is_refused(
-    app_database: Database, worker_database: Database, fake_clock: FakeClock
-) -> None:
-    actor, other = client(), phone()
-    with pytest.raises(ApplicationError) as refused:
-        await start_deposit(
-            app_database, fake_clock, actor=actor, msisdn=other, account_phone="+256772000111"
-        )
-    assert refused.value.code == "validation_failed"
-    assert [(f.field_path, f.code) for f in refused.value.fields] == [
-        (["phone"], "not_account_phone")
-    ]
-    assert (
-        await count(
-            worker_database,
-            "SELECT count(*) FROM payment_deposits WHERE client_id = :id",
-            id=actor.id,
-        )
-        == 0
-    )
-
-
-async def test_the_accounts_number_may_be_written_in_any_usual_form(
+async def test_a_payment_may_come_from_a_number_that_is_not_the_accounts(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
-    deposit = await start_deposit(
-        app_database, fake_clock, msisdn="0772000222", account_phone="+256772000222"
-    )
+    # The owner accepts money from any payer (2026-11-15): the prompt goes to the number given.
+    deposit = await start_deposit(app_database, fake_clock, msisdn="0701 999 999")
+    assert deposit.payer_msisdn == "+256701999999"
+
+
+async def test_the_number_may_be_written_in_any_usual_form(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    deposit = await start_deposit(app_database, fake_clock, msisdn="0772000222")
     assert deposit.payer_msisdn == "+256772000222"
 
 

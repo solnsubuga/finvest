@@ -13667,6 +13667,18 @@
             ],
             "title": "Network",
             "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
           }
         },
         "required": [
@@ -34927,7 +34939,7 @@
     },
     "/client/bond-holdings/{holding_id}/payments/mobile-money": {
       "post": {
-        "description": "Ask for a mobile money payment of exactly the bond purchase's cost, from the\nclient's own number, as for an investment. 409 if it already has a payment under way\nor paid: fetch it from `GET /client/bond-holdings/{holding_id}/payment`.",
+        "description": "Ask for a mobile money payment of exactly the bond purchase's cost, from the\nclient's number or another, as for an investment. 409 if it already has a payment under way\nor paid: fetch it from `GET /client/bond-holdings/{holding_id}/payment`.",
         "operationId": "pay_for_bond_by_mobile_money_client_bond_holdings__holding_id__payments_mobile_money_post",
         "parameters": [
           {
@@ -40678,7 +40690,7 @@
     },
     "/client/investments/{investment_id}/payments/mobile-money": {
       "post": {
-        "description": "Ask for a mobile money payment from the client's own number, for exactly the amount\nowed.\n\nWho collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the\nclient's phone. Pesapal opens an order on its page instead: poll\n`GET /client/payments/{payment_id}` until `page_url` is set and send the client there,\nas for a card. When the chosen collector is not running here, the other one is used.\n409 if the investment already has a payment under way or paid: fetch it from\n`GET /client/investments/{investment_id}/payment`.",
+        "description": "Ask for a mobile money payment for exactly the amount owed, from `phone`: the\nclient's own number when it is left out, or any other Ugandan mobile number.\n\nWho collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the\nclient's phone. Pesapal opens an order on its page instead: poll\n`GET /client/payments/{payment_id}` until `page_url` is set and send the client there,\nas for a card. When the chosen collector is not running here, the other one is used.\n409 if the investment already has a payment under way or paid: fetch it from\n`GET /client/investments/{investment_id}/payment`.",
         "operationId": "pay_by_mobile_money_client_investments__investment_id__payments_mobile_money_post",
         "parameters": [
           {

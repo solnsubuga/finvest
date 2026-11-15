@@ -52,9 +52,7 @@ async def test_every_movement_is_listed_newest_first_and_each_filter_narrows_it(
         await start_deposit(app_database, api.clock, actor=client, amount=10_000 * (n + 1))
         for n in range(2)
     ]
-    failed = await start_deposit(
-        app_database, api.clock, actor=client, msisdn=refused, account_phone=refused
-    )
+    failed = await start_deposit(app_database, api.clock, actor=client, msisdn=refused)
     await drain(deposit_worker(worker_database, provider, api.clock))
     await api.staff("finance")
 

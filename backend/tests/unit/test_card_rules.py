@@ -189,45 +189,14 @@ def test_card_settings_round_trip() -> None:
 
 # Mobile money on the hosted page ------------------------------------------------------------------
 
-OWN = "+256772123456"
 
-
-@pytest.mark.parametrize(
-    ("current", "paid_from", "status", "code"),
-    [
-        (S.AWAITING_APPROVAL, OWN, S.CONFIRMED, None),
-        (S.UNCERTAIN, OWN, S.CONFIRMED, None),
-        # Another number, or none the provider names, is held for staff and never credited.
-        (S.AWAITING_APPROVAL, "+256701000000", S.UNCERTAIN, "payer_differs"),
-        (S.AWAITING_APPROVAL, None, S.UNCERTAIN, "payer_differs"),
-        (S.UNCERTAIN, "+256701000000", None, None),
-    ],
-)
-def test_mobile_money_on_the_page_confirms_only_from_the_clients_own_number(
-    current: S, paid_from: str | None, status: S | None, code: str | None
-) -> None:
+@pytest.mark.parametrize("current", [S.AWAITING_APPROVAL, S.UNCERTAIN])
+def test_mobile_money_on_the_page_counts_whoever_paid(current: S) -> None:
+    # The owner accepts money from any payer: who paid is not a reason to hold it.
     amount = ugx(1_000_000)
-    move = after_card_status(
-        current,
-        Confirmed("t", amount),
-        expected=amount,
-        credited=amount,
-        payer=OWN,
-        paid_from=paid_from,
-    )
-    if status is None:
-        assert move is None
-        return
-    assert move is not None and (move.status, move.code) == (status, code)
-    assert (move.post is not None) == (status is S.CONFIRMED)
-
-
-def test_a_card_is_not_asked_for_a_payer() -> None:
-    amount = ugx(1_000_000)
-    move = after_card_status(
-        S.AWAITING_APPROVAL, Confirmed("t", amount), expected=amount, credited=amount
-    )
-    assert move is not None and move.status is S.CONFIRMED
+    move = after_card_status(current, Confirmed("t", amount), expected=amount, credited=amount)
+    assert move is not None and (move.status, move.code) == (S.CONFIRMED, None)
+    assert move.post == amount
 
 
 @pytest.mark.parametrize("provider", ["iotec", "pesapal"])

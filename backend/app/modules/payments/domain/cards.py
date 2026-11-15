@@ -214,8 +214,6 @@ def after_card_status(
     *,
     expected: Money,
     credited: Money,
-    payer: str | None = None,
-    paid_from: str | None = None,
 ) -> Move | None:
     """The next state of a card deposit from a status read, or None to leave it as it is.
 
@@ -224,9 +222,9 @@ def after_card_status(
     was collected. A pending order is left as it is here: cancelling an overdue one is the
     worker's job, because it calls the provider.
 
-    `payer` is the client's own number, for a mobile money payment on a hosted page. It must be
-    the number that paid: a payment from any other number, or one the provider does not name,
-    is held as uncertain for staff, as one for the wrong amount is.
+    Whoever paid, the payment counts: the owner accepts money from any payer (2026-11-15). A
+    mobile money payment from a number other than the client's is confirmed like any other, and
+    the number that paid is kept on the order (`cards.apply_card_move`).
     """
     if current not in (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN):
         return None
@@ -238,14 +236,6 @@ def after_card_status(
                 return Move(
                     DepositStatus.UNCERTAIN,
                     code=Code.AMOUNT_MISMATCH.value,
-                    provider_reference=reference,
-                )
-            if payer is not None and paid_from != payer:
-                if current is DepositStatus.UNCERTAIN:
-                    return None
-                return Move(
-                    DepositStatus.UNCERTAIN,
-                    code=Code.PAYER_DIFFERS.value,
                     provider_reference=reference,
                 )
             return Move(DepositStatus.CONFIRMED, provider_reference=reference, post=credited)

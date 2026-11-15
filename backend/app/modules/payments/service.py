@@ -205,20 +205,19 @@ _INSERT_NOTICE = text(
 )
 
 
-def checked_mobile_money(request: DepositRequest, account_phone: str) -> tuple[str, str]:
+def checked_mobile_money(request: DepositRequest) -> tuple[str, str]:
     """The payer's number and the network of a client's mobile money request, or the refusal.
 
-    The payer must be `account_phone`, the number on the client's own account, from their
-    session and never from what they sent.
+    The payer may be any Ugandan mobile number, not only the one on the client's account: the
+    owner accepts money from any payer (2026-11-15). The payment is still the client's, matched
+    to them by the deposit, and the number that paid is kept on it.
     """
     try:
         check_mobile_money_amount(request.amount)
         msisdn = normalise_msisdn(request.phone)
         validate_push_id(request.purpose_id)
-        if msisdn != normalise_msisdn(account_phone):
-            raise InvalidDeposit("not_account_phone")
     except InvalidDeposit as error:
-        field = "phone" if error.code in ("invalid_phone", "not_account_phone") else "amount"
+        field = "phone" if error.code == "invalid_phone" else "amount"
         raise ApplicationError(
             "validation_failed", fields=[FieldProblem(field_path=[field], code=error.code)]
         ) from None
@@ -248,7 +247,6 @@ async def request_deposit(
     request: DepositRequest,
     *,
     idempotency_key: str,
-    account_phone: str,
     provider: str,
     clock: Clock,
 ) -> Deposit:
@@ -258,9 +256,7 @@ async def request_deposit(
     provider to prompt the payer. Calling again with the same key returns the same deposit and
     creates nothing. The same key with different details is refused.
 
-    `account_phone` is the number on the client's own account, from their session and never
-    from what they sent. The payer must be that number: a payment from a number registered to
-    someone else is refused.
+    The payer is the number the client gave, theirs or anyone else's (`checked_mobile_money`).
 
     An investment takes one deposit. While one is open, uncertain or confirmed, a request with
     a new key raises `DepositExists` and no second prompt is sent. A failed deposit does not
@@ -268,7 +264,7 @@ async def request_deposit(
     """
     if actor.kind != "client" or actor.id is None:
         raise ApplicationError("forbidden")
-    msisdn, _ = checked_mobile_money(request, account_phone)
+    msisdn, _ = checked_mobile_money(request)
     client_id = actor.id
     now = clock.now()
 

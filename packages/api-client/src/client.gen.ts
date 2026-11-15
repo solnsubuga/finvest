@@ -1032,6 +1032,7 @@ export type MaturityChoice = z.infer<typeof MaturityChoice>;
 
 export const MobileMoneyPayment = z.object({
   network: z.enum(["mtn", "airtel"]),
+  phone: z.string().nullable().optional(),
 });
 export type MobileMoneyPayment = z.infer<typeof MobileMoneyPayment>;
 
