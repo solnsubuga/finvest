@@ -375,7 +375,7 @@ export function SplitBar({ portfolio, onDark = true }: { portfolio: Portfolio; o
   const palette = onDark ? [colors.lime, colors.aqua, colors.white, colors.onBlackMuted] : [colors.black, colors.aqua, colors.lime, colors.muted];
   return (
     <View style={{ gap: 8 }} testID="product-split">
-      <View style={styles.split} accessible accessibilityLabel={portfolio.products.map((share) => `${share.productName}, ${share.percent}%`).join("; ")}>
+      <View style={styles.split} accessible accessibilityRole="image" accessibilityLabel={portfolio.products.map((share) => `${share.productName}, ${share.percent}%`).join("; ")}>
         {portfolio.products.map((share, index) =>
           share.percent > 0 ? (
             <View key={share.productCode} style={{ width: `${share.percent}%`, backgroundColor: palette[index % palette.length], borderRadius: 6 }} />
