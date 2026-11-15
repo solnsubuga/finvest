@@ -4820,6 +4820,16 @@
         "title": "ChangeBody",
         "type": "object"
       },
+      "ChangeStatus": {
+        "enum": [
+          "proposed",
+          "approved",
+          "sent_back",
+          "withdrawn"
+        ],
+        "title": "ChangeStatus",
+        "type": "string"
+      },
       "ChangeView": {
         "additionalProperties": false,
         "properties": {
@@ -9371,6 +9381,51 @@
           "same_transaction_number"
         ],
         "title": "EarlierUseOut",
+        "type": "object"
+      },
+      "EditTypeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "default_tax_bps": {
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Default Tax Bps",
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "description",
+          "default_tax_bps",
+          "reason"
+        ],
+        "title": "EditTypeIn",
         "type": "object"
       },
       "EmailChange": {
@@ -14376,6 +14431,20 @@
               }
             ],
             "title": "Tax Bps"
+          },
+          "type_code": {
+            "anyOf": [
+              {
+                "maxLength": 24,
+                "minLength": 1,
+                "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Code"
           }
         },
         "required": [
@@ -14678,6 +14747,20 @@
               }
             ],
             "title": "Term Days"
+          },
+          "type_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": "^[A-Z0-9-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Code"
           }
         },
         "required": [
@@ -14816,6 +14899,20 @@
               }
             ],
             "title": "Term Days"
+          },
+          "type_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "pattern": "^[A-Z0-9-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Code"
           }
         },
         "required": [
@@ -14828,6 +14925,55 @@
           "reason"
         ],
         "title": "NewTermsIn",
+        "type": "object"
+      },
+      "NewTypeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "default_tax_bps": {
+            "maximum": 9999.0,
+            "minimum": 0.0,
+            "title": "Default Tax Bps",
+            "type": "integer"
+          },
+          "description": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Description",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ReturnModel"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "model",
+          "name",
+          "description",
+          "default_tax_bps",
+          "reason"
+        ],
+        "title": "NewTypeIn",
         "type": "object"
       },
       "NextOfKinBody": {
@@ -17799,6 +17945,207 @@
         ],
         "title": "ProductStatus",
         "type": "string"
+      },
+      "ProductTypeChangeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/TypeAction"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Note"
+          },
+          "default_tax_bps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Tax Bps"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ReturnModel"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ChangeStatus"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "code",
+          "model",
+          "name",
+          "description",
+          "default_tax_bps",
+          "reason",
+          "status",
+          "proposed_by",
+          "proposed_at",
+          "decided_by",
+          "decided_at",
+          "decision_note"
+        ],
+        "title": "ProductTypeChangeOut",
+        "type": "object"
+      },
+      "ProductTypeOut": {
+        "additionalProperties": false,
+        "properties": {
+          "built_in": {
+            "title": "Built In",
+            "type": "boolean"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "default_tax_bps": {
+            "title": "Default Tax Bps",
+            "type": "integer"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "in_use": {
+            "title": "In Use",
+            "type": "integer"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ReturnModel"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TypeStatus"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "model",
+          "description",
+          "default_tax_bps",
+          "status",
+          "built_in",
+          "in_use"
+        ],
+        "title": "ProductTypeOut",
+        "type": "object"
+      },
+      "ProductTypesOut": {
+        "additionalProperties": false,
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnModelOut"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/ProductTypeOut"
+            },
+            "title": "Types",
+            "type": "array"
+          }
+        },
+        "required": [
+          "types",
+          "models"
+        ],
+        "title": "ProductTypesOut",
+        "type": "object"
       },
       "Profile": {
         "enum": [
@@ -21127,6 +21474,33 @@
           "narrative"
         ],
         "title": "ReturnLineOut",
+        "type": "object"
+      },
+      "ReturnModel": {
+        "enum": [
+          "treasury_bill",
+          "fixed_income",
+          "treasury_bond"
+        ],
+        "title": "ReturnModel",
+        "type": "string"
+      },
+      "ReturnModelOut": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ReturnModel"
+          }
+        },
+        "required": [
+          "model",
+          "description"
+        ],
+        "title": "ReturnModelOut",
         "type": "object"
       },
       "ReturnOut": {
@@ -26852,6 +27226,16 @@
               }
             ],
             "title": "Term Days"
+          },
+          "type_code": {
+            "default": "",
+            "title": "Type Code",
+            "type": "string"
+          },
+          "type_name": {
+            "default": "",
+            "title": "Type Name",
+            "type": "string"
           }
         },
         "required": [
@@ -29745,6 +30129,57 @@
           "problems"
         ],
         "title": "TrialView",
+        "type": "object"
+      },
+      "TypeAction": {
+        "enum": [
+          "create",
+          "edit",
+          "retire",
+          "restore"
+        ],
+        "title": "TypeAction",
+        "type": "string"
+      },
+      "TypeStatus": {
+        "enum": [
+          "active",
+          "retired"
+        ],
+        "title": "TypeStatus",
+        "type": "string"
+      },
+      "TypeStatusIn": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "to": {
+            "enum": [
+              "active",
+              "retired"
+            ],
+            "title": "To",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "to",
+          "reason"
+        ],
+        "title": "TypeStatusIn",
         "type": "object"
       },
       "UnlockKeyBody": {
@@ -74106,6 +74541,672 @@
         "summary": "Staff Withdraw Product Change",
         "tags": [
           "staff investing"
+        ]
+      }
+    },
+    "/staff/product-type-changes": {
+      "get": {
+        "operationId": "staff_product_type_changes_staff_product_type_changes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ChangeStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ProductTypeChangeOut"
+                  },
+                  "title": "Response Staff Product Type Changes Staff Product Type Changes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Product Type Changes",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-type-changes/edit": {
+      "post": {
+        "description": "Propose a new name, description or usual tax. The return model never changes.",
+        "operationId": "staff_propose_product_type_edit_staff_product_type_changes_edit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditTypeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypeChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Product Type Edit",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-type-changes/new-type": {
+      "post": {
+        "description": "Propose a new type built on a return model. In use once a second person approves.",
+        "operationId": "staff_propose_product_type_staff_product_type_changes_new_type_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewTypeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypeChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Product Type",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-type-changes/status": {
+      "post": {
+        "description": "Propose retiring (`retired`: no new products of it) or restoring (`active`) a type.",
+        "operationId": "staff_propose_product_type_status_staff_product_type_changes_status_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypeStatusIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypeChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Propose Product Type Status",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-type-changes/{change_id}/approve": {
+      "post": {
+        "operationId": "staff_approve_product_type_change_staff_product_type_changes__change_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypeChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Approve Product Type Change",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-type-changes/{change_id}/send-back": {
+      "post": {
+        "operationId": "staff_send_back_product_type_change_staff_product_type_changes__change_id__send_back_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendBack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypeChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Send Back Product Type Change",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-type-changes/{change_id}/withdraw": {
+      "post": {
+        "operationId": "staff_withdraw_product_type_change_staff_product_type_changes__change_id__withdraw_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "change_id",
+            "required": true,
+            "schema": {
+              "title": "Change Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypeChangeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Withdraw Product Type Change",
+        "tags": [
+          "staff product types"
+        ]
+      }
+    },
+    "/staff/product-types": {
+      "get": {
+        "operationId": "staff_product_types_staff_product_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductTypesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Product Types",
+        "tags": [
+          "staff product types"
         ]
       }
     },

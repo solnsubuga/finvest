@@ -46,6 +46,8 @@ from app.modules.bonds.domain.issues import (
     remaining_coupons,
 )
 from app.modules.bonds.domain.issues import Refusal as BuyRefusal
+from app.modules.product_types import service as product_types
+from app.modules.product_types.domain.types import ReturnModel
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -124,6 +126,8 @@ class NewIssue:
     minimum_face_minor: int
     face_step_minor: int
     price: int
+    # The product type, by code, of the bond model. None is the built-in Treasury bond.
+    type_code: str | None = None
 
 
 _ISSUE_COLUMNS = (
@@ -171,9 +175,10 @@ _WAITING = text(
 _INSERT_CHANGE = text(
     "INSERT INTO bond_changes (id, action, issue_id, base_version, code, isin, name, currency, "
     "coupon_bps, tax_bps, issue_date, maturity_date, minimum_face_minor, face_step_minor, price, "
-    "reason, proposed_by, proposed_at) VALUES (:id, :action, :issue_id, :base_version, :code, "
-    ":isin, :name, :currency, :coupon_bps, :tax_bps, :issue_date, :maturity_date, "
-    ":minimum_face_minor, :face_step_minor, :price, :reason, :proposed_by, :now)"
+    "reason, proposed_by, proposed_at, type_id) VALUES (:id, :action, :issue_id, "
+    ":base_version, :code, :isin, :name, :currency, :coupon_bps, :tax_bps, :issue_date, "
+    ":maturity_date, :minimum_face_minor, :face_step_minor, :price, :reason, :proposed_by, "
+    ":now, :type_id)"
 )
 _DECIDE = text(
     "UPDATE bond_changes SET status = :status, decided_by = :decided_by, decided_at = :now, "
@@ -182,9 +187,10 @@ _DECIDE = text(
 _INSERT_ISSUE = text(
     "INSERT INTO bond_issues (id, code, isin, name, currency, coupon_bps, tax_bps, issue_date, "
     "maturity_date, minimum_face_minor, face_step_minor, status, version, change_id, "
-    "created_at, updated_at) VALUES (:id, :code, :isin, :name, :currency, :coupon_bps, "
-    ":tax_bps, :issue_date, :maturity_date, :minimum_face_minor, :face_step_minor, 'draft', 1, "
-    ":change_id, :now, :now)"
+    "created_at, updated_at, type_id) VALUES (:id, :code, :isin, :name, :currency, "
+    ":coupon_bps, :tax_bps, :issue_date, :maturity_date, :minimum_face_minor, "
+    ":face_step_minor, 'draft', 1, :change_id, :now, :now, "
+    "(SELECT type_id FROM bond_changes WHERE id = CAST(:change_id AS push_id)))"
 )
 _UPDATE_STATUS = text(
     "UPDATE bond_issues SET status = :status, version = version + 1, change_id = :change_id, "
@@ -310,11 +316,13 @@ async def propose_issue(
         raise invalid("issue", "invalid") from error
     if refusal is not None:
         raise _refused(refusal)
+    bond_type = await product_types.type_for(session, new.type_code, ReturnModel.TREASURY_BOND)
     change_id = push_id()
     await session.execute(
         _INSERT_CHANGE,
         {
             **_values(target),
+            "type_id": bond_type.id,
             "id": change_id,
             "action": BondChangeAction.CREATE.value,
             "issue_id": None,
@@ -589,6 +597,7 @@ async def _propose_existing(
         _INSERT_CHANGE,
         {
             **dict.fromkeys(_values(view.issue)),
+            "type_id": None,
             "id": change_id,
             "action": action.value,
             "issue_id": view.id,

@@ -193,6 +193,8 @@ class NewBondIn(Contract):
     face_step_minor: FaceMinor = 100_000
     price: Price
     reason: Note
+    # A product type of the bond model, from `GET /staff/product-types`. Left out, Treasury bond.
+    type_code: Code | None = None
 
 
 class BondPriceIn(Contract):
@@ -739,6 +741,7 @@ async def staff_propose_bond(
         minimum_face_minor=body.minimum_face_minor,
         face_step_minor=body.face_step_minor,
         price=body.price,
+        type_code=body.type_code,
     )
     async with _transaction(request, staff.actor) as session:
         view = await catalogue.propose_issue(session, staff.actor, new, body.reason, clock)

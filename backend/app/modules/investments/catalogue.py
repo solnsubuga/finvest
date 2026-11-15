@@ -562,3 +562,15 @@ async def _audit(
         ),
         clock,
     )
+
+
+_PRODUCT_TYPES = text(
+    "SELECT p.code, t.code AS type_code FROM investment_products p "
+    "JOIN product_types t ON t.id = p.type_id"
+)
+
+
+async def type_codes(session: AsyncSession) -> dict[str, str]:
+    """Each product's type code, by product code."""
+    rows = await session.execute(_PRODUCT_TYPES)
+    return {row.code: row.type_code for row in rows.all()}
