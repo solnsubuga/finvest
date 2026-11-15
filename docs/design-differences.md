@@ -33,9 +33,14 @@ Already on main when checked, though the QA table listed them: the investment de
 - **Insights** shows six months.
 - **Console**: Review queue as rows with Open; announcements in Settings; regulator report in Reports; bank transfer check at the top of Reconciliation; Close the month in Finance; no New report to FIA (filed on the FIA system); no New role (roles are fixed); no Fees card (no client fees); no dollar rate row (dollars paused).
 
-## Still owed, needing a backend read first
+## Built after the first pass
 
-- Console Support: Invested and Payout pending in About this client. The staff client routes carry no money figures yet.
-- Console Complaints: Export register. A file of complaints holds personal data, so it should come from an audited backend route, as the compliance register does.
-- Console Rates: Last auction tile. Needs the Bank of Uganda auction results in the API.
-- Console Finance: Prepare the URA file and Tax return file buttons. The backend already exports each month's withholding tax payees (`GET /staff/tax/months/{month}/payees.csv`); whether that file matches URA's format, and what a tax return file holds, needs URA's specification and the owner.
+- Console Support: Invested and Payout pending in About this client. Read from the client's ledger balances (the same figures the client page shows), only for staff who hold `clients.view`.
+- Console Complaints: Export register. `POST /staff/complaints.csv` (complaints.view) writes every complaint as CSV and records `complaints.register_exported` in the audit trail. It leaves out the client's own words and the resolution note.
+- Console Rates: Last bill auction tile. The Bank of Uganda's results the website already shows now live in the shared `packages/market` (`@finvest/market`), updated by hand after each auction. Bills carry the published before-tax yield for staff, and the tile shows it with the auction date. The website still shows only the after-tax fields.
+- Console Rates: a Last bought tile beside it. `GET /staff/dealing/last-buys` (rates.view) gives the yearly yield, before tax, of Finvest's own latest settled purchase for each product, and the tile shows the newest one.
+- Console Finance: the withholding tax payees file was already there, as "Download for URA (CSV)" on each month (`GET /staff/tax/months/{month}/payees.csv`).
+
+## Still owed
+
+- Console Finance: a Tax return file, and whether the payees file matches URA's own format. Both need URA's specification and the owner.

@@ -46,6 +46,26 @@ async function rows(): Promise<string[][]> {
 }
 
 describe("complaints screen", () => {
+  it("exports the whole register as a file, and says when it cannot", async () => {
+    const saved: string[] = [];
+    const stub = createStubComplaintsApi(ME, () => TODAY, () => NOW);
+    render(
+      <ComplaintsScreen api={stub} directory={createStubDirectory(ME)} me={ME.id} canManage={false} canClose={false} today={() => TODAY} save={(file) => saved.push(file.filename)} />,
+    );
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Export register" }));
+    await waitFor(() => expect(saved).toEqual([expect.stringMatching(/^finvest-complaints-register-\d{4}-\d{2}-\d{2}\.csv$/)]));
+  });
+
+  it("shows why an export failed", async () => {
+    const stub = createStubComplaintsApi(ME, () => TODAY, () => NOW);
+    const api: ComplaintsApi = { ...stub, exportRegister: () => Promise.reject(new ComplaintsError("forbidden")) };
+    renderComplaints({ api });
+    const { user } = { user: userEvent.setup() };
+    await user.click(await screen.findByRole("button", { name: "Export register" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+
   it("shows the figures and the open register, earliest deadline first", async () => {
     renderComplaints();
     await panel("C-2611, Joan Namutebi");

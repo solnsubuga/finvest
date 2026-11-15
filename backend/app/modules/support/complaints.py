@@ -287,6 +287,25 @@ async def register(
     return [_view(row, today) for row in (await session.execute(query, {"limit": size})).all()]
 
 
+REGISTER_LIMIT = 10_000
+_EVERY = text(
+    f"SELECT {_COLUMNS} FROM complaints "  # noqa: S608 - constant column list
+    "ORDER BY received_at DESC, id DESC LIMIT :limit"
+)
+
+
+async def whole_register(session: AsyncSession, today: date) -> list[ComplaintView]:
+    """Every complaint, newest first, for the register file. Raises `too_many_complaints` (422)
+    beyond REGISTER_LIMIT, which the file would need to page."""
+    rows = (await session.execute(_EVERY, {"limit": REGISTER_LIMIT + 1})).all()
+    if len(rows) > REGISTER_LIMIT:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["complaints"], code="too_many_complaints")],
+        )
+    return [_view(row, today) for row in rows]
+
+
 async def complaint_for_staff(
     session: AsyncSession, complaint_id: str, today: date
 ) -> tuple[ComplaintView, list[ComplaintEvent]]:

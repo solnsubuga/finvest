@@ -207,6 +207,24 @@ async def test_an_order_from_preparing_to_settling_over_http(api: Api) -> None:
     # A settled order is finished, so it leaves the open orders.
     assert order_id not in {o["id"] for o in replayed.json()["orders"]}
 
+    # The Rates screen sees what these bills cost, as the latest buy of the product.
+    buys = await api.http.get("/staff/dealing/last-buys", headers=grace)
+    assert buys.status_code == 200, buys.text
+    [bought] = [b for b in buys.json()["buys"] if b["product_code"] == "TREA-182"]
+    assert bought == {
+        "product_code": "TREA-182",
+        "at_auction": True,
+        "face_minor": M,
+        "paid_minor": 970_000,
+        "currency": "UGX",
+        "settled_on": settled_on.isoformat(),
+        "matures_on": (settled_on + timedelta(days=180)).isoformat(),
+        # 30,000 / 970,000 x 365 / 180, rounded down.
+        "yearly_yield_bps": 627,
+    }
+    _, support = await signed_in_staff(api, "support")
+    assert (await api.http.get("/staff/dealing/last-buys", headers=support)).status_code == 403
+
 
 async def test_commands_need_a_key_a_note_and_exact_types(api: Api) -> None:
     _, staff = await signed_in_staff(api)

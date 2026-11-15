@@ -30,8 +30,10 @@ WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/site/package.json apps/site/
 COPY packages/tokens/package.json packages/tokens/
+COPY packages/market/package.json packages/market/
 RUN pnpm install --frozen-lockfile --filter "@finvest/site..."
 COPY packages/tokens packages/tokens
+COPY packages/market packages/market
 COPY apps/site apps/site
 RUN pnpm --filter @finvest/site build
 # The Content-Security-Policy for exactly these pages (site-csp.mjs).

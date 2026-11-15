@@ -138,6 +138,18 @@ export interface ComplaintsApi {
   proposeOutcome(complaintId: string, closing: Closing): Promise<ComplaintDetail>;
   /** Names the proposal, so a newer one is never confirmed by mistake. A rejection needs a reason. */
   decideOutcome(complaintId: string, proposalId: string, decision: Decision, reason: string | null): Promise<ComplaintDetail>;
+  /** The whole register as a CSV file. Every export is recorded on the audit trail. */
+  exportRegister(): Promise<RegisterFile>;
+}
+
+export interface RegisterFile {
+  file: Blob;
+  filename: string;
+}
+
+export function registerFilename(now: Date = new Date()): string {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(now);
+  return `finvest-complaints-register-${day}.csv`;
 }
 
 export type ComplaintsErrorCode =
@@ -185,4 +197,5 @@ export const notConnectedComplaintsApi: ComplaintsApi = {
   addNote: notConnected,
   proposeOutcome: notConnected,
   decideOutcome: notConnected,
+  exportRegister: notConnected,
 };

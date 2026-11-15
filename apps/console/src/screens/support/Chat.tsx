@@ -1,4 +1,6 @@
 import { Link } from "react-router";
+import { formatAmount } from "../clients/labels.ts";
+import type { Owed } from "../clients/api.ts";
 import type { ClientCard } from "@/directory/api.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
@@ -204,8 +206,24 @@ export function ChatPanel({
   );
 }
 
-/** The client's account beside the chat. Only what the directory knows: money figures come with the clients screen. */
-export function AboutClient({ card }: { card: ClientCard | null | undefined }) {
+/** Money a client has with Finvest, by ledger account code, from their client page. */
+export type ClientMoney = readonly Owed[];
+
+const SUMS = {
+  invested: ["client.holding"],
+  payoutPending: ["client.payout_pending", "client.payout_in_flight"],
+} as const;
+
+/** "UGX 2,500,000", or "UGX 2,500,000 and $300.00", or "None": totals of these codes. */
+export function moneyLine(money: ClientMoney, codes: readonly string[]): string {
+  const sums = new Map<Owed["currency"], number>();
+  for (const item of money) if (codes.includes(item.accountCode)) sums.set(item.currency, (sums.get(item.currency) ?? 0) + item.minor);
+  const parts = [...sums].filter(([, minor]) => minor !== 0).map(([currency, minor]) => formatAmount(minor, currency));
+  return parts.length ? parts.join(" and ") : "None";
+}
+
+/** The client's account beside the chat: who they are, and what they have invested and waiting to be paid. */
+export function AboutClient({ card, money }: { card: ClientCard | null | undefined; money?: ClientMoney | null | undefined }) {
   return (
     <section
       aria-label="About this client"
@@ -222,6 +240,20 @@ export function AboutClient({ card }: { card: ClientCard | null | undefined }) {
             {card.accountNumber ? `Account ${card.accountNumber}, ` : "No account number yet, "}
             {card.verified ? "verified" : "not verified yet"}, client since {longDate(card.clientSince)}
           </p>
+          {money === undefined ? null : money === null ? (
+            <p className="m-0 text-sm text-muted">Their money figures could not be read. Open the client record.</p>
+          ) : (
+            <dl className="m-0 flex flex-col gap-1.5" aria-label="Their money">
+              <div className="flex justify-between gap-3 text-sm">
+                <dt className="text-muted">Invested</dt>
+                <dd className="m-0 text-right font-bold tabular-nums">{moneyLine(money, SUMS.invested)}</dd>
+              </div>
+              <div className="flex justify-between gap-3 text-sm">
+                <dt className="text-muted">Payout pending</dt>
+                <dd className="m-0 text-right font-bold tabular-nums">{moneyLine(money, SUMS.payoutPending)}</dd>
+              </div>
+            </dl>
+          )}
           {card.status === "locked" || card.status === "closed" ? (
             <p className="m-0 rounded-md bg-danger-surface px-3 py-2.5 text-sm font-semibold text-danger">
               {card.status === "locked"
