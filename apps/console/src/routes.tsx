@@ -4,6 +4,7 @@ import { DevicesPage } from "@/account/DevicesPage.tsx";
 import { useAuth } from "@/auth/context.ts";
 import { can } from "@/auth/types.ts";
 import { AppShell } from "@/components/AppShell.tsx";
+import { ScreenLoader } from "@/components/ScreenLoader.tsx";
 import { homePath, NAV_ITEMS, type NavItem } from "@/nav/nav.ts";
 import { EnrolPage } from "@/pages/EnrolPage.tsx";
 import { NoAccessPage } from "@/pages/NoAccessPage.tsx";
@@ -22,7 +23,13 @@ function Guarded({ item, children }: { item: NavItem; children: ReactNode }) {
 /** The built screen for a menu item, or the placeholder until there is one. */
 function screenFor(item: NavItem): ReactNode {
   const Screen = SCREENS.get(item.path);
-  return Screen ? <Screen /> : <PlaceholderPage item={item} />;
+  return Screen ? (
+    <ScreenLoader>
+      <Screen />
+    </ScreenLoader>
+  ) : (
+    <PlaceholderPage item={item} />
+  );
 }
 
 function Home() {
