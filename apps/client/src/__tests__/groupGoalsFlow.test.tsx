@@ -137,8 +137,13 @@ describe("group goals", () => {
     expect(screen.queryByText("UGX 1,850,000")).toBeNull();
 
     await fireEvent.press(screen.getByTestId("group-make-link"));
-    const link = await screen.findByTestId("group-link");
+    // The code that lets anyone join is hidden until asked for.
+    const hidden = await screen.findByTestId("group-link");
+    expect(String(hidden.props.children)).toBe("https://app.finvestug.com/goals/groups/join#••••••••");
+    await fireEvent.press(screen.getByTestId("group-link-show"));
+    const link = screen.getByTestId("group-link");
     expect(String(link.props.children)).toMatch(/^https:\/\/app\.finvestug\.com\/goals\/groups\/join#[A-Za-z0-9_-]{22}$/);
+    expect(screen.queryByTestId("group-link-show")).toBeNull();
   });
 
   it("lets the one who set it up remove a member, after asking", async () => {
