@@ -910,6 +910,9 @@ export const CatalogueOut = z.object({
 });
 export type CatalogueOut = z.infer<typeof CatalogueOut>;
 
+export const ChangeStatus = z.enum(["proposed", "approved", "sent_back", "withdrawn"]);
+export type ChangeStatus = z.infer<typeof ChangeStatus>;
+
 export const ChangeView = z.object({
   about_you: z.boolean(),
   current_role: z.enum(["admin", "operations", "finance", "compliance", "support"]).nullable(),
@@ -1667,6 +1670,15 @@ export type DocumentOut = z.infer<typeof DocumentOut>;
 export const DocumentType = z.enum(["national_id", "passport", "driving_permit", "refugee_id"]);
 export type DocumentType = z.infer<typeof DocumentType>;
 
+export const EditTypeIn = z.object({
+  code: z.string(),
+  default_tax_bps: z.number().int(),
+  description: z.string(),
+  name: z.string(),
+  reason: z.string(),
+});
+export type EditTypeIn = z.infer<typeof EditTypeIn>;
+
 export const Enrol = z.object({
   credential: z.record(z.string(), z.unknown()),
   passkey_name: z.string().optional(),
@@ -2341,6 +2353,7 @@ export const NewBondIn = z.object({
   price: z.number().int(),
   reason: z.string(),
   tax_bps: z.number().int().nullable().optional(),
+  type_code: z.string().nullable().optional(),
 });
 export type NewBondIn = z.infer<typeof NewBondIn>;
 
@@ -2373,6 +2386,7 @@ export const NewProductIn = z.object({
   reason: z.string(),
   tax_bps: z.number().int(),
   term_days: z.number().int().nullable(),
+  type_code: z.string().nullable().optional(),
 });
 export type NewProductIn = z.infer<typeof NewProductIn>;
 
@@ -2390,8 +2404,22 @@ export const NewTermsIn = z.object({
   product_code: z.string(),
   reason: z.string(),
   term_days: z.number().int().nullable(),
+  type_code: z.string().nullable().optional(),
 });
 export type NewTermsIn = z.infer<typeof NewTermsIn>;
+
+export const ReturnModel = z.enum(["treasury_bill", "fixed_income", "treasury_bond"]);
+export type ReturnModel = z.infer<typeof ReturnModel>;
+
+export const NewTypeIn = z.object({
+  code: z.string(),
+  default_tax_bps: z.number().int(),
+  description: z.string(),
+  model: ReturnModel,
+  name: z.string(),
+  reason: z.string(),
+});
+export type NewTypeIn = z.infer<typeof NewTypeIn>;
 
 export const NotCarriedView = z.object({
   attempt: z.number().int(),
@@ -2732,6 +2760,54 @@ export const ProductReachOut = z.object({
   running_investments: z.number().int(),
 });
 export type ProductReachOut = z.infer<typeof ProductReachOut>;
+
+export const TypeAction = z.enum(["create", "edit", "retire", "restore"]);
+export type TypeAction = z.infer<typeof TypeAction>;
+
+export const ProductTypeChangeOut = z.object({
+  action: TypeAction,
+  code: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_note: z.string().nullable(),
+  default_tax_bps: z.number().int().nullable(),
+  description: z.string().nullable(),
+  id: z.string(),
+  model: ReturnModel,
+  name: z.string().nullable(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  status: ChangeStatus,
+});
+export type ProductTypeChangeOut = z.infer<typeof ProductTypeChangeOut>;
+
+export const TypeStatus = z.enum(["active", "retired"]);
+export type TypeStatus = z.infer<typeof TypeStatus>;
+
+export const ProductTypeOut = z.object({
+  built_in: z.boolean(),
+  code: z.string(),
+  default_tax_bps: z.number().int(),
+  description: z.string(),
+  in_use: z.number().int(),
+  model: ReturnModel,
+  name: z.string(),
+  status: TypeStatus,
+});
+export type ProductTypeOut = z.infer<typeof ProductTypeOut>;
+
+export const ReturnModelOut = z.object({
+  description: z.string(),
+  model: ReturnModel,
+});
+export type ReturnModelOut = z.infer<typeof ReturnModelOut>;
+
+export const ProductTypesOut = z.object({
+  models: z.array(ReturnModelOut),
+  types: z.array(ProductTypeOut),
+});
+export type ProductTypesOut = z.infer<typeof ProductTypesOut>;
 
 export const ProgressView = z.object({
   awaiting_payment_minor: z.number().int(),
@@ -3876,6 +3952,8 @@ export const StaffProductOut = z.object({
   rate: RateOut.nullable(),
   status: ProductStatus,
   term_days: z.number().int().nullable(),
+  type_code: z.string().optional(),
+  type_name: z.string().optional(),
 });
 export type StaffProductOut = z.infer<typeof StaffProductOut>;
 
@@ -4195,6 +4273,13 @@ export const TrialRequest = z.object({
   investments_csv: z.string(),
 });
 export type TrialRequest = z.infer<typeof TrialRequest>;
+
+export const TypeStatusIn = z.object({
+  code: z.string(),
+  reason: z.string(),
+  to: z.enum(["active", "retired"]),
+});
+export type TypeStatusIn = z.infer<typeof TypeStatusIn>;
 
 export const WaitingPayoutOut = z.object({
   amount: HeldAmountOut,
@@ -7730,6 +7815,102 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: ProductChangeOut,
+  },
+  "GET /staff/product-type-changes": {
+    method: "GET",
+    path: "/staff/product-type-changes",
+    params: z.object({}),
+    query: z.object({
+    status: ChangeStatus.nullable().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(ProductTypeChangeOut),
+  },
+  "POST /staff/product-type-changes/edit": {
+    method: "POST",
+    path: "/staff/product-type-changes/edit",
+    params: z.object({}),
+    query: z.object({}),
+    body: EditTypeIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ProductTypeChangeOut,
+  },
+  "POST /staff/product-type-changes/new-type": {
+    method: "POST",
+    path: "/staff/product-type-changes/new-type",
+    params: z.object({}),
+    query: z.object({}),
+    body: NewTypeIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ProductTypeChangeOut,
+  },
+  "POST /staff/product-type-changes/status": {
+    method: "POST",
+    path: "/staff/product-type-changes/status",
+    params: z.object({}),
+    query: z.object({}),
+    body: TypeStatusIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 201,
+    response: ProductTypeChangeOut,
+  },
+  "POST /staff/product-type-changes/{change_id}/approve": {
+    method: "POST",
+    path: "/staff/product-type-changes/{change_id}/approve",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ProductTypeChangeOut,
+  },
+  "POST /staff/product-type-changes/{change_id}/send-back": {
+    method: "POST",
+    path: "/staff/product-type-changes/{change_id}/send-back",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: SendBack,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ProductTypeChangeOut,
+  },
+  "POST /staff/product-type-changes/{change_id}/withdraw": {
+    method: "POST",
+    path: "/staff/product-type-changes/{change_id}/withdraw",
+    params: z.object({
+    change_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ProductTypeChangeOut,
+  },
+  "GET /staff/product-types": {
+    method: "GET",
+    path: "/staff/product-types",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: ProductTypesOut,
   },
   "GET /staff/products": {
     method: "GET",

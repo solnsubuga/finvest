@@ -47,6 +47,8 @@ from app.modules.investments.domain.rates import (
     RateVersion,
     rate_in_force,
 )
+from app.modules.product_types import service as product_types
+from app.modules.product_types.domain.types import ReturnModel
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -106,6 +108,8 @@ class NewProduct:
     interest_paid: InterestPaid
     annual_rate_bps: int
     tax_bps: int
+    # The product type, by code. None is the built-in type of the kind.
+    type_code: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,6 +119,9 @@ class NewTerms:
     term_days: int | None
     minimum_minor: int
     interest_paid: InterestPaid
+    # Another product type, by code: a draft only, as with the kind. None keeps the type, or
+    # takes the built-in type of a new kind.
+    type_code: str | None = None
 
 
 _COLUMNS = (
@@ -132,31 +139,35 @@ _LIST = text(
 _INSERT = text(
     "INSERT INTO investment_product_changes (id, action, product_id, base_version, code, name, "
     "kind, currency, term_days, minimum_minor, interest_paid, product_status, "
-    "first_annual_rate_bps, first_tax_bps, reason, proposed_by, proposed_at) VALUES (:id, "
-    ":action, :product_id, :base_version, :code, :name, :kind, :currency, :term_days, "
+    "first_annual_rate_bps, first_tax_bps, reason, proposed_by, proposed_at, type_id) VALUES "
+    "(:id, :action, :product_id, :base_version, :code, :name, :kind, :currency, :term_days, "
     ":minimum_minor, :interest_paid, :product_status, :first_annual_rate_bps, :first_tax_bps, "
-    ":reason, :proposed_by, :now)"
+    ":reason, :proposed_by, :now, :type_id)"
 )
 _DECIDE = text(
     "UPDATE investment_product_changes SET status = :status, decided_by = :decided_by, "
     "decided_at = :now, decision_note = :note WHERE id = :id"
 )
-_VERSION = text("SELECT id, version FROM investment_products WHERE code = :code")
+_VERSION = text("SELECT id, version, type_id FROM investment_products WHERE code = :code")
 _CODE_TAKEN = text(
     "SELECT EXISTS (SELECT FROM investment_products WHERE code = :code) "
     "OR EXISTS (SELECT FROM investment_product_changes "
     "WHERE code = :code AND action = 'create' AND status = 'proposed' "
     "AND (CAST(:except AS text) IS NULL OR id <> :except))"
 )
+# A product's type is the one its approved change names.
 _INSERT_PRODUCT = text(
     "INSERT INTO investment_products (id, code, name, kind, currency, term_days, minimum_minor, "
-    "interest_paid, status, version, change_id, created_at, updated_at) VALUES (:id, :code, "
-    ":name, :kind, :currency, :term_days, :minimum_minor, :interest_paid, :status, 1, "
-    ":change_id, :now, :now)"
+    "interest_paid, status, version, change_id, created_at, updated_at, type_id) VALUES (:id, "
+    ":code, :name, :kind, :currency, :term_days, :minimum_minor, :interest_paid, :status, 1, "
+    ":change_id, :now, :now, "
+    "(SELECT type_id FROM investment_product_changes WHERE id = CAST(:change_id AS push_id)))"
 )
 _UPDATE_PRODUCT = text(
     "UPDATE investment_products SET name = :name, kind = :kind, term_days = :term_days, "
     "minimum_minor = :minimum_minor, interest_paid = :interest_paid, status = :status, "
+    "type_id = (SELECT type_id FROM investment_product_changes "
+    "WHERE id = CAST(:change_id AS push_id)), "
     "version = version + 1, change_id = :change_id, updated_at = :now WHERE id = :id"
 )
 _INSERT_FIRST_RATE = text(
@@ -215,12 +226,13 @@ async def propose_new_product(
         first = RateVersion(business_date(clock.now()), new.annual_rate_bps, new.tax_bps)
     except InvalidRate as error:
         raise invalid("annual_rate_bps", "out_of_range") from error
+    kind_of = await product_types.type_for(session, new.type_code, ReturnModel(new.kind.value))
     await _lock(session, f"code:{target.code}")
     change = ProductChange(ProductAction.CREATE, target, reason, _id(staff), first_rate=first)
     refusal = check_proposal(change, None, code_taken=await _code_taken(session, target.code))
     if refusal is not None:
         raise _refused(refusal)
-    return await _save(session, staff, change, None, clock)
+    return await _save(session, staff, change, None, kind_of.id, clock)
 
 
 async def propose_new_terms(
@@ -247,7 +259,20 @@ async def propose_new_terms(
     change = ProductChange(
         ProductAction.EDIT, target, reason, _id(staff), base_version=current.version
     )
-    return await _propose_existing(session, staff, change, product_id, current, clock)
+    type_id = await _type_id(session, product_code)
+    if terms.type_code is not None or terms.kind is not current.product.kind:
+        chosen = await product_types.type_for(
+            session, terms.type_code, ReturnModel(terms.kind.value)
+        )
+        if (
+            chosen.id != type_id
+            and terms.kind is current.product.kind
+            and current.product.status is not ProductStatus.DRAFT
+        ):
+            # Clients have been told what it is, as with the kind.
+            raise invalid("type_code", Refusal.KIND_FIXED.value)
+        type_id = chosen.id
+    return await _propose_existing(session, staff, change, product_id, current, type_id, clock)
 
 
 async def propose_status(
@@ -271,7 +296,8 @@ async def propose_status(
         _id(staff),
         base_version=current.version,
     )
-    return await _propose_existing(session, staff, change, product_id, current, clock)
+    type_id = await _type_id(session, product_code)
+    return await _propose_existing(session, staff, change, product_id, current, type_id, clock)
 
 
 # Decisions -------------------------------------------------------------------------------------
@@ -450,13 +476,21 @@ async def _propose_existing(
     change: ProductChange,
     product_id: str,
     current: Current,
+    type_id: str,
     clock: Clock,
 ) -> ProductChangeView:
     await _lock(session, product_id)
     refusal = check_proposal(change, current, code_taken=False)
     if refusal is not None:
         raise _refused(refusal)
-    return await _save(session, staff, change, product_id, clock)
+    return await _save(session, staff, change, product_id, type_id, clock)
+
+
+async def _type_id(session: AsyncSession, code: str) -> str:
+    row = (await session.execute(_VERSION, {"code": code})).one_or_none()
+    if row is None:
+        raise ApplicationError("not_found")
+    return str(row.type_id)
 
 
 async def _save(
@@ -464,6 +498,7 @@ async def _save(
     staff: Actor,
     change: ProductChange,
     product_id: str | None,
+    type_id: str,
     clock: Clock,
 ) -> ProductChangeView:
     change_id = push_id()
@@ -484,6 +519,7 @@ async def _save(
                     "reason": change.reason.strip(),
                     "proposed_by": staff.id,
                     "now": clock.now(),
+                    "type_id": type_id,
                 },
             )
     except IntegrityError as error:

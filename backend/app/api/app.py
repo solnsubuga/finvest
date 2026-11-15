@@ -106,6 +106,7 @@ from app.modules.payouts import (
 )
 from app.modules.payouts.wiring import PayoutNameSettings
 from app.modules.platform_settings import api as platform_settings_api
+from app.modules.product_types import api as product_types_api
 from app.modules.reconciliation import api as reconciliation_api
 from app.modules.reconciliation import custodian_api
 from app.modules.reconciliation import transfers_api as pot_transfers_api
@@ -312,6 +313,7 @@ def create_app(
         *investments_api.routers,
         *investment_transfers_api.routers,
         *bonds_api.routers,
+        *product_types_api.routers,
     ):
         app.include_router(router)
     for router in kyc_api.create_routers(

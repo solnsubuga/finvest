@@ -49,6 +49,8 @@ Worked example, `UG12K1405378` (16% coupon, 10% tax, matures 14 May 2037), UGX 1
 | Each coupon after tax, 21 left including the one at maturity | 72,000 |
 | Back by maturity: the face value and 21 coupons | 2,512,000 |
 
+Every issue has a product type of the bond model, Treasury bond unless staff name another, such as a corporate bond type they defined (see [product-types.md](product-types.md)). The type is fixed with the issue.
+
 ## Prices
 
 A price is per 100 of face value, to four decimal places, held as an integer: 98.5 is `985000` and par is `1000000`. A price below 50 or above 150 is refused as a typing mistake. What a client pays rounds up to the shilling, and what a client is paid rounds down.

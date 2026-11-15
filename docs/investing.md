@@ -12,6 +12,8 @@ The catalogue starts with the three products Finvest 1.0 sold.
 | `TREA-182` | 182 Day Treasury Bill | UGX | 182 days | UGX 200,000 | At maturity | Live |
 | `USD-BOND` | USD Fixed Income | USD | Open | $500 | Monthly | Paused |
 
+Every product has a product type, which staff define with two people (see [product-types.md](product-types.md)). A product's kind is its type's return model, Treasury bill or Fixed income. A new product names its type with `type_code`, or takes the built-in type of its kind, and a draft may move to another type of its kind.
+
 A product is draft, live or paused. Only a live product takes new investments. A paused product takes none, and its running investments carry on. The dollar product is paused until paying in and out in dollars is built.
 
 There is no wallet, so an investment is paid for in one payment and that payment must meet the minimum by itself. It may not be more than the largest single investment, UGX 5,000,000,000 or USD 1,500,000 (`app/shared/limits.py`), refused with `above_maximum`; a larger sum is split over several investments. The same ceiling applies to a goal target (`target_too_large`). A rollover, a transfer and interest saved to a goal are not new requests, so they are not refused for passing it.

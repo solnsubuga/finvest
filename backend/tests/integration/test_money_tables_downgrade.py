@@ -13,7 +13,8 @@ what clients owe for them, the runs staff asked for again, staff notes and actio
 client, the account freezes, why an investment was sent to another client, the platform
 settings, the withdrawal limit changes, the paydays clients named, the custodian statement
 checks, the SMS delivery reports, the choice to save an investment's interest to a goal, the
-auction calendar, the bond catalogue, clients' bond holdings or the coupons paid on them."""
+auction calendar, the bond catalogue, clients' bond holdings, the coupons paid on them or the
+product types staff defined."""
 
 import os
 from collections.abc import Iterator
@@ -26,6 +27,13 @@ from tests.support.database import TestDatabase
 pytestmark = pytest.mark.integration
 
 ROWS = {
+    "0493_product_types": (
+        "INSERT INTO product_type_changes (id, action, code, model, name, description, "
+        "default_tax_bps, reason, proposed_by, proposed_at) VALUES ('-Nabc0000000000000T1', "
+        "'create', 'CORP-BOND', 'treasury_bond', 'Corporate bond', 'Issued by a company.', 1500, "
+        "'Clients asked', '-Nabc0000000000000S1', now())",
+        "refusing to drop the product types staff defined",
+    ),
     "0492_bond_coupons": (
         "INSERT INTO bond_changes (id, action, code, isin, name, currency, coupon_bps, tax_bps, "
         "issue_date, maturity_date, minimum_face_minor, face_step_minor, price, reason, "

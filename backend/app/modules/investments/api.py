@@ -31,7 +31,7 @@ from app.modules.goals import reads as goal_reads
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.pins_api import Pins
 from app.modules.identity.service import StaffSession
-from app.modules.investments import service
+from app.modules.investments import catalogue, service
 from app.modules.investments.domain.interest import ClientReturns
 from app.modules.investments.domain.investments import AtMaturity, InvestmentStatus
 from app.modules.investments.domain.positions import PositionRow, positions_csv
@@ -39,6 +39,7 @@ from app.modules.investments.domain.products import InterestPaid, ProductKind, P
 from app.modules.investments.domain.rates import ProposalStatus, RateVersion
 from app.modules.kyc import service as kyc
 from app.modules.payouts import payouts
+from app.modules.product_types import service as product_types
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
@@ -199,6 +200,9 @@ class StaffProductOut(Contract):
     status: ProductStatus
     rate: RateOut | None
     next_rate: RateOut | None
+    # The product type, from `GET /staff/product-types`.
+    type_code: str = ""
+    type_name: str = ""
 
 
 class ProposalIn(Contract):
@@ -251,6 +255,9 @@ class NewProductIn(Contract):
     annual_rate_bps: Bps
     tax_bps: Bps
     reason: Note
+    # The product type, from `GET /staff/product-types`, of the same model as `kind`. Left out,
+    # the built-in type of the kind.
+    type_code: ProductCode | None = None
 
 
 class NewTermsIn(Contract):
@@ -264,6 +271,8 @@ class NewTermsIn(Contract):
     minimum_minor: AmountMinor
     interest_paid: InterestPaidIn
     reason: Note
+    # Another product type, for a draft only. Left out, the type stays.
+    type_code: ProductCode | None = None
 
 
 class StatusChangeIn(Contract):
@@ -969,7 +978,15 @@ async def staff_products(
     request: Request, staff: ProductsViewer, clock: AppClock
 ) -> list[StaffProductOut]:
     async with _transaction(request, staff.actor) as session:
-        return [_staff_product_out(v) for v in await service.list_products(session, clock)]
+        views = await service.list_products(session, clock)
+        type_of = await catalogue.type_codes(session)
+        names = {t.code: t.name for t in await product_types.list_types(session)}
+    found = []
+    for view in views:
+        out = _staff_product_out(view)
+        code = type_of.get(view.product.code, "")
+        found.append(out.model_copy(update={"type_code": code, "type_name": names.get(code, "")}))
+    return found
 
 
 @staff_router.get("/products/{code}/rates")
@@ -1061,6 +1078,7 @@ async def staff_propose_new_product(
         interest_paid=body.interest_paid,
         annual_rate_bps=body.annual_rate_bps,
         tax_bps=body.tax_bps,
+        type_code=body.type_code,
     )
     async with _transaction(request, staff.actor) as session:
         view = await service.propose_new_product(session, staff.actor, new, body.reason, clock)
@@ -1078,6 +1096,7 @@ async def staff_propose_new_terms(
         term_days=body.term_days,
         minimum_minor=body.minimum_minor,
         interest_paid=body.interest_paid,
+        type_code=body.type_code,
     )
     async with _transaction(request, staff.actor) as session:
         view = await service.propose_new_terms(
