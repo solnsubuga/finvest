@@ -24,6 +24,7 @@ from app.shared.business_day import KAMPALA, business_date
 from app.shared.clock import Clock
 from app.shared.errors import ApplicationError, FieldProblem
 from app.shared.push_ids import push_id
+from app.shared.references import short_reference
 
 BUILD_KIND = "documents.build"
 EMAIL_KIND = "documents.email"
@@ -96,8 +97,9 @@ class DocumentView:
 
     @property
     def reference(self) -> str:
-        """What the document's PDF and email call it: "ST-", "RC-", "TC-" or "IN-" and its ID."""
-        return f"{_REFERENCE_PREFIX[self.kind]}-{self.id}"
+        """What the document's PDF and email call it: "ST-", "RC-", "TC-" or "IN-" and a short
+        code made from its ID, such as "ST-3R0D5-3X44V" (see app.shared.references)."""
+        return short_reference(self.id, _REFERENCE_PREFIX[self.kind])
 
     @property
     def note(self) -> NoteStage | None:

@@ -22,6 +22,7 @@ def test_an_amount_of_zero_owed_does_not_block() -> None:
     ("standing", "blocker"),
     [
         (Standing(1, (), 0, 0, 0, 0), Blocker.INVESTMENTS_RUNNING),
+        (Standing(0, (), 0, 0, 0, 0, unpaid_investments=1), Blocker.INVESTMENTS_UNPAID),
         (Standing(0, (Money(1, Currency.UGX),), 0, 0, 0, 0), Blocker.MONEY_OWED),
         (Standing(0, (Money(-5, Currency.USD),), 0, 0, 0, 0), Blocker.MONEY_OWED),
         (Standing(0, (), 1, 0, 0, 0), Blocker.DEPOSITS_IN_PROGRESS),
@@ -35,5 +36,5 @@ def test_each_blocker_alone(standing: Standing, blocker: Blocker) -> None:
 
 
 def test_every_blocker_at_once_in_the_order_to_clear_them() -> None:
-    everything = Standing(2, (Money(10, Currency.UGX),), 1, 1, 1, 1)
+    everything = Standing(2, (Money(10, Currency.UGX),), 1, 1, 1, 1, unpaid_investments=1)
     assert blockers(everything) == list(Blocker)

@@ -49,6 +49,10 @@ Permission = Literal[
     # is `dealing_desk.view`. Every step still takes a second person.
     "dealing_orders.change",
     "finance.view",
+    # Proposing to close a month, approving or declining someone else's proposal, and
+    # withdrawing your own. Approving signs the month's books, so it always takes a second
+    # person who confirms it is them. Seeing the Finance screen is `finance.view`. Not a screen.
+    "finance.close",
     # Recording a payment of withholding tax to URA, approving someone else's, or declining it.
     # Approving posts it to the ledger. Seeing the tax screen is `finance.view`. Not a screen.
     "tax_remittances.change",
@@ -230,6 +234,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             "dealing_desk.view",
             "dealing_orders.change",
             "finance.view",
+            "finance.close",
             "tax_remittances.change",
             "products.view",
             "products.change",

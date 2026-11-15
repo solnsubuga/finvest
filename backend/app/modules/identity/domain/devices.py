@@ -27,6 +27,14 @@ _SYSTEMS = (
     ("CrOS", "ChromeOS"),
     ("Linux", "Linux"),
 )
+# Seen when nothing better matches: a browser that names no known program or system, and the
+# HTTP libraries an app sends with when it does not name itself.
+_FALLBACKS = (
+    ("Mozilla/", "Web browser"),
+    ("okhttp/", "App on Android"),
+    ("Dalvik/", "App on Android"),
+    ("CFNetwork/", "App on iPhone"),
+)
 UNKNOWN = "Unknown device"
 
 
@@ -41,7 +49,7 @@ def device_label(user_agent: str | None) -> str:
     system = _first(text, _SYSTEMS)
     if program and system:
         return f"{program} on {system}"
-    return program or system or UNKNOWN
+    return program or system or _first(text, _FALLBACKS) or UNKNOWN
 
 
 def kampala_time(moment: datetime) -> str:

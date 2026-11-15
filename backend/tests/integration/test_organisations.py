@@ -248,9 +248,22 @@ async def test_a_group_needs_two_people_and_two_approvals(api: Api) -> None:
     # A company's document is not a group's.
     wrong = await upload(api, organisation_id, "certificate_of_incorporation")
     assert wrong.json()["error"]["fields"][0]["code"] == "not_for_this_kind"
-    changed = await api.http.patch(
+    # QA F-033: more approvals than there could be people is refused when it is asked for.
+    refused = await api.http.patch(
         f"/client/organisations/{organisation_id}", json={"approvals_needed": 3}
     )
+    assert refused.status_code == 422, refused.text
+    problem = refused.json()["error"]["fields"][0]
+    assert (problem["field_path"], problem["code"]) == (
+        ["body", "approvals_needed"],
+        "more_than_signatories",
+    )
+    # Two is the group's least, so it may be chosen before the second person is invited; it
+    # still cannot be handed in until they have joined.
+    changed = await api.http.patch(
+        f"/client/organisations/{organisation_id}", json={"approvals_needed": 2}
+    )
+    assert changed.status_code == 200, changed.text
     assert "approvals_more_than_signatories" in changed.json()["problems"]
 
 

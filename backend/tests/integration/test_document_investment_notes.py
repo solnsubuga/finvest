@@ -25,6 +25,7 @@ from app.modules.investments import service as investments
 from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
+from app.shared.references import short_reference
 from tests.integration.test_documents import FakeEmail, invested, later_clock, run_jobs
 from tests.support.investments import PRESENT, at, started, today
 from tests.support.ledger import ugx
@@ -95,8 +96,8 @@ async def test_a_started_investment_gets_one_note_built_listed_and_emailed_locke
         DocumentStatus.READY,
         investment.id,
     )
-    assert note.file_name == f"Finvest investment note IN-{note.id}.pdf"
-    assert (note.reference, note.note) == (f"IN-{note.id}", NoteStage.STARTED)
+    assert note.file_name == f"Finvest investment note {short_reference(note.id, 'IN')}.pdf"
+    assert (note.reference, note.note) == (short_reference(note.id, "IN"), NoteStage.STARTED)
     assert file.content.startswith(b"%PDF-")
     (figures,) = drawn
     assert figures.amount == investment.amount
@@ -237,7 +238,7 @@ async def test_a_matured_investment_gets_a_note_that_says_what_it_came_to_and_wh
     assert [(view.kind, view.status, view.note) for view in ended] == [
         (DocumentKind.INVESTMENT_NOTE, DocumentStatus.READY, NoteStage.ENDED)
     ]
-    assert ended[0].reference == f"IN-{ended[0].id}"
+    assert ended[0].reference == short_reference(ended[0].id, "IN")
     (message,) = email.sent
     assert message.subject == f"Your Finvest investment note: {investment.product_name} ended"
     assert "rolled over" in message.text

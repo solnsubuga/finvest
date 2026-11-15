@@ -36,10 +36,12 @@ interface MonthCloseSectionProps {
   api: MonthCloseApi;
   /** The reader's own staff ID. */
   me: string;
+  /** `finance.close`: proposing, approving, declining and withdrawing. Without it the section reads only. */
+  canClose: boolean;
   newKey: () => string;
 }
 
-export function MonthCloseSection({ api, me, newKey }: MonthCloseSectionProps) {
+export function MonthCloseSection({ api, me, canClose, newKey }: MonthCloseSectionProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [proposing, setProposing] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -107,6 +109,7 @@ export function MonthCloseSection({ api, me, newKey }: MonthCloseSectionProps) {
         <Ready
           closes={load.value}
           me={me}
+          canClose={canClose}
           api={api}
           newKey={newKey}
           proposing={proposing}
@@ -129,6 +132,7 @@ export function MonthCloseSection({ api, me, newKey }: MonthCloseSectionProps) {
 function Ready({
   closes,
   me,
+  canClose,
   api,
   newKey,
   proposing,
@@ -138,6 +142,7 @@ function Ready({
 }: {
   closes: MonthCloses;
   me: string;
+  canClose: boolean;
   api: MonthCloseApi;
   newKey: () => string;
   proposing: boolean;
@@ -156,10 +161,14 @@ function Ready({
         <Fact name="Days closed through" value={closes.next.closedThrough ? formatDay(closes.next.closedThrough) : "No day yet"} />
       </dl>
       {waiting ? (
-        <Waiting close={waiting} me={me} api={api} newKey={newKey} onDone={onDone} onStale={onStale} />
+        <Waiting close={waiting} me={me} canClose={canClose} api={api} newKey={newKey} onDone={onDone} onStale={onStale} />
       ) : closes.next.refusal ? (
         <p className="m-0 rounded-md bg-surface-sunken px-3.5 py-3 text-md leading-normal">
           {refusalText(closes.next.refusal, next, closes.next.closedThrough ? formatDay(closes.next.closedThrough) : null)}
+        </p>
+      ) : !canClose ? (
+        <p className="m-0 rounded-md bg-surface-sunken px-3.5 py-3 text-md leading-normal">
+          {next} can be closed now. Closing a month needs the permission to close months, which your role does not have.
         </p>
       ) : proposing ? (
         <ReasonForm
@@ -218,6 +227,7 @@ function Pill({ status }: { status: CloseStatus }) {
 function Waiting({
   close,
   me,
+  canClose,
   api,
   newKey,
   onDone,
@@ -225,6 +235,7 @@ function Waiting({
 }: {
   close: MonthClose;
   me: string;
+  canClose: boolean;
   api: MonthCloseApi;
   newKey: () => string;
   onDone: (message: string) => Promise<void>;
@@ -232,7 +243,7 @@ function Waiting({
 }) {
   const [choice, setChoice] = useState<CloseDecision | null>(null);
   const month = formatMonth(close.month);
-  const choices: CloseDecision[] = close.yours ? ["withdraw"] : ["approve", "decline"];
+  const choices: CloseDecision[] = !canClose ? [] : close.yours ? ["withdraw"] : ["approve", "decline"];
   const currencies = [...new Set(close.books.map((line) => line.currency))];
   const proposer = close.proposedBy === me ? "you" : (close.proposedByName ?? "a colleague");
   return (
@@ -252,6 +263,9 @@ function Waiting({
       {currencies.map((currency) => (
         <BooksTable key={currency} currency={currency} close={close} />
       ))}
+      {canClose || close.yours ? null : (
+        <p className="m-0 text-sm text-muted">A different member of staff with the permission to close months decides it. Your role cannot approve or decline it.</p>
+      )}
       {/* While a reason form is open, its own button acts, so the choices step aside. */}
       <div className={cn("flex flex-wrap gap-2", choice ? "hidden" : null)}>
         {choices.map((decision) => (

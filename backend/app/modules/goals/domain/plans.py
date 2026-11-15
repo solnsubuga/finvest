@@ -45,7 +45,7 @@ class PlanProduct:
     minimum: Money
     annual_rate_bps: int
     tax_bps: int
-    # "10.63": the yearly rate after tax, as a label.
+    # "10.62": the yearly rate after tax, as a label.
     rate_percent: str
 
 

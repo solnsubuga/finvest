@@ -652,6 +652,8 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       if (code !== DEMO_CODE || !account) {
         throw new AuthError("invalid_code");
       }
+      // As the API: the code was right, so it says why, and the code still works.
+      if (password === account.password) throw new AuthError("same_as_now");
       resets.delete(challengeId);
       account.password = password;
       signedIn = null;
@@ -814,6 +816,7 @@ export function createStubAuthClient(options: StubOptions = {}): AuthClient {
       if (current !== account.password) throw new AuthError("invalid_credentials");
       if (next.length < 10) throw new AuthError("not_accepted");
       if (LEAKED.has(next.toLowerCase())) throw new AuthError("leaked_password");
+      if (next === account.password) throw new AuthError("same_as_now");
       account.password = next;
       account.otherDevices = [];
     },

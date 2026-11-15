@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { TextField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
-import { groupDigits, kampalaToday, monthYear, parseShillings } from "@/goals/amount";
+import { groupDigits, kampalaToday, monthYear, parseShillings, targetTooLarge } from "@/goals/amount";
 import { addMonths } from "@/goals/dates";
 import { useGroups } from "@/goals/GoalsProvider";
 import { describeGroupError, groupOutcomeUnknown, MAX_DISPLAY_NAME } from "@/goals/groups";
@@ -65,6 +65,7 @@ export default function NewGroup() {
     if (!cleanName) found.name = "Give the group goal a name.";
     else if (cleanName.length > 60) found.name = "Keep the name to 60 characters.";
     if (!total) found.target = "Enter how much the group needs, in shillings.";
+    else if (targetTooLarge(total)) found.target = targetTooLarge(total) ?? undefined;
     if (!own) found.part = "Enter your own part, in shillings.";
     else if (total && own > total) found.part = "Your part cannot be more than the group's target.";
     if (!cleanYou) found.you = "Enter the name the others will see.";

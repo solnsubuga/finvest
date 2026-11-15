@@ -23,6 +23,7 @@ const destination = (id: string, status: string, kind = "mobile_money", network:
 
 const clients = (destinations: ReturnType<typeof destination>[]): ClientsApi => ({
   search: () => Promise.resolve([]),
+  list: () => Promise.resolve({ clients: [], nextAfter: null, more: false }),
   client: () => Promise.resolve({ destinations } as unknown as ClientPage),
   propose: () => Promise.reject(new Error("unused")),
   decide: () => Promise.reject(new Error("unused")),

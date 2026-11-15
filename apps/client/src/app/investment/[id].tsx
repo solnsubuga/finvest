@@ -35,6 +35,7 @@ export default function InvestmentDetail() {
         investment?.status === "awaiting_payment" ? (
           <Button
             label={`Pay ${formatAmount(investment.amount)}`}
+            variant="lime"
             onPress={() => router.push(`/pay/${investment.id}`)}
             testID="pay-now"
           />

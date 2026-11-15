@@ -18,6 +18,7 @@ jest.mock("expo-router", () => {
 
 const CLEAR: Standing = {
   runningInvestments: 0,
+  unpaidInvestments: 0,
   owed: [],
   openDeposits: 0,
   openPayouts: 0,
@@ -75,6 +76,28 @@ describe("the Close account screen", () => {
     expect(screen.getByText(/UGX 8,164,760/)).toBeTruthy();
     expect(screen.getByTestId("close-withdraw-first")).toBeTruthy();
     expect(screen.getByTestId("close-start").props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it("names unpaid investments apart from the running ones, so the count matches the amount", async () => {
+    await show(
+      fake({
+        ...CLEAR,
+        runningInvestments: 3,
+        unpaidInvestments: 1,
+        owed: [{ minor: 1_534_000, currency: "UGX" }],
+        blockers: ["investments_running", "investments_unpaid", "money_owed"],
+      }),
+    );
+    expect(await screen.findByText("3 investments still running")).toBeTruthy();
+    expect(screen.getByText(/UGX 1,534,000/)).toBeTruthy();
+    expect(screen.getByText("1 investment waiting for payment")).toBeTruthy();
+    expect(screen.getByText("Pay to start earning, or let it lapse.")).toBeTruthy();
+  });
+
+  it("says nothing about unpaid investments when there are none", async () => {
+    await show(fake({ ...CLEAR, runningInvestments: 1, blockers: ["investments_running"] }));
+    expect(await screen.findByText("1 investment still running")).toBeTruthy();
+    expect(screen.queryByText(/waiting for payment/)).toBeNull();
   });
 
   it("asks once everything is clear, with the client's reason, and can be taken back", async () => {

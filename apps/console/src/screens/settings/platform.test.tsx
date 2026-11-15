@@ -109,7 +109,8 @@ describe("settings: platform rules", () => {
 describe("settings: platform helpers", () => {
   it("formats values the way staff read them", () => {
     expect(shillings(5_000_000)).toBe("UGX 5,000,000");
-    expect(shillings(null)).toBe("Not set");
+    expect(shillings(null)).toBe("No limit");
+    expect(shillings(null, "Not set")).toBe("Not set");
     expect(remindersText([1, 7])).toBe("7 days and 1 day before");
     expect(remindersText([14, 7, 1])).toBe("14 days, 7 days and 1 day before");
     expect(remindersText([])).toBe("None");

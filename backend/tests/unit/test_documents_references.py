@@ -9,7 +9,7 @@ from app.modules.documents.service import DocumentKind, DocumentStatus, Document
 
 def view(kind: DocumentKind, key: str = "key") -> DocumentView:
     return DocumentView(
-        id="Pq30vNa2AAAAAAAAAAAA",
+        id="-P6TNMgBJ0qtT-C9Ed1Q",
         client_id="client",
         kind=kind,
         idempotency_key=key,
@@ -35,7 +35,8 @@ def view(kind: DocumentKind, key: str = "key") -> DocumentView:
     ],
 )
 def test_every_kind_has_the_reference_its_pdf_prints(kind: DocumentKind, prefix: str) -> None:
-    assert view(kind).reference == f"{prefix}-Pq30vNa2AAAAAAAAAAAA"
+    # Short enough to read out, and never the raw ID, which can start with a dash.
+    assert view(kind).reference == f"{prefix}-3R0D5-3X44V"
 
 
 def test_only_an_investment_note_says_whether_it_started_or_ended() -> None:

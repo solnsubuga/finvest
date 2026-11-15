@@ -91,4 +91,12 @@ describe("maturities screen", () => {
     renderMaturities(notConnectedMaturitiesApi);
     expect(await screen.findByRole("alert")).toHaveTextContent("Maturities are not connected to the Finvest service yet.");
   });
+
+  it("sums up today, the two weeks ahead and money held in tiles, and offers the day by day as a file", async () => {
+    renderMaturities();
+    const tiles = await screen.findByRole("region", { name: "Maturities at a glance" });
+    expect(within(tiles).getByRole("group", { name: "Coming up, two weeks" })).toHaveTextContent(/terms?/);
+    expect(within(tiles).getByRole("group", { name: "Held for clients" })).toHaveTextContent("UGX 1,026,490");
+    expect(screen.getByRole("button", { name: "Export day by day" })).toBeEnabled();
+  });
 });

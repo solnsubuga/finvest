@@ -192,6 +192,20 @@ describe("identity checks screen", () => {
     expect(await within(review).findByText("Rejected. This decision is final.")).toBeInTheDocument();
   });
 
+  it("says another client holds the ID when an approval meets one", async () => {
+    const api = createStubKycApi(0);
+    vi.spyOn(api, "approve").mockRejectedValue(new KycError("duplicate_document"));
+    const getCheck = vi.spyOn(api, "getCheck");
+    const { user } = renderScreen(api);
+    const review = await openCheck("David Mugisha");
+    const asked = getCheck.mock.calls.length;
+    await user.type(within(review).getByLabelText("Reason for your decision"), "Looks fine");
+    await user.click(within(review).getByRole("button", { name: "Approve" }));
+    await user.click(within(review).getByRole("button", { name: "Yes, approve" }));
+    expect(await within(review).findByRole("alert")).toHaveTextContent("Another approved client already holds this identity document");
+    expect(getCheck.mock.calls.length).toBeGreaterThan(asked);
+  });
+
   it("keeps the form and says why when a decision fails", async () => {
     const api = createStubKycApi(0);
     vi.spyOn(api, "escalate").mockRejectedValue(new KycError("unavailable"));

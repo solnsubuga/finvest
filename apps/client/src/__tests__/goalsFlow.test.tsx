@@ -1,4 +1,5 @@
-import { fireEvent, screen } from "@testing-library/react-native";
+import { act, fireEvent, screen } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
@@ -183,5 +184,17 @@ describe("goals", () => {
     expect(rows.length).toBeGreaterThan(0);
     await fireEvent.press(rows[0]!);
     expect(screen).toHavePathname(`/investment/${rows[0]!.props.testID.replace("saving-", "")}`);
+  });
+
+  it.each([
+    ["/goals/start?target=0"],
+    ["/goals/plan"],
+  ])("sends %s opened without the earlier steps back to step 1", async (path) => {
+    await signIn("772123456");
+    await screen.findByTestId("home");
+    await act(async () => router.push(path));
+    expect(await screen.findByTestId("goal-name")).toBeTruthy();
+    expect(screen).toHavePathname("/goals/new");
+    expect(screen.queryByTestId("create-and-save")).toBeNull();
   });
 });

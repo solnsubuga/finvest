@@ -10,6 +10,8 @@ interface Me {
   name: string;
 }
 
+/** The sample list's page size, small so paging can be seen with a handful of clients. */
+const LIST_PAGE = 4;
 const wait = () => new Promise((resolve) => setTimeout(resolve, 150));
 const copy = <T>(value: T): T => structuredClone(value);
 
@@ -41,13 +43,13 @@ function samples(now: number): ClientPage[] {
   };
   return [
     {
-      account: account("-NstubClient00000042", "+256772123456", "sarah.n@example.com", "active", "2026-08-03T07:12:00Z", { hasAuthenticator: true }),
+      account: account("-NstubClient00000042", "+256772123456", "sarah.n@example.com", "active", "2026-08-03T07:12:00Z", { hasAuthenticator: true, restrictedUntil: "2026-11-16T08:00:00Z" }),
       verifiedName: "Sarah Nakato",
       identityCheck: { id: "-NstubCheck000000042", status: "approved", submittedAt: "2026-08-03T07:40:00Z", decidedAt: "2026-08-03T11:05:00Z", accountNumber: "1004382917" },
       owed: [
-        { accountCode: "client.holding", accountReference: "TB364-0042", minor: 2_500_000, currency: "UGX" },
-        { accountCode: "client.interest_accrued", accountReference: "TB364-0042", minor: 61_438, currency: "UGX" },
-        { accountCode: "client.awaiting_start", accountReference: null, minor: 500_000, currency: "UGX" },
+        { accountCode: "client.holding", accountReference: "-NinvestA00000000042", productName: "364 Day Treasury Bill", maturesOn: "2027-08-12", minor: 2_500_000, currency: "UGX" },
+        { accountCode: "client.interest_accrued", accountReference: "-NinvestA00000000042", productName: "364 Day Treasury Bill", maturesOn: "2027-08-12", minor: 61_438, currency: "UGX" },
+        { accountCode: "client.awaiting_start", accountReference: null, productName: null, maturesOn: null, minor: 500_000, currency: "UGX" },
       ],
       destinations: [
         {
@@ -82,7 +84,7 @@ function samples(now: number): ClientPage[] {
       account: account("-NstubClient00000017", "+256701987654", "j.okot@example.com", "locked", "2026-09-21T10:00:00Z", { lastSignedInAt: ago(72) }),
       verifiedName: "James Okot",
       identityCheck: { id: "-NstubCheck000000017", status: "approved", submittedAt: "2026-09-21T10:20:00Z", decidedAt: "2026-09-22T08:00:00Z", accountNumber: "1007719354" },
-      owed: [{ accountCode: "client.holding", accountReference: "FD12-0017", minor: 10_000_000, currency: "UGX" }],
+      owed: [{ accountCode: "client.holding", accountReference: "-NinvestB00000000017", productName: "364 Day Treasury Bill", maturesOn: "2027-03-01", minor: 10_000_000, currency: "UGX" }],
       destinations: [
         {
           id: "-NstubDest0000000017",
@@ -142,7 +144,7 @@ function samples(now: number): ClientPage[] {
       account: account("-NstubClient00000058", "+256773580058", "a.namuli@example.com", "locked", "2026-07-14T08:00:00Z", { lastSignedInAt: ago(4) }),
       verifiedName: "Annet Namuli",
       identityCheck: { id: "-NstubCheck000000058", status: "approved", submittedAt: "2026-07-14T08:30:00Z", decidedAt: "2026-07-14T12:00:00Z", accountNumber: "1005880412" },
-      owed: [{ accountCode: "client.holding", accountReference: "TB182-0058", minor: 4_000_000, currency: "UGX" }],
+      owed: [{ accountCode: "client.holding", accountReference: "-NinvestC00000000058", productName: "182 Day Treasury Bill", maturesOn: "2027-02-10", minor: 4_000_000, currency: "UGX" }],
       destinations: [],
       locks: [],
       freezes: [{ id: "-NstubFreeze00000058", frozenAt: ago(3), reason: "Lost my phone on a boda this morning" }],
@@ -154,7 +156,7 @@ function samples(now: number): ClientPage[] {
       account: account("-NstubClient00000099", "+256752000111", null, "unclaimed", "2026-11-01T06:00:00Z", { hasPasskey: false, lastSignedInAt: null }),
       verifiedName: null,
       identityCheck: null,
-      owed: [{ accountCode: "client.holding", accountReference: "TB182-0099", minor: 1_200_000, currency: "UGX" }],
+      owed: [{ accountCode: "client.holding", accountReference: "-NinvestD00000000099", productName: "182 Day Treasury Bill", maturesOn: "2027-04-21", minor: 1_200_000, currency: "UGX" }],
       destinations: [],
       locks: [],
       freezes: [],
@@ -215,6 +217,41 @@ export function createStubClientsApi(
           (digits(text).length >= 9 && digits(page.account.phone) === digits(text)),
       );
       return found ? [copy(found.account)] : [];
+    },
+    async list(query, status, after) {
+      await wait();
+      const text = query.trim().toLowerCase();
+      const words = text.split(/\s+/).filter(Boolean);
+      const number = text.replace(/[\s-]/g, "");
+      const exact = (page: ClientPage) =>
+        page.account.id.toLowerCase() === text ||
+        (number.length === 10 && page.identityCheck?.accountNumber === number) ||
+        (digits(text).length >= 9 && digits(page.account.phone) === digits(text));
+      const named = (page: ClientPage) => {
+        const name = page.verifiedName?.toLowerCase() ?? "";
+        return name !== "" && words.every((word) => name.includes(word));
+      };
+      const emailed = (page: ClientPage) => words.length === 1 && (page.account.email?.toLowerCase().includes(text) ?? false);
+      const one = text ? pages.find(exact) : undefined;
+      const found = (one ? [one] : pages.filter((page) => !text || named(page) || emailed(page)))
+        .filter((page) => status === null || page.account.status === status)
+        .sort((a, b) => b.account.createdAt.localeCompare(a.account.createdAt));
+      const start = after ? found.findIndex((page) => page.account.id === after) + 1 : 0;
+      const shown = text ? found : found.slice(start, start + LIST_PAGE);
+      const last = shown.at(-1);
+      return {
+        clients: shown.map((page) => ({
+          id: page.account.id,
+          verifiedName: page.verifiedName,
+          accountNumber: page.identityCheck?.status === "approved" ? page.identityCheck.accountNumber : null,
+          phone: page.account.phone,
+          email: page.account.email,
+          status: page.account.status,
+          createdAt: page.account.createdAt,
+        })),
+        nextAfter: !text && last && start + LIST_PAGE < found.length ? last.account.id : null,
+        more: false,
+      };
     },
     async client(id) {
       await wait();

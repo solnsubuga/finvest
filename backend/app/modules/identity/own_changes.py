@@ -75,6 +75,9 @@ class OwnChangeService:
         problem = password_problem(new, (client.phone, client.email))
         if problem is not None:
             raise _field("new_password", problem)
+        if await self.hasher.verify(new, stored):
+            # A change that changes nothing would still sign out every other device.
+            raise _field("new_password", "same_as_now")
         if await self.codes.identity.is_breached(new):
             raise _field("new_password", "leaked_password")
         hashed = await self.hasher.hash(new)

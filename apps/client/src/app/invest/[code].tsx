@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { isAboveLargest, largestSentence } from "@/investing/limits";
 import { View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -8,7 +9,7 @@ import { Button } from "@/components/Button";
 import { Field, Input } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
-import { formatAmount, formatDay, groupDigits, kindLabel, parseWholeAmount, termLabel, wholeUnits } from "@/investing/format";
+import { formatAmount, formatDay, groupDigits, interestPaidLabel, kindLabel, parseWholeAmount, termLabel, wholeUnits } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { Product } from "@/investing/types";
@@ -41,6 +42,7 @@ export default function ProductDetail() {
         product ? (
           <Button
             label="Review"
+            variant="lime"
             disabled={!ready}
             onPress={() => router.push({ pathname: "/invest/review", params: { code: product.code, amount: String(amount?.minor ?? "") } })}
             testID="review"
@@ -67,13 +69,22 @@ export default function ProductDetail() {
             <Title>{product.name}</Title>
           </View>
           <Headline product={product} />
+          <Facts product={product} />
           {product.status === "paused" ? (
             <Notice tone="warning">This product is paused for new investments. You can still see the rate.</Notice>
           ) : null}
           <Field
             label="How much do you want to invest?"
             hint={`From ${formatAmount(product.minimum)}`}
-            error={calc.state === "failed" ? calc.message : text && !amount ? "Type a whole amount, such as 1,000,000." : null}
+            error={
+              amount && isAboveLargest(amount)
+                ? largestSentence(amount.currency)
+                : calc.state === "failed"
+                  ? calc.message
+                  : text && !amount
+                    ? "Type a whole amount, such as 1,000,000."
+                    : null
+            }
           >
             <Input
               label="Amount"
@@ -106,6 +117,27 @@ function Headline({ product }: { product: Product }) {
           ? `Interest paid monthly. Leave it in as long as you like.`
           : `Fixed for ${product.termDays} days. Interest is added daily and paid at maturity.`}
       </Txt>
+    </View>
+  );
+}
+
+/** The product's terms at a glance, as on the canvas. */
+function Facts({ product }: { product: Product }) {
+  return (
+    <View style={{ gap: 8 }} testID="product-facts">
+      <Txt size={fontSizes.sm} weight="bold" color={colors.muted} accessibilityRole="header">
+        About this product
+      </Txt>
+      <DetailList
+        rows={[
+          { label: "Kind", value: kindLabel[product.kind] },
+          { label: "Term", value: product.termDays === null ? "Open, no end date" : `${product.termDays} days` },
+          { label: "Smallest amount", value: formatAmount(product.minimum) },
+          { label: "Interest", value: interestPaidLabel[product.interestPaid] },
+          { label: "Rate after tax", value: `${product.ratePercent}% a year, fixed when it starts` },
+          { label: "Starts", value: "The day your payment is confirmed" },
+        ]}
+      />
     </View>
   );
 }

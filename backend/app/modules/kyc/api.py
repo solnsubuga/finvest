@@ -320,8 +320,10 @@ async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> St
     transaction."""
     standing = await screening.latest_outcome(session, view.client_id)
     phone = await phone_lookups.phone_name_for_check(session, view.id)
+    held = await service.document_held_elsewhere(session, view)
     return _staff_check(
         view,
+        held,
         None if standing is None else standing.outcome,
         None
         if phone is None
@@ -337,6 +339,7 @@ async def _staff_check_now(session: AsyncSession, view: service.CheckView) -> St
 
 def _staff_check(
     view: service.CheckView,
+    document_held: bool,
     screening_outcome: ScreeningOutcome | None,
     phone_name: PhoneNameOut | None,
 ) -> StaffCheck:
@@ -347,7 +350,7 @@ def _staff_check(
         document_type=view.document_type,
         status=view.status,
         submitted_at=view.submitted_at,
-        review_flags=list(view.review_flags),
+        review_flags=list(service.with_held(view.review_flags, held=document_held)),
         client_id=view.client_id,
         document_country=view.document_country,
         surname=details.surname if details else None,
@@ -369,7 +372,8 @@ def _staff_check(
             for status, decision in _DECISIONS.items()
             if status in staff_moves(view.status)
             and not (
-                decision == "approve" and phone_name is not None and phone_name.blocks_approval
+                decision == "approve"
+                and (document_held or (phone_name is not None and phone_name.blocks_approval))
             )
         ],
         screening=screening_outcome,

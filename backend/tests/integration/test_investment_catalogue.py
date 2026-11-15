@@ -92,8 +92,8 @@ async def test_clients_see_live_products_with_the_rate_after_tax_only(
     async with app_database.actor_transaction(new_client()) as session:
         products = await investments.client_products(session, NOW)
     assert [(p.code, p.rate_percent, p.minimum.to_major(), p.term_days) for p in products] == [
-        ("TREA-91", "10.63", "100000", 91),
-        ("TREA-182", "11.69", "200000", 182),
+        ("TREA-91", "10.62", "100000", 91),
+        ("TREA-182", "11.68", "200000", 182),
     ]
     # Nothing a client is given names the tax or the rate before it.
     assert not [name for name in investments.ClientProduct.__slots__ if "tax" in name]
@@ -114,7 +114,7 @@ async def test_a_quote_is_what_the_design_shows(app_database: Database) -> None:
     assert quote.returns == ClientReturns(interest=ugx(26_490), total=ugx(1_026_490))
     assert quote.starts_on == date(2026, 11, 13)
     assert quote.matures_on == date(2027, 2, 12)
-    assert quote.product.rate_percent == "10.63"
+    assert quote.product.rate_percent == "10.62"
 
 
 @pytest.mark.parametrize(
@@ -538,6 +538,11 @@ async def test_an_approval_racing_a_withdrawal_ends_one_way(app_database: Databa
     outcomes = sorted(await asyncio.gather(approve(), take_back()))
     async with app_database.actor_transaction(daniel) as session:
         history = await investments.rate_history(session, "TREA-182")
-        final = (await investments.list_proposals(session, daniel))[0]
+        # By ID: the test database is shared, so the newest proposal may be another test's.
+        final = next(
+            found
+            for found in await investments.list_proposals(session, daniel)
+            if found.id == proposal.id
+        )
     assert outcomes in (["approved", "conflict"], ["conflict", "withdrawn"])
     assert (proposal.rate in history) is (final.status is ProposalStatus.APPROVED)

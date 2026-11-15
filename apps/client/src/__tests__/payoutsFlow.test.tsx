@@ -124,7 +124,14 @@ describe("payout accounts", () => {
     await signIn();
     await open("/payouts/add");
     await fireEvent.press(await screen.findByTestId("payout-kind-bank"));
+    // The name starts as the one on the client's ID.
+    expect(screen.getByTestId("holder-name-input").props.value).toBe("Amara Nakato");
+    await fireEvent.changeText(screen.getByTestId("holder-name-input"), "Someone Else");
+    expect(screen.getByTestId("holder-name-differs")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("holder-name-input"), "NAKATO amara");
+    expect(screen.queryByTestId("holder-name-differs")).toBeNull();
     // Nothing chosen or typed: refused on the form, nothing is sent.
+    await fireEvent.changeText(screen.getByTestId("holder-name-input"), "");
     await fireEvent.press(screen.getByTestId("payout-account-save"));
     expect(await screen.findByText("Choose your bank from the list.")).toBeTruthy();
     expect(screen.getByText("Enter the name the account is in.")).toBeTruthy();

@@ -157,7 +157,7 @@ class ClientInvestment:
     product_name: str
     status: InvestmentStatus
     amount: Money
-    # "10.63": the yearly rate after tax that this investment earns.
+    # "10.62": the yearly rate after tax that this investment earns.
     rate_percent: str
     term_days: int | None
     at_maturity: AtMaturity | None
@@ -880,15 +880,24 @@ def _client_view(investment: Investment, today: date) -> ClientInvestment:
     )
 
 
-_RUNNING_FOR_CLIENT = text(
-    "SELECT count(*) FROM investments WHERE client_id = :client_id "
-    "AND status IN ('awaiting_payment', 'active')"
+_COUNT_FOR_CLIENT = text(
+    "SELECT count(*) FROM investments WHERE client_id = :client_id AND status = :status"
 )
 
 
 async def running_count(session: AsyncSession, client_id: str) -> int:
-    """How many of the client's investments are waiting for payment or still running."""
-    return int(await session.scalar(_RUNNING_FOR_CLIENT, {"client_id": client_id}) or 0)
+    """How many of the client's investments have started and are still running, goal savings
+    included: the same ones Portfolio lists as running."""
+    found = await session.scalar(_COUNT_FOR_CLIENT, {"client_id": client_id, "status": "active"})
+    return int(found or 0)
+
+
+async def unpaid_count(session: AsyncSession, client_id: str) -> int:
+    """How many of the client's investments are still waiting for payment."""
+    found = await session.scalar(
+        _COUNT_FOR_CLIENT, {"client_id": client_id, "status": "awaiting_payment"}
+    )
+    return int(found or 0)
 
 
 async def withdrawable_for_client(

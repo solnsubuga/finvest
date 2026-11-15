@@ -28,3 +28,8 @@ jobs:
       revision: ${{ github.sha }}
       force_recreate: ${{ inputs.force_recreate || false }}
     secrets: inherit
+
+  # Reads the live headers and TLS from outside once the release is up.
+  edge-check:
+    needs: deploy
+    uses: ./.github/workflows/edge-check.yml

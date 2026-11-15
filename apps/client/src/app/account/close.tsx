@@ -39,6 +39,16 @@ function items(standing: Standing): Item[] {
           href: "/portfolio",
         }
       : { key: "investments", title: "No investments running", detail: "Nothing is still earning", clear: true },
+    // Counted apart from the running ones: they hold no money, so they are not in the amount above.
+    standing.unpaidInvestments
+      ? {
+          key: "unpaid",
+          title: `${plural(standing.unpaidInvestments, "investment", "investments")} waiting for payment`,
+          detail: `Pay to start earning, or let ${standing.unpaidInvestments === 1 ? "it" : "them"} lapse.`,
+          clear: false,
+          href: "/portfolio",
+        }
+      : null,
     !standing.runningInvestments && standing.owed.length
       ? {
           key: "owed",

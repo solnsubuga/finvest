@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Button } from "@/components/ui/button.tsx";
+import { saveText } from "@/download.ts";
 import { cn } from "@/lib.ts";
+import { figuresCsv, figuresFilename } from "./export.ts";
 import { figuresErrorMessage, type Amount, type Attention, type Currency, type Figures, type FiguresApi } from "./figures.ts";
 
 const MINOR_DIGITS: Record<Currency, number> = { UGX: 0, USD: 2 };
@@ -206,7 +208,12 @@ export function FiguresSection({ api, now }: { api: FiguresApi; now: () => Date 
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="m-0 text-md text-muted">{LONG_DAY.format(new Date(`${figures.today}T00:00:00Z`))}, Kampala.</p>
-        {picker}
+        <div className="flex flex-wrap gap-2">
+          {picker}
+          <Button variant="secondary" onClick={() => saveText(figuresCsv(figures), figuresFilename(figures))}>
+            Export the day's figures
+          </Button>
+        </div>
       </div>
 
       {money ? (

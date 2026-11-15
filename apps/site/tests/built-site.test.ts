@@ -71,7 +71,7 @@ describe("the built site", () => {
     }
   });
 
-  it("links only to pages that exist, the client app, or an email address", () => {
+  it("links only to pages that exist, the client app, its store listings, or an email address", () => {
     for (const path of pages) {
       const hrefs = [...read(path).matchAll(/<a\b[^>]*\bhref="([^"]*)"/g)].map((m) => m[1] ?? "");
       expect(hrefs.length, name(path)).toBeGreaterThan(0);
@@ -83,7 +83,7 @@ describe("the built site", () => {
           expect(read(path), `${name(path)} links to ${href}`).toContain(`id="${id}"`);
         } else {
           expect(href, name(path)).toMatch(
-            /^(https:\/\/app(-staging)?\.finvestug\.com(\/[a-z-]*)?|mailto:[a-z]+@finvestug\.com|tel:\+?[0-9]+)$/,
+            /^(https:\/\/app(-staging)?\.finvestug\.com(\/[a-z-]*)?|https:\/\/(apps\.apple\.com|play\.google\.com)\/[^"\s]+|mailto:[a-z]+@finvestug\.com|tel:\+?[0-9]+)$/,
           );
         }
       }

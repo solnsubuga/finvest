@@ -13,6 +13,7 @@ from app.modules.organisations.domain.applications import (
     clean_registration,
     clean_role,
     document_matches_type,
+    most_approvals,
     problems,
 )
 
@@ -163,3 +164,18 @@ def test_a_document_must_start_as_its_type_does(
     content_type: str, data: bytes, matches: bool
 ) -> None:
     assert document_matches_type(content_type, data) is matches
+
+
+@pytest.mark.parametrize(
+    ("kind", "people", "most"),
+    [
+        (Kind.COMPANY, 1, 1),
+        (Kind.COMPANY, 2, 2),
+        (Kind.COMPANY, 5, 5),
+        # A group needs two, so two may be chosen before the second person is on it.
+        (Kind.GROUP, 1, 2),
+        (Kind.GROUP, 3, 3),
+    ],
+)
+def test_the_strictest_rule_is_everyone_on_the_draft(kind: Kind, people: int, most: int) -> None:
+    assert most_approvals(kind, people) == most
