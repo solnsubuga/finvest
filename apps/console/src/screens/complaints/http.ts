@@ -13,6 +13,7 @@ import {
   type Complaint,
   type ComplaintDetail,
   type ComplaintsApi,
+  registerFilename,
   type EventAction,
   type Outcome,
   type ReceivedVia,
@@ -205,6 +206,14 @@ export function createHttpComplaintsApi(http: Http): ComplaintsApi {
   }
 
   return {
+    async exportRegister() {
+      try {
+        // A POST: every export is recorded on the audit trail.
+        return { file: await http.download("/staff/complaints.csv", { method: "POST" }), filename: registerFilename() };
+      } catch (error) {
+        throw toComplaintsError(error);
+      }
+    },
     async register(show) {
       try {
         return toRegister(await http.request<RegisterJson>("GET", `/staff/complaints?${new URLSearchParams({ show }).toString()}`));

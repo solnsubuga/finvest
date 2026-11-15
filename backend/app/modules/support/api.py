@@ -3,12 +3,15 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
 
 from app.infrastructure.database import Database
+from app.modules.audit import service as audit
+from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
+from app.modules.kyc import service as kyc
 from app.modules.support import complaints, conversations
 from app.modules.support.domain.chat import MAX_MESSAGE, MAX_SAVED_TITLE, AuthorKind, Topic
 from app.modules.support.domain.complaints import (
@@ -24,6 +27,7 @@ from app.modules.support.domain.complaints import (
     ReceivedVia,
     Status,
 )
+from app.modules.support.domain.register import ComplaintRow, complaints_csv
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
@@ -632,6 +636,65 @@ async def complaint_register(
             target_working_days=complaints.WORKING_DAYS_TO_REPLY,
         ),
         complaints=[_for_staff(view) for view in listed],
+    )
+
+
+# A POST, because every export is recorded on the audit trail.
+@staff_router.post(
+    "/complaints.csv",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}}},
+    summary="Every complaint as a CSV file: the register",
+)
+async def export_complaints(staff: ComplaintsStaff, database: Db, clock: Time) -> Response:
+    """Newest first, with each client's account number and name. Every export is on the audit
+    trail. More than 10,000 complaints is refused with `too_many_complaints`."""
+    today = business_date(clock.now())
+    async with database.actor_transaction(staff.actor) as session:
+        listed = await complaints.whole_register(session, today)
+        identities = await kyc.identities(session, sorted({c.client_id for c in listed}))
+        await audit.record(
+            session,
+            AuditEvent(
+                category="access",
+                action="complaints.register_exported",
+                resource_type="complaints_register",
+                resource_id="all",
+                actor=AuditActor.staff(staff.staff_id),
+                details={"complaints": len(listed)},
+            ),
+            clock,
+        )
+    rows = []
+    for item in listed:
+        found = identities.get(item.client_id)
+        rows.append(
+            ComplaintRow(
+                reference=item.reference,
+                received_at=item.received_at,
+                received_via=item.received_via,
+                category=item.category,
+                summary=item.summary,
+                account_number=found.account_number if found else None,
+                name=found.verified_name if found else None,
+                amount_minor=item.amount.minor if item.amount else None,
+                currency=item.amount.currency.value if item.amount else None,
+                status=item.status,
+                due_on=item.due_on,
+                overdue=item.overdue,
+                closed_at=item.closed_at,
+                outcome=item.outcome,
+                client_accepted=item.client_accepted,
+            )
+        )
+    name = f"finvest-complaints-register-{today.isoformat()}.csv"
+    return Response(
+        content=complaints_csv(rows),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{name}"',
+            "Cache-Control": "no-store",
+        },
     )
 
 

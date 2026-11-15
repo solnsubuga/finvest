@@ -15,6 +15,7 @@ import {
   notConnectedComplaintsApi,
   type ComplaintDetail,
   type ComplaintsApi,
+  type RegisterFile,
   type NewComplaint,
   type Register,
   type Show,
@@ -48,6 +49,8 @@ interface ComplaintsScreenProps {
   newKey?: () => string;
   /** The Kampala business day, as a calendar date. */
   today?: () => string;
+  /** Hands the exported register to the browser. Tests pass their own. */
+  save?: (file: RegisterFile) => void;
 }
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
@@ -60,6 +63,7 @@ export function ComplaintsScreen({
   canClose,
   newKey = () => crypto.randomUUID(),
   today = kampalaToday,
+  save = saveFile,
 }: ComplaintsScreenProps) {
   const [show, setShow] = useState<Show>("open");
   const [register, setRegister] = useState<Load<Register>>({ state: "loading" });
@@ -251,18 +255,21 @@ export function ComplaintsScreen({
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <PageHeader title="Complaints" summary={SUMMARY} />
-        {canManage ? (
-          <Button
-            className="px-[18px]"
-            disabled={logging}
-            onClick={() => {
-              setLogging(true);
-              setFailed(null);
-            }}
-          >
-            Log a complaint
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap items-start gap-2">
+          <ExportRegister api={api} save={save} />
+          {canManage ? (
+            <Button
+              className="px-[18px]"
+              disabled={logging}
+              onClick={() => {
+                setLogging(true);
+                setFailed(null);
+              }}
+            >
+              Log a complaint
+            </Button>
+          ) : null}
+        </div>
       </div>
       {register.state === "loading" ? (
         <p role="status" className="m-0 text-md text-muted">
@@ -410,5 +417,43 @@ export default function ComplaintsPage() {
       canManage={session ? can(session, "complaints.manage") : false}
       canClose={session ? can(session, "complaints.close") : false}
     />
+  );
+}
+
+/** Hands the browser the exported file. */
+function saveFile({ file, filename }: RegisterFile) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function ExportRegister({ api, save }: { api: ComplaintsApi; save: (file: RegisterFile) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function run() {
+    setBusy(true);
+    setError(null);
+    try {
+      save(await api.exportRegister());
+    } catch (failure) {
+      setError(complaintsErrorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <Button variant="secondary" disabled={busy} onClick={() => void run()}>
+        {busy ? "Preparing the register" : "Export register"}
+      </Button>
+      {error ? (
+        <p role="alert" className="m-0 text-sm font-bold text-danger">
+          {error}
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -42,6 +42,7 @@ A complaint is a regulated record. It gets a reference such as `C-1001`, a deadl
 | `POST /client/complaints` | Client | Make a complaint from the app, with a `client_key`. |
 | `GET /client/complaints/{id}` | Client | One complaint with its status, deadline and outcome. |
 | `GET /staff/complaints` | `complaints.view` | The register and its figures. `show` is `open`, `closed` or `all`. |
+| `POST /staff/complaints.csv` | `complaints.view` | The whole register as a CSV file, newest first, with each client's account number and name. Every export is on the audit trail (`complaints.register_exported`). The details and written resolution are left out. More than 10,000 complaints is refused with `too_many_complaints`. |
 | `POST /staff/complaints` | `complaints.manage` | Log a complaint that came by chat, phone, email, letter or in person, with a `client_key`. |
 | `GET /staff/complaints/{id}` | `complaints.view` | One complaint with its history and any outcome waiting to be confirmed (`pending_outcome`), and the last rejected outcome while it is the latest (`last_rejected`). |
 | `PUT /staff/complaints/{id}/owner` | `complaints.manage` | Give it to a member of staff. |
