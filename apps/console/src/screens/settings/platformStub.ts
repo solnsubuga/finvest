@@ -26,6 +26,7 @@ export type PlatformSample = "sample" | "mine" | "empty";
 
 const SECTIONS: Record<SettingKey, Section> = {
   payment_channels: "channels",
+  card_payments: "channels",
   public_holidays: "calendar",
   bank_payout_cutoff: "calendar",
   maturity_reminders: "calendar",
@@ -53,7 +54,10 @@ const HOLIDAYS = [
 ];
 
 const DEFAULTS: Values = {
-  payment_channels: { mtnPayIn: true, airtelPayIn: true, bankPayIn: true, mtnPayout: true, airtelPayout: true, bankPayout: true },
+  // Cards start paused, as a stored value from before cards existed reads them.
+  payment_channels: { mtnPayIn: true, airtelPayIn: true, bankPayIn: true, cardPayIn: false, mtnPayout: true, airtelPayout: true, bankPayout: true },
+  // The backend's default: 3.5% on top, UGX 5,000,000 a payment and UGX 10,000,000 in 30 days.
+  card_payments: { chargeBasisPoints: 350, maxPaymentMinor: 5_000_000, max30DaysMinor: 10_000_000 },
   public_holidays: HOLIDAYS,
   bank_payout_cutoff: "14:00",
   maturity_reminders: [7, 1],
@@ -64,7 +68,7 @@ const DEFAULTS: Values = {
 };
 
 const APPROVED: Partial<Values> = {
-  payment_channels: { ...DEFAULTS.payment_channels, airtelPayout: false },
+  payment_channels: { ...DEFAULTS.payment_channels, cardPayIn: true, airtelPayout: false },
   staff_idle_minutes: 15,
   office_networks: [
     { network: "196.43.130.0/24", label: "Kampala office" },

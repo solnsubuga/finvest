@@ -4,6 +4,7 @@ import type { Directory } from "@/directory/api.ts";
 import { cn } from "@/lib.ts";
 import { stamp } from "./labels.ts";
 import {
+  basisPointsFrom,
   BOUNDS,
   CHANNEL_LABELS,
   CHANNELS,
@@ -14,6 +15,7 @@ import {
   SettingsError,
   settingsErrorMessage,
   shillings,
+  type CardPayments,
   type Channels,
   type Decision,
   type Holiday,
@@ -21,6 +23,7 @@ import {
   type LimitsApi,
   type LimitsScreen,
   type OfficeNetwork,
+  percentText,
   type PlatformSettings,
   type PlatformSettingsApi,
   type Problem,
@@ -228,7 +231,12 @@ export function PlatformSections({ settings, limits, directory }: PlatformSectio
           )}
         </Card>
 
-        {platformCard("Payment channels", (data) => item("payment_channels", data, CHANNELS_VIEW))}
+        {platformCard("Payment channels", (data) => (
+          <>
+            {item("payment_channels", data, CHANNELS_VIEW)}
+            {item("card_payments", data, CARD_VIEW)}
+          </>
+        ))}
 
         {platformCard("Calendar and timing", (data) => (
           <>
@@ -655,6 +663,77 @@ const CHANNELS_VIEW: ItemView<Channels> = {
     </fieldset>
   ),
 };
+
+// Card payments -------------------------------------------------------------------------------
+
+const CARD_ROWS: readonly { key: "maxPaymentMinor" | "max30DaysMinor"; label: string }[] = [
+  { key: "maxPaymentMinor", label: "Most for one card payment" },
+  { key: "max30DaysMinor", label: "Most by card in any 30 days" },
+];
+
+const CARD_VIEW: ItemView<CardPayments> = {
+  label: "Card charge and limits",
+  summary: (value) => (value.chargeBasisPoints === 0 ? "No charge to clients" : `${percentText(value.chargeBasisPoints)} on top`),
+  details: (value, inUse) => (
+    <dl className="m-0 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-x-4 gap-y-1.5 text-md">
+      <dt className="text-sm text-muted">Card charge the client pays on top</dt>
+      <dd className="m-0 flex flex-wrap items-center justify-end text-right font-bold tabular-nums">
+        <span>{value.chargeBasisPoints === 0 ? "None, Finvest bears it" : percentText(value.chargeBasisPoints)}</span>
+        <Changed on={inUse !== undefined && inUse.chargeBasisPoints !== value.chargeBasisPoints} />
+      </dd>
+      {CARD_ROWS.map(({ key, label }) => (
+        <div key={key} className="contents">
+          <dt className="text-sm text-muted">{label}, charge included</dt>
+          <dd className="m-0 flex flex-wrap items-center justify-end text-right font-bold tabular-nums">
+            <span className="whitespace-nowrap">{shillings(value[key])}</span>
+            <Changed on={inUse !== undefined && inUse[key] !== value[key]} />
+          </dd>
+        </div>
+      ))}
+    </dl>
+  ),
+  effect:
+    "Once approved, new card payments are quoted and checked against these. Clients see the charge in shillings, rounded up to a whole shilling, before they pay. Card payments already started keep the charge they were quoted.",
+  check: (value) => {
+    if (!Number.isInteger(value.chargeBasisPoints) || value.chargeBasisPoints < 0 || value.chargeBasisPoints > 1000) return "Write the card charge as a percentage from 0 to 10, with at most two decimals.";
+    for (const { key } of CARD_ROWS) {
+      if (!Number.isInteger(value[key]) || value[key] < 1 || value[key] > 100_000_000) return "Write each card limit in whole shillings, from 1 to 100,000,000.";
+    }
+    if (value.maxPaymentMinor > value.max30DaysMinor) return "The 30 day limit cannot be below the limit for one payment.";
+    return null;
+  },
+  editor: ({ draft, setDraft }) => <CardEditor draft={draft} setDraft={setDraft} />,
+};
+
+function CardEditor({ draft, setDraft }: { draft: CardPayments; setDraft: (value: CardPayments) => void }) {
+  // The percentage is kept as typed, so "3." can be written on the way to "3.5".
+  const [rate, setRate] = useState(() => percentText(draft.chargeBasisPoints).replace("%", ""));
+  return (
+    <>
+      <Field label="Card charge the client pays on top (%)" hint="0 to 10, at most two decimals. 0 means Finvest bears it.">
+        <input
+          inputMode="decimal"
+          value={rate}
+          onChange={(event) => {
+            setRate(event.target.value);
+            setDraft({ ...draft, chargeBasisPoints: basisPointsFrom(event.target.value) ?? Number.NaN });
+          }}
+          className={cn(INPUT, "tabular-nums")}
+        />
+      </Field>
+      {CARD_ROWS.map(({ key, label }) => (
+        <Field key={key} label={`${label} (UGX)`} hint="Charge included, in whole shillings.">
+          <input
+            inputMode="numeric"
+            value={amountText(Number.isNaN(draft[key]) ? null : draft[key])}
+            onChange={(event) => setDraft({ ...draft, [key]: amountValue(event.target.value) ?? Number.NaN })}
+            className={cn(INPUT, "tabular-nums")}
+          />
+        </Field>
+      ))}
+    </>
+  );
+}
 
 // Calendar ------------------------------------------------------------------------------------
 
