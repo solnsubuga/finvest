@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
 
+import { BondsSection } from "@/bonds/Parts";
 import { AppPage } from "@/components/AppPage";
 import { Button } from "@/components/Button";
 import { Txt } from "@/components/Txt";
@@ -42,7 +43,10 @@ export default function Invest() {
       ) : products.state === "failed" ? (
         <Failed message={products.message} onRetry={retry} />
       ) : wide ? (
-        <WideInvest products={products.value} />
+        <View style={{ gap: 32 }}>
+          <WideInvest products={products.value} />
+          <BondsSection columns={twoColumns ? 2 : 1} />
+        </View>
       ) : (
         <View style={{ gap: 12 }}>
           {products.value.map((product) => (
@@ -56,6 +60,9 @@ export default function Invest() {
             Rates can change for new investments. Once you invest, your rate is
             fixed for the whole term.
           </Txt>
+          <View style={{ marginTop: 16 }}>
+            <BondsSection />
+          </View>
         </View>
       )}
       {demoPayableId ? (
