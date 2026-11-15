@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { isValidEmail } from "@/auth/password";
@@ -12,12 +12,15 @@ import { Button, TextLink } from "@/components/Button";
 import { PhoneField, TextField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { TermsAgreement } from "@/components/TermsAgreement";
-import { Title, Txt } from "@/components/Txt";
-import { colors, fontSizes } from "@/theme";
+import { Eyebrow, Title, Txt } from "@/components/Txt";
+import { clearIntent, writeIntent } from "@/organisations/intent";
+import { colors } from "@/theme";
 
 export default function SignupStart() {
   const router = useRouter();
   const { client, setSignup } = useAuth();
+  // Came from "Open an account for a company or group": this is the applicant's own account.
+  const forOrganisation = useLocalSearchParams<{ for?: string }>().for === "organisation";
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [inviteCode, setInviteCode] = useState("");
@@ -46,6 +49,9 @@ export default function SignupStart() {
         inviteCode: inviteCode.trim() || undefined,
       });
       setSignup(challenge);
+      // Home leads on to the company or group application once the ID check is approved.
+      if (forOrganisation) await writeIntent(e164);
+      else await clearIntent();
       router.push("/signup/code");
     } catch (caught) {
       setError(describeAuthError(caught));
@@ -60,18 +66,26 @@ export default function SignupStart() {
         <>
           <Button label="Text me a code" onPress={submit} loading={busy} testID="signup-submit" />
           <TextLink label="I already have an account" onPress={() => router.replace("/login")} />
-          <TextLink
-            label="Open an account for a company or group"
-            onPress={() => router.push({ pathname: "/unavailable", params: { topic: "group" } })}
-          />
+          {forOrganisation ? null : (
+            <TextLink
+              label="Open an account for a company or group"
+              onPress={() => router.push("/signup/organisation")}
+              testID="signup-organisation"
+            />
+          )}
         </>
       }
     >
       <Stack.Screen options={{ title: "Create your account" }} />
-      <BackButton fallback="/welcome" />
+      <BackButton fallback={forOrganisation ? "/signup/organisation" : "/welcome"} />
       <View style={{ marginTop: 28, gap: 10 }}>
+        {forOrganisation ? <Eyebrow>Step 1 of 3, your own account</Eyebrow> : null}
         <Title>Create your account</Title>
-        <Txt color={colors.muted}>Start with your phone number. No forms, no branch visit.</Txt>
+        <Txt color={colors.muted}>
+          {forOrganisation
+            ? "Your own account comes first. Once your ID is checked, you apply for the company or group from Home."
+            : "Start with your phone number. No forms, no branch visit."}
+        </Txt>
       </View>
 
       <View style={{ marginTop: 22, gap: 14 }}>

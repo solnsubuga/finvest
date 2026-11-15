@@ -67,7 +67,11 @@ type AuthState = {
   setJustSignedUp: (justSignedUp: boolean) => void;
 };
 
-/** Only the screens that change how a client signs in, so a log in can never be sent somewhere unexpected. */
+/**
+ * Only the screens that change how a client signs in, and the company or group application that
+ * "I already have a Finvest account" on its sign-up page leads to, so a log in can never be sent
+ * somewhere unexpected.
+ */
 export type ReturnTo =
   | "/security/passkey"
   | "/security/authenticator"
@@ -75,6 +79,7 @@ export type ReturnTo =
   | "/security/authenticator-off"
   | "/account/close"
   | "/account/language"
+  | "/account/organisations/new"
   | "/setup/pin"
   | "/setup/email"
   | "/setup/passkey";
