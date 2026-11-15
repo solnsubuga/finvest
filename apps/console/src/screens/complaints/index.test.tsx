@@ -5,7 +5,7 @@ import { createStubDirectory } from "@/directory/stub.ts";
 import { ComplaintsError, notConnectedComplaintsApi, type ComplaintsApi } from "./api.ts";
 import { ComplaintsScreen } from "./index.tsx";
 import { dueLabel, received, tenthsOfDays } from "./labels.ts";
-import { addWorkingDays, createStubComplaintsApi, workingDaysBetween } from "./stub.ts";
+import { addWorkingDays, createStubComplaintsApi, workingDaysBetween, type StubShare } from "./stub.ts";
 
 const ME = { id: "sample-me", name: "Amina Kintu" };
 const TODAY = "2026-11-13";
@@ -16,7 +16,8 @@ function renderComplaints({
   api = createStubComplaintsApi(me, () => TODAY, () => NOW),
   canManage = true,
   canClose = true,
-}: { me?: { id: string; name: string }; api?: ComplaintsApi; canManage?: boolean; canClose?: boolean } = {}) {
+  pollMs = 0,
+}: { me?: { id: string; name: string }; api?: ComplaintsApi; canManage?: boolean; canClose?: boolean; pollMs?: number } = {}) {
   let keys = 0;
   render(
     <ComplaintsScreen
@@ -27,6 +28,7 @@ function renderComplaints({
       canClose={canClose}
       newKey={() => `test-key-${++keys}`}
       today={() => TODAY}
+      pollMs={pollMs}
     />,
   );
   return { user: userEvent.setup() };
@@ -186,6 +188,43 @@ describe("complaints screen", () => {
     expect(within(closed).getByText("Not upheld, closed 13 Nov")).toBeInTheDocument();
     expect(within(closed).getByText(/The rate you saw was right/)).toBeInTheDocument();
     expect(within(closed).queryByRole("button", { name: "Add a note" })).not.toBeInTheDocument();
+  });
+
+  it("shows the proposer an outcome someone else confirmed, without a reload", async () => {
+    const shared: StubShare = {};
+    const DANIEL = { id: "sample-staff-daniel", name: "Daniel Kato" };
+    const mine = createStubComplaintsApi(DANIEL, () => TODAY, () => NOW, "sample", shared);
+    const other = createStubComplaintsApi(ME, () => TODAY, () => NOW, "sample", shared);
+    const { user } = renderComplaints({ me: DANIEL, api: mine, pollMs: 40 });
+    await user.click(await screen.findByRole("button", { name: "C-2615, Rate was lower than expected" }));
+    const detail = await panel("C-2615, Sarah Achieng");
+    const waiting = within(detail).getByRole("group", { name: "Outcome waiting" });
+    expect(waiting).toHaveTextContent("Proposed by you");
+
+    // Amina confirms it in her own browser.
+    const id = (await other.register("open")).complaints.find((complaint) => complaint.reference === "C-2615")?.id ?? "";
+    const proposal = (await other.complaint(id)).pendingOutcome?.id ?? "";
+    await other.decideOutcome(id, proposal, "confirmed", null);
+
+    expect(await screen.findByText("Not upheld, closed 13 Nov", {}, { timeout: 2000 })).toBeInTheDocument();
+    const closed = await panel("C-2615, Sarah Achieng");
+    expect(within(closed).queryByRole("group", { name: "Outcome waiting" })).not.toBeInTheDocument();
+    await waitFor(async () => expect((await rows()).map((row) => row[0])).not.toContain("C-2615"));
+  });
+
+  it("does not replace the open complaint when nothing about it changed", async () => {
+    const api = createStubComplaintsApi(ME, () => TODAY, () => NOW);
+    const read = vi.spyOn(api, "complaint");
+    const { user } = renderComplaints({ api, pollMs: 30 });
+    await user.click(await screen.findByRole("button", { name: "C-2615, Rate was lower than expected" }));
+    const detail = await panel("C-2615, Sarah Achieng");
+    await user.click(within(detail).getByRole("button", { name: "Reject" }));
+    const form = within(detail).getByRole("form", { name: "Reject the outcome" });
+    await user.type(within(form).getByLabelText(/What needs to change/), "Half a note");
+    const before = read.mock.calls.length;
+    await waitFor(() => expect(read.mock.calls.length).toBeGreaterThan(before + 2));
+    // The form the reader was writing in is still there, with their words.
+    expect(within(await panel("C-2615, Sarah Achieng")).getByLabelText(/What needs to change/)).toHaveValue("Half a note");
   });
 
   it("needs a reason to reject an outcome, and then it can be proposed again", async () => {

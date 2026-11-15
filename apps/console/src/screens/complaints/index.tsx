@@ -24,7 +24,7 @@ import { DetailPanel, type Command } from "./Detail.tsx";
 import { LogForm } from "./LogForm.tsx";
 import { Figures, RegisterTable } from "./Register.tsx";
 import { createHttpComplaintsApi } from "./http.ts";
-import { createStubComplaintsApi } from "./stub.ts";
+import { createStubComplaintsApi, type StubShare } from "./stub.ts";
 
 const SUMMARY = "The formal register. Every complaint has an owner, a deadline and an outcome.";
 const SHOWS: { id: Show; label: string }[] = [
@@ -51,7 +51,16 @@ interface ComplaintsScreenProps {
   today?: () => string;
   /** Hands the exported register to the browser. Tests pass their own. */
   save?: (file: RegisterFile) => void;
+  /**
+   * How often the open complaint is read again, so a change someone else made, such as closing
+   * an outcome you proposed, shows without a reload. It is also read again when the window comes
+   * back into view. 0 turns asking again off.
+   */
+  pollMs?: number;
 }
+
+/** Long enough not to load Finvest, short enough that a second person's decision shows quickly. */
+const POLL_MS = 15_000;
 
 const kampalaToday = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Kampala" }).format(new Date());
 
@@ -64,6 +73,7 @@ export function ComplaintsScreen({
   newKey = () => crypto.randomUUID(),
   today = kampalaToday,
   save = saveFile,
+  pollMs = POLL_MS,
 }: ComplaintsScreenProps) {
   const [show, setShow] = useState<Show>("open");
   const [register, setRegister] = useState<Load<Register>>({ state: "loading" });
@@ -178,6 +188,46 @@ export function ComplaintsScreen({
     setFailed(null);
     void openDetail(complaintId);
   }
+
+  // Someone else may change the open complaint: read it again now and then, and when the window
+  // comes back. Only a real change replaces it, so a half-written note is not dropped for nothing.
+  const shown = detail?.state === "ready" ? detail.value : null;
+  const latest = useRef<{ shown: ComplaintDetail | null; busy: boolean; show: Show }>({ shown, busy, show });
+  useEffect(() => {
+    latest.current = { shown, busy, show };
+  }, [shown, busy, show]);
+  const shownId = shown?.complaint.id ?? null;
+  useEffect(() => {
+    if (pollMs <= 0 || shownId === null) return;
+    let live = true;
+    const check = () => {
+      if (latest.current.busy || document.visibilityState === "hidden") return;
+      void api.complaint(shownId).then(
+        (value) => {
+          const before = latest.current.shown;
+          if (!live || before?.complaint.id !== shownId || JSON.stringify(before) === JSON.stringify(value)) return;
+          lookUp([value.complaint.clientId], [value.complaint.ownerId, ...value.history.map((item) => item.actorId)]);
+          setDetail({ state: "ready", value });
+          setRound((count) => count + 1);
+          void fetchRegister(latest.current.show).then((next) => live && next.state === "ready" && setRegister(next));
+        },
+        // A failed read leaves what is shown. The next one tries again.
+        () => undefined,
+      );
+    };
+    const timer = setInterval(check, pollMs);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", check);
+    return () => {
+      live = false;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", check);
+    };
+  }, [pollMs, shownId, api, lookUp, fetchRegister]);
 
   async function afterChange(value: ComplaintDetail) {
     lookUp([value.complaint.clientId], [value.complaint.ownerId, ...value.history.map((item) => item.actorId)]);
@@ -393,6 +443,17 @@ export function ComplaintsScreen({
   );
 }
 
+function closeElsewhere(grace: ComplaintsApi) {
+  window.setTimeout(() => {
+    void grace.register("open").then(async ({ complaints }) => {
+      const waiting = complaints.find((complaint) => complaint.reference === "C-2615");
+      if (!waiting) return;
+      const detail = await grace.complaint(waiting.id);
+      if (detail.pendingOutcome) await grace.decideOutcome(waiting.id, detail.pendingOutcome.id, "confirmed", null);
+    });
+  }, 4000);
+}
+
 export default function ComplaintsPage() {
   const { session } = useAuth();
   // A sample register under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
@@ -402,7 +463,12 @@ export default function ComplaintsPage() {
       // Under the stub, `?sample=empty` shows the screen with nothing in it and `?sample=offline` as if Finvest could not be reached.
       const sample = new URLSearchParams(window.location.search).get("sample");
       if (sample === "offline") return { api: notConnectedComplaintsApi, directory: createStubDirectory(me) };
-      return { api: createStubComplaintsApi(me, kampalaToday, Date.now, sample === "empty" ? "empty" : "sample"), directory: createStubDirectory(me) };
+      const shared: StubShare = {};
+      const api = createStubComplaintsApi(me, kampalaToday, Date.now, sample === "empty" ? "empty" : "sample", shared);
+      // `?sample=closed-elsewhere`: a few seconds in, Joel confirms the outcome Daniel proposed for
+      // C-2615 in his own browser, to show the open complaint moving on without a reload.
+      if (sample === "closed-elsewhere") closeElsewhere(createStubComplaintsApi({ id: "sample-staff-joel", name: "Joel Mukasa" }, kampalaToday, Date.now, "sample", shared));
+      return { api, directory: createStubDirectory(me) };
     }
     const base = apiBaseUrl();
     if (!base) return { api: notConnectedComplaintsApi, directory: emptyDirectory };

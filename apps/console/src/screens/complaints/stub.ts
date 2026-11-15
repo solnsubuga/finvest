@@ -61,11 +61,17 @@ interface Stored {
   clientKey: string | null;
 }
 
+/** Hand the same object to two stubs and they share one register, as two people's browsers share Finvest. */
+export interface StubShare {
+  stored?: unknown;
+}
+
 export function createStubComplaintsApi(
   me: { id: string; name: string },
   today: () => string,
   now: () => number = Date.now,
   seed: "sample" | "empty" = "sample",
+  shared?: StubShare,
 ): ComplaintsApi {
   let counter = 0;
   const id = (prefix: string) => `${prefix}-${++counter}`;
@@ -239,7 +245,8 @@ export function createStubComplaintsApi(
     proposedAt: "2026-11-12T09:40:00Z",
   };
 
-  const stored = seed === "empty" ? [] : samples;
+  const stored = (shared?.stored as Stored[] | undefined) ?? (seed === "empty" ? [] : samples);
+  if (shared) shared.stored = stored;
   const isOverdue = (complaint: Complaint) => complaint.status !== "closed" && today() > complaint.dueOn;
   const copy = ({ complaint, history, pending, rejected }: Stored): ComplaintDetail => ({
     complaint: { ...complaint, overdue: isOverdue(complaint) },
