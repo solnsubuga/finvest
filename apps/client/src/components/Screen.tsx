@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { colors, COLUMN_WIDTH, spacing } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
+import { useStartLoaderDone } from "@/navigation/useStartLoaderDone";
 
 import { DemoLabel } from "./DemoLabel";
 
@@ -26,6 +27,7 @@ type Props = {
 export function Screen({ children, footer, dark = false, signedIn = false }: Props) {
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
+  useStartLoaderDone();
   const background = dark ? colors.black : colors.paper;
 
   return (
