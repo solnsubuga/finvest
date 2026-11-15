@@ -116,6 +116,22 @@ describe("the identity check", () => {
     expect(await screen.findByText("We are checking your ID")).toBeTruthy();
   });
 
+  it("closes the country list once another country is picked", async () => {
+    await signIn("701000200");
+    await fireEvent.press(await screen.findByText("Confirm who you are"));
+    await fireEvent.press(await screen.findByTestId("country-other"));
+    await fireEvent.press(await screen.findByTestId("country-CA"));
+
+    // The list is gone and the chip names the country picked.
+    expect(screen.queryByTestId("country-CN")).toBeNull();
+    expect(screen.getByText("Canada")).toBeTruthy();
+    expect(screen.getByText("Continue with National ID")).toBeTruthy();
+
+    // A tap on the chip opens the list again to change it.
+    await fireEvent.press(screen.getByTestId("country-other"));
+    expect(await screen.findByTestId("country-CN")).toBeTruthy();
+  });
+
   it("takes only the photo staff asked for again, then sends it", async () => {
     await signIn("701000200");
     // The demo's staff ask for a new selfie when the number ends in 1.
