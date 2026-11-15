@@ -76,9 +76,11 @@ function DocumentForm({ check }: { check: IdentityCheck | null }) {
   const { client } = useIdentity();
   const [documentType, setDocumentType] = useState<DocumentType>(check?.documentType ?? "national_id");
   const [country, setCountry] = useState(check?.documentCountry ?? "UG");
-  const [showOthers, setShowOthers] = useState(
-    check ? !NEARBY.some((nearby) => nearby.code === check.documentCountry) : false,
-  );
+  // The long list opens on "Another country" and closes again once a country
+  // in it is picked. The chip then carries that country's name, and a tap on
+  // it opens the list again to change it.
+  const [listOpen, setListOpen] = useState(false);
+  const otherChosen = !NEARBY.some((nearby) => nearby.code === country);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,26 +125,30 @@ function DocumentForm({ check }: { check: IdentityCheck | null }) {
                 selected={country === option.code}
                 onPress={() => {
                   setCountry(option.code);
-                  setShowOthers(false);
+                  setListOpen(false);
                 }}
                 testID={`country-${option.code}`}
               />
             ))}
             <Chip
-              label={showOthers && !NEARBY.some((n) => n.code === country) ? countryName(country) : "Another country"}
-              selected={showOthers}
-              onPress={() => setShowOthers(true)}
+              label={otherChosen ? countryName(country) : "Another country"}
+              selected={otherChosen || listOpen}
+              onPress={() => setListOpen((open) => !open)}
               testID="country-other"
             />
           </View>
-          {showOthers ? (
+          {listOpen ? (
             <ScrollView style={styles.others} nestedScrollEnabled>
               {OTHERS.map((option) => (
                 <Pressable
                   key={option.code}
                   accessibilityRole="radio"
                   aria-checked={country === option.code}
-                  onPress={() => setCountry(option.code)}
+                  onPress={() => {
+                    setCountry(option.code);
+                    setListOpen(false);
+                  }}
+                  testID={`country-${option.code}`}
                   style={({ pressed }) => [styles.other, pressed && { opacity: 0.7 }]}
                 >
                   <Txt size={fontSizes.sm} weight={country === option.code ? "bold" : "regular"}>
