@@ -24,6 +24,8 @@ from app.modules.payments import jobs as deposit_jobs
 from app.modules.payments import service
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
+    OTHER_NUMBER_PERIOD,
+    OTHER_NUMBER_PROMPTS,
     SENDING_GRACE,
     TRANSITIONS,
     UNCERTAIN_READ_WINDOW,
@@ -1195,6 +1197,72 @@ async def test_a_payment_may_come_from_a_number_that_is_not_the_accounts(
     # The owner accepts money from any payer (2026-11-15): the prompt goes to the number given.
     deposit = await start_deposit(app_database, fake_clock, msisdn="0701 999 999")
     assert deposit.payer_msisdn == "+256701999999"
+
+
+async def test_prompts_to_other_numbers_are_limited_to_five_a_day(
+    app_database: Database, fake_clock: FakeClock
+) -> None:
+    actor, own = client(), "+256772000111"
+
+    async def other() -> str:
+        try:
+            await start_deposit(
+                app_database, fake_clock, actor=actor, msisdn=phone(), account_phone=own
+            )
+        except ApplicationError as error:
+            return error.fields[0].code
+        return "started"
+
+    assert [await other() for _ in range(OTHER_NUMBER_PROMPTS)] == ["started"] * 5
+    assert await other() == "other_number_limit"
+    # The client's own number is never limited by it.
+    own_deposit = await start_deposit(
+        app_database, fake_clock, actor=actor, msisdn=own, account_phone=own
+    )
+    assert own_deposit.payer_msisdn == own
+    # A day after the first, there is room again.
+    fake_clock.advance(seconds=int(OTHER_NUMBER_PERIOD.total_seconds()) + 1)
+    assert await other() == "started"
+
+
+async def test_two_prompts_at_once_cannot_both_slip_under_the_limit(
+    app_database: Database,
+    fake_clock: FakeClock,
+    pools: dict[str, list[Database]],
+    concurrency_barrier: AsyncBarrier,
+) -> None:
+    actor, own = client(), "+256772000111"
+    for _ in range(OTHER_NUMBER_PROMPTS - 1):
+        await start_deposit(
+            app_database, fake_clock, actor=actor, msisdn=phone(), account_phone=own
+        )
+
+    async def other(database: Database) -> str:
+        try:
+            async with database.actor_transaction(actor) as session:
+                await session.execute(text("SELECT 1"))
+                await concurrency_barrier.wait()
+                await service.request_deposit(
+                    session,
+                    actor,
+                    DepositRequest(
+                        purpose=Purpose.INVESTMENT,
+                        purpose_id=push_id(),
+                        network=Network.MTN,
+                        amount=ugx(50_000),
+                        phone=phone(),
+                    ),
+                    idempotency_key=f"key-{push_id()}",
+                    provider=PROVIDER,
+                    clock=fake_clock,
+                    account_phone=own,
+                )
+        except ApplicationError as error:
+            return error.fields[0].code
+        return "started"
+
+    results = await asyncio.gather(*(other(database) for database in pools["finvest_app"]))
+    assert sorted(results) == ["other_number_limit", "started"]
 
 
 async def test_the_number_may_be_written_in_any_usual_form(

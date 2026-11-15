@@ -43,6 +43,8 @@ from app.modules.payments import payer_names
 from app.modules.payments.domain.cards import HOSTED_PROVIDERS
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
+    OTHER_NUMBER_PERIOD,
+    OTHER_NUMBER_PROMPTS,
     UNSENT_EXPIRY,
     DepositStatus,
     InvalidDeposit,
@@ -251,6 +253,7 @@ async def request_deposit(
     idempotency_key: str,
     provider: str,
     clock: Clock,
+    account_phone: str | None = None,
 ) -> Deposit:
     """Save a client's mobile money payment for one investment or goal, and a job to send it.
 
@@ -259,6 +262,8 @@ async def request_deposit(
     creates nothing. The same key with different details is refused.
 
     The payer is the number the client gave, theirs or anyone else's (`checked_mobile_money`).
+    `account_phone`, the number on the client's account from their session, limits prompts to
+    other numbers: at most `OTHER_NUMBER_PROMPTS` a day, refused with `other_number_limit`.
 
     An investment takes one deposit. While one is open, uncertain or confirmed, a request with
     a new key raises `DepositExists` and no second prompt is sent. A failed deposit does not
@@ -278,6 +283,8 @@ async def request_deposit(
             raise ApplicationError(
                 "unavailable", fields=[FieldProblem(field_path=["network"], code="channel_paused")]
             )
+        if account_phone is not None and msisdn != normalise_msisdn(account_phone):
+            await _limit_other_numbers(session, client_id, normalise_msisdn(account_phone), now)
         deposit_id = push_id()
         await insert_deposit(
             session,
@@ -323,6 +330,35 @@ async def request_deposit(
     if not outcome.replayed:
         logger.info("deposit_requested", deposit_id=deposit_id)
     return await get_deposit(session, deposit_id)
+
+
+_CLIENT_LOCK = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
+# The client's phone prompts to numbers other than the one on their account, in the period. A
+# payment on a hosted page is not a prompt we send, so it does not count.
+_OTHER_NUMBER_PROMPTS = text(
+    "SELECT count(*) FROM payment_deposits WHERE client_id = :client_id "
+    "AND method IN ('mtn', 'airtel') AND payer_msisdn <> :account AND created_at > :since "
+    "AND provider NOT IN ('pesapal', 'card_sandbox')"
+)
+
+
+async def _limit_other_numbers(
+    session: AsyncSession, client_id: str, account: str, now: datetime
+) -> None:
+    """Refuse a prompt to another number once the client has had `OTHER_NUMBER_PROMPTS` today.
+
+    Taken under a lock on the client, so two requests at once cannot both slip under it.
+    """
+    await session.execute(_CLIENT_LOCK, {"lock": f"payments.other-number:{client_id}"})
+    count = await session.scalar(
+        _OTHER_NUMBER_PROMPTS,
+        {"client_id": client_id, "account": account, "since": now - OTHER_NUMBER_PERIOD},
+    )
+    if int(count or 0) >= OTHER_NUMBER_PROMPTS:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["phone"], code="other_number_limit")],
+        )
 
 
 async def request_system_deposit(

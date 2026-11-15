@@ -147,7 +147,7 @@ export default function DepositStatusScreen() {
 /**
  * Mobile money paid on Pesapal's page, when Settings choose Pesapal to collect it. Pesapal
  * cannot prompt a phone by itself: the client picks the network on its page and approves the
- * prompt it sends. Only a payment from the client's own number is added to the investment.
+ * prompt it sends. Any number may pay there, and the payment counts for the investment.
  */
 function OnPage({
   deposit,
@@ -192,13 +192,13 @@ function OnPage({
           <Timeline
             steps={[
               { label: `Pesapal's page opens. Check that it says Finvest and ${amount}.`, state: "now" },
-              { label: `Choose ${network} and enter the number on your Finvest account.`, state: "later" },
-              { label: "Approve the prompt on your phone with your mobile money PIN.", state: "later" },
+              { label: `Choose ${network} and enter the number you are paying from.`, state: "later" },
+              { label: "Approve the prompt on that phone with the mobile money PIN.", state: "later" },
               { label: "Your investment starts once Pesapal confirms it.", state: "later" },
             ]}
           />
-          <Notice tone="warning">
-            {`Pay from your own number ending ${deposit.payer.replace(/\D/g, "").slice(-2)}, the one on your Finvest account. A payment from any other number is not added to your investment until our team has checked it.`}
+          <Notice tone="neutral">
+            {"You can pay from your own number or someone else's, such as a relative's. Either way the payment counts for your investment."}
           </Notice>
         </View>
       </Screen>

@@ -88,7 +88,7 @@ describe("the payments client for the real API", () => {
     });
     const deposit = await createApiPaymentsClient().payWithMobileMoney(request);
     expect(seen[0]!.headers["Idempotency-Key"]).toBe("key-1");
-    expect(JSON.parse(String(seen[0]!.body))).toEqual({ network: "mtn" });
+    expect(JSON.parse(String(seen[0]!.body))).toEqual({ network: "mtn", phone: "+256772123456" });
     expect(deposit).toMatchObject({
       id: PAYMENT,
       network: "mtn",
@@ -162,6 +162,8 @@ describe("the payments client for the real API", () => {
     await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("amount_not_allowed"));
     serve({ [path]: refused("not_found", 404) });
     await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("not_payable"));
+    serve({ [path]: refused("validation_failed", 422, [{ field_path: ["phone"], code: "other_number_limit" }]) });
+    await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("other_number_limit"));
     // Any other field problem is a definite refusal, never "could not reach Finvest".
     serve({ [path]: refused("validation_failed", 422, [{ field_path: ["network"], code: "invalid" }]) });
     await expect(client.payWithMobileMoney(request)).rejects.toEqual(new PaymentError("not_accepted"));
