@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { TextField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
-import { groupDigits, kampalaToday, monthYear, parseShillings } from "@/goals/amount";
+import { groupDigits, kampalaToday, monthYear, parseShillings, targetTooLarge } from "@/goals/amount";
 import { addMonths } from "@/goals/dates";
 import { useGoals } from "@/goals/GoalsProvider";
 import { CATEGORIES, categoryCopy, describeGoalError, Goal, GoalCategory } from "@/goals/types";
@@ -75,6 +75,7 @@ export default function EditGoal() {
     if (!cleaned) problems.name = "Give your goal a name.";
     else if (cleaned.length > 60) problems.name = "Keep the name to 60 characters.";
     if (!target) problems.target = "Enter how much you need, in shillings.";
+    else if (targetTooLarge(target)) problems.target = targetTooLarge(target) ?? undefined;
     setFieldError(problems);
     if (problems.name || problems.target || !target) return;
     const targetDate =

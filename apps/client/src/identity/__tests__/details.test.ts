@@ -45,6 +45,14 @@ describe("the details form", () => {
     expect(read.errors.expiresOn).toMatch(/expired/);
   });
 
+  it("refuses a birth date more than 120 years ago, as the server does", () => {
+    const read = readForm({ ...good, dateOfBirth: "01/01/1890" }, TODAY);
+    expect(read.ok).toBe(false);
+    if (read.ok) return;
+    expect(read.errors.dateOfBirth).toMatch(/more than 120 years ago/);
+    expect(readForm({ ...good, dateOfBirth: "14/11/1905" }, TODAY).ok).toBe(true);
+  });
+
   it("takes a client on their 18th birthday, and an ID that expires today", () => {
     const read = readForm({ ...good, dateOfBirth: "13/11/2008", expiresOn: "13/11/2026" }, TODAY);
     expect(read.ok).toBe(true);

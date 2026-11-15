@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import StrEnum
 
+from app.shared.limits import largest_single_amount
 from app.shared.money import Currency, Money, Rounding
 
 MAX_NAME_LENGTH = 60
@@ -49,6 +50,8 @@ class GoalRefusal(StrEnum):
     NAME_EMPTY = "name_empty"
     NAME_TOO_LONG = "name_too_long"
     TARGET_NOT_POSITIVE = "target_not_positive"
+    # Above the largest single amount Finvest accepts (app.shared.limits).
+    TARGET_TOO_LARGE = "target_too_large"
     # The date must be after today, and no further than the longest horizon.
     DATE_NOT_IN_FUTURE = "date_not_in_future"
     DATE_TOO_FAR = "date_too_far"
@@ -96,6 +99,8 @@ def check_goal(
         return GoalRefusal.NAME_TOO_LONG
     if not target.is_positive:
         return GoalRefusal.TARGET_NOT_POSITIVE
+    if target > largest_single_amount(target.currency):
+        return GoalRefusal.TARGET_TOO_LARGE
     if target_date is not None:
         if target_date <= today:
             return GoalRefusal.DATE_NOT_IN_FUTURE

@@ -135,6 +135,8 @@ async def test_nobody_invests_before_their_identity_is_checked(app_database: Dat
     [
         ("TREA-91", ugx(99_999), "below_minimum"),
         ("TREA-182", ugx(100_000), "below_minimum"),
+        # QA F-031: UGX 10 trillion is refused, not saved as an unpaid investment.
+        ("TREA-91", ugx(10_000_000_000_000), "above_maximum"),
         ("TREA-91", Money(100_000_00, Currency.USD), "currency_not_supported"),
         ("USD-BOND", Money(1_000_00, Currency.USD), "product_not_open"),
     ],

@@ -110,6 +110,8 @@ def status_on_submit(document_type: DocumentType, *, automatic_checks: bool) -> 
 
 COUNTRY = re.compile(r"[A-Z]{2}")
 MINIMUM_AGE = 18
+# Older than anyone alive: a birth date further back is a typing mistake.
+MAXIMUM_AGE = 120
 MAX_NAME_LENGTH = 100
 _NAME = re.compile(r"[^\W\d_]+(?:[ '\-.][^\W\d_]+)*\.?")
 _DOCUMENT_NUMBER = re.compile(r"[A-Z0-9]{5,32}")
@@ -162,6 +164,8 @@ def detail_problems(details: IdentityDetails, today: date) -> list[DetailProblem
         problems.append(DetailProblem("date_of_birth", "in_the_future"))
     elif _years_between(details.date_of_birth, today) < MINIMUM_AGE:
         problems.append(DetailProblem("date_of_birth", "under_age"))
+    elif _years_between(details.date_of_birth, today) > MAXIMUM_AGE:
+        problems.append(DetailProblem("date_of_birth", "too_old"))
     if details.document_expires_on is not None and details.document_expires_on < today:
         problems.append(DetailProblem("document_expires_on", "document_expired"))
     if details.tin is not None and _TIN.fullmatch(details.tin) is None:

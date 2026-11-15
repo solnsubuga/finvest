@@ -538,6 +538,11 @@ async def test_an_approval_racing_a_withdrawal_ends_one_way(app_database: Databa
     outcomes = sorted(await asyncio.gather(approve(), take_back()))
     async with app_database.actor_transaction(daniel) as session:
         history = await investments.rate_history(session, "TREA-182")
-        final = (await investments.list_proposals(session, daniel))[0]
+        # By ID: the test database is shared, so the newest proposal may be another test's.
+        final = next(
+            found
+            for found in await investments.list_proposals(session, daniel)
+            if found.id == proposal.id
+        )
     assert outcomes in (["approved", "conflict"], ["conflict", "withdrawn"])
     assert (proposal.rate in history) is (final.status is ProposalStatus.APPROVED)

@@ -1,4 +1,5 @@
 import { demoClosing } from "@/demo/closing";
+import { isAboveLargest } from "@/investing/limits";
 import { addDemoPayable, demoPaidAt } from "@/demo/payables";
 import { DEMO_GOAL_NAMES, demoInterestComing } from "@/demo/interestToGoal";
 
@@ -357,6 +358,9 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     }
     if (amount.minor < product.minimum.minor) {
       throw new InvestingError("below_minimum");
+    }
+    if (isAboveLargest(amount)) {
+      throw new InvestingError("above_maximum");
     }
     return product;
   }
