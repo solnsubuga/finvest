@@ -63,6 +63,15 @@ logger = structlog.get_logger()
 
 
 @dataclass(frozen=True, slots=True)
+class _PasswordMatch:
+    """An account whose password was right. `proved` is False only for a client's unproved email."""
+
+    id: str
+    password_hash: str
+    proved: bool
+
+
+@dataclass(frozen=True, slots=True)
 class LoginChallenge:
     id: str
     methods: list[SecondStep]
@@ -227,49 +236,19 @@ class IdentityService:
         A client signs in with their mobile number, or with `by_email` and an email address they
         have proved. Staff always use their email. Every failure is the same
         `invalid_credentials`, after the same amount of work, whether the account is missing,
-        inactive or the password is wrong.
+        inactive or the password is wrong. The one exception is the right password with an
+        address the client has not proved yet: that is `email_not_confirmed`, so they know to
+        open the link rather than doubt their password. Only the owner of the password learns it.
         """
-        email_login = kind == "staff" or by_email
-        try:
-            identifier = normalize_email(identifier) if email_login else normalize_phone(identifier)
-        except InvalidIdentifier:
-            identifier = ""  # still do the work below, then fail like any wrong password
-
-        if kind == "client" and by_email:
-            # Only a proved address signs a client in, and only one account can have proved it.
-            query = (
-                "SELECT id, phone, password_hash FROM identity_clients "
-                "WHERE email = :identifier AND email_verified_at IS NOT NULL AND status = 'active'"
-            )
-        elif kind == "client":
-            query = (
-                "SELECT id, phone, password_hash FROM identity_clients "
-                "WHERE phone = :identifier AND status = 'active'"
-            )
-        else:
-            query = (
-                "SELECT id, email AS phone, password_hash FROM identity_staff "
-                "WHERE email = :identifier AND status = 'active'"
-            )
-        async with self.database.transaction() as session:
-            account = (await session.execute(text(query), {"identifier": identifier})).one_or_none()
-
-        # A client's attempts count against their number whichever way they sign in, so the
-        # email gives no second budget of guesses. An unknown address counts against itself.
-        counted = account.phone if account is not None and kind == "client" else identifier
-        account_key = throttle_key(f"{kind}-account", counted)
-        pair_key = throttle_key(f"{kind}-account-from", f"{counted}\x00{address}")
-        keys = [(account_key, ACCOUNT_ATTEMPTS), (pair_key, ACCOUNT_FROM_ADDRESS_ATTEMPTS)]
-        if address is not None:
-            keys.append((throttle_key("address", address), ADDRESS_ATTEMPTS))
-        await reserve_attempts(self.database, self.clock, keys)
-
+        account, keys = await self._check_password(
+            kind, identifier, password, address=address, by_email=by_email
+        )
+        if not account.proved:
+            # The right password, so the wrong-guess counts go, as for any right password.
+            await clear_attempts(self.database, keys)
+            logger.info("login_refused", kind=kind, error_code="email_not_confirmed")
+            raise ApplicationError("email_not_confirmed")
         table = "identity_clients" if kind == "client" else "identity_staff"
-        hashed = account.password_hash if account is not None else None
-        if not await self.hasher.verify(password, hashed) or account is None:
-            logger.info("login_refused", kind=kind, error_code="invalid_credentials")
-            raise ApplicationError("invalid_credentials")
-
         now = self.clock.now()
         challenge_id = push_id(self.clock)
         async with self.database.transaction() as session:
@@ -300,10 +279,83 @@ class IdentityService:
                 },
             )
         # The right password clears the wrong-guess counts for this account, not for the address.
-        await clear_attempts(self.database, [account_key, pair_key])
+        await clear_attempts(self.database, keys)
         logger.info("login_started", kind=kind, login_id=challenge_id)
         # In the order to offer them. The person finishes with any one.
         return LoginChallenge(challenge_id, methods)
+
+    async def unproved_email_owner(self, email: str, password: str, *, address: str | None) -> str:
+        """The client whose password this is, when `email` is on their account but not proved.
+
+        For sending a new link from the log in screen. Counts as a sign-in attempt, and every
+        other outcome, including an address that is already proved, is `invalid_credentials`.
+        """
+        account, keys = await self._check_password(
+            "client", email, password, address=address, by_email=True
+        )
+        if account.proved:
+            raise ApplicationError("invalid_credentials")
+        await clear_attempts(self.database, keys)
+        return account.id
+
+    async def _check_password(
+        self,
+        kind: AccountKind,
+        identifier: str,
+        password: str,
+        *,
+        address: str | None,
+        by_email: bool,
+    ) -> tuple[_PasswordMatch, list[bytes]]:
+        """The account this identifier and password belong to, with its attempt keys.
+
+        Throttled and refused alike for a missing account and a wrong password. The caller
+        clears the returned keys once the attempt has done what it came for.
+        """
+        email_login = kind == "staff" or by_email
+        try:
+            identifier = normalize_email(identifier) if email_login else normalize_phone(identifier)
+        except InvalidIdentifier:
+            identifier = ""  # still do the work below, then fail like any wrong password
+
+        if kind == "client" and by_email:
+            # Only a proved address signs a client in, and only one account can have proved it.
+            # An account that holds the address unproved is still found, so the right password
+            # can be told to confirm it. A proved holder comes first, then the newest.
+            query = (
+                "SELECT id, phone, password_hash, email_verified_at IS NOT NULL AS proved "
+                "FROM identity_clients WHERE email = :identifier AND status = 'active' "
+                "ORDER BY email_verified_at IS NOT NULL DESC, created_at DESC LIMIT 1"
+            )
+        elif kind == "client":
+            query = (
+                "SELECT id, phone, password_hash, true AS proved FROM identity_clients "
+                "WHERE phone = :identifier AND status = 'active'"
+            )
+        else:
+            query = (
+                "SELECT id, email AS phone, password_hash, true AS proved FROM identity_staff "
+                "WHERE email = :identifier AND status = 'active'"
+            )
+        async with self.database.transaction() as session:
+            account = (await session.execute(text(query), {"identifier": identifier})).one_or_none()
+
+        # A client's attempts count against their number whichever way they sign in, so the
+        # email gives no second budget of guesses. An unknown address counts against itself.
+        counted = account.phone if account is not None and kind == "client" else identifier
+        account_key = throttle_key(f"{kind}-account", counted)
+        pair_key = throttle_key(f"{kind}-account-from", f"{counted}\x00{address}")
+        keys = [(account_key, ACCOUNT_ATTEMPTS), (pair_key, ACCOUNT_FROM_ADDRESS_ATTEMPTS)]
+        if address is not None:
+            keys.append((throttle_key("address", address), ADDRESS_ATTEMPTS))
+        await reserve_attempts(self.database, self.clock, keys)
+
+        hashed = account.password_hash if account is not None else None
+        if not await self.hasher.verify(password, hashed) or account is None:
+            logger.info("login_refused", kind=kind, error_code="invalid_credentials")
+            raise ApplicationError("invalid_credentials")
+        match = _PasswordMatch(account.id, account.password_hash, bool(account.proved))
+        return match, [account_key, pair_key]
 
     # Sessions
 

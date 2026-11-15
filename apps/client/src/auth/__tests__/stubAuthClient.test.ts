@@ -98,9 +98,27 @@ describe("log in", () => {
     // Joseph proved his address; Amara has not proved hers yet.
     const challenge = await auth.startLogin({ email: "Joseph@Example.com" }, DEMO_PASSWORD);
     expect(challenge).toMatchObject({ phone: null, email: "joseph@example.com" });
+    // The right password with an unproved address is told to confirm it, a wrong one is not.
     expect(await codeOf(auth.startLogin({ email: "amara@example.com" }, DEMO_PASSWORD))).toBe(
+      "email_not_confirmed",
+    );
+    expect(await codeOf(auth.startLogin({ email: "amara@example.com" }, "wrong password"))).toBe(
       "invalid_email_credentials",
     );
+  });
+
+  it("emails a new link from the log in screen, which then lets the address log in", async () => {
+    const tokens: string[] = [];
+    const auth = createStubAuthClient({ delayMs: 0, onEmailLink: (token) => tokens.push(token) });
+    expect(await codeOf(auth.sendEmailLinkFromLogin("amara@example.com", "wrong password"))).toBe(
+      "invalid_email_credentials",
+    );
+    await auth.sendEmailLinkFromLogin(" amara@example.com", DEMO_PASSWORD);
+    expect(tokens).toHaveLength(1);
+    await auth.confirmEmail(tokens[0]!);
+    await expect(auth.startLogin({ email: "amara@example.com" }, DEMO_PASSWORD)).resolves.toMatchObject({
+      email: "amara@example.com",
+    });
   });
 
   it("opens a full session with a passkey", async () => {

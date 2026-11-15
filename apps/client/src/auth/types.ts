@@ -79,6 +79,11 @@ export type AuthErrorCode =
   | "invalid_credentials"
   /** The same refusal as `invalid_credentials`, for a log in by email. */
   | "invalid_email_credentials"
+  /**
+   * The right password, with an email address the client has not confirmed
+   * by its link yet. Only the owner of the password is told.
+   */
+  | "email_not_confirmed"
   | "invalid_code"
   | "phone_taken"
   | "leaked_password"
@@ -215,9 +220,15 @@ export interface AuthClient {
   /**
    * Log in, step 1: the number or a proved email address, and the password.
    * Never opens a session on its own. An address the client never proved
-   * fails like a wrong password.
+   * fails with `email_not_confirmed` when the password is right, and like a
+   * wrong password otherwise.
    */
   startLogin(identifier: LoginIdentifier, password: string): Promise<LoginChallenge>;
+  /**
+   * After `email_not_confirmed`: emails a new confirming link to that
+   * address. Signed out, so it takes the same email and password again.
+   */
+  sendEmailLinkFromLogin(email: string, password: string): Promise<void>;
   /** Log in, step 2, with a passkey. */
   verifyWithPasskey(loginId: string): Promise<Session>;
   /** Log in, step 2, with the 6 digit code from an authenticator app. */
@@ -374,6 +385,8 @@ const messages: Record<AuthErrorCode, string> = {
   invalid_credentials: "That number and password do not match. Check both and try again.",
   invalid_email_credentials:
     "That email and password do not match. Only an email address you confirmed by its link works here.",
+  email_not_confirmed:
+    "Your password is right, but this email is not confirmed yet. Open the link we emailed you, then log in with your email. You can log in with your mobile number now.",
   invalid_code: "That code is not right. Check it and try again.",
   phone_taken: "This number already has a Finvest account. Log in instead.",
   leaked_password:

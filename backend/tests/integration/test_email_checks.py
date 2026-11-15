@@ -280,9 +280,11 @@ async def login_by_email(api: Api, email: str, password: str = PASSWORD) -> http
 async def test_a_proved_address_signs_the_client_in(api: Api) -> None:
     _, email, bearer = await a_client(api)
     assert email is not None
-    # Before the proof the address opens nothing, with the same answer as a wrong password.
+    # Before the proof the address opens nothing. Only the right password learns why.
     before = await login_by_email(api, email)
-    assert (before.status_code, before.json()["error"]["code"]) == (401, "invalid_credentials")
+    assert (before.status_code, before.json()["error"]["code"]) == (403, "email_not_confirmed")
+    guess = await login_by_email(api, email, "not-the-password-at-all")
+    assert (guess.status_code, guess.json()["error"]["code"]) == (401, "invalid_credentials")
     assert (await prove(api, email, bearer)).status_code == 204
 
     started = await login_by_email(api, f"  {email.upper()} ")
@@ -292,6 +294,54 @@ async def test_a_proved_address_signs_the_client_in(api: Api) -> None:
     assert (wrong.status_code, wrong.json()["error"]["code"]) == (401, "invalid_credentials")
     unknown = await login_by_email(api, "nobody-here@example.com")
     assert (unknown.status_code, unknown.json()["error"]["code"]) == (401, "invalid_credentials")
+
+
+async def link_from_login(api: Api, email: str, password: str = PASSWORD) -> httpx.Response:
+    return await api.http.post(
+        "/client/email/verification/from-login", json={"email": email, "password": password}
+    )
+
+
+async def test_the_log_in_screen_sends_a_new_link_for_an_unproved_address(api: Api) -> None:
+    _, email, _ = await a_client(api)
+    assert email is not None
+    wrong = await link_from_login(api, email, "not-the-password-at-all")
+    assert (wrong.status_code, wrong.json()["error"]["code"]) == (401, "invalid_credentials")
+    unknown = await link_from_login(api, "nobody-here@example.com")
+    assert (unknown.status_code, unknown.json()["error"]["code"]) == (401, "invalid_credentials")
+    assert await links(api, email) == []
+
+    sent = await link_from_login(api, f" {email.upper()}")
+    assert (sent.status_code, sent.json()) == (200, {"sent": True})
+    (link,) = await links(api, email)
+    assert (await confirm(api, token_of(link))).status_code == 204
+    assert (await login_by_email(api, email)).status_code == 200
+    # Once proved there is nothing to send, and the answer gives nothing away.
+    proved = await link_from_login(api, email)
+    assert (proved.status_code, proved.json()["error"]["code"]) == (401, "invalid_credentials")
+
+
+async def test_a_proved_holder_answers_for_an_address_another_holds_unproved(api: Api) -> None:
+    _, email, first = await a_client(api)
+    assert email is not None
+    number = next(_numbers)
+    await api.identity.create_client(
+        phone=f"+256{number}", email=email, password="another-long-passphrase"
+    )
+    assert (await prove(api, email, first)).status_code == 204
+    # The second account's password is checked against the proved holder, so it is refused.
+    other = await login_by_email(api, email, "another-long-passphrase")
+    assert (other.status_code, other.json()["error"]["code"]) == (401, "invalid_credentials")
+    assert (await login_by_email(api, email)).status_code == 200
+
+
+async def test_links_from_the_log_in_screen_count_as_sign_in_attempts(api: Api) -> None:
+    _, email, _ = await a_client(api)
+    assert email is not None
+    for _attempt in range(ACCOUNT_FROM_ADDRESS_ATTEMPTS):
+        await link_from_login(api, email, "wrong-password-guess")
+    limited = await link_from_login(api, email)
+    assert limited.status_code == 429
 
 
 async def test_login_takes_a_phone_or_an_email_not_both(api: Api) -> None:

@@ -5,7 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/auth/AuthProvider";
 import { isValidEmail } from "@/auth/password";
 import { toE164 } from "@/auth/phone";
-import { describeAuthError } from "@/auth/types";
+import { AuthError, describeAuthError } from "@/auth/types";
 import { BackButton } from "@/components/BackButton";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
@@ -28,6 +28,10 @@ export default function LoginStart() {
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The right password with an email not confirmed yet: offer a new link instead of a refusal.
+  const [unconfirmed, setUnconfirmed] = useState<string | null>(null);
+  const [linkSent, setLinkSent] = useState(false);
+  const [sending, setSending] = useState(false);
 
   const e164 = toE164(phone);
   const emailOk = isValidEmail(email);
@@ -40,11 +44,14 @@ export default function LoginStart() {
     setByEmail(email);
     setSubmitted(false);
     setError(null);
+    setUnconfirmed(null);
   };
 
   const submit = async () => {
     setSubmitted(true);
     setError(null);
+    setUnconfirmed(null);
+    setLinkSent(false);
     if ((byEmail ? !emailOk : !e164) || password.length === 0) {
       return;
     }
@@ -56,9 +63,28 @@ export default function LoginStart() {
       setPassword("");
       router.push("/login/verify");
     } catch (caught) {
-      setError(describeAuthError(caught));
+      if (caught instanceof AuthError && caught.code === "email_not_confirmed") {
+        setUnconfirmed(email.trim());
+      } else {
+        setError(describeAuthError(caught));
+      }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const sendLink = async () => {
+    if (!unconfirmed) return;
+    setSending(true);
+    setError(null);
+    try {
+      await client.sendEmailLinkFromLogin(unconfirmed, password);
+      setLinkSent(true);
+    } catch (caught) {
+      setUnconfirmed(null);
+      setError(describeAuthError(caught));
+    } finally {
+      setSending(false);
     }
   };
 
@@ -91,6 +117,26 @@ export default function LoginStart() {
 
       <View style={{ marginTop: 20, gap: 14 }}>
         {error ? <Notice tone="danger">{error}</Notice> : null}
+        {unconfirmed && !linkSent ? (
+          <View style={{ gap: 10 }} testID="email-not-confirmed">
+            <Notice tone="warning">{describeAuthError(new AuthError("email_not_confirmed"))}</Notice>
+            <Button
+              label="Email me a new link"
+              variant="secondary"
+              height={48}
+              onPress={sendLink}
+              loading={sending}
+              testID="send-email-link"
+            />
+          </View>
+        ) : null}
+        {unconfirmed && linkSent ? (
+          <View testID="email-link-sent">
+            <Notice tone="neutral">
+              {`We sent a new link to ${unconfirmed}. It works for 24 hours. Open it on any device, then log in here with your email.`}
+            </Notice>
+          </View>
+        ) : null}
         {byEmail ? (
           <TextField
             label="Email"

@@ -7684,6 +7684,30 @@
         "title": "EmailConfirm",
         "type": "object"
       },
+      "EmailLinkFromLogin": {
+        "additionalProperties": false,
+        "description": "The email and password the client just tried to log in with.",
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 1,
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "EmailLinkFromLogin",
+        "type": "object"
+      },
       "EmailLinkSent": {
         "additionalProperties": false,
         "description": "`sent` is false when the address was already proved, so nothing was sent.",
@@ -7835,6 +7859,7 @@
               "not_found",
               "unauthorized",
               "invalid_credentials",
+              "email_not_confirmed",
               "invalid_code",
               "passkey_failed",
               "second_step_missing",
@@ -32123,6 +32148,98 @@
           }
         },
         "summary": "Confirm Email",
+        "tags": [
+          "client email"
+        ]
+      }
+    },
+    "/client/email/verification/from-login": {
+      "post": {
+        "description": "Email a new link from the log in screen, after `email_not_confirmed`.\n\nSigned out, so the password proves the address is theirs to confirm. It counts as a sign-in\nattempt, and anything but the right password with an unproved address is\n`invalid_credentials`.",
+        "operationId": "send_email_link_from_login_client_email_verification_from_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailLinkFromLogin"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailLinkSent"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Gone"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Send Email Link From Login",
         "tags": [
           "client email"
         ]
