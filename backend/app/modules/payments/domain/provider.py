@@ -19,6 +19,7 @@ from app.modules.payments.domain.cards import (
 )
 from app.modules.payments.domain.deposits import Network
 from app.modules.payments.domain.outcomes import SendResult, StatusReading
+from app.modules.payments.domain.provider_refunds import RefundRequest, RequestResult
 from app.shared.money import Money
 
 
@@ -83,6 +84,14 @@ class CardCollectionsProvider(Protocol):
     async def order_status(self, *, request_id: str, provider_reference: str) -> CardReading: ...
 
     async def cancel_order(self, *, provider_reference: str) -> CancelResult: ...
+
+    async def refund_payment(self, request: RefundRequest) -> RequestResult:
+        """Ask once for a paid order to go back to the card. Never sent again by the caller."""
+        ...
+
+    async def payment_reversed(self, *, request_id: str, provider_reference: str) -> bool | None:
+        """Whether the provider shows the payment paid back. None when it cannot tell now."""
+        ...
 
     def read_notice(self, token: str, query: Mapping[str, str], body: bytes) -> ProviderNotice:
         """Check the notification's address token and read it. Raises `InvalidNotice`."""

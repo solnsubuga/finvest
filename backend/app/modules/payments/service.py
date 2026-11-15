@@ -134,12 +134,19 @@ class Deposit:
     # Set when two members of staff took back a deposit credited by mistake (reversals.py).
     # It stays confirmed, but no longer counts as the investment's payment.
     reversal_id: str | None = None
+    # Set when two members of staff paid a card deposit back to the card (provider_refunds.py).
+    # It stays confirmed, but no longer counts as the investment's payment.
+    provider_refund_id: str | None = None
+
+    @property
+    def taken_back(self) -> bool:
+        return self.reversal_id is not None or self.provider_refund_id is not None
 
 
 _COLUMNS = (
     "id, client_id, purpose_type, purpose_id, method, provider, currency, amount_minor, "
     "payer_msisdn, status, code, provider_reference, ledger_entry_id, created_at, updated_at, "
-    "sent_at, settled_at, reversal_id"
+    "sent_at, settled_at, reversal_id, provider_refund_id"
 )
 _INSERT = text(
     "INSERT INTO payment_deposits (id, client_id, purpose_type, purpose_id, method, provider, "
@@ -150,18 +157,19 @@ _INSERT = text(
 _SELECT = text(f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id")  # noqa: S608
 # Created by migration 0021. An investment has at most one deposit that has not failed.
 LIVE_INVESTMENT_INDEX = "uq_payment_deposits_live_investment"
+# A deposit taken back, by a reversal or a refund to the card, no longer counts as live.
+_LIVE = "status <> 'failed' AND reversal_id IS NULL AND provider_refund_id IS NULL"
 _HAS_LIVE = text(
-    "SELECT 1 FROM payment_deposits WHERE purpose_type = :purpose_type "
-    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL LIMIT 1"
+    "SELECT 1 FROM payment_deposits WHERE purpose_type = :purpose_type "  # noqa: S608
+    f"AND purpose_id = :purpose_id AND {_LIVE} LIMIT 1"
 )
 _HAS_LIVE_ID = text(
-    "SELECT id FROM payment_deposits WHERE purpose_type = :purpose_type "
-    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL "
-    "ORDER BY id DESC LIMIT 1"
+    "SELECT id FROM payment_deposits WHERE purpose_type = :purpose_type "  # noqa: S608
+    f"AND purpose_id = :purpose_id AND {_LIVE} ORDER BY id DESC LIMIT 1"
 )
 _SELECT_LIVE = text(
-    "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "
-    "AND purpose_id = :purpose_id AND status <> 'failed' AND reversal_id IS NULL LIMIT 1"
+    "SELECT id, status FROM payment_deposits WHERE purpose_type = 'investment' "  # noqa: S608
+    f"AND purpose_id = :purpose_id AND {_LIVE} LIMIT 1"
 )
 _SELECT_LOCKED = text(
     f"SELECT {_COLUMNS} FROM payment_deposits WHERE id = :id FOR UPDATE"  # noqa: S608
@@ -747,6 +755,20 @@ async def tell_client_reversed(session: AsyncSession, deposit: Deposit, now: dat
     )
 
 
+async def tell_client_refunded(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
+    """Tell the client their card payment is on its way back to the card, in the caller's
+    transaction. Once per deposit. The words never name the amount."""
+    await notifications.notify(
+        session,
+        event_name="payment_refunded",
+        client_id=deposit.client_id,
+        idempotency_key=deposit.id,
+        variables={"amount": deposit.amount, "method": _METHOD_LABELS[deposit.method]},
+        link=notifications.Link("deposit", deposit.id),
+        now=now,
+    )
+
+
 async def publish_confirmed(session: AsyncSession, deposit: Deposit, now: datetime) -> None:
     """Tell other modules a deposit was confirmed at `now`, in the caller's transaction.
 
@@ -947,6 +969,7 @@ def _deposit(row: Row[Any]) -> Deposit:
         sent_at=row.sent_at,
         settled_at=row.settled_at,
         reversal_id=row.reversal_id,
+        provider_refund_id=row.provider_refund_id,
     )
 
 

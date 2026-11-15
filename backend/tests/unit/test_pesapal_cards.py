@@ -21,6 +21,7 @@ from app.modules.payments.domain.outcomes import (
     Uncertain,
 )
 from app.modules.payments.domain.provider import InvalidNotice
+from app.modules.payments.domain.provider_refunds import RefundRequest, RequestResult
 from app.modules.payments.providers.pesapal import PesapalCards
 from app.shared.money import Currency, Money
 from tests.support.clock import FakeClock
@@ -258,3 +259,81 @@ def test_decimals_are_never_floats() -> None:
     from app.infrastructure.pesapal import read_json
 
     assert read_json(b'{"amount": 1000.10}')["amount"] == Decimal("1000.10")
+
+
+# Refunds -----------------------------------------------------------------------------------------
+
+
+def refund(amount: int = 1_000_000) -> RefundRequest:
+    return RefundRequest("-OdRefund00000000001", "PSP1234", Money(amount, Currency.UGX), "Refund")
+
+
+async def test_a_refund_is_asked_by_its_confirmation_code_and_never_names_the_person() -> None:
+    seen: list[dict[str, object]] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        assert request.url.path.endswith("/api/Transactions/RefundRequest")
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"status": "200", "message": "Refund request successfully"})
+
+    assert await adapter(Pesapal(answer)).refund_payment(refund()) is RequestResult.ACCEPTED
+    assert seen == [
+        {
+            "confirmation_code": "PSP1234",
+            "amount": 1_000_000,
+            "username": "Finvest",
+            "remarks": "Refund",
+        }
+    ]
+
+
+def _lost(request: httpx.Request) -> httpx.Response:
+    raise httpx.ReadTimeout("lost", request=request)
+
+
+def _unreachable(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("no route", request=request)
+
+
+@pytest.mark.parametrize(
+    ("answer", "result"),
+    [
+        (lambda _: httpx.Response(200, json={"status": "500"}), RequestResult.REFUSED),
+        # Pesapal's documents also name the code `error`.
+        (lambda _: httpx.Response(200, json={"error": 500}), RequestResult.REFUSED),
+        (lambda _: httpx.Response(200, json={"error": 200}), RequestResult.ACCEPTED),
+        (lambda _: httpx.Response(400, json={}), RequestResult.REFUSED),
+        (lambda _: httpx.Response(403, json={}), RequestResult.NOT_SENT),
+        (lambda _: httpx.Response(429, json={}), RequestResult.NOT_SENT),
+        (_unreachable, RequestResult.NOT_SENT),
+        (_lost, RequestResult.UNKNOWN),
+        (lambda _: httpx.Response(502, json={}), RequestResult.UNKNOWN),
+        (lambda _: httpx.Response(200, content=b"<html>"), RequestResult.UNKNOWN),
+        (lambda _: httpx.Response(200, json={"message": "ok"}), RequestResult.UNKNOWN),
+    ],
+)
+async def test_every_way_a_refund_request_can_end_is_sorted(
+    answer: Answer, result: RequestResult
+) -> None:
+    assert await adapter(Pesapal(answer)).refund_payment(refund()) is result
+
+
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        ({"status_code": 3, "merchant_reference": "-OdDeposit0000000001"}, True),
+        ({"status_code": 1, "merchant_reference": "-OdDeposit0000000001"}, False),
+        ({"status_code": 0, "merchant_reference": "-OdDeposit0000000001"}, None),
+        # About another payment: not trusted either way.
+        ({"status_code": 3, "merchant_reference": "-OdDeposit0000000002"}, None),
+        ({"status_code": True, "merchant_reference": "-OdDeposit0000000001"}, None),
+    ],
+)
+async def test_a_paid_back_payment_reads_as_reversed(
+    fields: dict[str, object], expected: bool | None
+) -> None:
+    fake = Pesapal(lambda _: httpx.Response(200, json={**fields, "status": "200"}))
+    seen = await adapter(fake).payment_reversed(
+        request_id="-OdDeposit0000000001", provider_reference="track-1"
+    )
+    assert seen is expected

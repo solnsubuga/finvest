@@ -5,6 +5,9 @@ An order is opened with `POST /api/Transactions/SubmitOrderRequest`. Pesapal ans
 passes 3-D Secure. Nothing can be paid without that page. The result is read back with
 `GET /api/Transactions/GetTransactionStatus`: `status_code` 1 is completed, 2 failed, 3 reversed
 and 0 not paid (yet). An unpaid order is cancelled with `POST /api/Transactions/CancelOrder`.
+A paid one is paid back to the card with `POST /api/Transactions/RefundRequest`, by its
+confirmation code. Pesapal's `"200"` only means it took the request: the merchant approves it
+and Pesapal's finance team pays it out later. It takes one refund per payment.
 
 How each way an order can end is sorted (see `domain/cards.py`):
 
@@ -65,6 +68,7 @@ from app.modules.payments.domain.outcomes import (
     UncertainReason,
 )
 from app.modules.payments.domain.provider import InvalidNotice, ProviderNotice
+from app.modules.payments.domain.provider_refunds import RefundRequest, RequestResult
 from app.shared.clock import Clock
 from app.shared.money import Currency, Money
 
@@ -73,6 +77,9 @@ logger = structlog.get_logger()
 SUBMIT_PATH = "/api/Transactions/SubmitOrderRequest"
 STATUS_PATH = "/api/Transactions/GetTransactionStatus"
 CANCEL_PATH = "/api/Transactions/CancelOrder"
+REFUND_PATH = "/api/Transactions/RefundRequest"
+# Who asked for the refund, as Pesapal records it. Never a person's name.
+REFUND_USERNAME = "Finvest"
 REGISTER_IPN_PATH = "/api/URLSetup/RegisterIPN"
 LIST_IPN_PATH = "/api/URLSetup/GetIpnList"
 MAX_NOTICE_BYTES = 4096
@@ -229,6 +236,85 @@ class PesapalCards:
         if str(data.get("status")) == "500":
             return CancelResult.REFUSED
         return CancelResult.UNKNOWN
+
+    # Refunds --------------------------------------------------------------------------------
+
+    async def refund_payment(self, request: RefundRequest) -> RequestResult:
+        """Ask once. A connection never opened, or a token refused, sent nothing; anything after
+        the request may have reached Pesapal is unknown, and is looked up by staff."""
+        if request.amount.currency is not Currency.UGX or not request.amount.is_positive:
+            return RequestResult.REFUSED
+        body = {
+            "confirmation_code": request.confirmation_code,
+            "amount": int(request.amount.minor),
+            "username": REFUND_USERNAME,
+            "remarks": request.remarks[:100],
+        }
+        try:
+            response = await self._authorised("POST", REFUND_PATH, json=body)
+        except PesapalUnavailable as error:
+            logger.warning(
+                "pesapal_refund_not_sent", reason=str(error), refund_id=request.refund_id
+            )
+            return RequestResult.NOT_SENT
+        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout):
+            logger.warning("pesapal_refund_not_sent", reason="connect_failed")
+            return RequestResult.NOT_SENT
+        except httpx.HTTPError:
+            logger.warning(
+                "pesapal_refund_unknown", reason="no_answer", refund_id=request.refund_id
+            )
+            return RequestResult.UNKNOWN
+        status = response.status_code
+        if status in (401, 403, 429):
+            logger.warning("pesapal_refund_not_sent", reason=f"http_{status}")
+            return RequestResult.NOT_SENT
+        if status == 400:
+            logger.warning("pesapal_refund_refused", status_code=status)
+            return RequestResult.REFUSED
+        if status != 200:
+            logger.warning("pesapal_refund_unknown", reason=f"http_{status}")
+            return RequestResult.UNKNOWN
+        try:
+            data = read_json(response.content)
+        except ValueError:
+            logger.warning("pesapal_refund_unknown", reason="unreadable_answer")
+            return RequestResult.UNKNOWN
+        # Pesapal's documents name the answer's code `status` in one place and `error` in
+        # another: 200 is taken, 500 is refused. Anything else is not trusted either way.
+        codes = {str(data.get(name)) for name in ("status", "error") if data.get(name) is not None}
+        if "500" in codes:
+            logger.warning("pesapal_refund_refused", refund_id=request.refund_id)
+            return RequestResult.REFUSED
+        if "200" in codes:
+            logger.info("pesapal_refund_requested", refund_id=request.refund_id)
+            return RequestResult.ACCEPTED
+        logger.warning("pesapal_refund_unknown", reason="unreadable_answer")
+        return RequestResult.UNKNOWN
+
+    async def payment_reversed(self, *, request_id: str, provider_reference: str) -> bool | None:
+        """True once Pesapal reads the order as reversed (status code 3), False while it still
+        reads it as paid, None when it cannot tell."""
+        try:
+            response = await self._authorised(
+                "GET", STATUS_PATH, params={"orderTrackingId": provider_reference}
+            )
+        except (PesapalUnavailable, httpx.HTTPError):
+            return None
+        if response.status_code != 200:
+            return None
+        try:
+            data = read_json(response.content)
+        except ValueError:
+            return None
+        code = data.get("status_code")
+        if data.get("merchant_reference") != request_id or isinstance(code, bool):
+            return None
+        if code == 3:
+            return True
+        if code == 1:
+            return False
+        return None
 
     # Notifications --------------------------------------------------------------------------
 

@@ -108,6 +108,28 @@ From `FINVEST_PESAPAL_*`:
 
 The scheduler needs only `FINVEST_CARDS_PROVIDER` and `FINVEST_PESAPAL_BASE_URL`, for the sandbox check and the card sweep.
 
+### Paying a card payment back
+
+A client paid for an investment by card and should have the money back before it starts: they asked to cancel, or it cannot go ahead. The money goes back to the same card through Pesapal, by two people (`provider_refunds.py`, `domain/provider_refunds.py`, `provider_refund_routes.py`, migration 0482). The investment's amount always goes back. The card charge goes back too only when the proposer marks the refund as Finvest's own mistake (the owner's decision, 2026-11-15); otherwise it stays Finvest's income.
+
+1. **Propose.** One member of staff names the confirmed card payment, a reason and whether Finvest erred (`POST /staff/payments/card-refunds`). The whole amount must still wait in `client.awaiting_start` for the investment, or it is refused with `money_moved_on`: a started investment is unwound first through investments corrections. It is refused with `not_refundable` for anything but a card payment, `already_taken_back` once reversed or refunded, and `no_confirmation_code` when Pesapal gave none. Nothing moves.
+2. **Approve.** A different member of staff approves, with a passkey or app code from the last ten minutes, and the worker's job is queued in that transaction. Or the second person sends it back with a note, or the proposer withdraws it. It shows in the approvals inbox as `card_refund`.
+3. **The worker holds the money, then asks once.** It takes the investment's row lock, checks everything again, posts the hold and marks the refund `sending`, and commits. Then, with no transaction open, it calls Pesapal's `RefundRequest` with the card payment's confirmation code, the amount going back, `Finvest` as the user and a fixed remark that names nobody. The job runs at most once.
+4. **Pesapal answers.** `"200"` means Pesapal took the request: the refund is `requested` and the client is told (`payment_refunded`, which never names the amount). Pesapal's own finance team still has to pay it. `"500"`, a `400`, or a request that never left (no connection, a refused token) releases the hold with its exact reversal, and the refund `failed` with `provider_refused` or `provider_unavailable`; the money waits for the investment again and staff may propose again. A lost answer makes it `uncertain`. It is never sent again, because Pesapal takes one refund per payment.
+5. **Done.** Every 30 minutes the worker reads each requested refund's order. Status code 3 (reversed) makes it `done`. Staff who see it on Pesapal's dashboard or statement can say so first (`POST /staff/payments/card-refunds/{id}/finding` with `paid`, a note of where, a recent second step, and not the proposer). For an uncertain refund they say what Pesapal shows: `requested`, `paid` or `not_paid`. The worker carries out what they found, so no staff transaction moves money. A send left `sending` for ten minutes is made `uncertain` by the same read.
+
+Once done, the deposit's `provider_refund_id` is set. It stays `confirmed`, because it was, but no longer counts as the investment's payment: the client can pay again, or the investment is cancelled as unpaid at its pay-by time. A refunded card payment still counts towards the client's 30-day card limit.
+
+| Event | Debit | Credit |
+| --- | --- | --- |
+| Refund held (`payment.provider_refund_held`) | Liability `client.awaiting_start` with the amount, and income `payments.card_charges` with the charge when Finvest erred | Liability `payments.provider_refunds_due` with what goes back |
+| Refund paid (`payment.provider_refund_paid`) | Liability `payments.provider_refunds_due` | Asset `pesapal.balance` |
+| Refund failed (`payment.provider_refund_released`) | The exact reversal of the hold | |
+
+Every entry has source `payment.provider_refund` and the refund's ID. If the ledger's Pesapal balance is too low to meet a paid refund, the refund stays `requested`, a warning is logged and the next read tries again: a difference for reconciliation, never a reason to lose the record. The database holds each person to their part: only the proposer withdraws, nobody decides their own or says what Pesapal shows for their own, only the worker moves an approved refund on, each step fills only its own columns, a hold, payment or release must be the refund's own entry, and a deposit's `provider_refund_id` is set once, by the worker, to a done refund of it.
+
+In the card sandbox the last three digits of what goes back choose the answer: `007` refused, `008` no answer, `009` never sent, anything else taken and read as paid back at once.
+
 ## A bank transfer, step by step
 
 The client sends money from their own bank account, then tells us about it. The code is in `bank_transfers.py` and `domain/bank_transfers.py`.
@@ -361,7 +383,7 @@ Staff can pause MTN, Airtel or bank transfer pay ins on Settings, two people agr
 
 ## Not built yet
 
-- Cards: card refunds and chargebacks by two people, and the console screens for card settings, card payments and refunds. Trying the adapter against Pesapal's sandbox, which needs the sandbox keys.
+- Cards: chargebacks, and the console screens for card payments and refunds. Trying the adapter against Pesapal's sandbox, which needs the sandbox keys.
 
 - Trying the adapter against ioTec's test wallet, which needs the credentials and a staging deploy.
 - Paying for a goal over HTTP. The routes take investments only.

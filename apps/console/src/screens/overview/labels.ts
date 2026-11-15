@@ -58,6 +58,8 @@ export const KIND_INFO: Record<Kind, KindInfo> = {
   // The subject is the payment's ID; the reversal opens by its own.
   deposit_reversal: { label: "Mistaken payment to take back", path: (item) => `/reconciliation?reversal=${encodeURIComponent(item.id)}` },
   // The subject is the step and the payment's ID, such as "open -N…"; the step opens by its own.
+  // The subject is the card payment's ID; the refund opens by its own.
+  card_refund: { label: "Card payment to pay back", path: (item) => `/reconciliation?card_refund=${encodeURIComponent(item.id)}` },
   deposit_receivable: { label: "Money a client owes for a mistaken payment", path: (item) => `/reconciliation?receivable=${encodeURIComponent(item.id)}` },
   tax_remittance: { label: "Payment to URA", path: at("/finance") },
   // The subject is the outcome proposed: "paid" or "failed".
@@ -119,7 +121,7 @@ export function describeSubject(item: ApprovalItem): string {
     return client ? `${days}, client ${client}` : `${days}, every client`;
   }
   if (item.kind === "phone_change" || item.kind === "account_closure") return `Client ${item.subject}`;
-  if (item.kind === "deposit_reversal") return `Payment ${item.subject}`;
+  if (item.kind === "deposit_reversal" || item.kind === "card_refund") return `Payment ${item.subject}`;
   if (item.kind === "deposit_receivable") {
     const [step, deposit] = item.subject.split(" ");
     return `${RECEIVABLE_STEPS[step ?? ""] ?? "Step"} for payment ${deposit ?? ""}`.trim();

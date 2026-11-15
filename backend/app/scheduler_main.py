@@ -36,6 +36,7 @@ from app.modules.migration.jobs import CLAIM_REMINDERS_KIND, CLAIM_REMINDERS_MAX
 from app.modules.notifications.keyed_backfill import KEY_HASHES
 from app.modules.notifications.service import PURGE_MESSAGES
 from app.modules.payments import cards as card_payments
+from app.modules.payments import provider_refunds
 from app.modules.payments import service as payments
 from app.modules.payments.settings import CardSettings, PaymentsSettings
 from app.modules.payments.wiring import ensure_allowed, ensure_cards_allowed
@@ -192,6 +193,16 @@ def schedules() -> list[Schedule]:
                 trigger=IntervalTrigger(minutes=1),
                 kind=card_payments.SWEEP_KIND,
                 max_age=timedelta(minutes=5),
+            )
+        )
+        # Reads every card refund waiting on the provider, and makes one whose send was
+        # interrupted uncertain, for staff to look up.
+        runs.append(
+            Schedule(
+                name="payments.read_provider_refunds",
+                trigger=IntervalTrigger(minutes=30),
+                kind=provider_refunds.READ_KIND,
+                max_age=timedelta(minutes=25),
             )
         )
     if payments_settings.provider != "disabled":

@@ -92,6 +92,13 @@ DEFAULTS: dict[str, Wording] = {
         "Finvest: a payment from {method} was matched to your account by mistake and has been "
         "taken back.",
     ),
+    "payment_refunded": Wording(
+        "Card payment on its way back",
+        "Your card payment is being paid back to the same card. Your bank may take a few "
+        "working days to show it. If you have a question, message us in the app.",
+        "Finvest: your card payment is being paid back to the same card. Your bank may take a "
+        "few working days to show it.",
+    ),
     "payout_processing": Wording(
         "Withdrawal is being processed",
         "Your withdrawal to {destination} is being processed. We will confirm when it is sent.",
