@@ -65,7 +65,8 @@ describe("treasury bonds on the products screen", () => {
   it("shows an empty catalogue and an unreachable Finvest", async () => {
     renderBonds(createStubBondsApi({ me: "me", sample: "empty" }), { canChange: true });
     expect(await screen.findByRole("heading", { name: "No bonds yet" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "New bond" })).toHaveAttribute("href", "/products?new-bond");
+    // Bonds are added through New product, like every other product.
+    expect(screen.queryByRole("link", { name: "New bond" })).not.toBeInTheDocument();
   });
 
   it("says when bonds cannot be loaded", async () => {
@@ -102,9 +103,10 @@ describe("treasury bonds on the products screen", () => {
 
   it("fills the tax in from the dates and shows what clients will see", async () => {
     const api = createStubBondsApi({ me: "me", sample: "empty" });
-    const user = renderBonds(api, { at: "/products?new-bond", canChange: true });
-    await user.type(await screen.findByLabelText("Code"), "BOND-10Y-2037");
-    await user.type(screen.getByLabelText("ISIN"), "UG12K1405378");
+    const user = renderBonds(api, { at: "/products?new", canChange: true });
+    await user.selectOptions(await screen.findByLabelText("Type"), "Treasury bond");
+    await user.type(await screen.findByLabelText("ISIN"), "UG12K1405378");
+    await user.type(screen.getByLabelText("Code"), "BOND-10Y-2037");
     await user.type(screen.getByLabelText("Name"), "10 Year Treasury Bond 2037");
     await user.type(screen.getByLabelText("Issue date"), "2027-05-18");
     await user.type(screen.getByLabelText("Maturity date"), "2037-05-14");

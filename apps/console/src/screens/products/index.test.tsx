@@ -122,6 +122,25 @@ describe("changing products", () => {
     expect((await api.listProductChanges("proposed"))[0]?.minimum).toEqual({ minor: 300_000, currency: "UGX" });
   });
 
+  it("starts with the type, and the type chosen is the product's kind", async () => {
+    const api = createStubCatalogueApi({ me: "me", today: TODAY, sample: "empty" });
+    const user = renderProducts(api, { at: "/products?new", canChange: true });
+    const type = await screen.findByLabelText("Type");
+    expect(type).toHaveValue("treasury_bill");
+    expect(screen.queryByLabelText("Kind")).toBeNull();
+    await user.selectOptions(type, "Fixed income");
+    expect(screen.getByText("A term and a rate before tax, paid at maturity or monthly.")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("Code"), "FIX-12M");
+    await user.type(screen.getByLabelText("Name"), "12 Month Fixed Income");
+    await user.type(screen.getByLabelText("Term, days"), "365");
+    await user.type(screen.getByLabelText("Minimum, UGX"), "500,000");
+    await user.type(screen.getByLabelText("Yearly rate before tax, %"), "14");
+    await user.type(screen.getByLabelText("Reason, for the audit trail"), "A year for savers");
+    await user.click(screen.getByRole("button", { name: "Send for approval" }));
+    await screen.findByRole("region", { name: "12 Month Fixed Income" });
+    expect((await api.listProductChanges("proposed"))[0]?.kind).toBe("fixed_income");
+  });
+
   it("refuses a code that is already taken", async () => {
     const user = renderProducts(undefined, { at: "/products?new", canChange: true });
     await screen.findByRole("heading", { name: "New product", level: 1 });

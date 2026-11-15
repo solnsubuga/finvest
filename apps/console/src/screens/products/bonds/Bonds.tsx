@@ -101,11 +101,6 @@ export function BondsSection({ api, me, canChange }: BondsSectionProps) {
           months, after tax.
         </p>
       </div>
-      {canChange ? (
-        <Link to="/products?new-bond" className="inline-flex h-11 items-center justify-center rounded-pill bg-lime px-[18px] text-sm font-bold text-ink">
-          New bond
-        </Link>
-      ) : null}
     </div>
   );
 
@@ -165,7 +160,7 @@ export function BondsSection({ api, me, canChange }: BondsSectionProps) {
           <h3 className="m-0 text-[17px] font-extrabold">No bonds yet</h3>
           <p className="m-0 text-md leading-normal text-muted">
             {canChange
-              ? "Add a bond from Bank of Uganda's auction results with New bond: its ISIN, coupon, dates and price. A second person approves it."
+              ? "Add a bond from Bank of Uganda's auction results with New product, type Treasury bond: its ISIN, coupon, dates and price. A second person approves it."
               : "Staff who can change products add bonds, with a second person approving."}
           </p>
         </div>
