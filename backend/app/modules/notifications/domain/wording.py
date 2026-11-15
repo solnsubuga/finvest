@@ -148,8 +148,8 @@ DEFAULTS: dict[str, Wording] = {
     ),
     "investment_matured": Wording(
         "Investment matured",
-        "Your {product} has matured. See what it paid in the app.",
-        "Finvest: your {product} has matured. See what it paid in the app.",
+        "Your {product} that started on {date} has matured. See what it paid in the app.",
+        "Finvest: your {product} that started on {date} has matured. See what it paid in the app.",
     ),
     "investment_withdrawal_requested": Wording(
         "Early withdrawal requested",
@@ -403,7 +403,15 @@ def format_values(spec: EventSpec, variables: Mapping[str, Value]) -> dict[str, 
 
 
 def _fill(template: str, values: Mapping[str, str]) -> str:
-    return _PLACEHOLDER.sub(lambda match: values[match.group(1)], template)
+    def value(match: re.Match[str]) -> str:
+        filled = values[match.group(1)]
+        # A value that ends a sentence of its own, such as "Moses O.", takes the template's
+        # full stop: "went to Moses O.", never "Moses O..".
+        if filled.endswith(".") and template.startswith(".", match.end()):
+            return filled[:-1]
+        return filled
+
+    return _PLACEHOLDER.sub(value, template)
 
 
 def render(spec: EventSpec, wording: Wording, variables: Mapping[str, Value]) -> Rendered:

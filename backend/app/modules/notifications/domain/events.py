@@ -65,7 +65,8 @@ _SPECS = (
     # Two members of staff set up an investment the client asked for. It waits for payment.
     _event("investment_booked", Category.INVESTMENTS, "investments", "product"),
     _event("investment_maturing", Category.INVESTMENTS, "investments", "product", "date"),
-    _event("investment_matured", Category.INVESTMENTS, "investments", "amount", "product"),
+    # `date` is the day it started, which tells two of one product that matured together apart.
+    _event("investment_matured", Category.INVESTMENTS, "investments", "amount", "product", "date"),
     # Cashing out a running investment before it matures. The amount is what the client gets.
     _event(
         "investment_withdrawal_requested", Category.INVESTMENTS, "investments", "amount", "product"
