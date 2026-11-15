@@ -1,6 +1,11 @@
 ---
 import { company } from "../data/company.ts";
+import { careersLink, storeLinks } from "../lib/company-links.ts";
 import Logo from "./Logo.astro";
+
+// Each appears once Finvest has supplied it (src/data/company.ts).
+const stores = storeLinks(company);
+const careers = careersLink(company.careersEmail);
 
 const groups = [
   {
@@ -19,6 +24,7 @@ const groups = [
       { href: "/about", label: "About us" },
       { href: "/safety", label: "Safety" },
       { href: "/about#contact", label: "Contact" },
+      ...(careers ? [{ href: careers, label: "Careers" }] : []),
     ],
   },
   {
@@ -59,6 +65,17 @@ const legalLine = [
       <div class="footer__about">
         <a class="brand" href="/" aria-label="Finvest home"><Logo /><span>finvest</span></a>
         <p>Treasury bills and bonds, unit trusts, fixed deposits and equity portfolios for everyone in Uganda, from your phone.</p>
+        {
+          stores.length > 0 && (
+            <div class="footer__stores">
+              {stores.map((store) => (
+                <a class="button button--on-black button--small" href={store.href}>
+                  {store.label}
+                </a>
+              ))}
+            </div>
+          )
+        }
       </div>
       <div class="footer__links">
         {
@@ -80,9 +97,10 @@ const legalLine = [
     <div class="footer__small">
       {legalLine && <p>{legalLine}</p>}
       <p>
-        Rates shown are yearly and after tax, and they change with each auction. The value of
-        investments can go down as well as up. Withdrawing before maturity can return less than
-        you put in.
+        Rates shown are yearly and after tax, and they change with each auction. Past rates do not
+        promise future ones. Withdrawing
+        before maturity pays back what you put in plus the interest earned so far, so you earn less
+        than if you hold to maturity.
       </p>
       <p>© {year} Finvest. All rights reserved.</p>
     </div>

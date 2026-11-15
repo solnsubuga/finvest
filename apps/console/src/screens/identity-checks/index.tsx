@@ -101,7 +101,8 @@ export function IdentityChecksScreen({
       await loadQueue();
     } catch (error) {
       setFailed({ id: selectedId, message: kycErrorMessage(error) });
-      if (error instanceof KycError && error.code === "conflict") {
+      // Reloaded, the check shows what changed: another decision, or the duplicate ID flag.
+      if (error instanceof KycError && (error.code === "conflict" || error.code === "duplicate_document")) {
         await api.getCheck(selectedId).then(
           (value) => setLoaded({ id: selectedId, load: { state: "ready", value } }),
           () => undefined,

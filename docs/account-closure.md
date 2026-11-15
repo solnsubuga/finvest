@@ -6,7 +6,8 @@ A client can close their Finvest account from Profile, once nothing is left in i
 
 | Blocker | Read from | What the client does |
 | --- | --- | --- |
-| `investments_running` | `investments.holdings.running_count`: waiting for payment or active | Wait for maturity, or withdraw early |
+| `investments_running` | `investments.holdings.running_count`: started and active, goal savings included, the same investments Portfolio lists as running | Wait for maturity, or withdraw early |
+| `investments_unpaid` | `investments.holdings.unpaid_count`: asked for and waiting for payment. Counted apart because they hold no money, so the count beside the amount owed matches it | Pay, or let it lapse |
 | `money_owed` | `ledger.statements.client_owed_as_of`, every entry including any dated ahead, summed per currency | Have it paid out. Covers money paid in and waiting to start, and a payout that failed and is parked. |
 | `deposits_in_progress` | `payments.service.open_deposit_count`: not confirmed or failed, including an unclear outcome | Wait for it to end |
 | `payouts_in_progress` | `payouts.payouts.open_payout_count`: held, queued, sent or unclear | Wait for it to end |

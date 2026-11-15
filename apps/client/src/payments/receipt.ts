@@ -1,3 +1,4 @@
+import { readFirstBytes } from "./firstBytes";
 import { ReceiptFile, ReceiptMimeType } from "./types";
 
 /** The largest receipt we accept. The server checks again. */
@@ -13,10 +14,11 @@ const ACCEPTED = new Set<string>(Object.values(TYPES_BY_EXTENSION));
 
 export type PickedFile = { uri: string; name: string; mimeType?: string | null; size?: number | null };
 
-export type ReceiptProblem = "wrong_type" | "too_large" | "empty";
+export type ReceiptProblem = "wrong_type" | "not_what_it_says" | "too_large" | "empty";
 
 export const receiptProblemCopy: Record<ReceiptProblem, string> = {
   wrong_type: "That file type is not accepted. Use a JPG, PNG or PDF.",
+  not_what_it_says: "That file is not what it says it is. Choose the PDF or photo itself.",
   too_large: "That file is larger than 10 MB. Choose a smaller one.",
   empty: "That file is empty. Choose another one.",
 };
@@ -45,6 +47,39 @@ export function checkReceipt(picked: PickedFile): ReceiptFile | ReceiptProblem {
     return "too_large";
   }
   return { uri: picked.uri, name: picked.name, mimeType, sizeBytes: size };
+}
+
+/** How each accepted type starts, whatever the file is called. */
+const SIGNATURES: Record<ReceiptMimeType, readonly number[]> = {
+  "image/jpeg": [0xff, 0xd8, 0xff],
+  "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  "application/pdf": [0x25, 0x50, 0x44, 0x46, 0x2d],
+};
+
+/** True when the first bytes are those of the file's type. */
+export function startsLike(mimeType: ReceiptMimeType, bytes: Uint8Array): boolean {
+  const signature = SIGNATURES[mimeType];
+  return bytes.length >= signature.length && signature.every((byte, index) => bytes[index] === byte);
+}
+
+/**
+ * checkReceipt, then a look at the file's first bytes, so a text file renamed .jpg is refused
+ * at once and not after staff open it. When the device will not let the app read the file the
+ * name and size checks stand, and the server checks the content again.
+ */
+export async function checkReceiptFile(
+  picked: PickedFile,
+  read: (uri: string) => Promise<Uint8Array> = readFirstBytes,
+): Promise<ReceiptFile | ReceiptProblem> {
+  const checked = checkReceipt(picked);
+  if (typeof checked === "string") return checked;
+  let bytes: Uint8Array;
+  try {
+    bytes = await read(checked.uri);
+  } catch {
+    return checked;
+  }
+  return startsLike(checked.mimeType, bytes) ? checked : "not_what_it_says";
 }
 
 /** Whole shillings from what was typed, such as "2,000,000". Null when it is not an amount. */

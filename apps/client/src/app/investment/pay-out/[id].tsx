@@ -10,6 +10,7 @@ import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { AccountPicker, firstChoosable, NoAccount } from "@/investing/AccountPicker";
 import { formatAmount } from "@/investing/format";
+import { nothingToPayOut } from "@/investing/payOut";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { describeInvestingError, Investment, InvestingError, PayoutAccount } from "@/investing/types";
@@ -43,6 +44,7 @@ export default function PayOutMatured() {
   const destinationId = chosen ?? firstChoosable(accounts);
   const waiting = loaded.state === "ready" && loaded.value.investment.waitingForDestination;
   const canSend = waiting && destinationId !== null;
+  const elsewhere = loaded.state === "ready" && !waiting ? nothingToPayOut(loaded.value.investment) : null;
 
   const send = async () => {
     if (!canSend || destinationId === null) return;
@@ -74,12 +76,18 @@ export default function PayOutMatured() {
   return (
     <Screen
       signedIn
-      footer={canSend ? <Button label="Send it to me" onPress={() => void send()} loading={busy} testID="pay-out-send" /> : null}
+      footer={
+        canSend ? (
+          <Button label="Send it to me" onPress={() => void send()} loading={busy} testID="pay-out-send" />
+        ) : elsewhere?.action ? (
+          <Button label={elsewhere.action.label} onPress={() => router.push(elsewhere.action!.href)} testID={elsewhere.action.testID} />
+        ) : null
+      }
     >
-      <Stack.Screen options={{ title: "Choose where to be paid" }} />
+      <Stack.Screen options={{ title: elsewhere?.title ?? "Choose where to be paid" }} />
       <BackButton fallback={`/investment/${id}`} />
       <View style={{ marginTop: 20 }}>
-        <Title>Choose where to be paid</Title>
+        <Title>{elsewhere?.title ?? "Choose where to be paid"}</Title>
       </View>
       {loaded.state === "loading" ? (
         <Loading label="Loading your investment" />
@@ -87,9 +95,9 @@ export default function PayOutMatured() {
         <View style={{ marginTop: 20 }}>
           <Failed message={loaded.message} onRetry={retry} />
         </View>
-      ) : !waiting ? (
-        <View style={{ marginTop: 20 }}>
-          <Notice tone="neutral">{describeInvestingError(new InvestingError("already_sent"))}</Notice>
+      ) : elsewhere ? (
+        <View style={{ marginTop: 20 }} testID="pay-out-nothing">
+          <Notice tone="neutral">{elsewhere.message}</Notice>
         </View>
       ) : (
         <View style={{ marginTop: 20, gap: 16 }}>

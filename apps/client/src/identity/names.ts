@@ -26,3 +26,23 @@ export function properCase(name: string): string {
 export function firstGivenName(givenNames: string): string | null {
   return properCase(givenNames).split(" ")[0] || null;
 }
+
+function nameWords(name: string): string[] {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .split(/[^a-z']+/)
+    .filter(Boolean)
+    .sort();
+}
+
+/**
+ * True when two names hold the same words, whatever their order, case or spacing: "NAKATO Amara"
+ * is the same as "Amara Nakato". Only a hint for the client; staff compare the proof itself.
+ */
+export function sameName(a: string, b: string): boolean {
+  const left = nameWords(a);
+  const right = nameWords(b);
+  return left.length > 0 && left.length === right.length && left.every((part, index) => part === right[index]);
+}
