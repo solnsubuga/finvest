@@ -226,6 +226,7 @@ export function toInvestingError(error: unknown, call: Call = "other"): Investin
       if (codes.includes("over_mobile_money_limit")) return new InvestingError("over_mobile_money_limit");
       if (codes.includes("over_daily_limit") || codes.includes("over_bank_limit")) return new InvestingError("over_limit");
       if (codes.includes("below_minimum")) return new InvestingError("below_minimum");
+      if (codes.includes("above_maximum")) return new InvestingError("above_maximum");
       if (codes.includes("product_not_open")) return new InvestingError("product_not_open");
       // Still a definite refusal: nothing was saved, so the next try may take a new key.
       return new InvestingError("invalid");

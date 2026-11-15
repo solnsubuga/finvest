@@ -109,6 +109,7 @@ export function toGoalError(error: unknown, call: Call = "other"): GoalError {
       const codes = error.fields.map((field) => field.code);
       if (codes.includes("sooner_than_every_term")) return new GoalError("sooner_than_every_term");
       if (codes.includes("below_minimum")) return new GoalError("below_minimum");
+      if (codes.includes("target_too_large")) return new GoalError("target_too_large");
       return new GoalError("invalid");
     }
     case "offline":

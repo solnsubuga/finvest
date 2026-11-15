@@ -6,6 +6,8 @@ import { DetailField, IdentityDetails } from "./types";
  */
 
 export const MINIMUM_AGE = 18;
+/** Older than anyone alive: a birth date further back is a typing mistake. As on the server. */
+export const MAXIMUM_AGE = 120;
 const NAME = /^[\p{L}]+(?:[ '\-.][\p{L}]+)*\.?$/u;
 const DOCUMENT_NUMBER = /^[A-Z0-9]{5,32}$/;
 const TIN = /^[0-9]{10}$/;
@@ -27,6 +29,7 @@ const problemCopy: Record<string, string> = {
   invalid_document_number: "Use the 5 to 32 letters and digits printed on your ID.",
   in_the_future: "That date is in the future.",
   under_age: `You must be ${MINIMUM_AGE} or older to open a Finvest account.`,
+  too_old: "Check the year. It is more than 120 years ago.",
   document_expired: "This ID has expired. Use one that is still valid.",
   invalid_tin: "A TIN is 10 digits. Leave it empty if you do not have one.",
   invalid_date: "Enter the date as day, month and year, like 22/06/1994.",
@@ -109,6 +112,7 @@ export function readForm(
   else if (!dateOfBirth) errors.dateOfBirth = problemCopy.invalid_date;
   else if (dateOfBirth > today) errors.dateOfBirth = problemCopy.in_the_future;
   else if (yearsBetween(dateOfBirth, today) < MINIMUM_AGE) errors.dateOfBirth = problemCopy.under_age;
+  else if (yearsBetween(dateOfBirth, today) > MAXIMUM_AGE) errors.dateOfBirth = problemCopy.too_old;
 
   const expiresOn = parseDay(form.expiresOn);
   if (!form.expiresOn.trim()) errors.expiresOn = problemCopy.missing;

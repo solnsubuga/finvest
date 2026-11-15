@@ -781,6 +781,7 @@ def _invalid(refusal: GoalRefusal) -> ApplicationError:
         GoalRefusal.NAME_EMPTY: "name",
         GoalRefusal.NAME_TOO_LONG: "name",
         GoalRefusal.TARGET_NOT_POSITIVE: "target_minor",
+        GoalRefusal.TARGET_TOO_LARGE: "target_minor",
         GoalRefusal.DATE_NOT_IN_FUTURE: "target_date",
         GoalRefusal.DATE_TOO_FAR: "target_date",
     }[refusal]

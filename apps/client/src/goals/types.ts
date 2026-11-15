@@ -122,6 +122,8 @@ export type GoalErrorCode =
   | "closed"
   | "sooner_than_every_term"
   | "below_minimum"
+  /** Above the largest goal target (src/investing/limits.ts). */
+  | "target_too_large"
   | "invalid"
   | "key_reused"
   | "not_verified"
@@ -172,6 +174,7 @@ const errorCopy: Record<GoalErrorCode, string> = {
   sooner_than_every_term:
     "That date is too soon. Your money is invested in Treasury bills, and the shortest one takes 91 days.",
   below_minimum: "Each saving must be at least the product's minimum.",
+  target_too_large: "That target is more than Finvest accepts for one goal. Set a smaller target.",
   invalid: "Something in this goal is not right. Check it and try again.",
   key_reused: "This was already sent with other details. Go back and start again.",
   not_verified: "Finish your ID check first. Each saving is an investment, and investing opens once your ID is approved.",

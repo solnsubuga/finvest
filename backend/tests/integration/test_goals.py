@@ -186,6 +186,8 @@ async def test_a_goal_with_no_date_uses_the_shortest_term_and_has_no_plan(
         ("  ", 2_000_000, year_on, ("name", "name_empty")),
         ("x" * 61, 2_000_000, year_on, ("name", "name_too_long")),
         ("Land", 2_000_000, today, ("target_date", "date_not_in_future")),
+        # QA F-031: a UGX 1 quadrillion target is refused.
+        ("Land", 10**15, year_on, ("target_minor", "target_too_large")),
         (
             "Land",
             2_000_000,

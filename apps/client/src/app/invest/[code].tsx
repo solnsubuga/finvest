@@ -1,4 +1,5 @@
 import { useCallback, useState } from "react";
+import { isAboveLargest, largestSentence } from "@/investing/limits";
 import { View } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 
@@ -73,7 +74,15 @@ export default function ProductDetail() {
           <Field
             label="How much do you want to invest?"
             hint={`From ${formatAmount(product.minimum)}`}
-            error={calc.state === "failed" ? calc.message : text && !amount ? "Type a whole amount, such as 1,000,000." : null}
+            error={
+              amount && isAboveLargest(amount)
+                ? largestSentence(amount.currency)
+                : calc.state === "failed"
+                  ? calc.message
+                  : text && !amount
+                    ? "Type a whole amount, such as 1,000,000."
+                    : null
+            }
           >
             <Input
               label="Amount"
