@@ -24,6 +24,7 @@ from tests.support.database import TestDatabase
 from tests.support.investments import PRESENT, pay, today
 from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import staff as new_staff
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -72,7 +73,7 @@ def code(response: httpx.Response) -> str:
 
 async def signed_in_client(api: Api, *, approved: bool = True) -> tuple[str, dict[str, str]]:
     """A client with an account, an approved identity check, and a bearer token."""
-    phone = f"+2567{secrets.randbelow(10**8):08d}"
+    phone = unique_phone()
     client_id = await api.identity.create_client(phone=phone, email=None, password=PASSWORD)
     client = Actor("client", client_id)
     if approved:

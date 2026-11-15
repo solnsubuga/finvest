@@ -45,6 +45,7 @@ from app.shared.actors import Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.email import RecordingTransport
+from tests.support.phones import unique_phone
 
 CLIENT_ORIGIN = "https://app.finvestug.com"
 STAFF_ORIGIN = "https://admin.finvestug.com"
@@ -313,7 +314,7 @@ def decode_secret(shown: str) -> bytes:
 def a_phone() -> str:
     """A Ugandan mobile number the sandbox approves: it never ends in 01 to 06."""
     while True:
-        number = "+2567" + "".join(secrets.choice("0123456789") for _ in range(8))
+        number = unique_phone()
         if not "01" <= number[-2:] <= "06":
             return number
 

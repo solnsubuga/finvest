@@ -5,7 +5,6 @@ its own code and ISIN, and pauses it again before it ends.
 """
 
 import asyncio
-import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -48,6 +47,7 @@ from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import key
 from tests.support.ledger import staff as new_staff
 from tests.support.payments import FakeCollections, deposit_worker, drain
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -424,7 +424,7 @@ async def http_api(
 
 async def signed_in(http: httpx.AsyncClient, database: Database, clock: Clock) -> tuple[Actor, str]:
     identity = http.app.state.identity  # type: ignore[attr-defined]
-    phone = "+2567" + "".join(secrets.choice("0123456789") for _ in range(8))
+    phone = unique_phone()
     client_id = await identity.create_client(
         phone=phone, email=None, password="copper-harbour-violin"
     )

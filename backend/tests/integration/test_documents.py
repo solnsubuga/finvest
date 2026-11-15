@@ -71,6 +71,7 @@ from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -900,9 +901,7 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
 ) -> None:
     api, identity = http
     assert (await api.get("/client/documents")).status_code == 401
-    client_id = await identity.create_client(
-        phone=f"+2567{abs(hash(push_id())) % 10**8:08d}", email=None, password=PASSWORD
-    )
+    client_id = await identity.create_client(phone=unique_phone(), email=None, password=PASSWORD)
     client = Actor("client", client_id)
     issued = await identity.issue_session(client, second_step="passkey", transport="token")
     api.headers["Authorization"] = f"Bearer {issued.token}"
@@ -983,9 +982,7 @@ async def client_with_email(
 ) -> Actor:
     """An approved client who can be reached at an email address, proved with a link unless not."""
     address = f"amara.{push_id().lower().replace('_', '').replace('-', '')}@example.com"
-    client_id = await identity.create_client(
-        phone=f"+2567{abs(hash(push_id())) % 10**8:08d}", email=address, password=PASSWORD
-    )
+    client_id = await identity.create_client(phone=unique_phone(), email=address, password=PASSWORD)
     if proved:
         checks = EmailCheckService(app_database, FakeClock(), "https://app.finvestug.com")
         assert await checks.send_link(client_id)

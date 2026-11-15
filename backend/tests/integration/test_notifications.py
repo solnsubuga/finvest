@@ -31,6 +31,7 @@ from app.modules.notifications.service import PURGE_MESSAGES, queue_message
 from app.shared.push_ids import push_id
 from tests.support.clock import FakeClock
 from tests.support.email import RecordingTransport
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -310,7 +311,7 @@ async def test_a_text_message_is_sent_once(
     app_database: Database, worker_database: Database
 ) -> None:
     clock, sms, key = FakeClock(), RecordingSms(), f"test:{push_id()}"
-    phone = f"+2567{next(_numbers):08d}"
+    phone = unique_phone()
     await queue_sms(app_database, clock, phone, key)
     worker = a_worker(worker_database, RecordingTransport(), clock, sms)
     await worker.run_once()
@@ -327,7 +328,7 @@ async def test_a_text_that_may_have_been_sent_is_never_sent_again(
 ) -> None:
     clock, key = FakeClock(), f"test:{push_id()}"
     sms = RecordingSms(failures=[SmsUncertain("The provider did not answer")])
-    phone = f"+2567{next(_numbers):08d}"
+    phone = unique_phone()
     await queue_sms(app_database, clock, phone, key)
     worker = a_worker(worker_database, RecordingTransport(), clock, sms)
     await worker.run_once()

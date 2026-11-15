@@ -16,6 +16,7 @@ from tests.support.http import PASSWORD, Api, running_api
 from tests.support.investments import PRESENT, request
 from tests.support.kyc import verify
 from tests.support.payments import start_deposit
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -64,7 +65,7 @@ async def test_staff_find_a_client_by_name_in_any_order_and_case(
 async def test_staff_find_a_client_by_part_of_their_email(api: Api) -> None:
     tag = push_id().lower().replace("-", "x").replace("_", "y")[-10:]
     client_id = await api.identity.create_client(
-        phone=f"+2567{abs(hash(tag)) % 10**8:08d}",
+        phone=unique_phone(),
         email=f"sarah.{tag}@example.com",
         password=PASSWORD,
     )

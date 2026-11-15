@@ -5,7 +5,6 @@ whose outcome is unknown, and a crash mid-call. Answers are scripted per payer n
 test uses a fresh number, so tests sharing a database never read each other's script.
 """
 
-import secrets
 from collections.abc import Mapping
 from datetime import timedelta
 
@@ -32,6 +31,7 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.clock import Clock
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
+from tests.support.phones import unique_phone
 
 PROVIDER = "fake"
 LEASE = timedelta(seconds=30)
@@ -42,7 +42,7 @@ def ugx(minor: int) -> Money:
 
 
 def phone() -> str:
-    return "+2567" + "".join(secrets.choice("0123456789") for _ in range(8))
+    return unique_phone()
 
 
 def client() -> Actor:
