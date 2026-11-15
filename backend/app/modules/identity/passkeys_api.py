@@ -84,6 +84,18 @@ class ClientSignedIn(Contract):
     session: ClientSessionView
 
 
+class PasskeyLoginOptions(Contract):
+    """Pass `public_key` to `navigator.credentials.get`. Send the answer with `attempt_id`."""
+
+    attempt_id: PushId
+    public_key: dict[str, Any]
+
+
+class PasskeyLogin(Contract):
+    attempt_id: PushId
+    credential: Credential
+
+
 class PasskeyItem(Contract):
     id: PushId
     name: str
@@ -133,6 +145,25 @@ async def client_login_passkey_verify(
     """Finish sign-in. A browser is given a cookie, never the token itself."""
     issued = await passkeys.sign_in(
         body.login_id, "client", body.credential, client_transport(request)
+    )
+    return await client_signed_in(request, response, identity, issued)
+
+
+@client_router.post("/login/passkey-only/options")
+async def client_passkey_login_options(request: Request, passkeys: Passkeys) -> PasskeyLoginOptions:
+    """Start logging in with a passkey alone: no number or password, the passkey says who."""
+    check_origin(request, "client", required=False)
+    attempt_id, options = await passkeys.passkey_login_options(address=caller_address(request))
+    return PasskeyLoginOptions(attempt_id=attempt_id, public_key=options)
+
+
+@client_router.post("/login/passkey-only/verify")
+async def client_passkey_login_verify(
+    body: PasskeyLogin, request: Request, response: Response, passkeys: Passkeys, identity: Identity
+) -> ClientSignedIn:
+    """Finish logging in with a passkey alone. A browser is given a cookie, never the token."""
+    issued = await passkeys.passkey_login(
+        body.attempt_id, body.credential, client_transport(request)
     )
     return await client_signed_in(request, response, identity, issued)
 

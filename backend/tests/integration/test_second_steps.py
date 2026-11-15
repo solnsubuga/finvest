@@ -1038,3 +1038,151 @@ async def test_staff_second_steps_tell_no_client(api: Api) -> None:
             text("SELECT count(*) FROM notifications WHERE client_id = :id"), {"id": staff_id}
         )
     assert told == 0
+
+
+# Logging in with a passkey alone
+
+
+async def passkey_login(
+    api: Api, device: Device, headers: dict[str, str] | None = None
+) -> httpx.Response:
+    options = await api.http.post("/client/login/passkey-only/options", headers=headers)
+    assert options.status_code == 200, options.text
+    body = options.json()
+    # The device is asked for any passkey it holds for the site: the options name nobody.
+    assert body["public_key"].get("allowCredentials", []) == []
+    assert body["public_key"]["userVerification"] == "required"
+    return await api.http.post(
+        "/client/login/passkey-only/verify",
+        json={"attempt_id": body["attempt_id"], "credential": device.get(body["public_key"])},
+        headers=headers,
+    )
+
+
+async def test_a_client_logs_in_with_a_passkey_alone(api: Api) -> None:
+    phone, client_id, token = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    assert (await add_passkey(api, token, device)).status_code == 201
+
+    verified = await passkey_login(api, device, BROWSER)
+    assert verified.status_code == 200, verified.text
+    assert verified.json()["token"] is None
+    session = verified.json()["session"]
+    assert (session["client_id"], session["phone"]) == (client_id, phone)
+    # A passkey does not depend on the SIM card, so nothing is limited for 24 hours.
+    assert session["restricted_until"] is None
+    assert session["confirmed_at"] is not None
+    assert COOKIES["client"] in verified.headers["set-cookie"]
+    assert (await api.http.get("/client/session")).status_code == 200
+    async with api.database.transaction() as db:
+        step = await db.scalar(
+            text(
+                "SELECT second_step FROM identity_sessions WHERE actor_kind = 'client' "
+                "AND actor_id = :id ORDER BY created_at DESC, id DESC LIMIT 1"
+            ),
+            {"id": client_id},
+        )
+    assert step == "passkey"
+
+
+async def test_the_phone_app_logs_in_with_a_passkey_alone_and_gets_a_token(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    await add_passkey(api, token, device)
+    verified = await passkey_login(api, device)
+    assert verified.status_code == 200, verified.text
+    assert "set-cookie" not in verified.headers
+    bearer = {"Authorization": f"Bearer {verified.json()['token']}"}
+    assert (await api.http.get("/client/session", headers=bearer)).status_code == 200
+
+
+async def test_a_passkey_login_answer_works_once(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    await add_passkey(api, token, device)
+    options = (await api.http.post("/client/login/passkey-only/options")).json()
+    body = {"attempt_id": options["attempt_id"], "credential": device.get(options["public_key"])}
+    # Sent twice at the same moment, from separate transactions: one session, never two.
+    responses = await asyncio.gather(
+        api.http.post("/client/login/passkey-only/verify", json=body),
+        api.http.post("/client/login/passkey-only/verify", json=body),
+    )
+    assert sorted(r.status_code for r in responses) == [200, 410]
+    again = await api.http.post("/client/login/passkey-only/verify", json=body)
+    assert (again.status_code, code(again)) == (410, "expired")
+
+
+async def test_a_passkey_login_answer_belongs_to_its_attempt(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    await add_passkey(api, token, device)
+    first = (await api.http.post("/client/login/passkey-only/options")).json()
+    second = (await api.http.post("/client/login/passkey-only/options")).json()
+    crossed = await api.http.post(
+        "/client/login/passkey-only/verify",
+        json={"attempt_id": second["attempt_id"], "credential": device.get(first["public_key"])},
+    )
+    assert (crossed.status_code, code(crossed)) == (410, "expired")
+
+
+async def test_a_passkey_login_challenge_expires(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    await add_passkey(api, token, device)
+    options = (await api.http.post("/client/login/passkey-only/options")).json()
+    api.clock.advance(minutes=5, seconds=1)
+    late = await api.http.post(
+        "/client/login/passkey-only/verify",
+        json={"attempt_id": options["attempt_id"], "credential": device.get(options["public_key"])},
+    )
+    assert (late.status_code, code(late)) == (410, "expired")
+
+
+@pytest.mark.parametrize("fault", ["unknown", "removed", "unverified", "other_handle", "staff"])
+async def test_a_passkey_login_that_does_not_prove_itself_is_refused(api: Api, fault: str) -> None:
+    _, _, token = await a_signed_in_client(api)
+    _, other_id, _ = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    added = await add_passkey(api, token, device)
+    if fault == "unknown":
+        device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    elif fault == "removed":
+        removed = await api.http.delete(
+            f"/client/passkeys/{added.json()['id']}", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert removed.status_code == 204
+    elif fault == "unverified":
+        # Touched but not unlocked: no fingerprint, face or screen lock checked the person.
+        device.user_verified = False
+    elif fault == "other_handle":
+        # A device that claims the passkey is another client's.
+        device.user_handle = base64.urlsafe_b64encode(other_id.encode()).rstrip(b"=").decode()
+    else:
+        _, _, staff_token = await invited(api)
+        device = Device(STAFF_SITE, STAFF_ORIGIN)
+        await enrol_with_passkey(api, staff_token, device)
+    refused = await passkey_login(api, device)
+    assert (refused.status_code, code(refused)) == (401, "passkey_failed")
+
+
+async def test_a_frozen_account_cannot_log_in_with_its_passkey(api: Api) -> None:
+    _, _, token = await a_signed_in_client(api)
+    device = Device(CLIENT_SITE, CLIENT_ORIGIN)
+    await add_passkey(api, token, device)
+    frozen = await api.http.post(
+        "/client/account-freeze", json={}, headers={"Authorization": f"Bearer {token}"}
+    )
+    assert frozen.status_code == 201, frozen.text
+    refused = await passkey_login(api, device)
+    assert (refused.status_code, code(refused)) == (401, "passkey_failed")
+
+
+async def test_passkey_login_is_off_without_a_site(
+    test_database: TestDatabase, app_database: Database
+) -> None:
+    settings = settings_for(test_database, client_passkey_site=None)
+    app = create_app(settings, app_database, FakeClock(), HASHER)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="https://api") as http:
+        off = await http.post("/client/login/passkey-only/options")
+    assert (off.status_code, code(off)) == (503, "unavailable")

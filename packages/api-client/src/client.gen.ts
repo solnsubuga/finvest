@@ -1027,6 +1027,18 @@ export const PasskeyItem = z.object({
 });
 export type PasskeyItem = z.infer<typeof PasskeyItem>;
 
+export const PasskeyLogin = z.object({
+  attempt_id: z.string(),
+  credential: z.record(z.string(), z.unknown()),
+});
+export type PasskeyLogin = z.infer<typeof PasskeyLogin>;
+
+export const PasskeyLoginOptions = z.object({
+  attempt_id: z.string(),
+  public_key: z.record(z.string(), z.unknown()),
+});
+export type PasskeyLoginOptions = z.infer<typeof PasskeyLoginOptions>;
+
 export const PasskeyOptions = z.object({
   public_key: z.record(z.string(), z.unknown()),
 });
@@ -2437,6 +2449,28 @@ export const operations = {
     params: z.object({}),
     query: z.object({}),
     body: LoginCode,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: ClientSignedIn,
+  },
+  "POST /client/login/passkey-only/options": {
+    method: "POST",
+    path: "/client/login/passkey-only/options",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: PasskeyLoginOptions,
+  },
+  "POST /client/login/passkey-only/verify": {
+    method: "POST",
+    path: "/client/login/passkey-only/verify",
+    params: z.object({}),
+    query: z.object({}),
+    body: PasskeyLogin,
     bodyKind: "json",
     idempotent: false,
     status: 200,

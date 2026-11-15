@@ -32,6 +32,9 @@ class Device:
         self.credential_id = os.urandom(32)
         self.sign_count = 0
         self.user_verified = True
+        # The account the device saved the passkey for, sent back as `userHandle` when the
+        # device chooses the passkey itself (a log in that names nobody first).
+        self.user_handle: str | None = None
 
     def _client_data(self, kind: str, options: dict[str, Any]) -> bytes:
         return json.dumps(
@@ -56,6 +59,7 @@ class Device:
 
     def create(self, options: dict[str, Any]) -> dict[str, Any]:
         """Answer registration options with a new credential, attestation format `none`."""
+        self.user_handle = options["user"]["id"]
         numbers = self.key.public_key().public_numbers()
         public_key = cbor2.dumps(
             {
@@ -101,5 +105,6 @@ class Device:
                 "clientDataJSON": b64url(client_data),
                 "authenticatorData": b64url(authenticator_data),
                 "signature": b64url(signature),
+                **({"userHandle": self.user_handle} if self.user_handle else {}),
             },
         }
