@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { emptyDirectory, type ClientCard, type Directory } from "@/directory/api.ts";
 import { createHttpDirectory } from "@/directory/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
+import { saveText } from "@/download.ts";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { createHttpClientsApi } from "../clients/http.ts";
@@ -23,6 +24,7 @@ import type { Amount, Currency } from "../products/api.ts";
 import { maturitiesErrorMessage, notConnectedMaturitiesApi, type Maturities, type MaturitiesApi, type MaturityDay } from "./api.ts";
 import { createHttpMaturitiesApi } from "./http.ts";
 import { createStubMaturitiesApi, type StubCase } from "./stub.ts";
+import { comingUp, maturitiesCsv, maturitiesFilename } from "./export.ts";
 
 const SUMMARY = "Terms that end, what each one became, and anything that needs a person.";
 
@@ -160,7 +162,13 @@ export function MaturitiesScreen({ api, directory = emptyDirectory, held: tools 
   const dueToday = days.filter((d) => d.day === today);
   return (
     <>
-      <PageHeader title="Maturities" summary={SUMMARY} />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Maturities" summary={SUMMARY} />
+        <Button variant="secondary" disabled={days.length === 0} onClick={() => saveText(maturitiesCsv(days), maturitiesFilename(today))}>
+          Export day by day
+        </Button>
+      </div>
+      <Tiles days={days} today={today} dueToday={dueToday} held={held} />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] items-start gap-4">
         <RunCard today={today} dueToday={dueToday} notClosed={notClosed} />
         <HeldCard held={held} />
@@ -169,6 +177,44 @@ export function MaturitiesScreen({ api, directory = emptyDirectory, held: tools 
       {held.length > 0 ? <Held investments={held} cards={cards} tools={tools} payOuts={payOuts} onProposed={readPayOuts} /> : null}
       <DayByDay days={days} today={today} />
     </>
+  );
+}
+
+/** The canvas's summary tiles: today, the two weeks ahead, and money held. */
+function Tiles({ days, today, dueToday, held }: { days: readonly MaturityDay[]; today: string; dueToday: readonly MaturityDay[]; held: readonly Investment[] }) {
+  const ahead = comingUp(days, today);
+  const sum = (values: readonly number[]) => values.reduce((a, b) => a + b, 0);
+  const money = (parts: readonly { minor: number; currency: Currency }[]) =>
+    parts.length === 0 ? "Nothing" : parts.map((part) => formatExact(part)).join(" and ");
+  return (
+    <section aria-label="Maturities at a glance" className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+      <Tile
+        name="Ending today"
+        value={terms(sum(dueToday.map((d) => d.investments)))}
+        note={money(dueToday.map((d) => d.principal))}
+      />
+      <Tile
+        name="Coming up, two weeks"
+        value={terms(sum(ahead.map((a) => a.terms)))}
+        note={money(ahead.map((a) => ({ minor: a.principal, currency: a.currency })))}
+      />
+      <Tile
+        name="Chosen for what is coming"
+        value={`${count(sum(ahead.map((a) => a.rollOver)))} roll over`}
+        note={`${count(sum(ahead.map((a) => a.payOut)))} to pay out, so cash is needed for those`}
+      />
+      <Tile name="Held for clients" value={terms(held.length)} note={held.length === 0 ? "Nothing waiting" : totals(held, proceeds)} warn={held.length > 0} />
+    </section>
+  );
+}
+
+function Tile({ name, value, note, warn = false }: { name: string; value: string; note: string; warn?: boolean }) {
+  return (
+    <div role="group" aria-label={name} className={cn("flex flex-col gap-1 rounded-xl bg-surface p-4", warn ? "border-2 border-warning p-[15px]" : "border border-border")}>
+      <p className="m-0 text-sm text-muted">{name}</p>
+      <p className="m-0 text-2xl font-extrabold tabular-nums">{value}</p>
+      <p className={cn("m-0 text-sm tabular-nums", warn ? "font-bold text-warning-text" : "text-muted")}>{note}</p>
+    </div>
   );
 }
 
