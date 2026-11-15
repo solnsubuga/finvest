@@ -393,6 +393,45 @@ class PrepareRelease(unittest.TestCase):
         self.assertNotIn("FINVEST_OBJECT_STORAGE_BACKEND", read_env(self.out / "runtime" / "api.env"))
         self.assertEqual(read_env(self.out / "release.env")["FINVEST_STORAGE_ORIGIN"], "")
 
+    def test_card_payments_reach_each_process_that_reads_them(self):
+        cards = {
+            "FINVEST_CARDS_PROVIDER": "pesapal",
+            "FINVEST_PESAPAL_CONSUMER_KEY": "key",
+            "FINVEST_PESAPAL_CONSUMER_SECRET": "secret",
+            "FINVEST_PESAPAL_IPN_TOKEN": "t" * 32,
+        }
+        pr.prepare(self.out, settings(**cards))
+        runtime = {s: read_env(self.out / "runtime" / f"{s}.env") for s in ("api", "worker", "scheduler")}
+        for service in ("api", "worker"):
+            env = runtime[service]
+            self.assertEqual(env["FINVEST_CARDS_PROVIDER"], "pesapal")
+            self.assertEqual(env["FINVEST_PESAPAL_CONSUMER_SECRET"], "secret")
+            self.assertEqual(env["FINVEST_PESAPAL_PUBLIC_API_URL"], "https://api.finvestug.com")
+            self.assertEqual(env["FINVEST_PESAPAL_RETURN_URL"], "https://app.finvestug.com/pay/card/return")
+        # The scheduler holds no Pesapal credentials.
+        self.assertEqual(runtime["scheduler"]["FINVEST_CARDS_PROVIDER"], "pesapal")
+        self.assertNotIn("FINVEST_PESAPAL_CONSUMER_KEY", runtime["scheduler"])
+        self.assertNotIn("FINVEST_PESAPAL_IPN_TOKEN", runtime["scheduler"])
+
+    def test_card_addresses_follow_the_environment_unless_set(self):
+        pr.prepare(
+            self.out,
+            settings(
+                FINVEST_CARDS_PROVIDER="pesapal",
+                FINVEST_PESAPAL_RETURN_URL="https://app.example.com/back",
+            ),
+        )
+        api = read_env(self.out / "runtime" / "api.env")
+        self.assertEqual(api["FINVEST_PESAPAL_RETURN_URL"], "https://app.example.com/back")
+        self.assertEqual(api["FINVEST_PESAPAL_PUBLIC_API_URL"], "https://api.finvestug.com")
+
+    def test_cards_stay_off_when_unset(self):
+        pr.prepare(self.out, settings())
+        for service in ("api", "worker", "scheduler"):
+            text = (self.out / "runtime" / f"{service}.env").read_text()
+            self.assertNotIn("CARDS", text)
+            self.assertNotIn("PESAPAL", text)
+
     def test_www_redirects_to_the_apex(self):
         pr.prepare(self.out, settings())
         site = (self.out / "edge" / "site.caddy").read_text()
