@@ -17,7 +17,7 @@ export function useOpeningOrganisation(): Loaded<boolean> {
   const phone = session?.phone ?? null;
   const [opening] = useFocusLoaded(
     useCallback(async () => {
-      if (!intentFor(await readIntent(), phone)) return false;
+      if (!(await intentFor(await readIntent(), phone))) return false;
       const applied = (await organisations.list()).some((found) => !found.invited);
       if (applied) await clearIntent();
       return !applied;

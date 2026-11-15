@@ -2,7 +2,7 @@ import { fireEvent, screen, within } from "@testing-library/react-native";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_CODE, DEMO_PASSWORD } from "@/auth/stubAuthClient";
-import { intentFor, parseIntent } from "@/organisations/intentTypes";
+import { intentFor, parseIntent, storedIntent } from "@/organisations/intentTypes";
 import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 
 const mockStore: { saved: string | null } = { saved: null };
@@ -19,11 +19,11 @@ jest.mock("@/organisations/stubOrganisationsClient", () => {
 });
 
 jest.mock("@/organisations/intent", () => {
-  const { parseIntent: parse } = jest.requireActual("@/organisations/intentTypes");
+  const { parseIntent: parse, storedIntent: stored } = jest.requireActual("@/organisations/intentTypes");
   return {
     readIntent: async () => parse(mockStore.saved),
     writeIntent: async (phone: string) => {
-      mockStore.saved = JSON.stringify({ phone });
+      mockStore.saved = await stored(phone);
     },
     clearIntent: async () => {
       mockStore.saved = null;
@@ -38,6 +38,9 @@ jest.mock("@/auth/stubAuthClient", () => {
 
 jest.mock("expo-crypto", () => ({
   randomUUID: () => jest.requireActual("node:crypto").randomUUID(),
+  CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+  digestStringAsync: async (_algorithm: string, text: string) =>
+    jest.requireActual("node:crypto").createHash("sha256").update(text).digest("hex"),
 }));
 
 jest.mock("expo-font", () => ({
@@ -95,7 +98,7 @@ describe("opening a company or group account from sign up", () => {
 
   it("leads an approved client from Home to the application", async () => {
     mockOrganisations.fresh = true;
-    mockStore.saved = JSON.stringify({ phone: "+256772123456" });
+    mockStore.saved = await storedIntent("+256772123456");
     await renderRouter("./src/app", { initialUrl: "/login" });
     await logIn();
     const step = await screen.findByTestId("set-up-organisation");
@@ -107,7 +110,7 @@ describe("opening a company or group account from sign up", () => {
   });
 
   it("stops asking once the client has an application of their own", async () => {
-    mockStore.saved = JSON.stringify({ phone: "+256772123456" });
+    mockStore.saved = await storedIntent("+256772123456");
     await renderRouter("./src/app", { initialUrl: "/login" });
     await logIn();
     await screen.findByTestId("home-set-up");
@@ -123,7 +126,7 @@ describe("opening a company or group account from sign up", () => {
   });
 
   it("asks nothing about companies after an ordinary sign up", async () => {
-    mockStore.saved = JSON.stringify({ phone: "+256772900413" });
+    mockStore.saved = await storedIntent("+256772900413");
     await signUp("772 900 413", { forOrganisation: false });
     await screen.findByTestId("home-set-up");
     expect(screen.queryByTestId("set-up-organisation")).toBeNull();
@@ -132,12 +135,15 @@ describe("opening a company or group account from sign up", () => {
 });
 
 describe("the kept choice", () => {
-  it("belongs only to the number that made it", () => {
-    const kept = parseIntent(JSON.stringify({ phone: "+256772900413" }));
-    expect(intentFor(kept, "+256772900413")).toBe(true);
-    expect(intentFor(kept, "+256772123456")).toBe(false);
-    expect(intentFor(kept, null)).toBe(false);
-    expect(intentFor(parseIntent("not json"), "+256772900413")).toBe(false);
-    expect(intentFor(parseIntent(JSON.stringify({ phone: 7 })), "+256772900413")).toBe(false);
+  it("belongs only to the number that made it, and never holds the number", async () => {
+    const raw = await storedIntent("+256772900413");
+    expect(raw).not.toContain("772900413");
+    const kept = parseIntent(raw);
+    expect(await intentFor(kept, "+256772900413")).toBe(true);
+    expect(await intentFor(kept, "+256772123456")).toBe(false);
+    expect(await intentFor(kept, null)).toBe(false);
+    expect(parseIntent("not json")).toBeNull();
+    // An entry from before digests, holding the number itself, counts as none.
+    expect(parseIntent(JSON.stringify({ phone: "+256772900413" }))).toBeNull();
   });
 });
