@@ -106,6 +106,12 @@ export function kampalaToday(nowMs: number): string {
  * "13/11/2026" to "2026-11-13". Null when it is not a real day, is after
  * today in Kampala, or is more than 90 days old.
  */
+/** Today in Kampala as the receipt form writes it, "15/11/2026". Most clients hand in a receipt the day they send. */
+export function daySentToday(nowMs: number): string {
+  const [year, month, day] = kampalaToday(nowMs).split("-");
+  return `${day}/${month}/${year}`;
+}
+
 export function parseDaySent(text: string, nowMs: number): string | null {
   const match = /^(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4})$/.exec(text.trim());
   if (!match) {
