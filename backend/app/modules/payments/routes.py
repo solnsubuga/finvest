@@ -174,6 +174,9 @@ class BankTransferDetails(Contract):
 
 class MobileMoneyPayment(Contract):
     network: Literal["mtn", "airtel"]
+    # The number to prompt, or that pays on the page. Anyone's number may pay (the owner's
+    # decision, 2026-11-15); left out, it is the number on the client's account.
+    phone: str | None = Field(default=None, max_length=20)
 
 
 @dataclass(frozen=True, slots=True)
@@ -473,7 +476,7 @@ def create_client_router(
                 purpose_id=payable.purpose_id,
                 network=Network(body.network),
                 amount=payable.amount,
-                phone=client.phone,
+                phone=body.phone or client.phone,
             )
             chosen = await platform_settings.mobile_money_collector(session, clock.now())
             if hosted is not None and (chosen.provider == "pesapal" or collections is None):
@@ -482,7 +485,6 @@ def create_client_router(
                     client.actor,
                     request,
                     idempotency_key=key,
-                    account_phone=client.phone,
                     provider=hosted.name,
                     clock=clock,
                 )
@@ -493,7 +495,6 @@ def create_client_router(
                 client.actor,
                 request,
                 idempotency_key=key,
-                account_phone=client.phone,
                 provider=collections.name,
                 clock=clock,
             )
@@ -508,8 +509,8 @@ def create_client_router(
         database: Db,
         clock: Time,
     ) -> PaymentView:
-        """Ask for a mobile money payment from the client's own number, for exactly the amount
-        owed.
+        """Ask for a mobile money payment for exactly the amount owed, from `phone`: the
+        client's own number when it is left out, or any other Ugandan mobile number.
 
         Who collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the
         client's phone. Pesapal opens an order on its page instead: poll
@@ -532,7 +533,7 @@ def create_client_router(
         clock: Time,
     ) -> PaymentView:
         """Ask for a mobile money payment of exactly the bond purchase's cost, from the
-        client's own number, as for an investment. 409 if it already has a payment under way
+        client's number or another, as for an investment. 409 if it already has a payment under way
         or paid: fetch it from `GET /client/bond-holdings/{holding_id}/payment`."""
         return await _pay_by_mobile_money(
             body, client, key, database, clock, _bond_payable, holding_id

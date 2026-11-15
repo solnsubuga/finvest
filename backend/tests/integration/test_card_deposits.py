@@ -448,6 +448,8 @@ async def test_a_card_order_cannot_be_changed_once_filled_in(
         "UPDATE payment_card_orders SET page_url = 'https://elsewhere.test/' "
         "WHERE deposit_id = :id",
         "UPDATE payment_card_orders SET charge_minor = 0 WHERE deposit_id = :id",
+        # Only a mobile money order keeps the number that paid.
+        "UPDATE payment_card_orders SET paid_from_msisdn = '+256701999999' WHERE deposit_id = :id",
         "DELETE FROM payment_card_orders WHERE deposit_id = :id",
     ):
         with pytest.raises(DBAPIError, match=r"card order|does not allow|permission denied"):
