@@ -17,7 +17,10 @@ from app.modules.dealing.orders import ORDER_RESOURCE
 from app.modules.identity.api import COOKIES
 from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.service import IdentityService
+from app.modules.investments import service as investments
+from app.modules.investments.domain.products import InterestPaid, ProductKind
 from app.shared.actors import Actor
+from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.integration.test_dealing_settlement import fund_bank
 from tests.support.database import TestDatabase
@@ -73,6 +76,34 @@ async def signed_in_staff(api: Api, role: str = "admin") -> tuple[str, dict[str,
         Actor("staff", staff_id), second_step="passkey", transport="cookie"
     )
     return staff_id, {"Cookie": f"{COOKIES['staff']}={issued.token}", "Origin": STAFF_ORIGIN}
+
+
+async def own_product(database: Database) -> str:
+    """A draft 182 day bill only the calling test deals in, made by two people. Its code.
+
+    Tests share one database, and other suites settle TREA-182 on later fixed dates, so what is
+    read per product, such as the latest buy, belongs to the calling test only on its own product.
+    """
+    code = f"DEAL-{secrets.token_hex(4).upper()}"
+    product = investments.NewProduct(
+        code=code,
+        name="182 Day Treasury Bill",
+        kind=ProductKind.TREASURY_BILL,
+        currency=Currency.UGX,
+        term_days=182,
+        minimum_minor=500_000,
+        interest_paid=InterestPaid.AT_MATURITY,
+        annual_rate_bps=1500,
+        tax_bps=1500,
+    )
+    maker, checker = new_staff(), new_staff()
+    async with database.actor_transaction(maker) as session:
+        change = await investments.propose_new_product(
+            session, maker, product, "A bill for one dealing test", PRESENT
+        )
+    async with database.actor_transaction(checker) as session:
+        await investments.approve_product_change(session, checker, change.id, PRESENT)
+    return code
 
 
 def key() -> dict[str, str]:
@@ -149,7 +180,13 @@ async def test_an_order_from_preparing_to_settling_over_http(api: Api) -> None:
     daniel_id, daniel = await signed_in_staff(api)
     _, grace = await signed_in_staff(api)
     _, moses = await signed_in_staff(api)
-    order = {"kind": "auction_bid", "product_code": "TREA-182", "face_minor": M, "currency": "UGX"}
+    product_code = await own_product(api.database)
+    order = {
+        "kind": "auction_bid",
+        "product_code": product_code,
+        "face_minor": M,
+        "currency": "UGX",
+    }
 
     once = key()
     first = await api.http.post("/staff/dealing/orders", headers={**daniel, **once}, json=order)
@@ -210,9 +247,9 @@ async def test_an_order_from_preparing_to_settling_over_http(api: Api) -> None:
     # The Rates screen sees what these bills cost, as the latest buy of the product.
     buys = await api.http.get("/staff/dealing/last-buys", headers=grace)
     assert buys.status_code == 200, buys.text
-    [bought] = [b for b in buys.json()["buys"] if b["product_code"] == "TREA-182"]
+    [bought] = [b for b in buys.json()["buys"] if b["product_code"] == product_code]
     assert bought == {
-        "product_code": "TREA-182",
+        "product_code": product_code,
         "at_auction": True,
         "face_minor": M,
         "paid_minor": 970_000,
@@ -227,7 +264,7 @@ async def test_an_order_from_preparing_to_settling_over_http(api: Api) -> None:
 
 
 async def test_commands_need_a_key_a_note_and_exact_types(api: Api) -> None:
-    _, staff = await signed_in_staff(api)
+    staff_id, staff = await signed_in_staff(api)
     order = {"kind": "auction_bid", "product_code": "TREA-182", "face_minor": M, "currency": "UGX"}
     no_key = await api.http.post("/staff/dealing/orders", headers=staff, json=order)
     assert code(no_key) == "idempotency_key_required"
@@ -240,7 +277,8 @@ async def test_commands_need_a_key_a_note_and_exact_types(api: Api) -> None:
     )
     assert code(not_a_lot) == "validation_failed"
     prepared = await api.http.post("/staff/dealing/orders", headers={**staff, **key()}, json=order)
-    order_id = prepared.json()["orders"][-1]["id"]
+    # Other tests leave open orders too, so find this one by who prepared it.
+    (order_id,) = [o["id"] for o in prepared.json()["orders"] if o["prepared_by"] == staff_id]
     _, other = await signed_in_staff(api)
     blank = await api.http.post(
         f"/staff/dealing/orders/{order_id}/send-back", headers={**other, **key()}, json={"note": ""}
