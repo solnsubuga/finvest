@@ -3,7 +3,7 @@
 import itertools
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -134,6 +134,11 @@ def details(number: str) -> dict[str, str]:
         "date_of_birth": "1994-06-22",
         "document_expires_on": "2030-09-18",
     }
+
+
+# The staff queue shows the oldest waiting checks first, one page of them, and other tests leave
+# checks waiting. A test that looks for its own check on the queue hands it in before then.
+BEFORE_ANY_OTHER_CHECK = datetime(2024, 1, 1, tzinfo=UTC)
 
 
 def a_number() -> str:
@@ -293,6 +298,7 @@ async def test_nobody_reaches_a_check_without_the_right_session(api: Api) -> Non
 
 async def test_staff_see_the_number_masked_and_each_look_is_on_the_audit_trail(api: Api) -> None:
     number = a_number()
+    api.clock.current = BEFORE_ANY_OTHER_CHECK
     _, check_id = await hand_in(api, number)
     staff = await api.staff()
 
@@ -350,6 +356,7 @@ async def test_staff_approve_once_with_a_reason_and_the_client_gets_the_number(a
 async def test_the_session_names_the_client_in_proper_case_from_the_check_they_sent(
     api: Api,
 ) -> None:
+    api.clock.current = BEFORE_ANY_OTHER_CHECK
     client, check_id = await hand_in(api)
     # Waiting for review, the client is greeted by the name they sent.
     waiting = (await api.http.get("/client/session", headers=client)).json()
@@ -531,6 +538,7 @@ async def test_without_the_data_key_or_storage_the_routes_say_unavailable(
 
 async def test_nothing_personal_is_logged(api: Api, capsys: pytest.CaptureFixture[str]) -> None:
     number = a_number()
+    api.clock.current = BEFORE_ANY_OTHER_CHECK
     _, check_id = await hand_in(api, number)
     staff = await api.staff()
     await api.http.get(f"/staff/identity-checks/{check_id}", headers=staff)
