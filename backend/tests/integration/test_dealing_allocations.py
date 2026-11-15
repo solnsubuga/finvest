@@ -1,9 +1,11 @@
 """Allocating bills to client investments against real PostgreSQL.
 
 Lots, investments and allocations are never removed, so the 182 day bill already holds what
-earlier tests bought and started. Each test first brings the allocations up to date, buys
-enough for what is waiting plus its own investment, and checks what must hold whatever else is
-in the database: no lot or investment is over allocated, and nobody waits while bills are free.
+earlier tests bought and started. Other dealing tests buy a draft bill of their own, so the only
+free 182 day bills are the ones these tests buy. Each test first brings the allocations up to
+date, buys enough for what is waiting plus its own investment, and checks what must hold
+whatever else is in the database: no lot or investment is over allocated, and nobody waits while
+bills are free.
 """
 
 import asyncio
@@ -97,7 +99,7 @@ async def check(worker: Database) -> int:
 async def buy(app: Database, cost: int) -> str:
     """Buy a lot of the 182 day bill costing exactly `cost`, and return its ID."""
     face = (cost * 103 // 100 // LOT + 1) * LOT
-    order = await bought(app, face, cost, MATURES_ON)
+    order = await bought(app, face, cost, MATURES_ON, code=CODE)
     async with app.actor_transaction(new_staff()) as session:
         return str(
             (
@@ -152,13 +154,16 @@ async def test_a_sale_releases_the_newest_allocations_from_the_lot(
     cost = waiting + newest.amount.minor
     face = (cost * 103 // 100 // LOT + 1) * LOT
     matures_on = SOLD_MATURES_ON
-    await bought(app_database, face, cost, matures_on)
+    await bought(app_database, face, cost, matures_on, code=CODE)
     await run(worker_database)
     assert await check(worker_database) == 0
 
     # Selling a slice of the lot leaves it holding less than is allocated from it.
     sale = await recorded(
-        app_database, fill(10 * LOT, 9 * LOT, matures_on), kind=OrderKind.SECONDARY_SALE
+        app_database,
+        fill(10 * LOT, 9 * LOT, matures_on),
+        kind=OrderKind.SECONDARY_SALE,
+        code=CODE,
     )
     await confirm(app_database, sale.id)
     result = await run(worker_database)

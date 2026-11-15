@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 from tests.integration.test_dealing_api import Api, api, code, key, signed_in_staff
-from tests.integration.test_dealing_withdrawal_funding import set_buffer
+from tests.integration.test_dealing_withdrawal_funding import set_buffer, usd_rules
 from tests.support.investments import today
 
 pytestmark = pytest.mark.integration
@@ -156,6 +156,8 @@ async def test_a_movement_is_declined_with_a_reason(api: Api) -> None:
 
 
 async def test_a_rules_change_is_proposed_withdrawn_or_approved_by_another(api: Api) -> None:
+    # The screen needs dollar rules in force, which the first buffer test of a run approves.
+    await usd_rules(api.database)
     _, daniel = await signed_in_staff(api, "finance")
     _, grace = await signed_in_staff(api, "admin")
     before = await screen(api, daniel)

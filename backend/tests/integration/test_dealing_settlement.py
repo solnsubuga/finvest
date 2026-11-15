@@ -28,6 +28,7 @@ from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TEST_SOURCE
+from tests.support.investments import draft_bill
 from tests.support.ledger import key, ugx
 from tests.support.ledger import staff as new_staff
 
@@ -36,7 +37,22 @@ pytestmark = pytest.mark.integration
 M = 1_000_000
 TODAY = date(2026, 11, 19)
 NOW = FakeClock(datetime(2026, 11, 19, 9, tzinfo=UTC))
+# The live 182 day bill, for tests that need client investments behind the bills.
 CODE = "TREA-182"
+_desk_product: list[str] = []
+
+
+async def desk_product(database: Database) -> str:
+    """The draft bill these tests deal in, made once per test database.
+
+    Not TREA-182: the allocation tests share out every free TREA-182 lot to the investments
+    waiting, so bills bought here would change what they see. A draft takes no investments.
+    """
+    if not _desk_product:
+        _desk_product.append(await draft_bill(database))
+    return _desk_product[0]
+
+
 _maturities = iter(range(1, 120))
 
 
@@ -78,9 +94,11 @@ async def fund_bank(database: Database, amount: int) -> None:
 
 
 async def balance(database: Database, code: str) -> int:
+    """A settlement account's balance. Opened here if no test has used it yet, so the answer
+    does not depend on which tests ran first."""
     async with database.actor_transaction(new_staff()) as session:
-        account_id = await ledger.system_account_id(session, code, Currency.UGX)
-        return (await ledger.get_balance(session, account_id)).minor
+        account = await ledger.open_account(session, settlement_accounts(Currency.UGX)[code], NOW)
+        return (await ledger.get_balance(session, account.id)).minor
 
 
 async def recorded(
@@ -90,15 +108,17 @@ async def recorded(
     kind: OrderKind = OrderKind.AUCTION_BID,
     face: int | None = None,
     recorder: Actor | None = None,
+    code: str | None = None,
 ) -> dealing.OrderView:
     preparer, approver = new_staff(), new_staff()
+    code = code or await desk_product(database)
     recorder = recorder or preparer
     async with database.actor_transaction(preparer) as session:
         order = await dealing.prepare_order(
             session,
             preparer,
             kind=kind,
-            product_code=CODE,
+            product_code=code,
             face=ugx(face or result.face.minor),
             clock=NOW,
         )
@@ -116,9 +136,11 @@ async def confirm(
         return await dealing.confirm_result(session, staff, order_id, NOW)
 
 
-async def bought(database: Database, face: int, cost: int, matures_on: date) -> dealing.OrderView:
+async def bought(
+    database: Database, face: int, cost: int, matures_on: date, *, code: str | None = None
+) -> dealing.OrderView:
     await fund_bank(database, cost)
-    order = await recorded(database, fill(face, cost, matures_on))
+    order = await recorded(database, fill(face, cost, matures_on), code=code)
     return await confirm(database, order.id)
 
 
@@ -171,7 +193,9 @@ async def test_confirming_a_purchase_posts_it_and_records_the_bills(
     }
     assert await balance(app_database, BANK_TRUST) == bank_before - 97 * M
     async with app_database.actor_transaction(grace) as session:
-        lots = await holdings.lots_of(session, CODE, matures_on, on=TODAY)
+        lots = await holdings.lots_of(
+            session, await desk_product(app_database), matures_on, on=TODAY
+        )
         events = await events_for_resource(session, dealing.ORDER_RESOURCE, order.id)
         held = await holdings.holdings_on(session, TODAY)
         before = await holdings.holdings_on(session, TODAY - timedelta(days=1))
@@ -179,7 +203,8 @@ async def test_confirming_a_purchase_posts_it_and_records_the_bills(
     assert [(held.lot.face, held.lot.cost) for held in lots] == [(ugx(100 * M), ugx(97 * M))]
     assert events[0].action == "dealing.order.settled"
     assert events[0].actor_id == grace.id
-    instrument = next(h for h in held if (h.product_code, h.matures_on) == (CODE, matures_on))
+    code = await desk_product(app_database)
+    instrument = next(h for h in held if (h.product_code, h.matures_on) == (code, matures_on))
     assert (instrument.face_minor, instrument.cost_minor) == (100 * M, 97 * M)
     assert settled.result is not None
     assert instrument.custodian_references == (settled.result.custodian_reference,)
@@ -244,7 +269,9 @@ async def test_a_sale_takes_the_oldest_bills_first_and_books_the_gain(
     }
     assert await balance(app_database, SALE_GAINS) == gains_before + 2 * M
     async with app_database.actor_transaction(new_staff()) as session:
-        lots = await holdings.lots_of(session, CODE, matures_on, on=TODAY)
+        lots = await holdings.lots_of(
+            session, await desk_product(app_database), matures_on, on=TODAY
+        )
         parts = (
             await session.execute(
                 text(
@@ -279,7 +306,10 @@ async def test_a_sale_below_cost_books_a_loss(app_database: Database) -> None:
         SALE_LOSSES: 500_000,
     }
     async with app_database.actor_transaction(new_staff()) as session:
-        assert await holdings.lots_of(session, CODE, matures_on, on=TODAY) == []
+        assert (
+            await holdings.lots_of(session, await desk_product(app_database), matures_on, on=TODAY)
+            == []
+        )
 
 
 async def test_a_sale_of_more_than_one_maturity_holds_is_refused(app_database: Database) -> None:
@@ -320,7 +350,10 @@ async def test_two_sales_of_the_same_bills_at_once_sell_them_once(
     outcomes = await asyncio.gather(*(settle(sale.id) for sale in sales))
     assert sorted(outcomes) == ["more_than_held", "settled"]
     async with app_database.actor_transaction(new_staff()) as session:
-        assert await holdings.lots_of(session, CODE, matures_on, on=TODAY) == []
+        assert (
+            await holdings.lots_of(session, await desk_product(app_database), matures_on, on=TODAY)
+            == []
+        )
 
 
 # What the database refuses ----------------------------------------------------------------------

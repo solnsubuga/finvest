@@ -17,15 +17,12 @@ from app.modules.dealing.orders import ORDER_RESOURCE
 from app.modules.identity.api import COOKIES
 from app.modules.identity.domain.permissions import ROLE_PERMISSIONS
 from app.modules.identity.service import IdentityService
-from app.modules.investments import service as investments
-from app.modules.investments.domain.products import InterestPaid, ProductKind
 from app.shared.actors import Actor
-from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.integration.test_dealing_settlement import fund_bank
 from tests.support.database import TestDatabase
 from tests.support.http import HASHER, PASSWORD, STAFF_ORIGIN
-from tests.support.investments import PRESENT, today
+from tests.support.investments import PRESENT, draft_bill, today
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
@@ -76,34 +73,6 @@ async def signed_in_staff(api: Api, role: str = "admin") -> tuple[str, dict[str,
         Actor("staff", staff_id), second_step="passkey", transport="cookie"
     )
     return staff_id, {"Cookie": f"{COOKIES['staff']}={issued.token}", "Origin": STAFF_ORIGIN}
-
-
-async def own_product(database: Database) -> str:
-    """A draft 182 day bill only the calling test deals in, made by two people. Its code.
-
-    Tests share one database, and other suites settle TREA-182 on later fixed dates, so what is
-    read per product, such as the latest buy, belongs to the calling test only on its own product.
-    """
-    code = f"DEAL-{secrets.token_hex(4).upper()}"
-    product = investments.NewProduct(
-        code=code,
-        name="182 Day Treasury Bill",
-        kind=ProductKind.TREASURY_BILL,
-        currency=Currency.UGX,
-        term_days=182,
-        minimum_minor=500_000,
-        interest_paid=InterestPaid.AT_MATURITY,
-        annual_rate_bps=1500,
-        tax_bps=1500,
-    )
-    maker, checker = new_staff(), new_staff()
-    async with database.actor_transaction(maker) as session:
-        change = await investments.propose_new_product(
-            session, maker, product, "A bill for one dealing test", PRESENT
-        )
-    async with database.actor_transaction(checker) as session:
-        await investments.approve_product_change(session, checker, change.id, PRESENT)
-    return code
 
 
 def key() -> dict[str, str]:
@@ -180,7 +149,8 @@ async def test_an_order_from_preparing_to_settling_over_http(api: Api) -> None:
     daniel_id, daniel = await signed_in_staff(api)
     _, grace = await signed_in_staff(api)
     _, moses = await signed_in_staff(api)
-    product_code = await own_product(api.database)
+    # Its own product: other tests settle TREA-182 on later days, which would be the latest buy.
+    product_code = await draft_bill(api.database)
     order = {
         "kind": "auction_bid",
         "product_code": product_code,
