@@ -1,16 +1,17 @@
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 
 import { useAuth } from "@/auth/AuthProvider";
 import { formatE164 } from "@/auth/phone";
 import { useSignOut } from "@/auth/useSignOut";
-import { describeAuthError } from "@/auth/types";
 import { AppPage } from "@/components/AppPage";
 import { Card, Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { Icon, IconName } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
+import { useEmailProof } from "@/profile/useEmailProof";
+import { WideProfile } from "@/profile/WideProfile";
 import { colors, COLUMN_WIDTH, fontSizes, radii } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
 
@@ -19,8 +20,7 @@ export default function Profile() {
   const { client, session, setSession } = useAuth();
   const wide = useIsWide();
   const { signOut, busy } = useSignOut();
-  const [sending, setSending] = useState(false);
-  const [emailNote, setEmailNote] = useState<{ tone: "neutral" | "danger"; text: string } | null>(null);
+  const { sendLink, sending, note: emailNote } = useEmailProof();
 
   // A link opened in another tab or on another device proves the address
   // there, so Profile asks again each time it comes into view.
@@ -46,26 +46,9 @@ export default function Profile() {
   if (!session) {
     return null;
   }
-
-  const sendLink = async () => {
-    setSending(true);
-    setEmailNote(null);
-    try {
-      const result = await client.sendEmailProof();
-      if (result === "proved") {
-        setSession({ ...session, emailVerified: true });
-      } else {
-        setEmailNote({
-          tone: "neutral",
-          text: `We emailed a link to ${session.email ?? "your address"}. Open it within 24 hours, on any device. Only the newest link works.`,
-        });
-      }
-    } catch (caught) {
-      setEmailNote({ tone: "danger", text: describeAuthError(caught) });
-    } finally {
-      setSending(false);
-    }
-  };
+  if (wide) {
+    return <WideProfile session={session} />;
+  }
 
   return (
     <AppPage title="Profile">

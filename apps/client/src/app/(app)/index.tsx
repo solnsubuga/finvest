@@ -40,17 +40,10 @@ import { useFocusLoaded } from "@/investing/useLoaded";
 import { useOpeningOrganisation } from "@/organisations/useOpening";
 import { formatMoney } from "@/payments/format";
 import { Loading } from "@/payments/Parts";
+import { initials } from "@/profile/initials";
 import { useProfile } from "@/profile/ProfileProvider";
 import { colors } from "@/theme";
 import { useIsWide } from "@/theme/useIsWide";
-
-function initials(name: string): string {
-  return name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part.charAt(0).toUpperCase())
-    .join("");
-}
 
 /** What UGX 100,000 (or the product's minimum, if higher) would earn in the shortest live bill. */
 function useFirstExample(enabled: boolean): string | null {
@@ -326,7 +319,7 @@ export default function Home() {
         <View style={styles.header}>
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel="Profile"
+            accessibilityLabel="Your profile"
             onPress={() => router.navigate("/profile")}
             style={({ pressed }) => [styles.avatar, pressed && { opacity: 0.8 }]}
             testID="home-profile"

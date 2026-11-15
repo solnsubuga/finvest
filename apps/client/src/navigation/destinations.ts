@@ -73,7 +73,7 @@ export const destinations: Destination[] = [
     href: "/profile",
     label: "Profile",
     icon: "profile",
-    inTabBar: false,
+    inTabBar: true,
   },
   { name: "help", href: "/help", label: "Help", icon: "help", inTabBar: false },
 ];
@@ -83,9 +83,14 @@ export const tabBarDestinations = destinations.filter((destination) => destinati
 /**
  * The wide sidebar's sections, in order. Home stands alone, then the money the
  * client has and moves, then what they plan, then their account and help. The
- * phone keeps the same split: four tabs, with Portfolio and Insights reached
+ * phone keeps the same split: five tabs, with Portfolio and Insights reached
  * from Home and Documents and Help from Profile.
+ *
+ * Profile is not a menu item on a wide screen: the signed-in name at the foot
+ * of the sidebar opens it (the owner's choice, 2026-11-15).
  */
+export const SIDEBAR_ACCOUNT_DESTINATION = "profile";
+
 const sidebarLayout: {
   key: string;
   heading: string | null;
@@ -101,7 +106,7 @@ const sidebarLayout: {
   {
     key: "account",
     heading: "Account",
-    names: ["profile", "documents", "help"],
+    names: ["documents", "help"],
   },
 ];
 

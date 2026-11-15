@@ -9,7 +9,7 @@ import { colors } from "@/theme";
 import { tabBarDestinations } from "./destinations";
 import { useStartLoaderDone } from "./useStartLoaderDone";
 
-/** The four-tab bar at the bottom of a phone screen. */
+/** The five-tab bar at the bottom of a phone screen. */
 export function TabBar({ activeName }: { activeName: string }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
