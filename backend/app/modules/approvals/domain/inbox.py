@@ -140,7 +140,7 @@ SOURCES: dict[Kind, Source] = {
     # download, and approving needs that too.
     "report_schedule": Source("reports.view", "reports.view"),
     # Finance signing a month off, on the Finance screen.
-    "month_close": Source("finance.view", "finance.view"),
+    "month_close": Source("finance.view", "finance.close"),
 }
 
 

@@ -10,6 +10,13 @@ import { colors, fontSizes } from "@/theme";
 import { Icon, IconName } from "./Icon";
 import { Txt } from "./Txt";
 
+/**
+ * The rule for the main button (the canvas, QA F-026). `lime` for the step that puts money in or
+ * fixes a choice about it (Review and Invest, Pay, Save my maturity choice, start a goal or a
+ * plan) and for a few milestone screens (Create an account, an ID check done). `primary` (black)
+ * for every other step forward, including money going out (withdraw, send, pay out).
+ * `secondary` for the other way out of a screen.
+ */
 type Variant = "primary" | "lime" | "secondary" | "outlineOnDark";
 
 type Props = {

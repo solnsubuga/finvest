@@ -30,7 +30,7 @@ export interface Rate {
   annualRateBps: number;
   /** Withholding tax on interest, in hundredths of a percent. */
   taxBps: number;
-  /** What a client sees, after tax, as the backend rounds it: "10.63". */
+  /** What a client sees, after tax, as the backend rounds it (down): "10.62". */
   clientRatePercent: string;
 }
 

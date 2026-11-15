@@ -34,7 +34,7 @@ function renderScreen(address: string) {
   return userEvent.setup();
 }
 
-const STANDING = { running_investments: 0, owed: [], open_deposits: 0, open_payouts: 0, open_goals: 0, live_plans: 0, blockers: [] };
+const STANDING = { running_investments: 0, unpaid_investments: 0, owed: [], open_deposits: 0, open_payouts: 0, open_goals: 0, live_plans: 0, blockers: [] };
 const CLOSURE = {
   id: "-Nclosure00000000001",
   client_id: "-Nclient00000000000A",
@@ -105,8 +105,8 @@ describe("account closures", () => {
 
   it("names what is still open in whole amounts", () => {
     expect(
-      standingLines({ runningInvestments: 2, owed: [{ minor: 8_164_760, currency: "UGX" }], openDeposits: 0, openPayouts: 1, openGoals: 0, livePlans: 0, blockers: [] }),
-    ).toEqual(["2 investments running", "UGX 8,164,760 still owed to the client", "1 payout on its way"]);
+      standingLines({ runningInvestments: 2, unpaidInvestments: 1, owed: [{ minor: 8_164_760, currency: "UGX" }], openDeposits: 0, openPayouts: 1, openGoals: 0, livePlans: 0, blockers: [] }),
+    ).toEqual(["2 investments running", "1 investment waiting for payment", "UGX 8,164,760 still owed to the client", "1 payout on its way"]);
   });
 });
 

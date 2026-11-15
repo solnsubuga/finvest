@@ -57,6 +57,15 @@ describe("Activity", () => {
     expect(screen.getByText("+UGX 15,400")).toBeTruthy();
     expect(screen.getByText("Payout")).toBeTruthy();
 
+    expect(screen.getAllByText(/^\u2212UGX /).length).toBeGreaterThan(0);
+
+    await fireEvent.changeText(screen.getByTestId("activity-search"), "interest 91");
+    expect(screen.getByText("Interest on 91 Day Treasury Bill")).toBeTruthy();
+    expect(screen.queryByText("Payment for 182 Day Treasury Bill")).toBeNull();
+    await fireEvent.changeText(screen.getByTestId("activity-search"), "nothing like this");
+    expect(screen.getByText("Nothing matches. Try another search.")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("activity-search"), "");
+
     await fireEvent.press(screen.getByTestId("filter-interest"));
     expect(screen.queryByText("Payout")).toBeNull();
     expect(screen.getByText("Interest on 91 Day Treasury Bill")).toBeTruthy();

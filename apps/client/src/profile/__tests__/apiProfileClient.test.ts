@@ -34,6 +34,7 @@ const refused = (code: string, status: number, fields: unknown[] = []) =>
 
 const standing = {
   running_investments: 1,
+  unpaid_investments: 2,
   owed: [{ amount_minor: 5_000_000, currency: "UGX" }],
   open_deposits: 0,
   open_payouts: 0,
@@ -79,6 +80,7 @@ describe("the profile client for the real API", () => {
     serve({ "GET /client/account-closure": json({ standing, request: null }) });
     const closure = await createApiProfileClient().getClosure();
     expect(closure.standing.owed).toEqual([{ minor: 5_000_000, currency: "UGX" }]);
+    expect([closure.standing.runningInvestments, closure.standing.unpaidInvestments]).toEqual([1, 2]);
     expect(closure.standing.blockers).toEqual(["investments_running", "money_owed"]);
   });
 

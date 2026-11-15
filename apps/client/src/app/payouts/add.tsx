@@ -16,6 +16,7 @@ import { Loading } from "@/payments/Parts";
 import { useFocusLoaded } from "@/payouts/Parts";
 import { usePayouts } from "@/payouts/PayoutsProvider";
 import { AccountKind, describePayoutsError, PayoutsError, PayoutsErrorCode } from "@/payouts/types";
+import { sameName } from "@/identity/names";
 import { colors, fontSizes, radii } from "@/theme";
 
 type Problems = Partial<Record<"phone" | "bank" | "account" | "name", string>>;
@@ -41,7 +42,10 @@ export default function AddPayoutAccount() {
   const [phone, setPhone] = useState(() => (session ? formatNational(session.phone) : ""));
   const [bankCode, setBankCode] = useState<string | null>(null);
   const [accountNumber, setAccountNumber] = useState("");
-  const [holderName, setHolderName] = useState("");
+  // The account must be in the client's own name, so it starts as the name on their ID.
+  const idName = session?.displayName ?? null;
+  const [holderName, setHolderName] = useState(idName ?? "");
+  const otherName = idName !== null && holderName.trim().length > 0 && !sameName(holderName, idName);
   const [problems, setProblems] = useState<Problems>({});
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -209,6 +213,14 @@ export default function AddPayoutAccount() {
           maxLength={120}
           testID="holder-name-input"
         />
+        {otherName && !problems.name ? (
+          // Said now, not days later when staff refuse it.
+          <View testID="holder-name-differs">
+            <Notice tone="warning">
+              {`That is not the name on your ID, ${idName}. We only pay accounts in your own name, so an account in another name will be refused.`}
+            </Notice>
+          </View>
+        ) : null}
         {error ? <Notice tone="danger">{error}</Notice> : null}
       </View>
     </Screen>

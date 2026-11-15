@@ -19,10 +19,10 @@ type State =
   | { status: "error"; message: string };
 
 const CONFIRMED: Record<Device["confirmedWith"], string> = {
-  passkey: "a passkey",
-  authenticator: "the authenticator app",
-  code: "an SMS code",
-  signup: "sign up",
+  passkey: "with a passkey",
+  authenticator: "with the authenticator app",
+  code: "with an SMS code",
+  signup: "when you created your account",
 };
 
 /** Sign in and security, Devices: where this account is signed in, and signing the others out. */
@@ -215,8 +215,8 @@ function DeviceRow({ device, now, action }: { device: Device; now: number; actio
         </View>
         <Txt size={fontSizes.sm} color={colors.muted}>
           {device.current
-            ? `Signed in ${accountWhen(device.signedInAt, now)} with ${CONFIRMED[device.confirmedWith]}`
-            : `Last used ${accountWhen(device.lastSeenAt, now)}. Signed in with ${CONFIRMED[device.confirmedWith]}.`}
+            ? `Signed in ${accountWhen(device.signedInAt, now)} ${CONFIRMED[device.confirmedWith]}`
+            : `Last used ${accountWhen(device.lastSeenAt, now)}. Signed in ${CONFIRMED[device.confirmedWith]}.`}
         </Txt>
       </View>
       {action}

@@ -71,6 +71,12 @@ MIN_SIGNATORIES: dict[Kind, int] = {Kind.COMPANY: 1, Kind.GROUP: 2}
 MIN_APPROVALS: dict[Kind, int] = {Kind.COMPANY: 1, Kind.GROUP: 2}
 
 
+def most_approvals(kind: Kind, people: int) -> int:
+    """The strictest rule a draft may choose: everyone on it, invited or joined, and never
+    less than the kind needs. The app offers exactly these choices."""
+    return max(people, MIN_SIGNATORIES[kind], MIN_APPROVALS[kind])
+
+
 class Problem(StrEnum):
     """Why an application cannot be handed in yet, in the order the client should fix them."""
 

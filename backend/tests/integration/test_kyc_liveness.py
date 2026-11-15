@@ -42,7 +42,15 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
-from tests.support.kyc import SEALER, SHA256, FakeProvider, all_passed, live_selfie, ready_draft
+from tests.support.kyc import (
+    SEALER,
+    SHA256,
+    FakeProvider,
+    add_photos,
+    all_passed,
+    live_selfie,
+    ready_draft,
+)
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
 
@@ -327,6 +335,45 @@ async def test_a_retake_of_the_selfie_can_be_live(
         again = await kyc.check_for_client(session, SEALER, client)
     assert again is not None
     assert again.retaken == frozenset({PhotoKind.SELFIE})
+
+
+async def test_a_passed_attempt_from_before_a_selfie_retake_is_not_offered_again(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    client = await draft(app_database, fake_clock)
+    old = await live_selfie(app_database, worker_database, client, fake_clock)
+    async with app_database.actor_transaction(client) as session:
+        view = await kyc.submit(session, SEALER, client, ManualProvider(), fake_clock)
+    fake_clock.advance(seconds=1)
+    staff = new_staff()
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.ask_for_photos(
+            session, SEALER, staff, view.id, frozenset({PhotoKind.BACK}), "Blurred", fake_clock
+        )
+    # Only the back: the live selfie stands, and so does its attempt.
+    kept = await state(app_database, client, fake_clock)
+    assert kept.latest is not None and kept.latest.id == old
+
+    # Handed in again, then asked for a new selfie.
+    fake_clock.advance(seconds=1)
+    async with app_database.actor_transaction(client) as session:
+        await add_photos(session, client, fake_clock, PhotoKind.BACK)
+    async with app_database.actor_transaction(client) as session:
+        view = await kyc.submit(session, SEALER, client, ManualProvider(), fake_clock)
+    fake_clock.advance(seconds=1)
+    async with app_database.actor_transaction(staff) as session:
+        await kyc.ask_for_photos(
+            session, SEALER, staff, view.id, frozenset({PhotoKind.SELFIE}), "Hidden", fake_clock
+        )
+    asked = await state(app_database, client, fake_clock)
+    # The passed attempt was for the old selfie: the client is offered a new one.
+    assert asked.latest is None
+    assert asked.problem is None
+    fake_clock.advance(seconds=1)
+    new = await live_selfie(app_database, worker_database, client, fake_clock)
+    again = await state(app_database, client, fake_clock)
+    assert again.latest is not None and again.latest.id == new
+    assert again.latest.status is LivenessStatus.PASSED
 
 
 # Starting, expiring and refusing ----------------------------------------------------------------

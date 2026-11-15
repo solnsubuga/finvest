@@ -47,7 +47,7 @@ Migration `0242_organisations`:
 | `GET /client/organisations` | Client | Every one they applied for or are asked to sign for |
 | `POST /client/organisations` | Client | Apply, as a draft |
 | `GET /client/organisations/{id}` | Client | One, with its signatories, documents and `problems` |
-| `PATCH /client/organisations/{id}` | Applicant | Change the name, registration number or approvals needed |
+| `PATCH /client/organisations/{id}` | Applicant | Change the name, registration number or approvals needed. Approvals above everyone on the draft (invited or joined, and never less than the kind's least) are refused with `more_than_signatories` on `approvals_needed` |
 | `POST /client/organisations/{id}/signatories` | Applicant | Ask someone, by `to` (account or mobile number) and `role` |
 | `DELETE /client/organisations/{id}/signatories/{client_id}` | Applicant | Take someone off |
 | `POST /client/organisations/{id}/answer` | Signatory | `{"join": true}` or `false` |

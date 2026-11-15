@@ -155,6 +155,7 @@ function problems(details: IdentityDetails, today: string): { field: DetailField
   }
   if (details.dateOfBirth > today) found.push({ field: "dateOfBirth", code: "in_the_future" });
   else if (yearsBetween(details.dateOfBirth, today) < 18) found.push({ field: "dateOfBirth", code: "under_age" });
+  else if (yearsBetween(details.dateOfBirth, today) > 120) found.push({ field: "dateOfBirth", code: "too_old" });
   if (details.expiresOn < today) found.push({ field: "expiresOn", code: "document_expired" });
   if (details.tin !== null && !TIN.test(details.tin)) found.push({ field: "tin", code: "invalid_tin" });
   return found;

@@ -128,7 +128,7 @@ async def test_the_website_lists_live_and_paused_products_after_tax(api: Api) ->
     assert response.headers["access-control-allow-origin"] == "*"
     body = response.json()
     by_code = {product["code"]: product for product in body["products"]}
-    assert by_code["TREA-91"]["client_rate_percent"] == "10.63"
+    assert by_code["TREA-91"]["client_rate_percent"] == "10.62"
     assert by_code["TREA-91"]["status"] == "live"
     assert by_code["USD-BOND"]["status"] == "paused"
     assert body["updated_on"] == today().isoformat()
@@ -149,6 +149,11 @@ async def test_the_website_calculator_quotes_after_tax(api: Api) -> None:
     )
     assert (too_small.status_code, code(too_small)) == (422, "validation_failed")
     assert too_small.json()["error"]["fields"][0]["code"] == "below_minimum"
+    too_large = await api.http.get(
+        "/public/quote", params={"product": "TREA-91", "amount_minor": 10_000_000_000_000}
+    )
+    assert (too_large.status_code, code(too_large)) == (422, "validation_failed")
+    assert too_large.json()["error"]["fields"][0]["code"] == "above_maximum"
     unknown = await api.http.get("/public/quote", params={"product": "NOPE", "amount_minor": 5})
     assert unknown.status_code == 404
     paused = await api.http.get(
@@ -394,6 +399,35 @@ async def test_a_new_product_takes_two_people_over_http(api: Api) -> None:
         "active_plans": 0,
         "paused_plans": 0,
     }
+
+
+async def test_a_second_new_product_with_a_waiting_code_is_refused_over_http(api: Api) -> None:
+    # QA F-033: two people proposing the same new code leave one waiting, not two.
+    _, first = await signed_in_staff(api, "finance")
+    _, second = await signed_in_staff(api, "admin")
+    body = {
+        "code": f"DUP-{secrets.randbelow(10**6)}",
+        "name": "273 Day Treasury Bill",
+        "kind": "treasury_bill",
+        "currency": "UGX",
+        "term_days": 273,
+        "minimum_minor": 500_000,
+        "interest_paid": "at_maturity",
+        "annual_rate_bps": 1500,
+        "tax_bps": 1500,
+        "reason": "A new term",
+    }
+    proposed = await api.http.post("/staff/product-changes/new-product", json=body, headers=first)
+    assert proposed.status_code == 201, proposed.text
+    again = await api.http.post("/staff/product-changes/new-product", json=body, headers=second)
+    assert again.status_code == 422, again.text
+    assert again.json()["error"]["fields"][0]["code"] == "code_taken"
+    waiting = await api.http.get(
+        "/staff/product-changes", params={"status": "proposed"}, headers=second
+    )
+    assert [item["id"] for item in waiting.json() if item["product_code"] == body["code"]] == [
+        proposed.json()["id"]
+    ]
 
 
 async def test_new_terms_over_http_are_sent_back_with_a_note(api: Api) -> None:

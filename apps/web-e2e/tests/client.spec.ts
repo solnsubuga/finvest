@@ -437,6 +437,40 @@ async function openToSend(page: Page) {
   }
 }
 
+test("a screen opened for the first time while offline says so, and opens once back online", async ({ page, context }) => {
+  // Without the background fetch of every screen, the Invest screen's code is not in the
+  // browser yet when the connection goes.
+  await page.route("**/_expo/static/js/web/**", (route) => {
+    const purpose = route.request().headers()["sec-purpose"] ?? "";
+    return purpose.includes("prefetch") ? route.abort() : route.continue();
+  });
+  await logIn(page);
+  await id(page, "use-passkey").click();
+  await createPin(page);
+  await expect(page.getByTestId("home")).toBeVisible();
+  await context.setOffline(true);
+  await page
+    .getByRole("link", { name: "Invest", exact: true })
+    .or(page.getByLabel("Invest", { exact: true }))
+    .first()
+    .click();
+  await expect(id(page, "screen-load-failed")).toBeVisible();
+  await expect(page.getByText("No connection")).toBeVisible();
+  await context.setOffline(false);
+  // The page loads again by itself; the demo keeps its session in memory, so it starts over.
+  await expect(id(page, "screen-load-failed")).toBeHidden();
+});
+
+test("an unknown address shows Finvest's not-found page with a way back", async ({ page }) => {
+  await page.goto("/this-page-does-not-exist");
+  await expect(page.getByText("We could not find that page")).toBeVisible();
+  await expect(page.getByText(/Unmatched Route|Sitemap/)).toHaveCount(0);
+  await id(page, "not-found-home").click();
+  await expect(page.getByText("Create an account")).toBeVisible();
+  await page.goto("/_sitemap");
+  await expect(page.getByText("We could not find that page")).toBeVisible();
+});
+
 test("a tablet held upright gets the sidebar, and no screen is wider than the window", async ({
   page,
 }, testInfo) => {

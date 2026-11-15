@@ -18,7 +18,7 @@ from app.modules.identity.service import StaffSession
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
-from app.shared.errors import ApplicationError, ErrorEnvelope
+from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
 
 _REFUSALS: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorEnvelope},
@@ -73,6 +73,10 @@ class IdentityCheckView(Contract):
 class OwedView(Contract):
     account_code: str
     account_reference: str | None
+    # When the line is held on an investment: its product's name, and its maturity for a fixed
+    # term. Null for other lines, and for an open term's maturity.
+    product_name: str | None
+    matures_on: date | None
     # Whole units of the smallest denomination: shillings for UGX, cents for USD.
     amount_minor: int
     currency: str
@@ -176,6 +180,81 @@ class DecideLock(Contract):
     reason: Reason
 
 
+class ClientRowView(Contract):
+    id: PushId
+    # The name on the approved identity document. None until the check is approved.
+    verified_name: str | None
+    account_number: str | None
+    phone: str
+    email: str | None
+    status: client_locks.ClientStatus
+    created_at: datetime
+
+
+class ClientListView(Contract):
+    clients: list[ClientRowView]
+    # Pass as `after` for the next page of the full list. None on the last page and for a search.
+    next_after: str | None
+    # A search found more than it shows: staff add a word.
+    more: bool
+
+
+CLIENT_PAGE = 25
+StatusFilter = Literal["active", "locked", "unclaimed", "closed"]
+
+
+def _after(value: str | None) -> tuple[datetime, str] | None:
+    """`next_after` as given: when the last client joined and their ID, joined by a space."""
+    if value is None:
+        return None
+    joined, _, client_id = value.partition(" ")
+    try:
+        when = datetime.fromisoformat(joined)
+    except ValueError:
+        when = None
+    if when is None or when.tzinfo is None or not clients.is_client_id(client_id):
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["query", "after"], code="bad_after")],
+        )
+    return when, client_id
+
+
+@router.get("")
+async def list_clients(
+    staff: ClientViewer,
+    database: Db,
+    q: Annotated[str, Query(max_length=80)] = "",
+    status: StatusFilter | None = None,
+    after: Annotated[str | None, Query(max_length=80)] = None,
+) -> ClientListView:
+    """Every client newest first, a page at a time, or those a search finds: an ID, account
+    number or mobile number finds one client; other text finds clients whose verified name
+    holds every word, or whose email holds it."""
+    async with database.actor_transaction(staff.actor) as session:
+        found = await clients.list_clients(
+            session, q, status=status, after=_after(after), limit=CLIENT_PAGE
+        )
+    return ClientListView(
+        clients=[
+            ClientRowView(
+                id=card.account.id,
+                verified_name=card.verified_name,
+                account_number=card.account_number,
+                phone=card.account.phone,
+                email=card.account.email,
+                status=card.account.status,
+                created_at=card.account.created_at,
+            )
+            for card in found.cards
+        ],
+        next_after=f"{found.next_after[0].isoformat()} {found.next_after[1]}"
+        if found.next_after
+        else None,
+        more=found.more,
+    )
+
+
 @router.get("/search")
 async def search(
     staff: ClientViewer, database: Db, q: Annotated[str, Query(min_length=1, max_length=40)]
@@ -242,10 +321,13 @@ async def client_page(
             OwedView(
                 account_code=item.account_code,
                 account_reference=item.account_reference,
+                product_name=holding.product_name if holding else None,
+                matures_on=holding.matures_on if holding else None,
                 amount_minor=item.owed.minor,
                 currency=item.owed.currency.value,
             )
             for item in page.owed
+            for holding in [page.holdings.get(item.account_reference or "")]
         ],
         destinations=[
             DestinationView(

@@ -5,7 +5,7 @@ Everything here is read through the functions the owning modules expose. Nothing
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,14 +15,18 @@ from app.modules.identity.client_locks import (
     client_account,
     client_accounts,
     client_by_phone,
+    clients_by_email,
     lock_history,
+    newest_clients,
 )
 from app.modules.identity.freezes import Freeze
 from app.modules.identity.freezes import freezes as client_freezes
+from app.modules.investments.holdings import get_investments
 from app.modules.kyc.service import (
     CheckSummary,
     check_summary,
     client_for_account_number,
+    clients_named,
     identities,
 )
 from app.modules.kyc.service import verified_name as kyc_verified_name
@@ -44,6 +48,8 @@ class ClientPage:
     identity_check: CheckSummary | None
     # What Finvest owes the client at the end of today, per ledger account.
     owed: list[ClientOwed]
+    # For each owed line held on an investment, by investment ID: its product and maturity.
+    holdings: dict[str, "HoldingName"]
     destinations: list[DestinationView]
     locks: list[LockChange]
     # Each time the client froze their own account, newest first.
@@ -51,6 +57,14 @@ class ClientPage:
     # None when the member of staff may not see support or complaints.
     conversation: ConversationView | None
     complaints: list[ComplaintView] | None
+
+
+@dataclass(frozen=True, slots=True)
+class HoldingName:
+    """How staff recognise an investment: its product and, for a fixed term, its maturity."""
+
+    product_name: str
+    matures_on: date | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +102,10 @@ async def client_cards(session: AsyncSession, client_ids: list[str]) -> list[Cli
     return cards
 
 
+def is_client_id(value: str) -> bool:
+    return _PUSH_ID.fullmatch(value) is not None
+
+
 async def find_client(session: AsyncSession, query: str) -> ClientAccount | None:
     """A client by ID, by ten-digit account number, or by mobile number."""
     cleaned = query.strip()
@@ -103,6 +121,60 @@ async def find_client(session: AsyncSession, query: str) -> ClientAccount | None
     return await client_by_phone(session, cleaned)
 
 
+# How many clients a name or email search shows. A search that finds more asks for more words.
+MATCH_LIMIT = 50
+
+
+@dataclass(frozen=True, slots=True)
+class ClientList:
+    cards: list[ClientCard]
+    # Where the next page of the newest-first list starts. None on the last page, and for a
+    # search, which shows its first MATCH_LIMIT matches.
+    next_after: tuple[datetime, str] | None
+    # True when a search found more than it shows.
+    more: bool
+
+
+async def list_clients(
+    session: AsyncSession,
+    query: str,
+    *,
+    status: str | None,
+    after: tuple[datetime, str] | None,
+    limit: int,
+) -> ClientList:
+    """Clients for the staff Clients screen.
+
+    No query: every client, newest first, a page at a time. An ID, account number or mobile
+    number: that one client. Anything else: clients whose verified name holds every word, or
+    whose email holds the text, newest first.
+    """
+    cleaned = " ".join(query.split())
+    if not cleaned:
+        accounts = await newest_clients(session, status=status, before=after, limit=limit + 1)
+        page = accounts[:limit]
+        cards = await client_cards(session, [account.id for account in page])
+        last = page[-1] if len(accounts) > limit else None
+        return ClientList(cards, (last.created_at, last.id) if last else None, more=False)
+    exact = await find_client(session, cleaned)
+    if exact is not None:
+        found = [exact.id]
+    else:
+        named = await clients_named(session, cleaned.split(" "), MATCH_LIMIT + 1)
+        # An email has no spaces, so only a one-word search can match one.
+        emailed = (
+            await clients_by_email(session, cleaned, MATCH_LIMIT + 1) if " " not in cleaned else []
+        )
+        found = list(dict.fromkeys(named + emailed))
+    cards = [
+        card
+        for card in await client_cards(session, found)
+        if status is None or card.account.status == status
+    ]
+    cards.sort(key=lambda card: (card.account.created_at, card.account.id), reverse=True)
+    return ClientList(cards[:MATCH_LIMIT], None, more=len(cards) > MATCH_LIMIT)
+
+
 async def client_page(
     session: AsyncSession,
     client_id: str,
@@ -114,13 +186,19 @@ async def client_page(
     account = await client_account(session, client_id)
     if account is None:
         return None
+    owed = [item for item in await client_owed_as_of(session, client_id, today) if item.owed.minor]
+    references = sorted({item.account_reference for item in owed if item.account_reference})
+    holdings = {
+        investment.id: HoldingName(investment.product_name, investment.maturity_date)
+        for investment in await get_investments(session, references)
+        if investment.client_id == client_id
+    }
     return ClientPage(
         account=account,
         verified_name=await kyc_verified_name(session, client_id),
         identity_check=await check_summary(session, client_id),
-        owed=[
-            item for item in await client_owed_as_of(session, client_id, today) if item.owed.minor
-        ],
+        owed=owed,
+        holdings=holdings,
         destinations=await destinations_for_client(session, client_id),
         locks=await lock_history(session, client_id),
         freezes=await client_freezes(session, client_id),

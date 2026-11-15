@@ -15,6 +15,7 @@ import { createHttpPhoneChangesApi, createStubPhoneChangesApi, notConnectedPhone
 import { ClosureQueue, ClosureSection } from "./Closures.tsx";
 import { createHttpClosuresApi, createStubClosuresApi, notConnectedClosuresApi, type ClosuresApi } from "./closures.ts";
 import { ActionsSection } from "./Actions.tsx";
+import { ClientList } from "./ClientList.tsx";
 import { createHttpActionsApi, notConnectedActionsApi, type ActionKind, type ActionsApi } from "./actions.ts";
 import { createStubActionsApi } from "./actionsStub.ts";
 import { NotesSection } from "./Notes.tsx";
@@ -70,12 +71,20 @@ export function ClientsScreen({
   const clientId = params.get("client");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<Search>({ state: "idle" });
+  // The name or email search the list shows, as sent. Empty lists every client.
+  const [listed, setListed] = useState("");
   const inputId = useId();
 
   async function find(event: FormEvent) {
     event.preventDefault();
     const text = query.trim();
-    if (!text) return;
+    if (!isExact(text)) {
+      // A name or an email: the list below shows what matches.
+      setSearch({ state: "idle" });
+      setListed(text);
+      if (clientId) setParams({});
+      return;
+    }
     setSearch({ state: "searching" });
     try {
       const [found] = await api.search(text);
@@ -99,7 +108,7 @@ export function ClientsScreen({
             Find a client
           </label>
           <span id={`${inputId}-hint`} className="text-xs font-medium text-muted">
-            By account number, mobile number or client ID.
+            By name, email, account number, mobile number or client ID.
           </span>
         </div>
         <div className="flex gap-2">
@@ -146,6 +155,7 @@ export function ClientsScreen({
           <p className="m-0 max-w-[720px] rounded-xl border border-border bg-surface p-5 text-md text-muted">
             Find a client to see their account, what Finvest holds for them, where their payouts go, and to lock or unlock them.
           </p>
+          <ClientList key={listed} api={api} query={listed} onOpen={(id) => setParams({ client: id })} />
           {recovery ? <RecoverySection api={recovery} onOpenClient={(id) => setParams({ client: id })} /> : null}
           {closures ? <ClosureQueue api={closures} onOpen={(id) => setParams({ client: id })} /> : null}
           <SuppressionsSection api={suppressions} canLift={canLift} />
@@ -153,6 +163,13 @@ export function ClientsScreen({
       )}
     </>
   );
+}
+
+/** A client ID, a ten-digit account number or a mobile number: text that names one client. */
+function isExact(text: string): boolean {
+  if (/^-[A-Za-z0-9_-]{19}$/.test(text)) return true;
+  const digits = text.replace(/[\s()+-]/g, "");
+  return /^\d{9,13}$/.test(digits);
 }
 
 function ClientView({

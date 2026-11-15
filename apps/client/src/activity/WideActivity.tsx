@@ -8,6 +8,7 @@ import { DataTable, Pill } from "@/components/DataTable";
 import { Txt } from "@/components/Txt";
 import { Panel, PanelLine } from "@/home/Parts";
 import { formatDateTime, formatMoney, formatTime } from "@/payments/format";
+import { shortReference } from "@/payments/reference";
 import { colors, fontFor } from "@/theme";
 
 import { shortDay } from "./build";
@@ -42,7 +43,7 @@ export function shownRows(items: ActivityItem[], filter: WideFilter, recent: boo
 
 function signed(item: ActivityItem): string {
   const figure = formatMoney(item.amount).replace(/^[A-Z]+ /, "");
-  return item.direction === "in" ? `+${figure}` : figure;
+  return item.direction === "in" ? `+${figure}` : `\u2212${figure}`;
 }
 
 /**
@@ -163,9 +164,12 @@ function Details({ item }: { item: ActivityItem }) {
           variant="secondary"
           height={48}
           onPress={() =>
-            // A payment's own ID is its Finvest reference, so the complaint is about that payment.
+            // The payment's short Finvest reference, made from its ID, so the complaint is about it.
             item.kind === "payment"
-              ? router.push({ pathname: "/support/complaints/new", params: { payment: item.key.slice("payment:".length) } })
+              ? router.push({
+                  pathname: "/support/complaints/new",
+                  params: { payment: shortReference(item.key.slice("payment:".length)) },
+                })
               : router.navigate("/help")
           }
           testID="detail-help"

@@ -54,6 +54,7 @@ from app.shared.actors import SYSTEM, Actor
 from app.shared.errors import ApplicationError
 from app.shared.money import Money
 from app.shared.push_ids import push_id
+from app.shared.references import short_reference
 from tests.integration import test_bank_transfers as bank_tests
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
@@ -762,7 +763,7 @@ async def test_the_monthly_run_waits_for_the_ledger_to_close_the_month_and_inclu
     ]
     async with app_database.actor_transaction(client) as session:
         mine = await service.client_documents(session, client)
-    statement = drawn[f"ST-{mine[0].id}"]
+    statement = drawn[short_reference(mine[0].id, "ST")]
     assert statement.period == march
     assert statement.not_final_from is None
     assert [(s.paid_in, s.earned, s.closing) for s in statement.summaries] == [
@@ -812,7 +813,7 @@ async def test_a_requested_statement_over_open_days_says_from_which_day_it_is_no
         ready = await service.client_document(session, client, asked.id)
     assert ready.status is DocumentStatus.READY
     assert ready.not_final_from == today() + timedelta(days=2)
-    assert drawn[f"ST-{asked.id}"].not_final_from == today() + timedelta(days=2)
+    assert drawn[short_reference(asked.id, "ST")].not_final_from == today() + timedelta(days=2)
     # The database holds the same rule: a monthly statement is never marked not final.
     with pytest.raises(DBAPIError, match="ck_documents_not_final"):
         async with worker_database.actor_transaction(SYSTEM) as session:
@@ -928,7 +929,7 @@ async def test_a_client_asks_for_and_downloads_a_statement_over_http(
         asked_period().start.isoformat(),
         None,
     )
-    assert (item["reference"], item["note"]) == (f"ST-{item['id']}", None)
+    assert (item["reference"], item["note"]) == (short_reference(item["id"], "ST"), None)
     assert (await api.get(f"/client/documents/{item['id']}/file")).status_code == 404
     refused = await api.post(
         "/client/statements",

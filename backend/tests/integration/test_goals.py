@@ -131,7 +131,7 @@ async def test_a_goal_is_set_up_with_the_product_of_its_plan(app_database: Datab
     assert goal.plan.product_code == "TREA-91"
     assert goal.plan.saving.minor % 1_000 == 0
     assert goal.plan.savings == 10
-    assert goal.plan.rate_percent == "10.63"
+    assert goal.plan.rate_percent == "10.62"
     assert goal.plan.put_in + goal.plan.interest >= ugx(2_000_000)
 
 
@@ -186,6 +186,8 @@ async def test_a_goal_with_no_date_uses_the_shortest_term_and_has_no_plan(
         ("  ", 2_000_000, year_on, ("name", "name_empty")),
         ("x" * 61, 2_000_000, year_on, ("name", "name_too_long")),
         ("Land", 2_000_000, today, ("target_date", "date_not_in_future")),
+        # QA F-031: a UGX 1 quadrillion target is refused.
+        ("Land", 10**15, year_on, ("target_minor", "target_too_large")),
         (
             "Land",
             2_000_000,

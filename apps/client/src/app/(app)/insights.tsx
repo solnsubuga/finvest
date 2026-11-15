@@ -7,6 +7,7 @@ import { AppPage } from "@/components/AppPage";
 import { Card, Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
 import { LinkCard } from "@/components/LinkCard";
+import { PillButton } from "@/components/PillButton";
 import { Eyebrow, Txt } from "@/components/Txt";
 import { useDataSaving } from "@/dataSaving/DataSavingProvider";
 import { barUnit, daysUntil, earnedBars, monthLong } from "@/insights/chart";
@@ -236,6 +237,9 @@ export default function Insights() {
               ? `${next.productName} saves its interest to your goal on ${formatLongDay(next.on)}, and what you put in starts another term.`
             : `${next.productName} rolls over on ${formatLongDay(next.on)} with ${formatMoney(next.amount)}, so it keeps earning. You can still choose to be paid out before then.`}
       </Txt>
+      <View style={{ alignItems: "flex-start", marginTop: 4 }}>
+        <PillButton label="Put it to work" onPress={() => router.navigate("/invest")} testID="insights-put-to-work" />
+      </View>
     </View>
   ) : null;
 

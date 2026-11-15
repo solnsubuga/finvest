@@ -42,16 +42,15 @@ class RateVersion:
 
     @property
     def client_rate_percent(self) -> str:
-        """The yearly rate after tax, as clients see it: "10.63" for 12.5% with 15% tax.
+        """The yearly rate after tax, as clients see it: "10.62" for 12.5% with 15% tax.
 
-        Two decimal places, rounded to the nearest. It is a label only. No amount is ever
+        Two decimal places, rounded down, so the label never promises more than the client
+        earns (10.625% shows as 10.62%, not 10.63%). It is a label only. No amount is ever
         worked out from it: amounts come from `interest.accrued`.
         """
         # In millionths of one percent, so the division below is exact integer arithmetic.
         millionths = self.annual_rate_bps * (BASIS_POINTS - self.tax_bps)
-        hundredths, remainder = divmod(millionths, BASIS_POINTS)
-        if remainder * 2 >= BASIS_POINTS:
-            hundredths += 1
+        hundredths = millionths // BASIS_POINTS
         return f"{hundredths // 100}.{hundredths % 100:02d}"
 
 

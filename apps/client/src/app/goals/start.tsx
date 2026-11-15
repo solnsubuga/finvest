@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { StyleSheet, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Notice, StepProgress } from "@/components/Blocks";
@@ -99,6 +99,12 @@ export default function StartGoal() {
       setBusy(null);
     }
   };
+
+  // Opened without steps 1 and 2, from a saved or typed address: start the goal from the
+  // beginning rather than offer buttons the server can only refuse.
+  if (!params.category || !params.name?.trim() || target <= 0) {
+    return <Redirect href="/goals/new" />;
+  }
 
   return (
     <Screen

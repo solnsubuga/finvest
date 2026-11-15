@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 
 import { BackButton } from "@/components/BackButton";
 import { Notice, StepProgress } from "@/components/Blocks";
@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { TextField } from "@/components/Field";
 import { Screen } from "@/components/Screen";
 import { Title, Txt } from "@/components/Txt";
-import { groupDigits, kampalaToday, monthYear, parseShillings } from "@/goals/amount";
+import { groupDigits, kampalaToday, monthYear, parseShillings, targetTooLarge } from "@/goals/amount";
 import { useGoals } from "@/goals/GoalsProvider";
 import { PlanCard, PlanProductNote } from "@/goals/Parts";
 import { addMonths } from "@/goals/dates";
@@ -50,7 +50,8 @@ export default function GoalPlanScreen() {
   const target = parseShillings(amount);
   const targetDate = horizon === "none" ? null : addMonths(kampalaToday(), horizon);
 
-  const query = target && targetDate ? `${target}:${targetDate}` : null;
+  // Above the largest goal the field says so; there is no plan to ask for.
+  const query = target && targetDate && !targetTooLarge(target) ? `${target}:${targetDate}` : null;
   const planState: PlanState =
     query === null
       ? { status: "idle" }
@@ -82,6 +83,11 @@ export default function GoalPlanScreen() {
       setError("Enter how much you need, in shillings.");
       return;
     }
+    const tooLarge = targetTooLarge(target);
+    if (tooLarge) {
+      setError(tooLarge);
+      return;
+    }
     setError(null);
     router.push({
       pathname: "/goals/start",
@@ -96,6 +102,11 @@ export default function GoalPlanScreen() {
   };
 
   const tooSoon = planState.status === "ready" && planState.plan === null;
+
+  // Opened without step 1, from a saved or typed address: start the goal from the beginning.
+  if (!params.category || !params.name?.trim()) {
+    return <Redirect href="/goals/new" />;
+  }
 
   return (
     <Screen

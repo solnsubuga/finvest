@@ -36,6 +36,12 @@ export function owedLabel(item: Owed): string {
   return OWED_LABELS[item.accountCode] ?? item.accountCode;
 }
 
+/** "364 Day Treasury Bill, matures 12 Aug 2027", so staff never read an investment ID. Null for a line not held on an investment. */
+export function holdingName(item: Owed): string | null {
+  if (!item.productName) return null;
+  return item.maturesOn ? `${item.productName}, matures ${formatDay(item.maturesOn)}` : item.productName;
+}
+
 export function destinationLabel(item: Destination): string {
   if (item.kind === "mobile_money") return item.network ? (NETWORKS[item.network] ?? humanize(item.network)) : "Mobile money";
   return item.bankCode ? `Bank (${item.bankCode.toUpperCase()})` : "Bank";

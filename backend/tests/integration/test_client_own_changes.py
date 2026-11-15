@@ -106,6 +106,11 @@ async def test_changing_the_password_needs_the_current_one_and_ends_other_sessio
     )
     assert weak.status_code == 422
     assert weak.json()["error"]["fields"][0]["field_path"] == ["new_password"]
+    same = await api.http.put(
+        "/client/password", json={"current_password": PASSWORD, "new_password": PASSWORD}
+    )
+    assert same.status_code == 422
+    assert same.json()["error"]["fields"][0]["code"] == "same_as_now"
     assert await live(api, elsewhere)
 
     changed = await api.http.put(

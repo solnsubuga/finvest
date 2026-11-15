@@ -1,5 +1,5 @@
 import type { Http } from "@/api/http.ts";
-import { toClientsError, type Account, type ClientPage, type ClientsApi, type Currency, type Lock } from "./api.ts";
+import { toClientsError, type Account, type ClientPage, type ClientsApi, type ClientStatus, type Currency, type Lock } from "./api.ts";
 
 interface AccountJson {
   id: string;
@@ -33,7 +33,7 @@ interface PageJson {
   account: AccountJson;
   verified_name: string | null;
   identity_check: { id: string; status: string; submitted_at: string | null; decided_at: string | null; account_number: string | null } | null;
-  owed: { account_code: string; account_reference: string | null; amount_minor: number; currency: string }[];
+  owed: { account_code: string; account_reference: string | null; product_name: string | null; matures_on: string | null; amount_minor: number; currency: string }[];
   destinations: {
     id: string;
     kind: string;
@@ -95,7 +95,14 @@ export function toPage(json: PageJson): ClientPage {
     // A currency this console does not know is left out rather than shown wrongly.
     owed: json.owed
       .filter((item) => CURRENCIES.has(item.currency))
-      .map((item) => ({ accountCode: item.account_code, accountReference: item.account_reference, minor: item.amount_minor, currency: item.currency as Currency })),
+      .map((item) => ({
+        accountCode: item.account_code,
+        accountReference: item.account_reference,
+        productName: item.product_name,
+        maturesOn: item.matures_on,
+        minor: item.amount_minor,
+        currency: item.currency as Currency,
+      })),
     destinations: json.destinations.map((item) => ({
       id: item.id,
       kind: item.kind,
@@ -132,12 +139,42 @@ export function toPage(json: PageJson): ClientPage {
   };
 }
 
+interface ListJson {
+  clients: { id: string; verified_name: string | null; account_number: string | null; phone: string; email: string | null; status: ClientStatus; created_at: string }[];
+  next_after: string | null;
+  more: boolean;
+}
+
 export function createHttpClientsApi(http: Http): ClientsApi {
   return {
     async search(query) {
       try {
         const found = await http.request<{ clients: AccountJson[] }>("GET", `/staff/clients/search?${new URLSearchParams({ q: query.trim() }).toString()}`);
         return found.clients.map(toAccount);
+      } catch (error) {
+        throw toClientsError(error);
+      }
+    },
+    async list(query, status, after) {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (status) params.set("status", status);
+      if (after) params.set("after", after);
+      try {
+        const found = await http.request<ListJson>("GET", `/staff/clients${params.size ? `?${params.toString()}` : ""}`);
+        return {
+          clients: found.clients.map((row) => ({
+            id: row.id,
+            verifiedName: row.verified_name,
+            accountNumber: row.account_number,
+            phone: row.phone,
+            email: row.email,
+            status: row.status,
+            createdAt: row.created_at,
+          })),
+          nextAfter: found.next_after,
+          more: found.more,
+        };
       } catch (error) {
         throw toClientsError(error);
       }

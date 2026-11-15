@@ -1,4 +1,4 @@
-"""Finance over HTTP, for staff with `finance.view`.
+"""Finance over HTTP, for staff with `finance.view`. Closing a month needs `finance.close`.
 
 `GET /staff/finance` is the screen for one currency and month: each account code's opening
 balance, debits, credits and closing balance, Finvest's own income and costs, how far the
@@ -148,8 +148,11 @@ SettingsStaff = Annotated[StaffSession, Depends(require_permission("settings.vie
 CodeMapStaff = Annotated[StaffSession, Depends(require_permission("account_codes.change"))]
 # Deciding needs a passkey or app code from the last few minutes.
 CodeMapDecider = Annotated[StaffSession, Depends(require_confirmed("account_codes.change"))]
-# Closing a month needs a passkey or app code from the last few minutes.
-FinanceApprover = Annotated[StaffSession, Depends(require_confirmed("finance.view"))]
+# Proposing, declining and withdrawing a month close is a permission of its own, so a read-only
+# finance role can never sign a month.
+MonthCloseStaff = Annotated[StaffSession, Depends(require_permission("finance.close"))]
+# Closing a month also needs a passkey or app code from the last few minutes.
+FinanceApprover = Annotated[StaffSession, Depends(require_confirmed("finance.close"))]
 CloseReason = Annotated[str, Field(min_length=1, max_length=500)]
 
 
@@ -493,7 +496,7 @@ def create_router() -> APIRouter:
     async def propose_month_close(
         request: Request,
         body: ProposeCloseIn,
-        staff: FinanceStaff,
+        staff: MonthCloseStaff,
         clock: AppClock,
         idempotency_key: IdempotencyKey,
     ) -> MonthCloseOut:
@@ -539,7 +542,7 @@ def create_router() -> APIRouter:
         request: Request,
         close_id: PushId,
         body: DecideCloseIn,
-        staff: FinanceStaff,
+        staff: MonthCloseStaff,
         clock: AppClock,
     ) -> MonthCloseOut:
         database: Database = request.app.state.database
@@ -554,7 +557,7 @@ def create_router() -> APIRouter:
         request: Request,
         close_id: PushId,
         body: DecideCloseIn,
-        staff: FinanceStaff,
+        staff: MonthCloseStaff,
         clock: AppClock,
     ) -> MonthCloseOut:
         database: Database = request.app.state.database

@@ -1,4 +1,4 @@
-import { Amount } from "@/investing/types";
+import { Amount, Portfolio } from "@/investing/types";
 import { formatAmount } from "@/investing/format";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -35,4 +35,13 @@ export function plural(count: number, one: string, many: string = `${one}s`): st
 export function termProgress(daysEarned: number, termDays: number): `${number}%` {
   if (termDays <= 0) return "0%";
   return `${Math.min(100, Math.max(0, Math.round((daysEarned / termDays) * 100)))}%`;
+}
+
+/**
+ * How many investments are running, said the same way on Home and Portfolio. Goal savings are
+ * investments too, so they are in the count, and named so it adds up with Home's two rows.
+ */
+export function runningSummary(portfolio: Pick<Portfolio, "activeCount" | "inGoals">): string {
+  const inGoals = portfolio.inGoals.count;
+  return `${portfolio.activeCount} running${inGoals ? `, ${inGoals} in ${inGoals === 1 ? "a goal" : "goals"}` : ""}`;
 }

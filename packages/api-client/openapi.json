@@ -174,6 +174,7 @@
           },
           "status": {
             "enum": [
+              "unclaimed",
               "active",
               "locked",
               "closed"
@@ -2078,6 +2079,7 @@
       "Blocker": {
         "enum": [
           "investments_running",
+          "investments_unpaid",
           "money_owed",
           "deposits_in_progress",
           "payouts_in_progress",
@@ -3971,6 +3973,7 @@
           },
           "status": {
             "enum": [
+              "unclaimed",
               "active",
               "locked",
               "closed"
@@ -4726,6 +4729,40 @@
         "title": "ClientLimitsView",
         "type": "object"
       },
+      "ClientListView": {
+        "additionalProperties": false,
+        "properties": {
+          "clients": {
+            "items": {
+              "$ref": "#/components/schemas/ClientRowView"
+            },
+            "title": "Clients",
+            "type": "array"
+          },
+          "more": {
+            "title": "More",
+            "type": "boolean"
+          },
+          "next_after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next After"
+          }
+        },
+        "required": [
+          "clients",
+          "next_after",
+          "more"
+        ],
+        "title": "ClientListView",
+        "type": "object"
+      },
       "ClientLoginStart": {
         "additionalProperties": false,
         "description": "The mobile number, or an email address the client has proved, with the password.",
@@ -5138,6 +5175,81 @@
           "created_at"
         ],
         "title": "ClientRequest",
+        "type": "object"
+      },
+      "ClientRowView": {
+        "additionalProperties": false,
+        "properties": {
+          "account_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "phone": {
+            "title": "Phone",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "unclaimed",
+              "active",
+              "locked",
+              "closed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "verified_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Name"
+          }
+        },
+        "required": [
+          "id",
+          "verified_name",
+          "account_number",
+          "phone",
+          "email",
+          "status",
+          "created_at"
+        ],
+        "title": "ClientRowView",
         "type": "object"
       },
       "ClientScreeningOut": {
@@ -13515,11 +13627,36 @@
           "currency": {
             "title": "Currency",
             "type": "string"
+          },
+          "matures_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matures On"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
           }
         },
         "required": [
           "account_code",
           "account_reference",
+          "product_name",
+          "matures_on",
           "amount_minor",
           "currency"
         ],
@@ -19538,6 +19675,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "finance.close",
                 "tax_remittances.change",
                 "products.view",
                 "products.change",
@@ -24515,6 +24653,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "finance.close",
                 "tax_remittances.change",
                 "products.view",
                 "products.change",
@@ -25126,10 +25265,15 @@
           "running_investments": {
             "title": "Running Investments",
             "type": "integer"
+          },
+          "unpaid_investments": {
+            "title": "Unpaid Investments",
+            "type": "integer"
           }
         },
         "required": [
           "running_investments",
+          "unpaid_investments",
           "owed",
           "open_deposits",
           "open_payouts",
@@ -30872,14 +31016,22 @@
     },
     "/client/claim": {
       "get": {
-        "description": "The signed-in client's claim. `not_found` for a client who signed up in Finvest 2.0.",
+        "description": "The signed-in client's claim, or null for a client who signed up in Finvest 2.0.\n\nEvery client's app asks on each start, and most have no claim, so that is an ordinary\nanswer and not a 404 in the browser's console.",
         "operationId": "my_claim_client_claim_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ClaimStateView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ClaimStateView"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response My Claim Client Claim Get"
                 }
               }
             },
@@ -45082,6 +45234,130 @@
         "summary": "Staff Runs",
         "tags": [
           "staff autoinvest"
+        ]
+      }
+    },
+    "/staff/clients": {
+      "get": {
+        "description": "Every client newest first, a page at a time, or those a search finds: an ID, account\nnumber or mobile number finds one client; other text finds clients whose verified name\nholds every word, or whose email holds it.",
+        "operationId": "list_clients_staff_clients_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 80,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "active",
+                    "locked",
+                    "unclaimed",
+                    "closed"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientListView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Clients",
+        "tags": [
+          "staff clients"
         ]
       }
     },

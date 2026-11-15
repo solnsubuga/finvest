@@ -61,6 +61,16 @@ describe("Forgot password", () => {
     await screen.findByText("Confirm it is you");
   });
 
+  it("refuses the password already in use, and the same code then sets a new one", async () => {
+    await openReset("772123456");
+    await fill(DEMO_CODE, DEMO_PASSWORD);
+    await screen.findByText("That is the password you have now. Choose a different one.");
+    await fireEvent.changeText(screen.getByTestId("password-input"), NEW_PASSWORD);
+    await fireEvent.changeText(screen.getByTestId("password-confirm-input"), NEW_PASSWORD);
+    await fireEvent.press(screen.getByTestId("reset-complete"));
+    await screen.findByText("Your password is changed");
+  });
+
   it("keeps the new password typed in and asks again for a wrong code", async () => {
     await openReset("772123456");
     await fill("000000", NEW_PASSWORD);

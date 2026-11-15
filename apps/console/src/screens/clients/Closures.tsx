@@ -35,6 +35,7 @@ export function standingLines(standing: Standing): string[] {
   const lines: string[] = [];
   const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   if (standing.runningInvestments) lines.push(count(standing.runningInvestments, "investment running", "investments running"));
+  if (standing.unpaidInvestments) lines.push(count(standing.unpaidInvestments, "investment waiting for payment", "investments waiting for payment"));
   for (const owed of standing.owed) lines.push(`${formatAmount(owed.minor, owed.currency)} still owed to the client`);
   if (standing.openDeposits) lines.push(count(standing.openDeposits, "payment in on its way", "payments in on their way"));
   if (standing.openPayouts) lines.push(count(standing.openPayouts, "payout on its way", "payouts on their way"));
