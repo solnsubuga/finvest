@@ -214,7 +214,7 @@ async def test_part_of_an_investment_moves_to_the_recipient_in_one_entry(
 
     # Both are told, without the amount.
     assert await notices(app_database, sender, "investment_sent") == [
-        f"Your {source.product_name} went to Amara N.. See what you kept in the app."
+        f"Your {source.product_name} went to Amara N. See what you kept in the app."
     ]
     received_notice = await notices(app_database, recipient, "investment_received")
     assert len(received_notice) == 1 and "1,000,000" not in received_notice[0]

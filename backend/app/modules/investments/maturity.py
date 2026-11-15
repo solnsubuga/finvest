@@ -307,6 +307,12 @@ async def mature_investment(
 # Internals --------------------------------------------------------------------------------------
 
 
+def _term_start(investment: Investment) -> date:
+    if investment.start_date is None:
+        raise ApplicationError("conflict")
+    return investment.start_date
+
+
 async def _mature(
     session: AsyncSession, investment: Investment, run_date: date, clock: Clock
 ) -> None:
@@ -403,7 +409,11 @@ async def _mature(
         event_name="investment_matured",
         client_id=investment.client_id,
         idempotency_key=investment.id,
-        variables={"amount": _proceeds(investment), "product": product.name},
+        variables={
+            "amount": _proceeds(investment),
+            "product": product.name,
+            "date": _term_start(investment),
+        },
         link=notifications.Link("investment", investment.id),
         now=clock.now(),
     )

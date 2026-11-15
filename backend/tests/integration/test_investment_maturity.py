@@ -44,6 +44,11 @@ MATURED, ACTIVE = InvestmentStatus.MATURED, InvestmentStatus.ACTIVE
 PROCEEDS = 1_026_490
 
 
+def day_text(value: date | None) -> str:
+    assert value is not None
+    return f"{value.day} {value.strftime('%b')} {value.year}"
+
+
 def day(offset: int) -> date:
     """That many days from today in Kampala, read when asked, so a run that crosses midnight
     still agrees with the database about which day it is."""
@@ -163,7 +168,11 @@ async def test_the_choice_and_the_maturity_are_audited_and_the_client_is_told(
             )
         ).all()
     assert [tuple(row) for row in told] == [
-        ("Your 91 Day Treasury Bill has matured. See what it paid in the app.", investment.id),
+        (
+            f"Your 91 Day Treasury Bill that started on {day_text(investment.start_date)} has "
+            "matured. See what it paid in the app.",
+            investment.id,
+        ),
     ]
 
 
