@@ -6,7 +6,9 @@ import { Icon } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
 import { colors, fontSizes, radii } from "@/theme";
 
-import { formatAmount, formatDay, investmentLabel, kindLabel, termLabel } from "./format";
+import { termProgress } from "@/home/format";
+
+import { formatAmount, formatDay, interestPaidLabel, investmentLabel, kindLabel, termLabel } from "./format";
 import { Investment, Product } from "./types";
 
 /** One product in the list: its name, the rate after tax and the terms. */
@@ -30,6 +32,11 @@ export function ProductCard({ product, onPress }: { product: Product; onPress: (
         <Txt size={fontSizes.sm} color={colors.muted}>
           {paused ? "Paused for new investments" : `From ${formatAmount(product.minimum)}`}
         </Txt>
+        {paused ? null : (
+          <Txt size={fontSizes.xs} color={colors.muted} testID={`product-${product.code}-paid`}>
+            {interestPaidLabel[product.interestPaid]}
+          </Txt>
+        )}
       </View>
       <View style={{ alignItems: "flex-end", gap: 2 }}>
         <Txt size={24} weight="extrabold" lineHeight={30} style={{ letterSpacing: -0.5 }}>
@@ -65,15 +72,21 @@ const styles = StyleSheet.create({
     borderRadius: radii.xl,
     padding: 18,
   },
+  track: { height: 6, borderRadius: 3, backgroundColor: colors.border, flexDirection: "row" },
+  bar: { borderRadius: 3, backgroundColor: colors.black },
 });
 
 /** One of the client's investments in the portfolio. */
 export function InvestmentCard({ investment, onPress }: { investment: Investment; onPress: () => void }) {
   const waiting = investment.status === "awaiting_payment";
+  // A fixed term that is running shows how far through it is, as on the canvas.
+  const term = investment.status === "active" && investment.termDays !== null && !investment.withdrawalRequestedAt ? investment.termDays : null;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${investment.productName}, ${investmentLabel(investment)}, worth ${formatAmount(investment.value)}`}
+      accessibilityLabel={`${investment.productName}, ${investmentLabel(investment)}, worth ${formatAmount(investment.value)}${
+        term ? `, day ${Math.min(investment.daysEarned, term)} of ${term}` : ""
+      }`}
       onPress={onPress}
       testID={`investment-${investment.id}`}
       style={({ pressed }) => [styles.card, { alignItems: "flex-start" }, pressed && { opacity: 0.85 }]}
@@ -92,6 +105,17 @@ export function InvestmentCard({ investment, onPress }: { investment: Investment
               ? `${investment.status === "matured" ? "Matured" : "Matures"} ${formatDay(investment.maturityDate)}`
               : `${investment.ratePercent}% a year after tax`}
         </Txt>
+        {term ? (
+          <View style={{ gap: 4, marginTop: 6 }} testID={`investment-${investment.id}-progress`}>
+            {/* Inside the card's button, so its words are in the card's label instead. */}
+            <View style={styles.track}>
+              <View style={[styles.bar, { width: termProgress(investment.daysEarned, term) }]} />
+            </View>
+            <Txt size={fontSizes.xs} color={colors.muted}>
+              {`Day ${Math.min(investment.daysEarned, term)} of ${term}`}
+            </Txt>
+          </View>
+        ) : null}
       </View>
       <View style={{ alignItems: "flex-end", gap: 2 }}>
         <Txt size={fontSizes.lg} weight="extrabold">

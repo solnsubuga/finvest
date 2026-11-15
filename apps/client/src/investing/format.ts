@@ -53,6 +53,11 @@ export function termLabel(product: Pick<Product, "termDays">): string {
   return product.termDays === null ? "Open term" : `${product.termDays} days`;
 }
 
+export const interestPaidLabel: Record<Product["interestPaid"], string> = {
+  at_maturity: "Interest paid at maturity",
+  monthly: "Interest paid monthly",
+};
+
 export const kindLabel: Record<Product["kind"], string> = {
   treasury_bill: "Treasury bill",
   fixed_income: "Fixed income",

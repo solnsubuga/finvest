@@ -134,11 +134,19 @@ export default function MaturityChoiceScreen() {
                     <Txt size={fontSizes.sm} color={colors.muted}>
                       {atMaturityDetail[option]}
                     </Txt>
+                    {choiceAmount(loaded.value.investment, option) ? (
+                      <Txt size={fontSizes.sm} weight="bold" testID={`maturity-${option}-amount`}>
+                        {choiceAmount(loaded.value.investment, option)}
+                      </Txt>
+                    ) : null}
                   </View>
                 </Pressable>
               );
             })}
           </View>
+          <Txt size={fontSizes.sm} color={colors.muted} testID="maturity-if-nothing">
+            {ifNothing(loaded.value.investment)}
+          </Txt>
           {paid ? (
             <View style={{ gap: 8 }}>
               <Eyebrow>{choice === "pay_interest" ? "Pay the interest to" : "Pay it to"}</Eyebrow>
@@ -200,6 +208,36 @@ export default function MaturityChoiceScreen() {
       )}
     </Screen>
   );
+}
+
+/** What each choice comes to at maturity, after tax. Null when the term has no fixed end. */
+function choiceAmount(investment: Investment, option: AtMaturity): string | null {
+  const interest = investment.interestAtMaturity;
+  const total = investment.totalAtMaturity;
+  if (!interest || !total) return null;
+  switch (option) {
+    case "roll_over":
+      return `${formatAmount(total)} starts a new term`;
+    case "pay_out":
+      return `${formatAmount(total)} paid to you`;
+    case "pay_interest":
+      return `${formatAmount(interest)} paid to you, ${formatAmount(investment.amount)} stays invested`;
+    case "interest_to_goal":
+      return `${formatAmount(interest)} to your goal, ${formatAmount(investment.amount)} stays invested`;
+  }
+}
+
+/** What happens if the client leaves the screen without saving: the choice saved now. */
+function ifNothing(investment: Investment): string {
+  const saved = investment.atMaturity ?? "roll_over";
+  const on = investment.maturityDate ? `on ${formatDay(investment.maturityDate)}` : "at the end of the term";
+  const what: Record<AtMaturity, string> = {
+    roll_over: "everything starts a new term at the rate on that day",
+    pay_out: "everything is paid to the account you chose",
+    pay_interest: "the interest is paid to the account you chose and the rest starts a new term",
+    interest_to_goal: "the interest is saved to your goal and the rest starts a new term",
+  };
+  return `If you do nothing, ${on} ${what[saved]}.`;
 }
 
 const styles = StyleSheet.create({
