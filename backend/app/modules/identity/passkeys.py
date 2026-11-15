@@ -76,8 +76,10 @@ RECENT_SIGN_IN = timedelta(minutes=10)
 # Attempts in fifteen minutes.
 OPTIONS_PER_BINDING = 10
 ENROLMENT_LOOKUPS_PER_ADDRESS = 30
+# A passkey log in names nobody until the device answers, so it is limited by caller address.
+PASSKEY_LOGINS_PER_ADDRESS = 30
 TRANSPORTS = {transport.value for transport in AuthenticatorTransport}
-Purpose = Literal["register", "sign_in", "reverify"]
+Purpose = Literal["register", "sign_in", "reverify", "passkey_login"]
 
 logger = structlog.get_logger()
 
@@ -376,6 +378,122 @@ class PasskeyService:
         return await self.identity.open_session(
             login_id, kind, second_step="passkey", transport=transport
         )
+
+    # Logging in with a passkey alone
+
+    async def passkey_login_options(self, *, address: str | None) -> tuple[str, dict[str, Any]]:
+        """Ask the device for any Finvest passkey it holds. Returns the attempt and the options.
+
+        Nobody is named yet: the passkey that answers says whose account it is. The options list
+        no passkeys, so the device offers the ones it has for this site.
+        """
+        site, _ = self._site("client")
+        if address is not None:
+            await reserve_attempts(
+                self.database,
+                self.clock,
+                [(throttle_key("passkey-login", address), PASSKEY_LOGINS_PER_ADDRESS)],
+            )
+        attempt_id = push_id(self.clock)
+        challenge = secrets.token_bytes(32)
+        options = generate_authentication_options(
+            rp_id=site,
+            challenge=challenge,
+            timeout=int(CHALLENGE_LIFETIME.total_seconds() * 1000),
+            allow_credentials=[],
+            user_verification=UserVerificationRequirement.REQUIRED,
+        )
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            await session.execute(
+                text(
+                    "INSERT INTO identity_passkey_challenges (challenge_hash, purpose, "
+                    "actor_kind, actor_id, bound_to, created_at, expires_at) VALUES (:hash, "
+                    "'passkey_login', 'client', NULL, :bound, :now, :expires)"
+                ),
+                {
+                    "hash": _digest(challenge),
+                    "bound": attempt_id,
+                    "now": now,
+                    "expires": now + CHALLENGE_LIFETIME,
+                },
+            )
+        result: dict[str, Any] = json.loads(options_to_json(options))
+        return attempt_id, result
+
+    async def passkey_login(
+        self, attempt_id: str, credential: dict[str, Any], transport: Transport
+    ) -> IssuedSession:
+        """Verify the device's signature and open a session for whoever owns that passkey.
+
+        The passkey must belong to an active client and have checked the person on the device
+        (fingerprint, face or screen lock), so it is two steps in one, like the password and a
+        passkey. Every failure is the same `passkey_failed`.
+        """
+        site, origins = self._site("client")
+        try:
+            parsed = parse_authentication_credential_json(credential)
+            challenge = parse_client_data_json(parsed.response.client_data_json).challenge
+        except (WebAuthnException, ValueError):
+            raise _failed() from None
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            taken = await session.scalar(
+                text(
+                    "UPDATE identity_passkey_challenges SET consumed_at = :now "
+                    "WHERE challenge_hash = :hash AND purpose = 'passkey_login' "
+                    "AND actor_kind = 'client' AND actor_id IS NULL AND bound_to = :bound "
+                    "AND consumed_at IS NULL AND expires_at > :now RETURNING true"
+                ),
+                {"now": now, "hash": _digest(challenge), "bound": attempt_id},
+            )
+        if not taken:
+            raise ApplicationError("expired")
+        async with self.database.transaction() as session:
+            passkey = (
+                await session.execute(
+                    text(
+                        "SELECT p.id, p.actor_id, p.public_key, p.sign_count "
+                        "FROM identity_passkeys p JOIN identity_clients c ON c.id = p.actor_id "
+                        "WHERE p.credential_id = :credential AND p.actor_kind = 'client' "
+                        "AND p.removed_at IS NULL AND c.status = 'active'"
+                    ),
+                    {"credential": parsed.raw_id},
+                )
+            ).one_or_none()
+        handle = parsed.response.user_handle
+        if passkey is None or (handle is not None and handle != passkey.actor_id.encode()):
+            # Unknown, removed, someone's closed or locked account, or a handle that disagrees.
+            logger.info("passkey_refused", kind="client", error_code="passkey_failed")
+            raise _failed()
+        try:
+            verified = verify_authentication_response(
+                credential=parsed,
+                expected_challenge=challenge,
+                expected_rp_id=site,
+                expected_origin=origins,
+                credential_public_key=bytes(passkey.public_key),
+                credential_current_sign_count=passkey.sign_count,
+                require_user_verification=True,
+            )
+        except (WebAuthnException, ValueError):
+            logger.info("passkey_refused", kind="client", error_code="passkey_failed")
+            raise _failed() from None
+        now = self.clock.now()
+        async with self.database.transaction() as session:
+            # The session opens with the passkey's use, or neither is saved.
+            await session.execute(
+                text(
+                    "UPDATE identity_passkeys SET sign_count = :count, last_used_at = :now "
+                    "WHERE id = :id"
+                ),
+                {"count": verified.new_sign_count, "now": now, "id": passkey.id},
+            )
+            issued = await self.identity.issue_in(
+                session, Actor("client", passkey.actor_id), "passkey", transport, now
+            )
+        logger.info("passkey_login", kind="client")
+        return issued
 
     async def _check_assertion(
         self, actor: Actor, credential: dict[str, Any], purpose: Purpose, bound_to: str
