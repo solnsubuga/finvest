@@ -176,6 +176,8 @@ export type PaymentErrorCode =
   | "account_closing"
   /** Card payments are paused, or over a card limit. The pay screen explains which. */
   | "card_refused"
+  /** Too many prompts to numbers other than the client's own today. Their own number still works. */
+  | "other_number_limit"
   | "unavailable";
 
 /** The payment already under way for the same thing, so the client can be taken to it. */
@@ -304,6 +306,8 @@ const messages: Record<PaymentErrorCode, string> = {
   receipt_not_accepted: "We could not accept that file. Use a JPG, PNG or PDF of up to 10 MB.",
   not_found: "We could not find this payment.",
   card_refused: "This cannot be paid by card right now. Pay by mobile money or bank transfer instead.",
+  other_number_limit:
+    "You have paid from other numbers five times today. Pay from your own number, or try that number again tomorrow.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 
