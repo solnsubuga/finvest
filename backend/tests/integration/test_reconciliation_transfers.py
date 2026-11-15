@@ -45,13 +45,14 @@ async def propose(
     sent: int = 1_000_000,
     received: int = 990_000,
     provider_reference: str | None = None,
+    from_pot: tuple[StatementSource, str] = MTN,
 ) -> transfers.TransferView:
     proposer = staff()
     async with database.actor_transaction(proposer) as session:
         return await transfers.propose(
             session,
             proposer,
-            from_pot=MTN,
+            from_pot=from_pot,
             to_pot=BANK,
             sent=ugx(sent),
             received=ugx(received),
@@ -63,10 +64,13 @@ async def propose(
         )
 
 
-async def fund_wallet(database: Database, clock: FakeClock, amount: int) -> None:
-    """Money collected into the MTN wallet, owed to a test account, posted as the worker."""
+async def fund_wallet(
+    database: Database, clock: FakeClock, amount: int, pot: tuple[StatementSource, str] = MTN
+) -> None:
+    """Money collected into a pot (the MTN wallet unless said), owed to a test account, posted
+    as the worker."""
     async with database.actor_transaction(SYSTEM) as session:
-        wallet = await ledger.open_account(session, rules.find_pot(*MTN).ledger_account, clock)
+        wallet = await ledger.open_account(session, rules.find_pot(*pot).ledger_account, clock)
         owed = await ledger.open_account(
             session, AccountSpec("test.owed", AccountKind.LIABILITY, Currency.UGX, "Owed"), clock
         )
@@ -332,3 +336,26 @@ async def test_a_sweep_larger_than_the_books_hold_is_not_posted(
         assert (await transfers.get_transfer(session, proposed.id)).status is (
             TransferStatus.PROPOSED
         )
+
+
+PESAPAL = (StatementSource.PESAPAL, "cards")
+
+
+async def test_a_pesapal_settlement_books_pesapal_s_fee(
+    app_database: Database, worker_database: Database, fake_clock: FakeClock
+) -> None:
+    await fund_wallet(worker_database, fake_clock, 1_035_000, PESAPAL)
+    proposed = await propose(
+        app_database, fake_clock, sent=1_035_000, received=1_000_000, from_pot=PESAPAL
+    )
+    checker = staff()
+    async with app_database.actor_transaction(checker) as session:
+        approved = await transfers.approve(
+            session, checker, proposed.id, idempotency_key=key(), clock=fake_clock
+        )
+    assert approved.ledger_entry_id is not None
+    assert await entry_lines(app_database, approved.ledger_entry_id) == {
+        "bank.trust": 1_000_000,
+        "fees.provider.pesapal": 35_000,
+        "pesapal.balance": -1_035_000,
+    }

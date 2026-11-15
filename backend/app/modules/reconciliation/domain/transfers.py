@@ -1,5 +1,5 @@
 """Moving Finvest's own money from one pot to another, such as sweeping collected mobile money
-from the ioTec wallet to the trust bank account. Pure: no I/O.
+from the ioTec wallet, or card payments settled by Pesapal, to the trust bank account. Pure: no I/O.
 
 A transfer is recorded by one member of staff once the money has been sent, and approved by a
 different one. Only then is it posted, as one entry: what arrived into the receiving pot, any
@@ -18,7 +18,12 @@ from app.modules.reconciliation.domain.pots import CASH_POTS, Pot
 from app.modules.reconciliation.domain.statements import StatementSource
 from app.shared.money import Currency, Money
 
-FEE_ACCOUNT_CODE = "fees.provider.iotec"
+# The expense account each provider's fee on a transfer out of its pot is booked to. A bank
+# charge has no agreed account yet, so a transfer out of the bank carries no fee.
+FEE_ACCOUNTS: dict[StatementSource, tuple[str, str]] = {
+    StatementSource.IOTEC: ("fees.provider.iotec", "ioTec fees"),
+    StatementSource.PESAPAL: ("fees.provider.pesapal", "Pesapal fees"),
+}
 ENTRY_TYPE = "reconciliation.pot_transfer"
 SOURCE_TYPE = "pot_transfer"
 
@@ -63,8 +68,8 @@ class TransferTerms:
             raise TransferError("amount_not_positive")
         if self.received > self.sent:
             raise TransferError("transfer_received_more_than_sent")
-        if self.fee.is_positive and self.from_pot.source is not StatementSource.IOTEC:
-            # Only ioTec's fee account is agreed. Bank charges need their own account first.
+        if self.fee.is_positive and self.from_pot.source not in FEE_ACCOUNTS:
+            # Bank charges need their own account first.
             raise TransferError("transfer_fee_not_allowed")
 
     @property
@@ -72,8 +77,11 @@ class TransferTerms:
         return self.sent - self.received
 
 
-def fee_account(currency: Currency) -> AccountSpec:
-    return AccountSpec(FEE_ACCOUNT_CODE, AccountKind.EXPENSE, currency, "ioTec fees")
+def fee_account(currency: Currency, source: StatementSource = StatementSource.IOTEC) -> AccountSpec:
+    """The expense account for the fee on a transfer out of a `source` pot. A pot with no fee
+    account (the bank) books ioTec's, which a transfer with no fee never posts to."""
+    code, name = FEE_ACCOUNTS.get(source, FEE_ACCOUNTS[StatementSource.IOTEC])
+    return AccountSpec(code, AccountKind.EXPENSE, currency, name)
 
 
 def posting(

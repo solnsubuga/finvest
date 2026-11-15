@@ -47,6 +47,11 @@ _SELECT_BALANCE_AS_OF = text(
     "FROM ledger_lines AS line JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
     "WHERE line.account_id = :account_id AND entry.effective_date <= :on"
 )
+_SELECT_ANY_LINE_BY = text(
+    "SELECT EXISTS (SELECT FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "WHERE line.account_id = :account_id AND entry.effective_date <= :on) AS found"
+)
 _SELECT_TOTAL = text(
     "SELECT count(DISTINCT account.kind) AS kinds, "
     "coalesce(sum(balance.balance_minor), 0)::bigint AS total_minor "
@@ -97,6 +102,12 @@ async def balance_as_of(session: AsyncSession, account_id: str, on: date) -> Mon
         .debit_minor
     )
     return Money(debit_minor if kind in _DEBIT_NORMAL else -debit_minor, currency)
+
+
+async def has_lines_by(session: AsyncSession, account_id: str, on: date) -> bool:
+    """Whether any entry dated on or before `on` has touched the account."""
+    found = await session.execute(_SELECT_ANY_LINE_BY, {"account_id": account_id, "on": on})
+    return bool(found.one().found)
 
 
 @dataclass(frozen=True, slots=True)

@@ -2211,6 +2211,7 @@
           "source": {
             "enum": [
               "iotec",
+              "pesapal",
               "bank"
             ],
             "title": "Source",
@@ -15703,6 +15704,7 @@
           "source": {
             "enum": [
               "iotec",
+              "pesapal",
               "bank"
             ],
             "title": "Source",
@@ -26279,6 +26281,7 @@
           "source": {
             "enum": [
               "iotec",
+              "pesapal",
               "bank"
             ],
             "title": "Source",
@@ -29576,6 +29579,7 @@
           "source": {
             "enum": [
               "iotec",
+              "pesapal",
               "bank"
             ],
             "title": "Source",
@@ -29661,6 +29665,7 @@
           "source": {
             "enum": [
               "iotec",
+              "pesapal",
               "bank"
             ],
             "title": "Source",
@@ -30080,6 +30085,7 @@
           "source": {
             "enum": [
               "iotec",
+              "pesapal",
               "bank"
             ],
             "title": "Source",
@@ -71829,6 +71835,7 @@
             "schema": {
               "enum": [
                 "iotec",
+                "pesapal",
                 "bank"
               ],
               "title": "Source",

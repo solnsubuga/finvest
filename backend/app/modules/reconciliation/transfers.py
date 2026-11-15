@@ -224,7 +224,9 @@ async def _approve(session: AsyncSession, staff: Actor, transfer_id: str, clock:
     terms = view.terms
     from_account = await ledger.open_account(session, terms.from_pot.ledger_account, clock)
     to_account = await ledger.open_account(session, terms.to_pot.ledger_account, clock)
-    fee_account = await ledger.open_account(session, rules.fee_account(terms.sent.currency), clock)
+    fee_account = await ledger.open_account(
+        session, rules.fee_account(terms.sent.currency, terms.from_pot.source), clock
+    )
     async with session.begin_nested():
         try:
             posted = await ledger.post_entry(

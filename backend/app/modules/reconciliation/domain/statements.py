@@ -1,4 +1,4 @@
-"""Statements from ioTec, the bank and the custodian, as the ledger needs to see them. Pure.
+"""Statements from ioTec, Pesapal, the bank and the custodian, as the ledger sees them. Pure.
 
 A statement is refused whole unless it adds up: the opening balance plus every line must equal
 the closing balance. Amounts are parsed from text into integer `Money` and never pass through
@@ -26,6 +26,7 @@ MAX_TEXT = 200
 
 class StatementSource(StrEnum):
     IOTEC = "iotec"
+    PESAPAL = "pesapal"
     BANK = "bank"
     CUSTODIAN = "custodian"
 
