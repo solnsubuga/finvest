@@ -39,6 +39,7 @@ from app.modules.ledger.domain.entries import (
     debit,
 )
 from app.modules.notifications import contract as notifications
+from app.modules.payments import payer_names
 from app.modules.payments.domain.cards import HOSTED_PROVIDERS
 from app.modules.payments.domain.deposits import (
     APPROVAL_WINDOW,
@@ -722,6 +723,7 @@ async def apply_move(
     cause: Cause,
     paid_into: AccountSpec | None = None,
     recovered_charge: Money | None = None,
+    paid_from: str | None = None,
 ) -> Deposit:
     """Record `move` on a deposit the caller has locked. Posts to the ledger if it confirms.
 
@@ -729,6 +731,10 @@ async def apply_move(
     the provider's wallet is used. A bank transfer must name the bank account it was found in,
     and a card payment the card provider's balance. `recovered_charge` is a card charge the
     client paid on top: it arrives with the payment and is Finvest's income, not the client's.
+
+    A confirmed mobile money payment from a number other than the client's own asks for the
+    name behind that number (`payer_names`). On a hosted page the number is `paid_from`, the
+    one the provider says paid; otherwise it is the number that was prompted.
     """
     if not can_move(deposit.status, move.status):
         raise RuntimeError(f"A deposit cannot move from {deposit.status} to {move.status}")
@@ -761,6 +767,15 @@ async def apply_move(
         await _tell_client(session, deposit, move.status, now)
     if move.status is DepositStatus.CONFIRMED:
         await publish_confirmed(session, deposit, now)
+        if deposit.method in (Method.MTN, Method.AIRTEL):
+            hosted = deposit.provider in HOSTED_PROVIDERS
+            await payer_names.ask_if_another(
+                session,
+                deposit.id,
+                deposit.client_id,
+                paid_from if hosted else deposit.payer_msisdn,
+                clock,
+            )
     logger.info(
         "deposit_moved", deposit_id=deposit.id, status=move.status.value, error_code=move.code
     )
