@@ -497,6 +497,7 @@ def create_client_router(
                 idempotency_key=key,
                 provider=collections.name,
                 clock=clock,
+                account_phone=client.phone,
             )
             return _view(deposit)
 

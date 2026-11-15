@@ -59,6 +59,12 @@ SENDING_GRACE = timedelta(minutes=2)
 # A deposit still `created` after this long was never sent, and the payer has stopped waiting.
 UNSENT_EXPIRY = timedelta(minutes=10)
 
+# A client may have ioTec prompt numbers other than their own this many times in a day, so a
+# stranger's phone cannot be flooded with prompts from someone else's account. Every request
+# counts, whatever became of it.
+OTHER_NUMBER_PROMPTS = 5
+OTHER_NUMBER_PERIOD = timedelta(hours=24)
+
 # How long status reads keep trying to settle an uncertain deposit before it is left to
 # reconciliation, and how far apart the reads are as it ages.
 UNCERTAIN_READ_WINDOW = timedelta(hours=24)
