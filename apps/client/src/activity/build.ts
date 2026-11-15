@@ -13,6 +13,7 @@ export type PayoutRow = Pick<PayoutOut, "id" | "amount" | "kind" | "status" | "c
 const METHOD: Record<PaymentRow["method"], string> = {
   mtn: "MTN Mobile Money",
   airtel: "Airtel Money",
+  card: "Card",
   bank_transfer: "Bank transfer",
 };
 

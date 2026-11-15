@@ -70,7 +70,8 @@ const DEPOSIT_STATUS: Record<PaymentView["status"], DepositStatus> = {
 };
 
 export function toDeposit(view: PaymentView, payable: Payable): Deposit {
-  if (view.method === "bank_transfer") {
+  // A card payment is not a mobile money deposit: the card screens read it.
+  if (view.method === "bank_transfer" || view.method === "card") {
     throw new PaymentError("not_found");
   }
   return {
