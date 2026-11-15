@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
-import { legalDocuments, type LegalDocument, versionLabel } from "../data/legal.ts";
+import { earlierVersions, legalDocuments, type LegalDocument, versionLabel } from "../data/legal.ts";
 import { legalPdf, wrap } from "./legal-pdf.ts";
 
 describe("legal PDFs", () => {
@@ -27,9 +27,11 @@ describe("legal PDFs", () => {
     const long: LegalDocument = {
       slug: "long",
       title: "Long",
+      stage: "draft",
+      summary: "A long document.",
       sections: Array.from({ length: 40 }, (_, index) => ({
         heading: `Section ${index + 1}`,
-        covers: "What this section will cover, written out at some length so it wraps.",
+        body: ["A paragraph written out at some length so it wraps.", { list: ["One point", "Another point"] }],
       })),
     };
     const pdf = await PDFDocument.load(await legalPdf(long, "finvestug.com/legal/long"));
@@ -43,6 +45,40 @@ describe("legal PDFs", () => {
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.join(" ")).toBe(text);
     for (const line of lines) expect(font.widthOfTextAtSize(line, 11)).toBeLessThanOrEqual(120);
+  });
+});
+
+describe("wording", () => {
+  it("writes every current document out in full, as a draft until the lawyers review it", () => {
+    for (const document of legalDocuments) {
+      expect(document.stage, document.slug).not.toBe("layout");
+      if (document.stage === "reviewed") expect(document.reviewedBy?.trim(), document.slug).toBeTruthy();
+      expect(document.summary.length, document.slug).toBeGreaterThanOrEqual(40);
+      expect(document.summary.length, document.slug).toBeLessThanOrEqual(170);
+      for (const section of document.sections) {
+        expect(section.body.length, `${document.slug}: ${section.heading}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("never states a tax rate or a placeholder", () => {
+    const text = JSON.stringify(legalDocuments);
+    expect(text).not.toMatch(/\d\s*%|per ?cent/i);
+    expect(text).not.toMatch(/\[[A-Z][A-Z :,'.a-z]*[A-Z.]\]|\bTBC\b|\bTBD\b|\bTODO\b|null|undefined/);
+  });
+
+  it("keeps each earlier version of the terms and the privacy notice", () => {
+    const current = new Map(legalDocuments.map((document) => [document.slug, document.version]));
+    for (const earlier of earlierVersions) {
+      expect(earlier.version, earlier.slug).toBeTruthy();
+      expect(earlier.version, earlier.slug).not.toBe(current.get(earlier.slug));
+    }
+  });
+
+  it("uses only characters the PDF font can draw", async () => {
+    for (const document of [...legalDocuments, ...earlierVersions]) {
+      await expect(legalPdf(document, "finvestug.com/legal/x")).resolves.toBeInstanceOf(Uint8Array);
+    }
   });
 });
 

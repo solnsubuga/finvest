@@ -1,5 +1,5 @@
 ---
-import { layoutOnlyNotice, legalDocuments, versionLabel, type LegalDocument } from "../../data/legal.ts";
+import { draftNotice, layoutOnlyNotice, legalDocuments, versionLabel, type LegalDocument } from "../../data/legal.ts";
 import Base from "../../layouts/Base.astro";
 
 export function getStaticPaths() {
@@ -18,7 +18,7 @@ const { document } = Astro.props;
 
 <Base
   title={document.title}
-  description={`${document.title} for Finvest clients. This page shows the structure only, and the wording will be supplied by Finvest's lawyers before launch.`}
+  description={document.summary}
   headerTone="light"
 >
   <section class="band legal">
@@ -49,17 +49,35 @@ const { document } = Astro.props;
           </a>
         </div>
         <article>
-          <p class="legal__draft">
-            <strong>Layout only.</strong> {layoutOnlyNotice}
-          </p>
+          {
+            document.stage === "layout" ? (
+              <p class="legal__draft">
+                <strong>Layout only.</strong> {layoutOnlyNotice}
+              </p>
+            ) : document.stage === "draft" ? (
+              <p class="legal__draft">
+                <strong>Draft for legal review.</strong> {draftNotice}
+              </p>
+            ) : null
+          }
           {
             document.sections.map((section, index) => (
-              <>
+              <section class="legal__section">
                 <h2>
                   {index + 1}. {section.heading}
                 </h2>
-                <p>{section.covers}</p>
-              </>
+                {section.body.map((block) =>
+                  typeof block === "string" ? (
+                    <p>{block}</p>
+                  ) : (
+                    <ul>
+                      {block.list.map((item) => (
+                        <li>{item}</li>
+                      ))}
+                    </ul>
+                  ),
+                )}
+              </section>
             ))
           }
         </article>

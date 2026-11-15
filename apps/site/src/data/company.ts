@@ -12,6 +12,9 @@ export interface TeamMember {
   role: string;
 }
 
+/** Where clients and visitors write to us. */
+export const supportEmail = "support@finvestug.com";
+
 export const company = {
   /** How long a person takes to review an identity check. */
   reviewTime: "Usually within one working day",
@@ -25,9 +28,13 @@ export const company = {
   officeAddress: null,
   /** The registered company behind the trading name. */
   registeredName: null,
+  /** Its company number at the Uganda Registration Services Bureau. */
+  registrationNumber: null,
   /** The regulator's name, as it should be written. */
   regulator: null,
   licenceNumber: null,
+  /** Its registration number with the Personal Data Protection Office. */
+  dataProtectionRegistration: null,
   /** The bank that keeps the bills. */
   custodian: null,
   /** The firm that audits the accounts each year. */
@@ -51,8 +58,10 @@ export const company = {
   phone: string | null;
   officeAddress: string | null;
   registeredName: string | null;
+  registrationNumber: string | null;
   regulator: string | null;
   licenceNumber: string | null;
+  dataProtectionRegistration: string | null;
   custodian: string | null;
   auditor: string | null;
   team: TeamMember[];

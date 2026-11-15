@@ -2308,11 +2308,23 @@ a:hover {
   letter-spacing: -0.3px;
 }
 
-.legal article h2 + p {
+.legal__section {
   max-width: 680px;
+}
+
+.legal__section p,
+.legal__section ul {
   margin-top: 10px;
   line-height: 1.7;
-  color: var(--fv-color-muted);
+  color: var(--fv-color-ink);
+}
+
+.legal__section ul {
+  padding-left: 1.25em;
+}
+
+.legal__section li + li {
+  margin-top: 6px;
 }
 
 @media (min-width: 900px) {
