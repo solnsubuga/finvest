@@ -441,7 +441,9 @@ async def submit(
     `phone_names`: a provider reads the name the network holds for a phone number, so the
     client's own number is looked up too (`phone_names.py`).
     `guided_selfie`: a document with a selfie also needs a kept frame for each pose, the two
-    turns going opposite ways and the two nods too (`poses.py`).
+    turns going opposite ways and the two nods too (`poses.py`). A selfie captured by a passed
+    liveness check needs none: that check is the proof (the owner's choice, 2026-11-15), and
+    the poses are the way to a selfie when it cannot run.
     """
     row = await _editable(session, client)
     view = await _view(session, sealer, row)
@@ -449,7 +451,7 @@ async def submit(
     if row.status == CheckStatus.AWAITING_CLIENT:
         missing += [kind.value for kind in PhotoKind if kind in view.retake_photos - view.retaken]
     kept: dict[Pose, Kept] = {}
-    if guided_selfie and PhotoKind.SELFIE in _required(row):
+    if guided_selfie and PhotoKind.SELFIE in _required(row) and not selfie_is_live(view):
         kept = await kept_poses(session, row.id)
         missing += [f"pose_{pose.value}" for pose in poses_missing(kept)]
     if missing:
@@ -506,6 +508,11 @@ async def submit(
         await phone_lookups.ask_at_hand_in(session, row.id, row.client_id, clock)
     await _audit(session, client, "change", "kyc.check.submitted", row.id, clock)
     return await _view_by_id(session, sealer, row.id)
+
+
+def selfie_is_live(view: CheckView) -> bool:
+    """Whether the check's current selfie was captured by a passed liveness check."""
+    return any(p.kind is PhotoKind.SELFIE and p.live for p in view.photos)
 
 
 async def kept_poses(session: AsyncSession, check_id: str) -> dict[Pose, Kept]:

@@ -174,6 +174,23 @@ export function liveCopy(problem: LiveProblem | null, pose: Pose | null): string
   }
 }
 
+/**
+ * Whether the check takes the head turns: the guided selfie, unless its selfie came from a
+ * passed live check, which is the proof on its own (the owner's choice, 2026-11-15). The API
+ * then lists no poses as missing.
+ */
+export function headTurns(check: Pick<IdentityCheck, "guidedSelfie" | "liveSelfie">): boolean {
+  return check.guidedSelfie && !check.liveSelfie;
+}
+
+/**
+ * Whether the progress bar counts the head turns. Before the selfie, a build that runs Regula's
+ * liveness expects none, since a passed check needs none; a camera selfie brings them back.
+ */
+export function turnsCounted(check: Pick<IdentityCheck, "guidedSelfie" | "liveSelfie" | "photos">, regula: boolean): boolean {
+  return headTurns(check) && (check.photos.includes("selfie") || !regula);
+}
+
 /** The poses the check still needs, in order. Empty when the selfie is not the guided one. */
 export function posesMissing(check: Pick<IdentityCheck, "guidedSelfie" | "missing">): Pose[] {
   if (!check.guidedSelfie) return [];

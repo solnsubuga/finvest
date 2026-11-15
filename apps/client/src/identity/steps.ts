@@ -1,10 +1,10 @@
-import { posesMissing } from "./poses";
+import { headTurns, posesMissing } from "./poses";
 import { DocumentType, IdentityCheck, PhotoKind, requiredPhotos } from "./types";
 
 /**
  * The order of the ID check, as on the design canvas: choose the document,
  * the front, the back (not for a passport), confirm the details, then the selfie.
- * With the guided selfie the head turns follow the selfie.
+ * With the guided selfie the head turns follow the selfie, unless a live check took it.
  */
 export type Step = "document" | PhotoKind | "details" | "poses";
 
@@ -37,7 +37,7 @@ export function hrefFor(step: Step): string {
 export function nextStep(check: IdentityCheck | null): Step | null {
   if (!check) return "document";
   if (check.status !== "draft") return null;
-  for (const step of stepsFor(check.documentType, check.guidedSelfie)) {
+  for (const step of stepsFor(check.documentType, headTurns(check))) {
     if (stepMissing(step, check)) return step;
   }
   return null;
@@ -45,7 +45,7 @@ export function nextStep(check: IdentityCheck | null): Step | null {
 
 /** The step after this one in a draft, skipping what is already done. Null when all are done. */
 export function stepAfter(step: Step, check: IdentityCheck): Step | null {
-  const steps = stepsFor(check.documentType, check.guidedSelfie);
+  const steps = stepsFor(check.documentType, headTurns(check));
   const later = steps.slice(steps.indexOf(step) + 1);
   return later.find((candidate) => stepMissing(candidate, check)) ?? nextStep(check);
 }

@@ -7,15 +7,12 @@ import { Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
 import { RegulaLiveness } from "./RegulaLiveness";
-import { regulaFaceUrl, type RegulaOutcome } from "./types";
+import { regulaCanRun, regulaFaceUrl, type RegulaOutcome } from "./types";
 
 /** Written inline, so a production build leaves the demo's stand-in out of reach. */
 const demo = process.env.EXPO_PUBLIC_DEMO_AUTH === "1";
 
-/** Whether this build can run Regula's liveness: it knows Regula's Face service, or is the demo. */
-export function regulaCanRun(): boolean {
-  return regulaFaceUrl() !== null || demo;
-}
+export { regulaCanRun };
 
 /** Runs one session of Regula's liveness for an attempt's tag. */
 export function RegulaRun({ tag, onEnd }: { tag: string; onEnd: (outcome: RegulaOutcome) => void }) {

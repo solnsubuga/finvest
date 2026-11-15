@@ -124,6 +124,10 @@ describe("the demo's Regula liveness", () => {
     for (let read = 0; read < 3 && state.latest?.status === "open"; read++) state = await client.getLiveness();
     expect(state.latest).toMatchObject({ status: "passed", photoUsed: true });
     await expect(client.reportLivenessTransaction(started.id, TRANSACTION)).rejects.toMatchObject({ code: "liveness_ended" });
+    // The live capture is the selfie, and no head turns follow it.
+    const check = await client.getCheck();
+    expect(check).toMatchObject({ guidedSelfie: true, liveSelfie: true });
+    expect(check!.missing.filter((item) => item.startsWith("pose_"))).toEqual([]);
   });
 
   it("refuses a session for an attempt that is not open, or that is not a transaction", async () => {

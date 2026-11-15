@@ -20,7 +20,7 @@ import { Frame } from "@/identity/PhotoFrame";
 import { StepTop } from "@/identity/Parts";
 import { checkPhoto, photoProblemCopy } from "@/identity/photo";
 import { choosePhoto, PickResult, takePhoto } from "@/identity/pickPhoto";
-import { posesMissing } from "@/identity/poses";
+import { posesMissing, turnsCounted } from "@/identity/poses";
 import { hrefFor, stepAfter } from "@/identity/steps";
 import {
   describeIdentityError,
@@ -159,12 +159,13 @@ export default function TakePhoto() {
   const top = retake ? (
     <BackButton fallback="/id-check" />
   ) : (
-    <StepTop step={kind} documentType={check.documentType} guided={check.guidedSelfie} fallback="/id-check" />
+    <StepTop step={kind} documentType={check.documentType} guided={turnsCounted(check, regulaCanRun() && !camera)} fallback="/id-check" />
   );
 
   if (selfie && check.guidedSelfie && !camera && regulaCanRun()) {
-    // With Regula, the guided selfie starts with Regula's liveness in the app, whose capture is
-    // the selfie; the head turns follow. The guided camera stays as the fallback.
+    // With Regula, the guided selfie is Regula's liveness in the app, whose capture is the
+    // selfie, and nothing follows it (the owner's choice, 2026-11-15). The guided camera, with
+    // its head turns, stays as the fallback.
     return (
       <>
         <Stack.Screen options={{ title }} />

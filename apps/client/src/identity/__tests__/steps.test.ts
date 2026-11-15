@@ -1,4 +1,5 @@
 import { checkPhoto } from "../photo";
+import { headTurns, turnsCounted } from "../poses";
 import { nextStep, stepAfter, stepNumber, stepsFor } from "../steps";
 import { IdentityCheck } from "../types";
 
@@ -67,5 +68,20 @@ describe("a photo from the device", () => {
     expect(stepAfter("selfie", guided([]))).toBeNull();
     // Not guided: pose entries are never asked for.
     expect(nextStep(draft({ missing: ["pose_up"] }))).toBeNull();
+  });
+
+  it("takes no head turns after a selfie a passed live check captured", () => {
+    const live = draft({ guidedSelfie: true, liveSelfie: true, photos: ["front", "back", "selfie"], missing: [] });
+    expect(headTurns(live)).toBe(false);
+    expect(headTurns({ ...live, liveSelfie: false })).toBe(true);
+    expect(stepAfter("selfie", live)).toBeNull();
+    expect(nextStep(live)).toBeNull();
+    // Before the selfie, a build that runs Regula's liveness counts no head turns; a camera selfie
+    // brings them back.
+    const before = draft({ guidedSelfie: true });
+    expect(turnsCounted(before, true)).toBe(false);
+    expect(turnsCounted(before, false)).toBe(true);
+    expect(turnsCounted({ ...before, photos: ["selfie"] }, true)).toBe(true);
+    expect(turnsCounted(live, true)).toBe(false);
   });
 });
