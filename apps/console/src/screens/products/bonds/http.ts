@@ -74,6 +74,9 @@ const FIELD_CODES: readonly BondsErrorCode[] = [
   "matured",
   "currency_not_open",
   "stale",
+  "unknown_type",
+  "wrong_model",
+  "type_retired",
 ];
 
 export function toBondsError(error: unknown): BondsError {
@@ -129,6 +132,7 @@ export function createHttpBondsApi(http: Http): BondsApi {
         face_step_minor: draft.faceStepMinor,
         price: draft.price,
         reason: draft.reason,
+        type_code: draft.typeCode,
       }),
     proposePrice: (code, price, reason) => post("/staff/bond-changes/price", { code, price, reason }),
     proposeStatus: (code, to, reason) => post("/staff/bond-changes/status", { code, to, reason }),

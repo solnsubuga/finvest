@@ -49,6 +49,9 @@ export interface Product {
   rate: Rate | null;
   /** An approved rate that starts later. */
   nextRate: Rate | null;
+  /** The product type staff chose (docs/product-types.md). Absent from older samples. */
+  typeCode?: string | undefined;
+  typeName?: string | undefined;
 }
 
 export interface Proposal {
@@ -113,6 +116,8 @@ export interface NewProductDraft {
   annualRateBps: number;
   taxBps: number;
   reason: string;
+  /** The product type chosen on the New product page. Without it the type follows the kind. */
+  typeCode?: string | undefined;
 }
 
 export interface NewTermsDraft {
@@ -176,6 +181,9 @@ export type CatalogueErrorCode =
   | "no_rate"
   | "currency_not_open"
   | "product_changed"
+  | "unknown_type"
+  | "wrong_model"
+  | "type_retired"
   | "invalid"
   | "conflict"
   | "not_found"
@@ -209,6 +217,9 @@ const MESSAGES: Record<CatalogueErrorCode, string> = {
   no_rate: "This product has no rate in force yet. Approve a rate before opening it.",
   currency_not_open: "Finvest cannot take payments or pay out in this currency yet, so the product stays paused.",
   product_changed: "The product changed after this was proposed. Propose it again against the product as it is now.",
+  unknown_type: "That product type does not exist. Reload the page and choose the type again.",
+  wrong_model: "That product type does not use this form. Choose the type again.",
+  type_retired: "That product type is retired, so no new products of it can be added.",
   invalid: "Finvest did not accept these details. Check them and try again.",
   conflict: "Someone else has already decided this change. The list has been reloaded.",
   not_found: "This change no longer exists.",
