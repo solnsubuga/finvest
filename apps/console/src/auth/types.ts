@@ -106,6 +106,8 @@ export const ACTION_PERMISSIONS = [
   "dealing_orders.change",
   // Approving, rejecting, asking for new photos or escalating an identity check. One person decides.
   "identity_checks.review",
+  // Proposing to close a month, approving or declining someone else's, or withdrawing your own.
+  "finance.close",
   // Recording a payment of withholding tax to URA, approving someone else's, or declining it.
   "tax_remittances.change",
   // Proposing a new mobile number for a client, or approving or rejecting someone else's.

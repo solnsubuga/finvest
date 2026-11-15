@@ -106,7 +106,7 @@ Both need `finance.view` (finance and admin).
 
 The ledger closes day by day. Closing the month is Finance's sign-off that a month is finished. It moves nothing and locks nothing the day closes have not already locked. It records that two people checked the month, and it keeps that month's books exactly as they were signed.
 
-One person proposes closing a month, and a different person approves it. The approval needs a passkey or app code from the last few minutes. The month waits in the approvals inbox as `month_close`, and the proposer may withdraw it while it waits. A proposal is refused with 409 for any of these reasons:
+Seeing the month closes needs `finance.view`. Proposing, approving, declining and withdrawing one needs `finance.close` (finance and admin), so a read-only finance role can never sign a month. One person proposes closing a month, and a different person approves it. The approval needs a passkey or app code from the last few minutes. The month waits in the approvals inbox as `month_close`, and the proposer may withdraw it while it waits. A proposal is refused with 409 for any of these reasons:
 
 | Code | Why |
 | --- | --- |

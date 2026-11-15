@@ -2078,6 +2078,7 @@
       "Blocker": {
         "enum": [
           "investments_running",
+          "investments_unpaid",
           "money_owed",
           "deposits_in_progress",
           "payouts_in_progress",
@@ -13515,11 +13516,36 @@
           "currency": {
             "title": "Currency",
             "type": "string"
+          },
+          "matures_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matures On"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
           }
         },
         "required": [
           "account_code",
           "account_reference",
+          "product_name",
+          "matures_on",
           "amount_minor",
           "currency"
         ],
@@ -19538,6 +19564,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "finance.close",
                 "tax_remittances.change",
                 "products.view",
                 "products.change",
@@ -24515,6 +24542,7 @@
                 "dealing_desk.view",
                 "dealing_orders.change",
                 "finance.view",
+                "finance.close",
                 "tax_remittances.change",
                 "products.view",
                 "products.change",
@@ -25126,10 +25154,15 @@
           "running_investments": {
             "title": "Running Investments",
             "type": "integer"
+          },
+          "unpaid_investments": {
+            "title": "Unpaid Investments",
+            "type": "integer"
           }
         },
         "required": [
           "running_investments",
+          "unpaid_investments",
           "owed",
           "open_deposits",
           "open_payouts",
@@ -30872,14 +30905,22 @@
     },
     "/client/claim": {
       "get": {
-        "description": "The signed-in client's claim. `not_found` for a client who signed up in Finvest 2.0.",
+        "description": "The signed-in client's claim, or null for a client who signed up in Finvest 2.0.\n\nEvery client's app asks on each start, and most have no claim, so that is an ordinary\nanswer and not a 404 in the browser's console.",
         "operationId": "my_claim_client_claim_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ClaimStateView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ClaimStateView"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response My Claim Client Claim Get"
                 }
               }
             },

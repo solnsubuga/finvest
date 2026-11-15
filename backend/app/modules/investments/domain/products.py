@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from app.shared.limits import largest_single_amount
 from app.shared.money import Currency, Money
 
 # Short upper-case codes staff recognise, such as "TREA-91".
@@ -88,6 +89,8 @@ class Refusal(StrEnum):
     CURRENCY_NOT_SUPPORTED = "currency_not_supported"
     AMOUNT_NOT_POSITIVE = "amount_not_positive"
     BELOW_MINIMUM = "below_minimum"
+    # Above the largest single investment Finvest accepts (app.shared.limits).
+    ABOVE_MAXIMUM = "above_maximum"
 
 
 def check_new_investment(product: Product, amount: Money) -> Refusal | None:
@@ -104,6 +107,8 @@ def check_new_investment(product: Product, amount: Money) -> Refusal | None:
         return Refusal.AMOUNT_NOT_POSITIVE
     if amount < product.minimum:
         return Refusal.BELOW_MINIMUM
+    if amount > largest_single_amount(amount.currency):
+        return Refusal.ABOVE_MAXIMUM
     return None
 
 

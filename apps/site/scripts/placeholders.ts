@@ -11,13 +11,17 @@
  *    company name, regulator, licence number) and is still empty. The pages leave a missing
  *    fact out, so only this list shows it.
  *
- * With --strict it fails if anything is left in any of the three lists. Run that before the site is
+ * 4. Every legal document whose wording Finvest's lawyers have not yet reviewed
+ *    (src/data/legal.ts). Set its `stage` to "reviewed" and `reviewedBy` to who and when.
+ *
+ * With --strict it fails if anything is left in any of the four lists. Run that before the site is
  * opened to search engines.
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { company } from "../src/data/company.ts";
+import { legalDocuments } from "../src/data/legal.ts";
 import { missingFacts } from "../src/lib/launch.ts";
 
 const dist = new URL("../dist/", import.meta.url).pathname;
@@ -65,6 +69,14 @@ console.log("\nFacts needed before launch, to be entered in src/data/company.ts:
 for (const key of missing) console.log(`- ${key}`);
 console.log(`\n${missing.length} required fact(s) missing.`);
 
-if (process.argv.includes("--strict") && (found.size > 0 || open.length > 0 || missing.length > 0)) {
+const unreviewed = legalDocuments.filter((document) => document.stage !== "reviewed");
+console.log("\nLegal documents waiting for review by Finvest's lawyers:\n");
+for (const document of unreviewed) console.log(`- ${document.title} (/legal/${document.slug})`);
+console.log(`\n${unreviewed.length} of ${legalDocuments.length} legal document(s) not reviewed.`);
+
+if (
+  process.argv.includes("--strict") &&
+  (found.size > 0 || open.length > 0 || missing.length > 0 || unreviewed.length > 0)
+) {
   process.exit(1);
 }

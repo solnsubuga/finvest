@@ -9,7 +9,7 @@ from app.modules.identity.domain.terms import CURRENT_VERSIONS
 from app.modules.migration import claims
 from app.modules.migration.domain.claim import ClaimStatus
 from app.shared.actors import SYSTEM, Actor
-from tests.integration.test_claims import PASSWORD, Api, api, imported, texted
+from tests.integration.test_claims import PASSWORD, Api, a_phone, api, imported, texted
 
 pytestmark = pytest.mark.integration
 
@@ -139,6 +139,17 @@ async def test_a_link_for_one_account_does_not_finish_another(api: Api) -> None:
     # Its owner can still claim it with its own link and code.
     mine = await complete(api, other_token, started.json()["challenge_id"], other_code)
     assert mine.status_code == 200, mine.text
+
+
+async def test_a_client_who_signed_up_in_the_app_has_no_claim_and_no_404(api: Api) -> None:
+    client_id = await api.identity.create_client(phone=a_phone(), email=None, password=PASSWORD)
+    issued = await api.identity.issue_session(
+        Actor("client", client_id), second_step="passkey", transport="token"
+    )
+    mine = await api.http.get("/client/claim", headers={"Authorization": f"Bearer {issued.token}"})
+    # Every app start asks. Most clients have no claim, which is an answer, not an error.
+    assert mine.status_code == 200, mine.text
+    assert mine.json() is None
 
 
 async def test_signing_in_is_needed_to_see_a_claim(api: Api) -> None:

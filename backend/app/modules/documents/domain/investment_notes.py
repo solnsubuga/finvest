@@ -28,7 +28,7 @@ class InvestmentNote:
     investment_id: str
     product_name: str  # "91 Day Treasury Bill"
     amount: Money
-    rate_percent: str  # "10.63": the yearly rate after tax
+    rate_percent: str  # "10.62": the yearly rate after tax
     start_date: date
     # None for an open term, which earns until the client withdraws.
     term_days: int | None

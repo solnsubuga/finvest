@@ -20,14 +20,14 @@ export const STUB_PRODUCTS: PlanProduct[] = [
     code: "TREA-91",
     name: "91 Day Treasury Bill",
     minimum: { currency: "UGX", minor: 100_000 },
-    ratePercent: "10.63",
+    ratePercent: "10.62",
     termDays: 91,
   },
   {
     code: "TREA-182",
     name: "182 Day Treasury Bill",
     minimum: { currency: "UGX", minor: 200_000 },
-    ratePercent: "11.69",
+    ratePercent: "11.68",
     termDays: 182,
   },
 ];

@@ -128,7 +128,7 @@ async def test_the_website_lists_live_and_paused_products_after_tax(api: Api) ->
     assert response.headers["access-control-allow-origin"] == "*"
     body = response.json()
     by_code = {product["code"]: product for product in body["products"]}
-    assert by_code["TREA-91"]["client_rate_percent"] == "10.63"
+    assert by_code["TREA-91"]["client_rate_percent"] == "10.62"
     assert by_code["TREA-91"]["status"] == "live"
     assert by_code["USD-BOND"]["status"] == "paused"
     assert body["updated_on"] == today().isoformat()
@@ -149,6 +149,11 @@ async def test_the_website_calculator_quotes_after_tax(api: Api) -> None:
     )
     assert (too_small.status_code, code(too_small)) == (422, "validation_failed")
     assert too_small.json()["error"]["fields"][0]["code"] == "below_minimum"
+    too_large = await api.http.get(
+        "/public/quote", params={"product": "TREA-91", "amount_minor": 10_000_000_000_000}
+    )
+    assert (too_large.status_code, code(too_large)) == (422, "validation_failed")
+    assert too_large.json()["error"]["fields"][0]["code"] == "above_maximum"
     unknown = await api.http.get("/public/quote", params={"product": "NOPE", "amount_minor": 5})
     assert unknown.status_code == 404
     paused = await api.http.get(

@@ -577,6 +577,23 @@ async def test_a_wrong_reset_code_changes_nothing(api: Api) -> None:
     assert still.status_code == 200
 
 
+async def test_a_reset_to_the_password_in_use_is_refused_and_keeps_the_code(api: Api) -> None:
+    phone, _ = await a_client(api)
+    started = await api.http.post("/client/password/reset/start", json={"phone": phone})
+    [sent] = await texted(api, phone)
+    body = {"challenge_id": started.json()["challenge_id"], "code": sent}
+    same = await api.http.post(
+        "/client/password/reset/complete", json={**body, "password": PASSWORD}
+    )
+    assert (same.status_code, code(same)) == (422, "validation_failed")
+    assert same.json()["error"]["fields"][0]["code"] == "same_as_now"
+    # Nothing was spent: the same code sets a new password.
+    done = await api.http.post(
+        "/client/password/reset/complete", json={**body, "password": NEW_PASSWORD}
+    )
+    assert done.status_code == 204, done.text
+
+
 async def test_a_signup_code_cannot_reset_a_password(api: Api) -> None:
     phone, _ = await a_client(api)
     started = await api.http.post("/client/signup/start", json={"phone": phone})

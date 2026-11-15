@@ -19,6 +19,7 @@ from app.modules.identity.client_locks import (
 )
 from app.modules.identity.freezes import Freeze
 from app.modules.identity.freezes import freezes as client_freezes
+from app.modules.investments.holdings import get_investments
 from app.modules.kyc.service import (
     CheckSummary,
     check_summary,
@@ -44,6 +45,8 @@ class ClientPage:
     identity_check: CheckSummary | None
     # What Finvest owes the client at the end of today, per ledger account.
     owed: list[ClientOwed]
+    # For each owed line held on an investment, by investment ID: its product and maturity.
+    holdings: dict[str, "HoldingName"]
     destinations: list[DestinationView]
     locks: list[LockChange]
     # Each time the client froze their own account, newest first.
@@ -51,6 +54,14 @@ class ClientPage:
     # None when the member of staff may not see support or complaints.
     conversation: ConversationView | None
     complaints: list[ComplaintView] | None
+
+
+@dataclass(frozen=True, slots=True)
+class HoldingName:
+    """How staff recognise an investment: its product and, for a fixed term, its maturity."""
+
+    product_name: str
+    matures_on: date | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,13 +125,19 @@ async def client_page(
     account = await client_account(session, client_id)
     if account is None:
         return None
+    owed = [item for item in await client_owed_as_of(session, client_id, today) if item.owed.minor]
+    references = sorted({item.account_reference for item in owed if item.account_reference})
+    holdings = {
+        investment.id: HoldingName(investment.product_name, investment.maturity_date)
+        for investment in await get_investments(session, references)
+        if investment.client_id == client_id
+    }
     return ClientPage(
         account=account,
         verified_name=await kyc_verified_name(session, client_id),
         identity_check=await check_summary(session, client_id),
-        owed=[
-            item for item in await client_owed_as_of(session, client_id, today) if item.owed.minor
-        ],
+        owed=owed,
+        holdings=holdings,
         destinations=await destinations_for_client(session, client_id),
         locks=await lock_history(session, client_id),
         freezes=await client_freezes(session, client_id),

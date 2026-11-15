@@ -1,12 +1,12 @@
 /**
  * Each legal page as a PDF, made at build time so "Download as PDF" is a plain link that works
- * without JavaScript. The PDF holds the same structure as the page, including the notice that the
- * wording must still come from Finvest's lawyers.
+ * without JavaScript. The PDF holds the same wording as the page, including the notice while the
+ * wording is still a draft or a layout.
  */
 
 import { colors } from "@finvest/tokens";
 import { PDFDocument, type PDFFont, type PDFPage, rgb, StandardFonts } from "pdf-lib";
-import { layoutOnlyNotice, type LegalDocument, versionLabel } from "../data/legal.ts";
+import { draftNotice, layoutOnlyNotice, type LegalDocument, versionLabel } from "../data/legal.ts";
 
 // A4 in points.
 const PAGE_WIDTH = 595.28;
@@ -110,46 +110,80 @@ export async function legalPdf(document: LegalDocument, address: string): Promis
   y -= 16;
 
   // The notice that the wording is still to come, in the same warm box as on the page.
-  const noticeLines = wrap(`Layout only. ${layoutOnlyNotice}`, regular, 10, TEXT_WIDTH - 28);
-  const noticeHeight = noticeLines.length * 15 + 20;
-  room(noticeHeight);
-  page.drawRectangle({
-    x: MARGIN,
-    y: y - noticeHeight,
-    width: TEXT_WIDTH,
-    height: noticeHeight,
-    color: colour(colors.warningSurface),
-  });
-  let noticeY = y - 10;
-  noticeLines.forEach((line, index) => {
-    noticeY -= 15;
-    const lead = "Layout only.";
-    if (index === 0 && line.startsWith(lead)) {
-      const options = { y: noticeY + 3, size: 10, color: colour(colors.warningText) };
-      page.drawText(lead, { ...options, x: MARGIN + 14, font: bold });
-      page.drawText(line.slice(lead.length), {
-        ...options,
-        x: MARGIN + 14 + bold.widthOfTextAtSize(lead, 10),
-        font: regular,
-      });
-    } else {
-      page.drawText(line, {
-        x: MARGIN + 14,
-        y: noticeY + 3,
-        size: 10,
-        font: regular,
-        color: colour(colors.warningText),
-      });
-    }
-  });
-  y -= noticeHeight + 8;
+  const notice =
+    document.stage === "layout"
+      ? { lead: "Layout only.", text: layoutOnlyNotice }
+      : document.stage === "draft"
+        ? { lead: "Draft for legal review.", text: draftNotice }
+        : null;
+  if (notice) {
+    const noticeLines = wrap(`${notice.lead} ${notice.text}`, regular, 10, TEXT_WIDTH - 28);
+    const noticeHeight = noticeLines.length * 15 + 20;
+    room(noticeHeight);
+    page.drawRectangle({
+      x: MARGIN,
+      y: y - noticeHeight,
+      width: TEXT_WIDTH,
+      height: noticeHeight,
+      color: colour(colors.warningSurface),
+    });
+    let noticeY = y - 10;
+    noticeLines.forEach((line, index) => {
+      noticeY -= 15;
+      if (index === 0 && line.startsWith(notice.lead)) {
+        const options = { y: noticeY + 3, size: 10, color: colour(colors.warningText) };
+        page.drawText(notice.lead, { ...options, x: MARGIN + 14, font: bold });
+        page.drawText(line.slice(notice.lead.length), {
+          ...options,
+          x: MARGIN + 14 + bold.widthOfTextAtSize(notice.lead, 10),
+          font: regular,
+        });
+      } else {
+        page.drawText(line, {
+          x: MARGIN + 14,
+          y: noticeY + 3,
+          size: 10,
+          font: regular,
+          color: colour(colors.warningText),
+        });
+      }
+    });
+    y -= noticeHeight + 8;
+  }
+
+  // A layout keeps its earlier grey text, so its PDF stays as it was. Written wording is in ink.
+  const bodyColour = document.stage === "layout" ? colors.muted : colors.ink;
+
+  /** A list item: a bullet, then its text wrapped beside it. */
+  const bullet = (text: string) => {
+    const indent = 14;
+    wrap(text, regular, 11, TEXT_WIDTH - indent).forEach((line, index) => {
+      room(17);
+      y -= 17;
+      const baseline = y + (17 - 11) / 2;
+      if (index === 0) {
+        page.drawText("\u2022", { x: MARGIN + 2, y: baseline, size: 11, font: regular, color: colour(bodyColour) });
+      }
+      page.drawText(line, { x: MARGIN + indent, y: baseline, size: 11, font: regular, color: colour(bodyColour) });
+    });
+  };
 
   document.sections.forEach((section, index) => {
     // Keep a heading with the first line of its text.
     room(12 + 22 + 17);
     y -= 12;
     lines(`${index + 1}. ${section.heading}`, bold, 13, colors.ink, 22);
-    lines(section.covers, regular, 11, colors.muted, 17);
+    section.body.forEach((block, blockIndex) => {
+      if (blockIndex > 0) y -= 6;
+      if (typeof block === "string") {
+        lines(block, regular, 11, bodyColour, 17);
+      } else {
+        block.list.forEach((item, itemIndex) => {
+          if (itemIndex > 0) y -= 3;
+          bullet(item);
+        });
+      }
+    });
   });
 
   const pages = pdf.getPages();

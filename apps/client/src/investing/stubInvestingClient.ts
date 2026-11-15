@@ -1,4 +1,5 @@
 import { demoClosing } from "@/demo/closing";
+import { isAboveLargest } from "@/investing/limits";
 import { addDemoPayable, demoPaidAt } from "@/demo/payables";
 import { DEMO_GOAL_NAMES, demoInterestComing } from "@/demo/interestToGoal";
 
@@ -39,7 +40,7 @@ const PRODUCTS: (Product & Terms)[] = [
     minimum: { currency: "UGX", minor: 100_000 },
     interestPaid: "at_maturity",
     status: "live",
-    ratePercent: "10.63",
+    ratePercent: "10.62",
     rateBps: 1250,
     taxBps: 1500,
   },
@@ -52,7 +53,7 @@ const PRODUCTS: (Product & Terms)[] = [
     minimum: { currency: "UGX", minor: 200_000 },
     interestPaid: "at_maturity",
     status: "live",
-    ratePercent: "11.69",
+    ratePercent: "11.68",
     rateBps: 1375,
     taxBps: 1500,
   },
@@ -65,7 +66,7 @@ const PRODUCTS: (Product & Terms)[] = [
     minimum: { currency: "USD", minor: 500_00 },
     interestPaid: "monthly",
     status: "paused",
-    ratePercent: "6.89",
+    ratePercent: "6.88",
     rateBps: 725,
     taxBps: 500,
   },
@@ -357,6 +358,9 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
     }
     if (amount.minor < product.minimum.minor) {
       throw new InvestingError("below_minimum");
+    }
+    if (isAboveLargest(amount)) {
+      throw new InvestingError("above_maximum");
     }
     return product;
   }

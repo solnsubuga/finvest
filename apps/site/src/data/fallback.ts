@@ -17,7 +17,7 @@ export const fallback: Catalogue = {
       termDays: 91,
       minimumMinor: 100_000,
       interestPaid: "at_maturity",
-      clientRatePercent: "10.63",
+      clientRatePercent: "10.62",
       status: "live",
     },
     {
@@ -28,7 +28,7 @@ export const fallback: Catalogue = {
       termDays: 182,
       minimumMinor: 200_000,
       interestPaid: "at_maturity",
-      clientRatePercent: "11.69",
+      clientRatePercent: "11.68",
       status: "live",
     },
     {
@@ -39,7 +39,7 @@ export const fallback: Catalogue = {
       termDays: null,
       minimumMinor: 50_000,
       interestPaid: "monthly",
-      clientRatePercent: "6.89",
+      clientRatePercent: "6.88",
       // Paused until paying in and out in dollars is built (docs/decisions.md).
       status: "paused",
     },

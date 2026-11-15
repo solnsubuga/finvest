@@ -1,7 +1,7 @@
 import { operations, type OperationName, type Operations } from "@finvest/api-client/client";
 import type { z } from "zod";
 
-import { API_URL, USES_COOKIE } from "./config";
+import { API_URL, APP_USER_AGENT, USES_COOKIE } from "./config";
 import { reportConnection } from "./connection";
 import { readToken } from "./token";
 
@@ -239,6 +239,7 @@ export async function api<K extends OperationName>(name: K, input: ApiInput<K>):
   };
   const url = `${API_URL}${buildPath(op.path, loose.params)}${buildQuery(loose.query)}`;
   const headers: Record<string, string> = { Accept: "application/json" };
+  if (APP_USER_AGENT) headers["User-Agent"] = APP_USER_AGENT;
   let body: BodyInit | undefined;
   if (op.bodyKind === "json") {
     headers["Content-Type"] = "application/json";

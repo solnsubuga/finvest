@@ -1,3 +1,6 @@
+import { formatAmount } from "@/investing/format";
+import { LARGEST_SINGLE_AMOUNT } from "@/investing/limits";
+
 /** Typing an amount in whole shillings: digits only, grouped by thousands as they are typed. */
 
 /** At most a trillion shillings, far above any goal, and well inside a safe integer. */
@@ -43,4 +46,10 @@ const MONTHS = [
 export function monthYear(day: string): string {
   const [year, month] = day.split("-").map(Number);
   return `${MONTHS[(month ?? 1) - 1]} ${year}`;
+}
+
+/** Why a goal target in shillings cannot be used, or null. The ceiling is the server's too. */
+export function targetTooLarge(shillings: number): string | null {
+  const largest = LARGEST_SINGLE_AMOUNT.UGX;
+  return shillings > largest.minor ? `The largest goal is ${formatAmount(largest)}. Set a smaller target.` : null;
 }

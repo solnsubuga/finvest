@@ -45,9 +45,11 @@ export function createApiClaimClient(): ClaimClient {
   return {
     async getClaim() {
       try {
-        return toClaim(await api("GET /client/claim", {}));
+        // A client who signed up in the app has no claim: the API answers null.
+        const view = await api("GET /client/claim", {});
+        return view === null ? null : toClaim(view);
       } catch (error) {
-        // A client who signed up in the app has no claim. That is not a failure.
+        // What an API from before that change answered instead.
         if (error instanceof ApiError && error.code === "not_found") return null;
         throw toClaimError(error, "read");
       }

@@ -242,11 +242,17 @@ export default function Home() {
                 <View style={styles.wideRow}>
                   <TotalCard portfolio={ready} wide />
                   <View style={styles.tiles}>
-                    <Tile label="Investments" value={figure(ready.outsideGoals.worth)} detail={`${ready.outsideGoals.count} active`} testID="tile-investments" />
+                    <Tile label="Investments" value={figure(ready.outsideGoals.worth)} detail={`${ready.outsideGoals.count} running`} testID="tile-investments" />
                     <Tile
                       label="Goals"
                       value={figure(ready.inGoals.worth)}
-                      detail={ready.openGoals ? plural(ready.openGoals, "goal") : "No goals yet"}
+                      detail={
+                        !ready.openGoals
+                          ? "No goals yet"
+                          : ready.inGoals.count
+                            ? `${plural(ready.openGoals, "goal")}, ${plural(ready.inGoals.count, "saving")} running`
+                            : plural(ready.openGoals, "goal")
+                      }
                       testID="tile-goals"
                     />
                     <Tile

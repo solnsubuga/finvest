@@ -22,6 +22,7 @@ from app.modules.documents.domain import formatting
 from app.modules.documents.domain.checks import shown as shown_code
 from app.modules.documents.domain.statements import ActivityKind, Statement
 from app.shared.money import Currency, Money
+from app.shared.references import short_reference
 
 MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 _BOLD = Font(bold=True)
@@ -144,7 +145,7 @@ def _holdings(sheet: Worksheet, statement: Statement) -> None:
     for holding in statement.holdings:
         rows.add(
             holding.product,
-            holding.reference,
+            short_reference(holding.reference),
             holding.status,
             holding.started_on,
             holding.matures_on,
@@ -166,7 +167,7 @@ def _activity(sheet: Worksheet, statement: Statement) -> None:
             line.on,
             ACTIVITY_NAMES[line.kind],
             line.description,
-            line.reference,
+            short_reference(line.reference),
             line.amount.currency.value,
             line.amount,
         )
