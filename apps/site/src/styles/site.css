@@ -1620,6 +1620,13 @@ a:hover {
   color: var(--fv-color-on-black-muted);
 }
 
+.footer__stores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: var(--fv-space-5);
+}
+
 .footer__links {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1981,6 +1988,54 @@ a:hover {
   .split--form {
     grid-template-columns: minmax(0, 1fr) 520px;
     align-items: start;
+  }
+}
+
+/* About: the team */
+
+.team {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--fv-space-3);
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.team li {
+  display: flex;
+  flex-direction: column;
+}
+
+.team__initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin-bottom: 14px;
+  border-radius: 50%;
+  background: var(--fv-color-lime);
+  color: var(--fv-color-ink);
+  font-size: 22px;
+  font-weight: var(--fv-font-weight-extrabold);
+}
+
+.team strong {
+  font-size: 17px;
+  font-weight: var(--fv-font-weight-extrabold);
+}
+
+.team small {
+  font-size: var(--fv-font-size-md);
+  color: var(--fv-color-muted);
+}
+
+@media (min-width: 900px) {
+  .team {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--fv-space-4);
+    margin-top: var(--fv-space-8);
   }
 }
 

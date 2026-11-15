@@ -6,6 +6,7 @@ import PageTitle from "../components/PageTitle.astro";
 import { supportEmail } from "../config.ts";
 import { company } from "../data/company.ts";
 import { fallback } from "../data/fallback.ts";
+import { initials } from "../lib/company-links.ts";
 import { minimumLabel } from "../lib/format.ts";
 import Base from "../layouts/Base.astro";
 
@@ -94,6 +95,28 @@ const beliefs = [
       </div>
     </div>
   </section>
+
+  {
+    company.team.length > 0 && (
+      <section class="band" id="team">
+        <div class="wrap">
+          <p class="eyebrow">Team</p>
+          <h2 class="h2 h2--small">The people responsible for your money.</h2>
+          <ul class="team">
+            {company.team.map((member) => (
+              <li class="card">
+                <span class="team__initials" aria-hidden="true">
+                  {initials(member.name)}
+                </span>
+                <strong>{member.name}</strong>
+                <small>{member.role}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    )
+  }
 
   <section class="band band--black" id="contact">
     <div class="wrap split split--form">
