@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from app.modules.bonds.domain.coupons import coupon, is_coupon_run_day, is_owed
+from app.modules.bonds.domain.coupons import coupon, due_dates, is_coupon_run_day, is_owed
 from app.modules.bonds.domain.issues import BondIssue, BondStatus
 from app.shared.money import Currency, Money
 
@@ -80,3 +80,16 @@ def test_a_month_end_maturity_pays_on_the_last_day_of_shorter_months() -> None:
 )
 def test_a_holding_is_owed_coupons_dated_after_it_started(start: date | None, owed: bool) -> None:
     assert is_owed(start, date(2026, 11, 14)) is owed
+
+
+def test_a_run_pays_every_coupon_up_to_its_day_so_a_missed_one_is_made_up() -> None:
+    assert due_dates(issue(issue_date=date(2025, 5, 14)), date(2026, 11, 13)) == (
+        date(2025, 11, 14),
+        date(2026, 5, 14),
+    )
+    assert due_dates(issue(), date(2026, 11, 14))[-1] == date(2026, 11, 14)
+
+
+def test_a_run_never_pays_the_coupon_at_maturity() -> None:
+    short = issue(issue_date=date(2025, 5, 14), maturity_date=date(2026, 5, 14))
+    assert due_dates(short, date(2027, 1, 1)) == (date(2025, 11, 14),)

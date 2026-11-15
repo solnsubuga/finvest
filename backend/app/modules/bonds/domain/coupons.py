@@ -3,7 +3,8 @@
 A holding is paid every coupon dated after the business day it started, because the client
 paid the interest accrued up to the quote and the coupon pays the whole period. The last
 coupon falls on the maturity date and is paid with the face value at maturity, not by the
-coupon run.
+coupon run. A run pays every coupon owed up to its day, so one a stopped scheduler missed is
+paid by the next run.
 """
 
 from __future__ import annotations
@@ -39,6 +40,12 @@ def coupon(issue: BondIssue, face: Money) -> Coupon:
 def is_coupon_run_day(issue: BondIssue, on: date) -> bool:
     """Whether the coupon run pays this issue on `on`: a coupon date before maturity."""
     return on < issue.maturity_date and on in coupon_dates(issue)
+
+
+def due_dates(issue: BondIssue, run_date: date) -> tuple[date, ...]:
+    """The coupon dates the run on `run_date` pays: every one before maturity, on or before
+    `run_date`, oldest first. Earlier ones are there so that a missed run is made up."""
+    return tuple(on for on in coupon_dates(issue) if on < issue.maturity_date and on <= run_date)
 
 
 def is_owed(start_date: date | None, coupon_date: date) -> bool:

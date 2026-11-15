@@ -1,7 +1,8 @@
 """Bond coupons: the run that pays them, and what a client does with one that waits.
 
 Every six months, on each coupon date before maturity, the worker pays each holding that
-started before that date its coupon, the way an investment's interest is paid at maturity:
+started before that date its coupon, the way an investment's interest is paid at maturity. Each
+run also pays any coupon an earlier run missed, so a coupon is never lost to a stopped scheduler:
 
 * one ledger entry, `bond.coupon`: the coupon before tax from `interest.expense`, the tax to
   `tax.withholding_payable`, and the rest handed to payouts in the client's "payout pending"
@@ -30,7 +31,13 @@ from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.bonds import holdings
 from app.modules.bonds.catalogue import invalid
-from app.modules.bonds.domain.coupons import HoldReason, coupon, is_coupon_run_day, is_owed
+from app.modules.bonds.domain.coupons import (
+    HoldReason,
+    coupon,
+    due_dates,
+    is_coupon_run_day,
+    is_owed,
+)
 from app.modules.bonds.domain.holdings import HoldingStatus
 from app.modules.bonds.domain.issues import BondIssue, BondStatus
 from app.modules.ledger import service as ledger
@@ -83,17 +90,23 @@ class Batch:
     failed: int
 
 
+# Every issue someone holds, whatever its status: a coupon owed is paid even if the issue has
+# since been paused or matured.
 _ISSUES = text(
-    "SELECT id, code, isin, name, currency, coupon_bps, tax_bps, issue_date, maturity_date, "
-    "minimum_face_minor, face_step_minor, status FROM bond_issues "
-    "WHERE status IN ('live', 'paused') AND maturity_date > :run_date"
+    "SELECT b.id, b.code, b.isin, b.name, b.currency, b.coupon_bps, b.tax_bps, b.issue_date, "
+    "b.maturity_date, b.minimum_face_minor, b.face_step_minor, b.status FROM bond_issues b "
+    "WHERE EXISTS (SELECT FROM bond_holdings h WHERE h.issue_id = b.id AND h.status = 'active')"
 )
+# Holdings owed any of the coupons given as (issue, date) pairs, and not yet paid it.
 _DUE = text(
-    "SELECT h.id FROM bond_holdings h WHERE h.issue_id = ANY(CAST(:issue_ids AS text[])) "
-    "AND h.status = 'active' AND h.start_date < :run_date AND h.id > :after "
+    "SELECT DISTINCT h.id FROM bond_holdings h "
+    "JOIN unnest(CAST(:issue_ids AS text[]), CAST(:dates AS date[])) AS d(issue_id, coupon_date) "
+    "ON d.issue_id = h.issue_id "
+    "WHERE h.status = 'active' AND h.start_date < d.coupon_date AND h.id > :after "
     "AND NOT EXISTS (SELECT FROM bond_coupons c WHERE c.holding_id = h.id "
-    "AND c.coupon_date = :run_date) ORDER BY h.id LIMIT :limit"
+    "AND c.coupon_date = d.coupon_date) ORDER BY h.id LIMIT :limit"
 )
+_PAID_DATES = text("SELECT coupon_date FROM bond_coupons WHERE holding_id = :holding_id")
 _LOCK_HOLDING = text("SELECT id FROM bond_holdings WHERE id = :id FOR UPDATE")
 _EXISTS = text(
     "SELECT 1 FROM bond_coupons WHERE holding_id = :holding_id AND coupon_date = :coupon_date"
@@ -143,46 +156,64 @@ async def pay_batch(
     after: str = "",
     limit: int = BATCH,
 ) -> Batch:
-    """Pay the next holdings owed a coupon dated `run_date`, in ID order after `after`.
+    """Pay the next holdings, in ID order after `after`, every coupon they are owed dated on or
+    before `run_date` and not yet paid.
 
-    Worker only. Each holding is paid inside its own savepoint: one that cannot be paid is left
-    as it was, logged, and stays owed for the run's retry.
+    So a run pays its own day's coupons and any an earlier run missed, however long the
+    scheduler was down. Worker only. Each coupon is paid inside its own savepoint: one that
+    cannot be paid is left as it was, logged, and stays owed for the next run or retry.
     """
     if run_date > business_date(clock.now()):
         # A coupon is never paid before its date.
         raise ApplicationError("conflict")
-    issues = {
-        row.id: _issue(row)
-        for row in (await session.execute(_ISSUES, {"run_date": run_date})).all()
-        if is_coupon_run_day(_issue(row), run_date)
-    }
-    if not issues:
+    issues = {row.id: _issue(row) for row in (await session.execute(_ISSUES)).all()}
+    owed = {issue_id: due_dates(issue, run_date) for issue_id, issue in issues.items()}
+    pairs = [(issue_id, day) for issue_id, days in owed.items() for day in days]
+    if not pairs:
         return Batch(last_id=None, paid=0, held=0, failed=0)
     ids = [
         row.id
         for row in (
             await session.execute(
                 _DUE,
-                {"issue_ids": list(issues), "run_date": run_date, "after": after, "limit": limit},
+                {
+                    "issue_ids": [issue_id for issue_id, _ in pairs],
+                    "dates": [day for _, day in pairs],
+                    "after": after,
+                    "limit": limit,
+                },
             )
         ).all()
     ]
     paid = held = failed = 0
     for holding_id in ids:
-        try:
-            async with session.begin_nested():
-                outcome = await pay_coupon(session, holding_id, run_date, clock)
-        except Exception as error:
-            failed += 1
-            logger.error(
-                "bond_coupon_not_paid", holding_id=holding_id, error_type=type(error).__name__
-            )
-            continue
-        if outcome == CouponStatus.PAID_OUT:
-            paid += 1
-        elif outcome == CouponStatus.HELD:
-            held += 1
+        for coupon_date in await _unpaid_dates(session, holding_id, run_date):
+            try:
+                async with session.begin_nested():
+                    outcome = await pay_coupon(session, holding_id, coupon_date, clock)
+            except Exception as error:
+                failed += 1
+                logger.error(
+                    "bond_coupon_not_paid", holding_id=holding_id, error_type=type(error).__name__
+                )
+                continue
+            if outcome == CouponStatus.PAID_OUT:
+                paid += 1
+            elif outcome == CouponStatus.HELD:
+                held += 1
     return Batch(last_id=ids[-1] if ids else None, paid=paid, held=held, failed=failed)
+
+
+async def _unpaid_dates(session: AsyncSession, holding_id: str, run_date: date) -> list[date]:
+    """The coupon dates on or before `run_date` the holding is owed and not yet paid, oldest
+    first."""
+    holding = await holdings.get_holding(session, holding_id)
+    paid = set((await session.execute(_PAID_DATES, {"holding_id": holding_id})).scalars().all())
+    return [
+        day
+        for day in due_dates(holding.issue, run_date)
+        if is_owed(holding.start_date, day) and day not in paid
+    ]
 
 
 async def pay_coupon(

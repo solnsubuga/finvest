@@ -81,7 +81,8 @@ class BondJobs:
         logger.info("unpaid_bond_holdings_cancelled", count=result.get("cancelled"))
 
     async def pay_coupons(self, job: ClaimedJob, context: JobContext) -> None:
-        """Pay every holding owed a coupon dated the business day this run is for.
+        """Pay every holding every coupon it is owed dated on or before the business day this
+        run is for, so a run also makes up any an earlier one missed.
 
         The day comes from the time the run was scheduled for, so a run that is late or retried
         still pays its own day's coupons. Holdings are paid a batch at a time, each batch in a

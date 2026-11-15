@@ -607,7 +607,7 @@ async def client_pay_out_coupon(
 ) -> BondCouponOut:
     """Send on a coupon that is waiting for a destination.
 
-    Safe to repeat: the payout's key is `bond-coupon:<coupon id>:<destination id>`. 428
+    A repeat after it was sent on is refused with 409 `conflict`, never paid twice. 428
     `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh
     confirmation for `withdrawal`.
     """

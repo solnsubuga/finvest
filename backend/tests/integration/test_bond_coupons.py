@@ -335,3 +335,29 @@ async def test_the_database_lets_only_the_worker_pay_and_the_owner_send_on(
                 await session.execute(
                     text("DELETE FROM bond_coupons WHERE id = :id"), {"id": held.id}
                 )
+
+
+async def test_a_later_run_pays_a_coupon_an_earlier_run_missed(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = now()
+    day = coupon_day()
+    client = await approved_client(app_database, clock)
+    async with live_issue(app_database, clock, **dates_for(day)) as code:
+        holding = await active(app_database, worker_database, client, code, clock)
+        # The scheduler was down on the coupon date. Three days later is not a coupon date,
+        # but that day's run pays the coupon all the same, once.
+        later = day + timedelta(days=3)
+        assert await run_coupon_job(worker_database, later) == ("succeeded", None)
+        [paid] = await coupon_rows(worker_database, holding.id)
+        assert (paid.coupon_date, paid.net, paid.status) == (
+            day,
+            ugx(72_000),
+            coupons.CouponStatus.HELD,
+        )
+        assert await run_coupon_job(worker_database, later + timedelta(days=1)) == (
+            "succeeded",
+            None,
+        )
+        assert len(await coupon_rows(worker_database, holding.id)) == 1
+        assert await coupon_entries(worker_database, holding.id) == 1

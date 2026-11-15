@@ -33479,7 +33479,7 @@
     },
     "/client/bond-coupons/{coupon_id}/pay-out": {
       "post": {
-        "description": "Send on a coupon that is waiting for a destination.\n\nSafe to repeat: the payout's key is `bond-coupon:<coupon id>:<destination id>`. 428\n`pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh\nconfirmation for `withdrawal`.",
+        "description": "Send on a coupon that is waiting for a destination.\n\nA repeat after it was sent on is refused with 409 `conflict`, never paid twice. 428\n`pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh\nconfirmation for `withdrawal`.",
         "operationId": "client_pay_out_coupon_client_bond_coupons__coupon_id__pay_out_post",
         "parameters": [
           {
