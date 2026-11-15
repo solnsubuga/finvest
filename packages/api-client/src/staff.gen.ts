@@ -951,6 +951,8 @@ export const OwedView = z.object({
   account_reference: z.string().nullable(),
   amount_minor: z.number().int(),
   currency: z.string(),
+  matures_on: z.string().nullable(),
+  product_name: z.string().nullable(),
 });
 export type OwedView = z.infer<typeof OwedView>;
 

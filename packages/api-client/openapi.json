@@ -13516,11 +13516,36 @@
           "currency": {
             "title": "Currency",
             "type": "string"
+          },
+          "matures_on": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matures On"
+          },
+          "product_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Name"
           }
         },
         "required": [
           "account_code",
           "account_reference",
+          "product_name",
+          "matures_on",
           "amount_minor",
           "currency"
         ],
