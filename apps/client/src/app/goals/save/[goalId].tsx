@@ -14,6 +14,7 @@ import { describeGoalError, Goal, GoalError, outcomeUnknown } from "@/goals/type
 import { formatMoney } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
+import { rememberGoalSaving } from "@/payments/payingFor";
 import { colors } from "@/theme";
 import { IdCheckPrompt } from "@/identity/Parts";
 
@@ -65,6 +66,7 @@ export default function SaveToGoal() {
     setBusy(true);
     try {
       const saving = await client.saveToGoal(goalId, { currency: "UGX", minor: value }, idempotencyKey);
+      if (goal) rememberGoalSaving(saving.investmentId, { goalId, goalName: goal.name });
       router.replace(`/pay/${saving.investmentId}`);
     } catch (caught) {
       setNeedsId(caught instanceof GoalError && caught.code === "not_verified");

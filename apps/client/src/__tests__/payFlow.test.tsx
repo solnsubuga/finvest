@@ -69,6 +69,13 @@ jest.mock("@/support/stubSupportClient", () => {
 
 jest.mock("@/payments/pollInterval", () => ({ POLL_MS: 25 }));
 
+/** When set, the payment is a saving the client started from this goal. */
+const mockGoal: { saving: { goalId: string; goalName: string } | null } = { saving: null };
+jest.mock("@/payments/payingFor", () => ({
+  ...jest.requireActual("@/payments/payingFor"),
+  goalSavingFor: () => mockGoal.saving,
+}));
+
 /** Pesapal's page, which the demo stands in for with the app's own return page. */
 const mockOpened: string[] = [];
 jest.mock("@/payments/openCardPage", () => ({
@@ -100,6 +107,7 @@ async function advance(ms: number) {
 }
 
 beforeEach(() => {
+  mockGoal.saving = null;
   mockPay.mockClear();
   mockOpened.length = 0;
   mockScenario.code = "00";
@@ -148,6 +156,23 @@ describe("paying for an investment by mobile money", () => {
 
     await fireEvent.press(screen.getByTestId("receipt-done"));
     await screen.findByTestId("home");
+  });
+
+  it("names the goal a saving is for, says what happens next and goes back to the goal", async () => {
+    mockGoal.saving = { goalId: "demo-goal-fees", goalName: "Daniel's school fees" };
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await advance(8_000);
+    await screen.findByText("Completed");
+    expect(screen.getByText("Saved for Daniel's school fees, in 91 Day Treasury Bill")).toBeTruthy();
+    expect(screen.queryByText(/school fees: 91 Day/)).toBeNull();
+    expect(
+      screen.getByText(
+        "Your money is in. It is invested in 91 Day Treasury Bill and starts earning tomorrow. You can follow it on Daniel's school fees.",
+      ),
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText("Back to your goal"));
+    expect(screen).toHavePathname("/goals/demo-goal-fees");
   });
 
   it("pays on Pesapal's page from the client's own number when Settings choose Pesapal", async () => {

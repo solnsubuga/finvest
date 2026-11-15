@@ -9,6 +9,7 @@ import { Icon } from "@/components/Icon";
 import { Screen } from "@/components/Screen";
 import { Txt } from "@/components/Txt";
 import { formatDateTime, formatMoney, networkName, networkProduct } from "@/payments/format";
+import { goalSavingFor } from "@/payments/payingFor";
 import { Detail, DetailList, Loading, ShareNote } from "@/payments/Parts";
 import { asText, shareText, ShareOutcome } from "@/payments/share";
 import { useDeposit } from "@/payments/useDeposit";
@@ -20,7 +21,9 @@ export default function Receipt() {
   const { depositId } = useLocalSearchParams<{ depositId: string }>();
   const { deposit, missing, stale } = useDeposit(depositId);
   const pdf = useDocumentFor("receipt", depositId);
-  const done = () => router.replace("/");
+  const goal = deposit ? goalSavingFor(deposit.payable.id) : null;
+  // A saving goes back to its goal, where the client was. Anything else goes Home.
+  const done = () => (goal ? router.dismissTo(`/goals/${goal.goalId}`) : router.replace("/"));
   const [shared, setShared] = useState<ShareOutcome | null>(null);
 
   if (missing) {
@@ -52,6 +55,10 @@ export default function Receipt() {
   }
 
   const network = networkName[deposit.network];
+  // A saving's title already leads with its goal ("Daniel's school fees: 91 Day Treasury Bill").
+  const product = goal && deposit.payable.title.startsWith(`${goal.goalName}: `)
+    ? deposit.payable.title.slice(goal.goalName.length + 2)
+    : deposit.payable.title;
   const rows: Detail[] = [
     { label: "Date and time", value: formatDateTime(deposit.confirmedAt) },
     { label: "Paid from", value: networkProduct[deposit.network] },
@@ -63,7 +70,17 @@ export default function Receipt() {
   rows.push({ label: "Finvest reference", value: deposit.reference });
   // The number is already masked as the PDF receipt masks it.
   const share = async () =>
-    setShared(await shareText("Finvest receipt", asText(`Finvest receipt: ${formatMoney(deposit.amount)} paid into ${deposit.payable.title}`, rows)));
+    setShared(
+      await shareText(
+        "Finvest receipt",
+        asText(
+          goal
+            ? `Finvest receipt: ${formatMoney(deposit.amount)} saved for ${goal.goalName}, in ${product}`
+            : `Finvest receipt: ${formatMoney(deposit.amount)} paid into ${deposit.payable.title}`,
+          rows,
+        ),
+      ),
+    );
 
   return (
     <Screen
@@ -71,7 +88,7 @@ export default function Receipt() {
       footer={
         <>
           <Button label="Share receipt" variant="secondary" onPress={share} testID="receipt-share" />
-          <Button label="Done" onPress={done} testID="receipt-done" />
+          <Button label={goal ? "Back to your goal" : "Done"} onPress={done} testID="receipt-done" />
           <TextLink
             label="Something wrong with this?"
             onPress={() => router.push({ pathname: "/support/complaints/new", params: { payment: deposit.reference } })}
@@ -97,7 +114,16 @@ export default function Receipt() {
         >
           {formatMoney(deposit.amount)}
         </Txt>
-        <Txt color={colors.muted}>{`Paid into ${deposit.payable.title}`}</Txt>
+        <Txt color={colors.muted} style={{ textAlign: "center" }}>
+          {goal ? `Saved for ${goal.goalName}, in ${product}` : `Paid into ${deposit.payable.title}`}
+        </Txt>
+      </View>
+      <View style={{ marginTop: 20 }}>
+        <Notice tone="neutral">
+          {goal
+            ? `Your money is in. It is invested in ${product} and starts earning tomorrow. You can follow it on ${goal.goalName}.`
+            : `Your money is in. It is invested in ${deposit.payable.title} and starts earning tomorrow. You can follow it in Portfolio.`}
+        </Notice>
       </View>
       <View style={{ marginTop: 24 }}>
         <DetailList rows={rows} />
