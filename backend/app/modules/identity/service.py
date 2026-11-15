@@ -49,7 +49,7 @@ AccountKind = Literal["client", "staff"]
 # Wrong guesses allowed in fifteen minutes: against one account from one address, against one
 # account from anywhere, and from one address against any account. The first is the tightest so
 # that someone guessing from elsewhere cannot easily lock the owner out.
-ACCOUNT_FROM_ADDRESS_ATTEMPTS = 5
+ACCOUNT_FROM_ADDRESS_ATTEMPTS = 4  # Solo, 2026-11-15
 ACCOUNT_ATTEMPTS = 20
 ADDRESS_ATTEMPTS = 50
 TOUCH_INTERVAL = timedelta(minutes=1)

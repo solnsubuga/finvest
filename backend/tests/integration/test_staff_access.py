@@ -176,7 +176,10 @@ async def test_cloudflare_unavailable_is_tried_again_after_asking_first(
     assert trying["state"] == "waiting" and trying["error_code"] == "cloudflare_unavailable"
 
     access.mode = "ok"
-    api.clock.advance(minutes=20)
+    # Twenty minutes for the job to come due, with the console in use so its session stays open.
+    api.clock.advance(minutes=10)
+    await access_of(api, staff_id)
+    api.clock.advance(minutes=10)
     await run_due(run)
     assert email in access.emails
     settled = await access_of(api, staff_id)
@@ -260,7 +263,10 @@ async def test_a_deactivation_approved_during_an_add_still_ends_off_the_list(
     # The invite's job saw the team change after its add, so it did not record "in access".
     assert (await access_of(api, staff_id) or {})["state"] == "waiting"
 
-    api.clock.advance(minutes=20)
+    # Twenty minutes for the job to come due, with the console in use so its session stays open.
+    api.clock.advance(minutes=10)
+    await access_of(api, staff_id)
+    api.clock.advance(minutes=10)
     await run_due(run)
     assert email not in access.emails
     assert (await access_of(api, staff_id) or {})["state"] == "removed"

@@ -41,7 +41,7 @@ Status is **Met** (checked in the code or configuration named), **Fixed** (a gap
 | Requirement | Status | Where |
 | --- | --- | --- |
 | Session cookie `Secure`, `HttpOnly`, `SameSite=Strict` | Met | `backend/app/modules/identity/api.py` |
-| Idle and absolute timeouts per audience | Met | `Settings`: client web 15 minutes and 12 hours, staff 30 minutes and 12 hours. The staff idle time can be changed on the console's Settings by two people, and staff can be kept to office networks ([platform-settings.md](platform-settings.md)) |
+| Idle and absolute timeouts per audience | Met | `Settings`: client web 10 minutes and 8 hours, staff 15 minutes and 12 hours. The phone app stays signed in for 30 days unused and 90 at most, and asks for the PIN after 5 minutes away. The staff idle time can be changed on the console's Settings by two people, and staff can be kept to office networks ([platform-settings.md](platform-settings.md)) |
 | Sign out ends the session on the server | Met | `/sign-out` |
 | A new session on every sign in | Met | `session_opened` |
 | People can see their signed-in devices and sign the others out, and are told of a sign-in from a new device | Met | `/client/sessions`, `/staff/sessions`, the `new_sign_in` message |

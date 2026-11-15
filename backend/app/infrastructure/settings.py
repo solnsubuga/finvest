@@ -60,11 +60,11 @@ class Settings(BaseSettings):
     # Off only for local development over plain http.
     cookie_secure: bool = True
     # Client on the web, client on a phone (the app's PIN guards it between uses), and staff.
-    client_web_session_idle_minutes: int = Field(default=15, ge=5, le=120)
-    client_web_session_absolute_hours: int = Field(default=12, ge=1, le=24)
+    client_web_session_idle_minutes: int = Field(default=10, ge=5, le=120)
+    client_web_session_absolute_hours: int = Field(default=8, ge=1, le=24)
     client_app_session_idle_days: int = Field(default=30, ge=1, le=90)
     client_app_session_absolute_days: int = Field(default=90, ge=1, le=365)
-    staff_session_idle_minutes: int = Field(default=30, ge=5, le=240)
+    staff_session_idle_minutes: int = Field(default=15, ge=5, le=240)
     staff_session_absolute_hours: int = Field(default=12, ge=1, le=24)
     password_memory_kib: int = Field(default=65_536, ge=19_456, le=1_048_576)
     password_time_cost: int = Field(default=3, ge=2, le=10)

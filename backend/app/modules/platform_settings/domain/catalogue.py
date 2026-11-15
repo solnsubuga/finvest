@@ -569,7 +569,7 @@ DEFINITIONS: dict[Key, Definition] = {
         _idle,
         lambda value: value.minutes,
         # The same as the deploy setting's own default (`staff_session_idle_minutes`).
-        lambda _year: StaffIdleMinutes(30),
+        lambda _year: StaffIdleMinutes(15),
     ),
     "office_networks": Definition(
         "office_networks",

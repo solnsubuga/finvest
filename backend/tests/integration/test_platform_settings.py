@@ -47,7 +47,7 @@ async def propose(
     database: Database,
     staff: Actor,
     clock: FakeClock,
-    value: object = 15,
+    value: object = 10,
     key: str = "staff_idle_minutes",
     check: service.ApprovalCheck = ANYWHERE,
 ) -> service.Proposal:
@@ -92,21 +92,21 @@ async def test_a_value_is_used_only_after_a_second_person_approves(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
     maker, checker = new_staff(), new_staff()
-    assert await idle(app_database, maker, fake_clock) == StaffIdleMinutes(30)
+    assert await idle(app_database, maker, fake_clock) == StaffIdleMinutes(15)
     first = await propose(app_database, maker, fake_clock)
-    assert await idle(app_database, maker, fake_clock) == StaffIdleMinutes(30)
+    assert await idle(app_database, maker, fake_clock) == StaffIdleMinutes(15)
     fake_clock.advance(minutes=1)
     await decide(app_database, checker, first.id, "approved", fake_clock)
     # Read with no one signed in, as a staff session's idle time is.
     async with app_database.transaction() as session:
-        assert await service.staff_idle_minutes(session, fake_clock.now()) == StaffIdleMinutes(15)
+        assert await service.staff_idle_minutes(session, fake_clock.now()) == StaffIdleMinutes(10)
 
     fake_clock.advance(minutes=1)
     second = await propose(app_database, checker, fake_clock, 20)
     async with app_database.actor_transaction(maker) as session:
         listed = {s.key: s for s in await service.list_settings(session, fake_clock.now())}
     setting = listed["staff_idle_minutes"]
-    assert setting.value == StaffIdleMinutes(15) and setting.changed_by == checker.id
+    assert setting.value == StaffIdleMinutes(10) and setting.changed_by == checker.id
     assert setting.proposal is not None and setting.proposal.value == StaffIdleMinutes(20)
     untouched = listed["maturity_reminders"]
     assert untouched.value == MaturityReminders((7, 1)) and untouched.changed_at is None
@@ -161,7 +161,7 @@ async def test_nobody_approves_their_own_value_even_by_writing_the_row(
         await decide(app_database, new_staff(), proposal.id, "withdrawn", fake_clock)
     assert raised.value.code == "forbidden"
     await decide(app_database, maker, proposal.id, "withdrawn", fake_clock)
-    assert await idle(app_database, maker, fake_clock) == StaffIdleMinutes(30)
+    assert await idle(app_database, maker, fake_clock) == StaffIdleMinutes(15)
 
 
 async def test_one_change_waits_per_setting_and_a_decision_is_final(
