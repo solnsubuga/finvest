@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from app.infrastructure.database import Database
 from app.modules.investments import service as investments
 from app.modules.investments.domain.investments import AtMaturity
+from app.modules.investments.domain.products import InterestPaid, ProductKind
 from app.modules.investments.holdings import AWAITING_START
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
@@ -14,11 +15,12 @@ from app.modules.payouts.domain.destinations import MobileMoneyNumber
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
-from app.shared.money import Money
+from app.shared.money import Currency, Money
 from tests.support.clock import FakeClock
 from tests.support.kyc import verify
 from tests.support.ledger import client as new_client
 from tests.support.ledger import key, ugx
+from tests.support.ledger import staff as new_staff
 from tests.support.payouts import approve_by_two, name_from_network
 
 
@@ -175,3 +177,36 @@ async def approved_destination(
     await name_from_network(app_database, view.id, clock)
     await approve_by_two(app_database, view.id, clock)
     return view.id
+
+
+# Earlier than any clock a test sets, so the product and its first rate are in force for all.
+_LONG_AGO = FakeClock(datetime(2026, 1, 1, 9, tzinfo=UTC))
+
+
+async def draft_bill(database: Database, *, term_days: int = 182) -> str:
+    """A draft Treasury bill of its own for a dealing test, made by two people. Its code.
+
+    Tests share one database and never remove what they buy, so anything read per product,
+    such as the latest buy or the bills free to allocate, is a test's own only on a product of
+    its own. A draft takes no client investments and is not in the live catalogue.
+    """
+    code = f"DEAL-{secrets.token_hex(4).upper()}"
+    product = investments.NewProduct(
+        code=code,
+        name=f"{term_days} Day Treasury Bill",
+        kind=ProductKind.TREASURY_BILL,
+        currency=Currency.UGX,
+        term_days=term_days,
+        minimum_minor=500_000,
+        interest_paid=InterestPaid.AT_MATURITY,
+        annual_rate_bps=1500,
+        tax_bps=1500,
+    )
+    maker, checker = new_staff(), new_staff()
+    async with database.actor_transaction(maker) as session:
+        change = await investments.propose_new_product(
+            session, maker, product, "A bill for dealing tests", _LONG_AGO
+        )
+    async with database.actor_transaction(checker) as session:
+        await investments.approve_product_change(session, checker, change.id, _LONG_AGO)
+    return code

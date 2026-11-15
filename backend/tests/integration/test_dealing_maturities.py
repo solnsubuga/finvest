@@ -11,13 +11,15 @@ from sqlalchemy.exc import DBAPIError
 from app.infrastructure.database import Database
 from app.modules.dealing import holdings, maturities
 from app.modules.dealing.domain.orders import OrderKind
-from app.modules.dealing.domain.settlement import BANK_TRUST, BILL_INCOME
+from app.modules.dealing.domain.settlement import BANK_TRUST, BILL_INCOME, LOT_SOURCE_TYPE
+from app.modules.dealing.domain.settlement import accounts as settlement_accounts
 from app.modules.ledger import closing
+from app.modules.ledger import service as ledger
 from app.shared.actors import SYSTEM
+from app.shared.money import Currency
 from tests.integration.test_dealing_settlement import (
     NOW,
     M,
-    balance,
     bought,
     confirm,
     fill,
@@ -67,13 +69,36 @@ async def maturity_of(database: Database, lot: str) -> tuple[int, int, str] | No
     return None if row is None else (row.face_minor, row.cost_minor, row.ledger_entry_id)
 
 
+async def moved(database: Database, entry_id: str, code: str) -> int:
+    """What one entry put on a settlement account, a debit positive. The run pays every lot due
+    in the shared database, so balances move by other tests' lots too: read this lot's entry."""
+    async with database.actor_transaction(new_staff()) as session:
+        account = await ledger.open_account(session, settlement_accounts(Currency.UGX)[code], NOW)
+        entry = await ledger.get_entry(session, entry_id)
+    return sum(line.amount.minor for line in entry.lines if line.account_id == account.id)
+
+
+async def maturity_entries(database: Database, lot: str) -> list[str]:
+    async with database.actor_transaction(new_staff()) as session:
+        return list(
+            (
+                await session.execute(
+                    text(
+                        "SELECT id FROM ledger_journal_entries "
+                        "WHERE source_type = :type AND source_id = :lot"
+                    ),
+                    {"type": LOT_SOURCE_TYPE, "lot": lot},
+                )
+            ).scalars()
+        )
+
+
 async def test_a_lot_is_paid_on_its_maturity_date_and_leaves_the_holdings(
     app_database: Database, worker_database: Database
 ) -> None:
     matures_on = maturity()
     order = await bought(app_database, 100 * M, 97 * M, matures_on)
     lot = await lot_id(app_database, order.id)
-    bank, income = await balance(app_database, BANK_TRUST), await balance(app_database, BILL_INCOME)
 
     await run(worker_database, matures_on - timedelta(days=1))
     assert await maturity_of(app_database, lot) is None
@@ -82,8 +107,9 @@ async def test_a_lot_is_paid_on_its_maturity_date_and_leaves_the_holdings(
     recorded_maturity = await maturity_of(app_database, lot)
     assert recorded_maturity is not None
     assert recorded_maturity[:2] == (100 * M, 97 * M)
-    assert await balance(app_database, BANK_TRUST) == bank + 100 * M
-    assert await balance(app_database, BILL_INCOME) == income + 3 * M
+    assert await maturity_entries(app_database, lot) == [recorded_maturity[2]]
+    assert await moved(app_database, recorded_maturity[2], BANK_TRUST) == 100 * M
+    assert await moved(app_database, recorded_maturity[2], BILL_INCOME) == -3 * M
     async with worker_database.actor_transaction(SYSTEM) as session:
         held = await holdings.holdings_on(session, matures_on)
         movements = await holdings.expected_bank_movements(
@@ -146,7 +172,6 @@ async def test_running_twice_or_twice_at_once_pays_a_lot_once(
 ) -> None:
     matures_on = maturity()
     lot = await lot_id(app_database, (await bought(app_database, 100 * M, 97 * M, matures_on)).id)
-    bank = await balance(app_database, BANK_TRUST)
     barrier = AsyncBarrier(2)
 
     async def once() -> None:
@@ -156,8 +181,11 @@ async def test_running_twice_or_twice_at_once_pays_a_lot_once(
 
     await asyncio.gather(once(), once())
     await run(worker_database, matures_on)
-    assert await maturity_of(app_database, lot) is not None
-    assert await balance(app_database, BANK_TRUST) == bank + 100 * M
+    recorded_maturity = await maturity_of(app_database, lot)
+    assert recorded_maturity is not None
+    # One entry for the lot, paying its face into the bank once.
+    assert await maturity_entries(app_database, lot) == [recorded_maturity[2]]
+    assert await moved(app_database, recorded_maturity[2], BANK_TRUST) == 100 * M
 
 
 async def test_bills_that_have_matured_cannot_be_sold(

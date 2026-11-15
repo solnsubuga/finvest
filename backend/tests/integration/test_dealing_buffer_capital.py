@@ -75,6 +75,14 @@ async def approve(database: Database, staff: Actor, movement_id: str) -> capital
         return await capital.approve(session, staff, movement_id, NOW)
 
 
+async def paid_in_at_least(database: Database, cents: int) -> None:
+    """Make what Finvest has paid in at least `cents`, so the buffer, not what was paid in,
+    is what limits taking money out. On a fresh database nothing has been paid in yet."""
+    short = cents - (await paid_in(database)).minor
+    if short > 0:
+        await pay_in(database, short)
+
+
 def refusal(error: pytest.ExceptionInfo[ApplicationError]) -> str:
     return error.value.fields[0].code
 
@@ -159,6 +167,7 @@ async def test_taking_out_is_refused_beyond_what_was_paid_in_or_what_the_buffer_
 async def test_taking_out_is_checked_again_when_approved_and_dated_that_day(
     app_database: Database,
 ) -> None:
+    await paid_in_at_least(app_database, 1_000_000)
     await set_buffer(app_database, 0)
     await pay_in(app_database, 600_000)
     first = await propose(app_database, new_staff(), Direction.OUT, 400_000)
@@ -181,6 +190,7 @@ async def test_taking_out_is_checked_again_when_approved_and_dated_that_day(
 async def test_two_approvals_at_once_never_take_out_more_than_the_buffer(
     app_database: Database,
 ) -> None:
+    await paid_in_at_least(app_database, 1_000_000)
     await set_buffer(app_database, 0)
     await pay_in(app_database, 600_000)
     movements = [await propose(app_database, new_staff(), Direction.OUT, 400_000) for _ in "ab"]
