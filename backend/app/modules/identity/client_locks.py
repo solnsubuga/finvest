@@ -30,7 +30,8 @@ RESOURCE = "client_lock"
 MAX_REASON = 500
 LockKind = Literal["lock", "unlock"]
 Decision = Literal["approved", "rejected", "withdrawn"]
-ClientStatus = Literal["active", "locked", "closed"]
+# `unclaimed`: carried over from the paper register and not signed up yet (migration 0009).
+ClientStatus = Literal["unclaimed", "active", "locked", "closed"]
 logger = structlog.get_logger()
 
 
