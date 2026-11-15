@@ -12,8 +12,8 @@ from typing import Final, Literal
 TermsDocument = Literal["terms", "privacy"]
 
 CURRENT_VERSIONS: Final[dict[TermsDocument, str]] = {
-    "terms": "2026-11-14",
-    "privacy": "2026-11-14",
+    "terms": "2026-11-15",
+    "privacy": "2026-11-15",
 }
 
 # How a client came to agree: by signing up, or by claiming an account moved over from paper

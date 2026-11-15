@@ -23,7 +23,8 @@ export const quoteEndpoint = `${apiUrl}/public/quote`;
 /** Search engines are kept out until the owner says launch. */
 export const indexable = import.meta.env.PUBLIC_INDEXABLE === "true";
 
-export const supportEmail = "support@finvestug.com";
+/** Kept with the other facts about Finvest, so scripts run outside the build can read it too. */
+export { supportEmail } from "./data/company.ts";
 
 /** Where the statement check page asks whether a code is on a statement Finvest issued. */
 export const statementCheckEndpoint = `${apiUrl}/public/statement-checks`;
