@@ -11,12 +11,20 @@ ARG PUBLIC_APP_URL
 ARG PUBLIC_API_URL
 # true lets search engines in. Off until launch (docs/decisions.md).
 ARG PUBLIC_INDEXABLE=false
+# The phone apps' identities for /.well-known (apps/site/src/lib/app-association.ts). Empty lists
+# no app. The team ID is 10 characters; the fingerprints are comma-separated SHA-256 values.
+ARG PUBLIC_APPLE_TEAM_ID=
+ARG PUBLIC_ANDROID_CERT_SHA256=
 RUN for url in "$PUBLIC_SITE_URL" "$PUBLIC_APP_URL" "$PUBLIC_API_URL"; do \
       echo "$url" | grep -Eq '^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?$' || { echo "Not an https origin: '$url'" >&2; exit 1; }; \
     done; \
-    test "$PUBLIC_INDEXABLE" = true || test "$PUBLIC_INDEXABLE" = false
+    test "$PUBLIC_INDEXABLE" = true || test "$PUBLIC_INDEXABLE" = false; \
+    test -z "$PUBLIC_APPLE_TEAM_ID" || echo "$PUBLIC_APPLE_TEAM_ID" | grep -Eq '^[A-Z0-9]{10}$' || { echo "Not an Apple team ID" >&2; exit 1; }; \
+    test -z "$PUBLIC_ANDROID_CERT_SHA256" || echo "$PUBLIC_ANDROID_CERT_SHA256" | tr -d ' ' \
+      | grep -Eq '^[0-9A-F]{2}(:[0-9A-F]{2}){31}(,[0-9A-F]{2}(:[0-9A-F]{2}){31})*$' || { echo "Not SHA-256 fingerprints" >&2; exit 1; }
 ENV PUBLIC_SITE_URL=$PUBLIC_SITE_URL PUBLIC_APP_URL=$PUBLIC_APP_URL PUBLIC_API_URL=$PUBLIC_API_URL \
-    PUBLIC_INDEXABLE=$PUBLIC_INDEXABLE ASTRO_TELEMETRY_DISABLED=1 CI=true
+    PUBLIC_INDEXABLE=$PUBLIC_INDEXABLE PUBLIC_APPLE_TEAM_ID=$PUBLIC_APPLE_TEAM_ID \
+    PUBLIC_ANDROID_CERT_SHA256=$PUBLIC_ANDROID_CERT_SHA256 ASTRO_TELEMETRY_DISABLED=1 CI=true
 RUN corepack enable
 WORKDIR /src
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./

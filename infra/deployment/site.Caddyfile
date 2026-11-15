@@ -14,6 +14,14 @@
 	handle /health/live {
 		respond "ok" 200
 	}
+	# The phone apps' association files (apps/site/src/lib/app-association.ts). Apple reads the one
+	# without an extension and needs it as JSON, served directly with no redirect.
+	@app_links path /.well-known/apple-app-site-association /.well-known/assetlinks.json
+	handle @app_links {
+		header Content-Type application/json
+		header Cache-Control "public, max-age=300"
+		file_server
+	}
 	# Hashed file names never change, so they can be cached for a year.
 	@hashed {
 		path /_astro/*
