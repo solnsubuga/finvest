@@ -253,7 +253,9 @@ _DOCUMENT_TAKEN = text(
 )
 _PHOTOS = text(
     "SELECT id, kind, storage_key, content_type, byte_size, created_at, source FROM kyc_photos "
-    "WHERE check_id = :check_id AND replaced_at IS NULL ORDER BY kind"
+    "WHERE check_id = :check_id AND replaced_at IS NULL "
+    # In the order a reviewer reads them: the front of the ID, its back, then the selfie.
+    "ORDER BY CASE kind WHEN 'front' THEN 0 WHEN 'back' THEN 1 ELSE 2 END"
 )
 _PROVIDER_PHOTOS = text(
     "SELECT kind, storage_key, sha256, content_type FROM kyc_photos "

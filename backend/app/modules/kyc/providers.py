@@ -1,5 +1,7 @@
 """Identity provider adapters. The provider is not chosen yet; see docs/identity-checks.md."""
 
+from pathlib import Path
+
 from app.modules.kyc.domain.face_confirmations import (
     MatchAnswer,
     MatchNotRun,
@@ -73,16 +75,17 @@ class DevelopmentStubProvider:
         )
 
 
-# The smallest JPEG header the photo check accepts. Not a picture: the stub captures nothing.
-STUB_CAPTURE = b"\xff\xd8\xff\xe0 development stub capture"
+# A grey outline of a head and shoulders, so the stand-in capture shows as a picture in the
+# console and the app instead of a broken image. Not anyone's face: the stub captures nothing.
+STUB_CAPTURE = (Path(__file__).parent / "development-stub-selfie.jpg").read_bytes()
 
 
 class DevelopmentStubLiveness:
     """Pretends to run a liveness check, for local development only. It checks nothing.
 
     The page it hands out is a placeholder, and the first read says a live person was seen,
-    with a stand-in capture. Paired only with `DevelopmentStubProvider`, so it is refused in
-    production and never approves a client.
+    with a stand-in capture: a grey outline of a head and shoulders. Paired only with
+    `DevelopmentStubProvider`, so it is refused in production and never approves a client.
     """
 
     name = "development-stub"

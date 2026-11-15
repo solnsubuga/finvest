@@ -68,6 +68,9 @@ export function toQueueItem(json: QueueJson): QueueItem {
   };
 }
 
+/** The order a reviewer reads the photos in: the front of the ID, its back, then the selfie. */
+const PHOTO_ORDER: Record<PhotoKind, number> = { front: 0, back: 1, selfie: 2 };
+
 export function toCheck(json: CheckJson, links: PhotoLinksJson | null): CheckDetail {
   const urls = new Map((links?.photos ?? []).map((photo) => [photo.id, photo.url]));
   return {
@@ -78,11 +81,13 @@ export function toCheck(json: CheckJson, links: PhotoLinksJson | null): CheckDet
     documentNumberMasked: json.document_number_masked,
     dateOfBirth: json.date_of_birth,
     documentExpiresOn: json.document_expires_on,
-    photos: json.photos.map((photo) => ({
-      kind: photo.kind,
-      url: urls.get(photo.id) ?? null,
-      live: photo.live === true,
-    })),
+    photos: [...json.photos]
+      .sort((a, b) => PHOTO_ORDER[a.kind] - PHOTO_ORDER[b.kind])
+      .map((photo) => ({
+        kind: photo.kind,
+        url: urls.get(photo.id) ?? null,
+        live: photo.live === true,
+      })),
     automaticChecks: json.automatic_checks.map((item) => ({ check: item.check, verdict: item.verdict, score: item.score })),
     phoneName: json.phone_name
       ? {
