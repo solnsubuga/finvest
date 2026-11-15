@@ -17,7 +17,7 @@ from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
 from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.dealing import desk as desk_view
-from app.modules.dealing import orders
+from app.modules.dealing import last_buys, orders
 from app.modules.dealing.domain.liquidity import BufferLevel
 from app.modules.dealing.domain.orders import Action, Fill, InvalidOrder, OrderKind, OrderStatus
 from app.modules.dealing.domain.position import Cover
@@ -281,6 +281,50 @@ async def _order_currency(request: Request, staff: StaffSession, order_id: str) 
 # Routes -----------------------------------------------------------------------------------------
 
 router = APIRouter(prefix="/staff/dealing", tags=["dealing desk"], responses=_REFUSALS)
+
+
+RateReader = Annotated[StaffSession, Depends(require_permission("rates.view"))]
+
+
+class LastBuyOut(Contract):
+    product_code: str
+    # A bid at a Bank of Uganda auction, rather than a purchase from another holder.
+    at_auction: bool
+    face_minor: int
+    paid_minor: int
+    currency: Currency
+    settled_on: date
+    matures_on: date
+    # The simple yearly yield before tax, in basis points, rounded down.
+    yearly_yield_bps: int | None
+
+
+class LastBuysOut(Contract):
+    buys: list[LastBuyOut]
+
+
+@router.get("/last-buys")
+async def get_last_buys(request: Request, staff: RateReader) -> LastBuysOut:
+    """The latest bills bought for each product and what they yield before tax, for the Rates
+    screen. Only settled purchases count."""
+    database: Database = request.app.state.database
+    async with database.actor_transaction(staff.actor) as session:
+        found = await last_buys.last_buys(session)
+    return LastBuysOut(
+        buys=[
+            LastBuyOut(
+                product_code=buy.product_code,
+                at_auction=buy.at_auction,
+                face_minor=buy.face.minor,
+                paid_minor=buy.paid.minor,
+                currency=buy.face.currency,
+                settled_on=buy.settled_on,
+                matures_on=buy.matures_on,
+                yearly_yield_bps=buy.yearly_yield_bps,
+            )
+            for buy in found
+        ]
+    )
 
 
 @router.get("/desk")

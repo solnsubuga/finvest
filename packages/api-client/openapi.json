@@ -9970,6 +9970,80 @@
         "title": "Kind",
         "type": "string"
       },
+      "LastBuyOut": {
+        "additionalProperties": false,
+        "properties": {
+          "at_auction": {
+            "title": "At Auction",
+            "type": "boolean"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "face_minor": {
+            "title": "Face Minor",
+            "type": "integer"
+          },
+          "matures_on": {
+            "format": "date",
+            "title": "Matures On",
+            "type": "string"
+          },
+          "paid_minor": {
+            "title": "Paid Minor",
+            "type": "integer"
+          },
+          "product_code": {
+            "title": "Product Code",
+            "type": "string"
+          },
+          "settled_on": {
+            "format": "date",
+            "title": "Settled On",
+            "type": "string"
+          },
+          "yearly_yield_bps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yearly Yield Bps"
+          }
+        },
+        "required": [
+          "product_code",
+          "at_auction",
+          "face_minor",
+          "paid_minor",
+          "currency",
+          "settled_on",
+          "matures_on",
+          "yearly_yield_bps"
+        ],
+        "title": "LastBuyOut",
+        "type": "object"
+      },
+      "LastBuysOut": {
+        "additionalProperties": false,
+        "properties": {
+          "buys": {
+            "items": {
+              "$ref": "#/components/schemas/LastBuyOut"
+            },
+            "title": "Buys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "buys"
+        ],
+        "title": "LastBuysOut",
+        "type": "object"
+      },
       "LedgerCodeOut": {
         "additionalProperties": false,
         "properties": {
@@ -50315,6 +50389,78 @@
           }
         },
         "summary": "Get Desk",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/last-buys": {
+      "get": {
+        "description": "The latest bills bought for each product and what they yield before tax, for the Rates\nscreen. Only settled purchases count.",
+        "operationId": "get_last_buys_staff_dealing_last_buys_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LastBuysOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Last Buys",
         "tags": [
           "dealing desk"
         ]
