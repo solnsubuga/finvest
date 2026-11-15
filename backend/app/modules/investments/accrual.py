@@ -104,6 +104,11 @@ _IS_DUE = (
 _DUE = select_investments(
     f"WHERE {_IS_DUE} AND i.id > :after ORDER BY i.id LIMIT :limit FOR UPDATE OF i SKIP LOCKED"
 )
+# Runs for different days queue one batch at a time. Without it, a catch-up of several days
+# that runs together skips the investments another day's run holds and ends with them behind.
+_ONE_BATCH_AT_A_TIME = text(
+    "SELECT pg_advisory_xact_lock(hashtextextended('finvest.investments.interest_run', 0))"
+)
 _BEHIND = text(
     f"SELECT i.currency, count(*) AS behind FROM investments i WHERE {_IS_DUE} "  # noqa: S608
     "GROUP BY i.currency"
@@ -151,6 +156,9 @@ async def accrue_batch(
     it paid stays due for the next run.
     """
     _check_run_date(run_date, clock)
+    # Held to the end of this transaction, so the batch before, of this or another day's run,
+    # has committed and released every investment it paid.
+    await session.execute(_ONE_BATCH_AT_A_TIME)
     rows = (
         await session.execute(_DUE, {"run_date": run_date, "after": after, "limit": limit})
     ).all()

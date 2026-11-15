@@ -261,6 +261,38 @@ async def test_two_workers_on_the_same_run_pay_each_investment_once(
         assert await ledger.find_balance_drift(session) == []
 
 
+async def test_runs_for_several_days_at_once_queue_and_leave_nothing_behind(
+    app_database: Database, worker_database: Database
+) -> None:
+    held = [await started(app_database, worker_database, NOW) for _ in range(6)]
+    barrier = AsyncBarrier(3)
+
+    async def run(run_date: date) -> None:
+        after = ""
+        first = True
+        while True:
+            async with worker_database.actor_transaction(SYSTEM) as session:
+                if first:
+                    await barrier.wait()
+                    first = False
+                batch = await accrual.accrue_batch(
+                    session, run_date, at(run_date), after=after, limit=2
+                )
+                await asyncio.sleep(0.01)
+            if batch.last_id is None:
+                return
+            after = batch.last_id
+
+    # A catch-up after the clock moved on: three nights' runs at once, with no final pass.
+    await asyncio.gather(run(day(1)), run(day(2)), run(day(3)))
+
+    for investment in held:
+        after = await reload(worker_database, investment.id)
+        assert after.accrued_through == day(3)
+    async with worker_database.actor_transaction(SYSTEM) as session:
+        assert await ledger.find_balance_drift(session) == []
+
+
 async def test_one_investment_that_cannot_be_paid_does_not_stop_the_rest(
     app_database: Database, worker_database: Database
 ) -> None:
