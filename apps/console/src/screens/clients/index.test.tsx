@@ -53,6 +53,46 @@ describe("clients", () => {
     expect(await screen.findByText(/No client has the account number, mobile number or ID/)).toBeInTheDocument();
   });
 
+  it("lists every client newest first, a page at a time, and filters by status", async () => {
+    const { user } = renderClients();
+    const list = (await screen.findAllByRole("region", { name: "All clients" }))[0]!;
+    await within(list).findAllByRole("rowheader");
+    const names = () => within(list).getAllByRole("rowheader").map((cell) => cell.textContent);
+    expect(names()).toEqual(["Name not verified yet", "James Okot", expect.any(String), expect.any(String)]);
+    await user.click(screen.getByRole("button", { name: "Show more" }));
+    await screen.findByText("Sarah Nakato");
+    expect(names()).toHaveLength(6);
+    expect(screen.queryByRole("button", { name: "Show more" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Locked" }));
+    expect(screen.getByRole("button", { name: "Locked" })).toHaveAttribute("aria-pressed", "true");
+    await screen.findByText("James Okot");
+    const locked = screen.getAllByRole("region", { name: "All clients" })[0]!;
+    expect(within(locked).getAllByRole("rowheader")).toHaveLength(2);
+  });
+
+  it("finds clients by part of their name in any order, or their email, and opens one", async () => {
+    const { user } = renderClients();
+    await find(user, "nakato sar");
+    const list = (await screen.findAllByRole("region", { name: "Clients matching “nakato sar”" }))[0]!;
+    expect(await within(list).findAllByRole("rowheader")).toHaveLength(1);
+    expect(within(list).getByText("sarah.n@example.com")).toBeInTheDocument();
+    await user.click(within(list).getByRole("button", { name: "Sarah Nakato" }));
+    expect(await screen.findByRole("heading", { name: "Sarah Nakato" })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Find a client"));
+    await find(user, "okot@");
+    expect(await screen.findByRole("button", { name: "James Okot" })).toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Find a client"));
+    await find(user, "nobody here");
+    expect(await screen.findByText("No client's verified name or email matches “nobody here”.")).toBeInTheDocument();
+  });
+
+  it("says when the list cannot be loaded", async () => {
+    renderClients(notConnectedClientsApi);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Clients could not be loaded");
+    expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
   it("approves someone else's lock with a reason, and the account locks", async () => {
     const { user } = renderClients(undefined, "/clients?client=-NstubClient00000042");
     const card = await screen.findByRole("article", { name: "Lock the account, waiting" });

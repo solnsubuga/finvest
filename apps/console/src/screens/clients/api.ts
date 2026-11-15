@@ -115,9 +115,35 @@ export interface ClientPage {
   canLock: boolean;
 }
 
+/** A client as the Clients list shows them. */
+export interface ClientRow {
+  id: string;
+  /** The name on the approved identity document. Null until the check is approved. */
+  verifiedName: string | null;
+  accountNumber: string | null;
+  phone: string;
+  email: string | null;
+  status: ClientStatus;
+  createdAt: string;
+}
+
+export interface ClientList {
+  clients: ClientRow[];
+  /** Pass back as `after` for the next page of the full list. Null on the last page and for a search. */
+  nextAfter: string | null;
+  /** A search found more than it shows. */
+  more: boolean;
+}
+
 export interface ClientsApi {
   /** By client ID, ten-digit account number or mobile number. At most one client. */
   search(query: string): Promise<Account[]>;
+  /**
+   * Every client newest first, a page at a time, when `query` is empty. Otherwise the client an
+   * ID, account number or mobile number names, or clients whose verified name holds every word
+   * or whose email holds the text.
+   */
+  list(query: string, status: ClientStatus | null, after: string | null): Promise<ClientList>;
   client(id: string): Promise<ClientPage>;
   propose(clientId: string, kind: LockKind, reason: string): Promise<Lock>;
   decide(lockId: string, decision: Decision, reason: string): Promise<Lock>;
@@ -193,6 +219,7 @@ const refuse = () => Promise.reject(new ClientsError("not_connected"));
 
 export const notConnectedClientsApi: ClientsApi = {
   search: refuse,
+  list: refuse,
   client: refuse,
   propose: refuse,
   decide: refuse,
