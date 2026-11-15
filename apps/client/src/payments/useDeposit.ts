@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import { usePayments } from "./PaymentsProvider";
-import { BankTransfer, Deposit, isFinal } from "./types";
+import { BankTransfer, CardPayment, Deposit, isFinal, PaymentError } from "./types";
 import { usePolled } from "./usePolled";
 
 export type DepositView = { deposit: Deposit | null; missing: boolean; stale: boolean };
@@ -29,4 +29,19 @@ export function useBankTransfer(transferId: string): BankTransferView {
   const read = useCallback(() => client.getBankTransfer(transferId), [client, transferId]);
   const { value, missing, stale } = usePolled(read, transferDone);
   return { transfer: value, missing, stale };
+}
+
+export type CardPaymentView = { payment: CardPayment | null; missing: boolean; stale: boolean };
+
+const cardDone = (payment: CardPayment) => isFinal(payment.status);
+
+/** Reads a card payment until Pesapal's own record says it is paid or not. */
+export function useCardPayment(paymentId: string): CardPaymentView {
+  const { client } = usePayments();
+  const read = useCallback(async () => {
+    if (!client.getCardPayment) throw new PaymentError("not_found");
+    return client.getCardPayment(paymentId);
+  }, [client, paymentId]);
+  const { value, missing, stale } = usePolled(read, cardDone);
+  return { payment: value, missing, stale };
 }

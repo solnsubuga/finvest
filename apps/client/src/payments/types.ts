@@ -164,10 +164,12 @@ export type PaymentErrorCode =
   | "not_found"
   /** A request to close the account is waiting for staff, so nothing new starts. */
   | "account_closing"
+  /** Card payments are paused, or over a card limit. The pay screen explains which. */
+  | "card_refused"
   | "unavailable";
 
 /** The payment already under way for the same thing, so the client can be taken to it. */
-export type OpenPayment = { id: string; method: "mobile_money" | "bank_transfer" };
+export type OpenPayment = { id: string; method: "mobile_money" | "bank_transfer" | "card" };
 
 export class PaymentError extends Error {
   readonly code: PaymentErrorCode;
@@ -188,10 +190,73 @@ export function openPaymentHref(error: unknown): string | null {
     return null;
   }
   const { id, method } = error.openPayment;
+  if (method === "card") return `/pay/card/${id}`;
   return method === "bank_transfer" ? `/pay/bank/transfer/${id}` : `/pay/deposit/${id}`;
 }
 
+/**
+ * Why the client may not pay this by card now:
+ * - `channel_paused`: staff paused card payments on Settings.
+ * - `cards_unavailable`: this app or server takes no cards.
+ * - `above_card_payment_limit`: the total is over the most one card payment may be.
+ * - `above_card_30_day_limit`: the client has paid as much by card as 30 days allow.
+ */
+export type CardRefusal =
+  | "channel_paused"
+  | "cards_unavailable"
+  | "above_card_payment_limit"
+  | "above_card_30_day_limit";
+
+/** What paying by card would cost, shown before the client goes on. Never a rate. */
+export type CardOffer = {
+  amount: Money;
+  /** The card charge on top, in shillings. Zero when Finvest bears it. */
+  charge: Money;
+  total: Money;
+  /** The most one card payment may be. */
+  maxPayment: Money;
+  refused: CardRefusal | null;
+};
+
+/**
+ * Where a card payment stands:
+ * - `sending`: we are opening Pesapal's secure page.
+ * - `awaiting_card`: the page is open for the client to pay on.
+ * - `checking`: we could not get a clear answer from Pesapal and are asking.
+ * - `confirmed`, `failed`: final.
+ */
+export type CardPaymentStatus = "sending" | "awaiting_card" | "checking" | "confirmed" | "failed";
+
+export type CardPayment = {
+  id: string;
+  payable: Payable;
+  /** What the investment receives. */
+  amount: Money;
+  charge: Money;
+  /** What the card pays: the amount and the charge. */
+  total: Money;
+  status: CardPaymentStatus;
+  failure: FailureReason | null;
+  /** Pesapal's page, while the client may pay on it. The card is typed only there. */
+  pageUrl: string | null;
+  /** The card that paid, once paid. Never the card number. */
+  card: { brand: string | null; lastFour: string | null } | null;
+  requestedAt: string;
+  confirmedAt: string | null;
+  reference: string;
+};
+
+export type CardPaymentRequest = { payableId: string; idempotencyKey: string };
+
 export interface PaymentsClient {
+  /** Cards are optional: a client without them offers mobile money and bank transfer only. */
+  getCardOffer?(payableId: string): Promise<CardOffer>;
+  /** Starts a card payment. The first status is `sending`; poll until `pageUrl` is set. */
+  payWithCard?(request: CardPaymentRequest): Promise<CardPayment>;
+  getCardPayment?(paymentId: string): Promise<CardPayment>;
+  /** The client is back from Pesapal's page: asks for the result to be read now. */
+  cardReturned?(paymentId: string): Promise<CardPayment>;
+
   getPayable(payableId: string): Promise<Payable>;
   /**
    * Asks the network to send an approval prompt to the phone. It answers as
@@ -207,7 +272,7 @@ export interface PaymentsClient {
   getBankTransfer(transferId: string): Promise<BankTransfer>;
 }
 
-export function isFinal(status: DepositStatus): boolean {
+export function isFinal(status: DepositStatus | CardPaymentStatus): boolean {
   return status === "confirmed" || status === "failed";
 }
 
@@ -225,6 +290,7 @@ const messages: Record<PaymentErrorCode, string> = {
   key_reused: "Something changed since your last try. Go back and start the payment again.",
   receipt_not_accepted: "We could not accept that file. Use a JPG, PNG or PDF of up to 10 MB.",
   not_found: "We could not find this payment.",
+  card_refused: "This cannot be paid by card right now. Pay by mobile money or bank transfer instead.",
   unavailable: "We could not reach Finvest. Check your connection and try again.",
 };
 

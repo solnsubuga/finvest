@@ -14,10 +14,19 @@ import { formatMoney, networkName, networkProduct } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { AmountCard, Loading } from "@/payments/Parts";
 import { usePayments } from "@/payments/PaymentsProvider";
-import { describePaymentError, openPaymentHref, Network, Payable, PaymentError } from "@/payments/types";
+import {
+  CardOffer,
+  describePaymentError,
+  openPaymentHref,
+  Network,
+  Payable,
+  PaymentError,
+} from "@/payments/types";
 import { colors, fontSizes, radii } from "@/theme";
 
 const NETWORKS: Network[] = ["mtn", "airtel"];
+
+type Method = "mobile_money" | "card";
 
 /** A first guess from the number, so most clients do not have to choose. They can change it. */
 function likelyNetwork(national: string): Network {
@@ -52,6 +61,9 @@ export default function Pay() {
   const [error, setError] = useState<string | null>(null);
   // One key for this visit: a second tap or a retry asks for the money once.
   const [idempotencyKey] = useState(newIdempotencyKey);
+  const [cardKey] = useState(newIdempotencyKey);
+  const [method, setMethod] = useState<Method>("mobile_money");
+  const [cardOffer, setCardOffer] = useState<CardOffer | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -59,13 +71,53 @@ export default function Pay() {
       (found) => live && setPayable(found),
       (caught) => live && setLoadError(describePaymentError(caught)),
     );
+    // Cards are offered only when the server says what they would cost. Without an answer the
+    // screen offers mobile money and bank transfer, as before.
+    client.getCardOffer?.(payableId).then(
+      (offer) => live && setCardOffer(offer),
+      () => undefined,
+    );
     return () => {
       live = false;
     };
   }, [client, payableId]);
 
+  const payByCard = async () => {
+    if (!payable || !client.payWithCard) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const payment = await client.payWithCard({ payableId: payable.id, idempotencyKey: cardKey });
+      router.replace(`/pay/card/${payment.id}`);
+    } catch (caught) {
+      const open = openPaymentHref(caught);
+      if (open) {
+        router.replace(open);
+        return;
+      }
+      if (caught instanceof PaymentError && caught.code === "card_refused" && client.getCardOffer) {
+        // Paused or over a limit since the screen opened: show why, and offer the other ways.
+        client.getCardOffer(payable.id).then(setCardOffer, () => undefined);
+        setMethod("mobile_money");
+      }
+      if (outcomeUnknown(caught)) {
+        setLocked(true);
+      }
+      setError(describePaymentError(caught));
+      setBusy(false);
+    }
+  };
+
+  const cardShown = cardOffer !== null && cardOffer.refused !== "cards_unavailable";
+  const cardOpen = cardShown && cardOffer.refused === null;
+  const paying = cardOpen && method === "card" ? "card" : "mobile_money";
+
   const pay = async () => {
     setError(null);
+    if (paying === "card") {
+      await payByCard();
+      return;
+    }
     if (!payable || !payer) {
       return;
     }
@@ -100,7 +152,11 @@ export default function Pay() {
       footer={
         payable ? (
           <Button
-            label={`Pay ${formatMoney(payable.amount)}`}
+            label={
+              paying === "card" && cardOffer
+                ? `Pay ${formatMoney(cardOffer.total)} by card`
+                : `Pay ${formatMoney(payable.amount)}`
+            }
             variant="lime"
             onPress={pay}
             loading={busy}
@@ -134,53 +190,98 @@ export default function Pay() {
               {`Your first request may already be with ${networkName[network]}, so the network is fixed. Pressing Pay again repeats that same request. It does not ask for the money twice.`}
             </Notice>
           ) : null}
-          <View style={{ gap: 8 }} accessibilityRole="radiogroup">
-            <Eyebrow>Pay from</Eyebrow>
-            {NETWORKS.map((option) => {
-              const selected = option === network;
-              return (
-                <Pressable
-                  key={option}
-                  accessibilityRole="radio"
-                  aria-checked={selected}
-                  aria-disabled={locked}
-                  disabled={locked}
-                  accessibilityLabel={networkProduct[option]}
-                  onPress={() => setNetwork(option)}
-                  testID={`network-${option}`}
-                  style={({ pressed }) => [
-                    styles.option,
-                    selected && styles.optionSelected,
-                    locked && !selected && { opacity: 0.4 },
-                    pressed && { opacity: 0.8 },
-                  ]}
-                >
-                  <View style={styles.badge}>
-                    <Txt size={fontSizes.xs} weight="extrabold">
-                      {networkName[option]}
+          {cardShown && cardOffer.refused ? <CardRefusedNotice offer={cardOffer} /> : null}
+          {cardShown ? (
+            <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+              <Eyebrow>Pay with</Eyebrow>
+              <MethodOption
+                label="Mobile money"
+                hint="MTN or Airtel, prompted on your phone"
+                badge="MTN Airtel"
+                selected={paying === "mobile_money"}
+                disabled={locked}
+                onPress={() => setMethod("mobile_money")}
+                testID="method-mobile-money"
+              />
+              <MethodOption
+                label="Card"
+                hint={
+                  cardOffer.refused === "channel_paused"
+                    ? "Paused for now. Try mobile money or a bank transfer."
+                    : cardOffer.refused
+                      ? `Up to ${formatMoney(cardOffer.maxPayment)} a payment`
+                      : "Visa or Mastercard, debit or credit"
+                }
+                badge="VISA MC"
+                selected={paying === "card"}
+                disabled={locked || cardOffer.refused !== null}
+                onPress={() => setMethod("card")}
+                testID="method-card"
+              />
+            </View>
+          ) : null}
+          {paying === "card" && cardOffer ? (
+            <View style={{ gap: 12 }} testID="card-charge">
+              <View style={styles.breakdown}>
+                <BreakdownRow label="Investment" value={formatMoney(cardOffer.amount)} />
+                <BreakdownRow label="Card charge" value={formatMoney(cardOffer.charge)} />
+                <BreakdownRow label="You pay" value={formatMoney(cardOffer.total)} strong />
+              </View>
+              <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
+                {`${cardOffer.charge.minor > 0 ? "The card charge goes to the card network and Pesapal, not to Finvest. " : ""}Up to ${formatMoney(cardOffer.maxPayment)} a payment. If this money is ever refunded, it goes back to the same card.`}
+              </Txt>
+            </View>
+          ) : (
+            <>
+            <View style={{ gap: 8 }} accessibilityRole="radiogroup">
+              <Eyebrow>Pay from</Eyebrow>
+              {NETWORKS.map((option) => {
+                const selected = option === network;
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="radio"
+                    aria-checked={selected}
+                    aria-disabled={locked}
+                    disabled={locked}
+                    accessibilityLabel={networkProduct[option]}
+                    onPress={() => setNetwork(option)}
+                    testID={`network-${option}`}
+                    style={({ pressed }) => [
+                      styles.option,
+                      selected && styles.optionSelected,
+                      locked && !selected && { opacity: 0.4 },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                  >
+                    <View style={styles.badge}>
+                      <Txt size={fontSizes.xs} weight="extrabold">
+                        {networkName[option]}
+                      </Txt>
+                    </View>
+                    <Txt weight="bold" style={{ flex: 1 }}>
+                      {networkProduct[option]}
                     </Txt>
-                  </View>
-                  <Txt weight="bold" style={{ flex: 1 }}>
-                    {networkProduct[option]}
-                  </Txt>
-                  <View style={[styles.radio, selected && styles.radioSelected]}>
-                    {selected ? <Icon name="check" size={14} color={colors.ink} strokeWidth={3} /> : null}
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={styles.number} accessible testID="pay-number">
-            <Txt size={fontSizes.sm} color={colors.muted}>
-              Your number
+                    <View style={[styles.radio, selected && styles.radioSelected]}>
+                      {selected ? <Icon name="check" size={14} color={colors.ink} strokeWidth={3} /> : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={styles.number} accessible testID="pay-number">
+              <Txt size={fontSizes.sm} color={colors.muted}>
+                Your number
+              </Txt>
+              <Txt size={fontSizes.lg} weight="bold">
+                {formatE164(payer)}
+              </Txt>
+            </View>
+            <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
+              {`${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
             </Txt>
-            <Txt size={fontSizes.lg} weight="bold">
-              {formatE164(payer)}
-            </Txt>
-          </View>
-          <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
-            {`${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
-          </Txt>
+            </>
+          )}
           {locked ? null : (
             <Pressable
               accessibilityRole="link"
@@ -208,7 +309,118 @@ export default function Pay() {
   );
 }
 
+function CardRefusedNotice({ offer }: { offer: CardOffer }) {
+  if (offer.refused === "channel_paused") {
+    return (
+      <Notice tone="warning" title="Card payments are paused">
+        Card payments are not working right now. Mobile money and bank transfer work as usual.
+      </Notice>
+    );
+  }
+  if (offer.refused === "above_card_payment_limit") {
+    return (
+      <Notice tone="warning" title={`Cards take up to ${formatMoney(offer.maxPayment)}`}>
+        Pay this one by mobile money or bank transfer, or invest a smaller amount by card.
+      </Notice>
+    );
+  }
+  return (
+    <Notice tone="warning" title="You have paid as much by card as 30 days allow">
+      Pay this one by mobile money or bank transfer.
+    </Notice>
+  );
+}
+
+function MethodOption({
+  label,
+  hint,
+  badge,
+  selected,
+  disabled,
+  onPress,
+  testID,
+}: {
+  label: string;
+  hint: string;
+  badge: string;
+  selected: boolean;
+  disabled: boolean;
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      aria-checked={selected}
+      aria-disabled={disabled}
+      disabled={disabled}
+      accessibilityLabel={`${label}. ${hint}`}
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => [
+        styles.option,
+        selected && styles.optionSelected,
+        disabled && !selected && styles.optionDisabled,
+        pressed && { opacity: 0.8 },
+      ]}
+    >
+      <View style={styles.badgeWide}>
+        <Txt size={fontSizes.xs} weight="extrabold" style={{ textAlign: "center" }}>
+          {badge}
+        </Txt>
+      </View>
+      <View style={{ flex: 1, paddingVertical: 10 }}>
+        <Txt weight="bold" color={disabled && !selected ? colors.muted : colors.ink}>
+          {label}
+        </Txt>
+        <Txt size={fontSizes.xs} color={colors.muted}>
+          {hint}
+        </Txt>
+      </View>
+      {disabled && !selected ? null : (
+        <View style={[styles.radio, selected && styles.radioSelected]}>
+          {selected ? <Icon name="check" size={14} color={colors.ink} strokeWidth={3} /> : null}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function BreakdownRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <View style={styles.breakdownRow} accessible accessibilityLabel={`${label}: ${value}`}>
+      <Txt size={fontSizes.sm} weight={strong ? "bold" : "regular"} color={strong ? colors.ink : colors.muted}>
+        {label}
+      </Txt>
+      <Txt size={fontSizes.sm} weight={strong ? "extrabold" : "semibold"}>
+        {value}
+      </Txt>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  optionDisabled: { backgroundColor: colors.surfaceSunken, borderColor: colors.surfaceSunken },
+  badgeWide: {
+    width: 64,
+    minHeight: 36,
+    borderRadius: radii.sm,
+    backgroundColor: colors.surfaceSunken,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  breakdown: {
+    borderRadius: radii.lg,
+    backgroundColor: colors.surfaceSunken,
+    paddingHorizontal: 14,
+  },
+  breakdownRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    minHeight: 46,
+  },
   option: {
     flexDirection: "row",
     alignItems: "center",

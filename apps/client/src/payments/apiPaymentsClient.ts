@@ -1,11 +1,21 @@
 import { Platform } from "react-native";
-import type { BankTransferDetails, ClientInvestmentOut, PaymentView, Upload } from "@finvest/api-client/client";
+import type {
+  BankTransferDetails,
+  CardOffer as CardOfferView,
+  ClientInvestmentOut,
+  PaymentView,
+  Upload,
+} from "@finvest/api-client/client";
 
 import { api, ApiError, isAccountClosing } from "@/api/http";
 
 import { shortReference } from "./reference";
 import {
   BankTransfer,
+  CardOffer,
+  CardPayment,
+  CardPaymentStatus,
+  CardRefusal,
   Deposit,
   DepositStatus,
   FailureReason,
@@ -68,6 +78,59 @@ const DEPOSIT_STATUS: Record<PaymentView["status"], DepositStatus> = {
   confirmed: "confirmed",
   failed: "failed",
 };
+
+const CARD_STATUS: Record<PaymentView["status"], CardPaymentStatus> = {
+  created: "sending",
+  sending: "sending",
+  awaiting_approval: "awaiting_card",
+  uncertain: "checking",
+  in_review: "checking",
+  confirmed: "confirmed",
+  failed: "failed",
+};
+
+const CARD_REFUSALS = new Set<CardRefusal>([
+  "channel_paused",
+  "cards_unavailable",
+  "above_card_payment_limit",
+  "above_card_30_day_limit",
+]);
+
+export function toCardOffer(view: CardOfferView): CardOffer {
+  return {
+    amount: view.amount,
+    charge: view.charge,
+    total: view.total,
+    maxPayment: view.max_payment,
+    refused:
+      view.refused === null
+        ? null
+        : CARD_REFUSALS.has(view.refused as CardRefusal)
+          ? (view.refused as CardRefusal)
+          : "cards_unavailable",
+  };
+}
+
+export function toCardPayment(view: PaymentView, payable: Payable): CardPayment {
+  if (view.method !== "card") {
+    throw new PaymentError("not_found");
+  }
+  const zero = { minor: 0, currency: view.amount.currency };
+  return {
+    id: view.id,
+    payable,
+    amount: view.amount,
+    charge: view.card_charge ?? zero,
+    total: view.card_total ?? view.amount,
+    status: CARD_STATUS[view.status],
+    failure: view.status === "failed" ? toFailure(view.failure) : null,
+    pageUrl: view.card_page_url ?? null,
+    card: view.card ? { brand: view.card.brand, lastFour: view.card.last_four } : null,
+    requestedAt: view.created_at,
+    confirmedAt: view.confirmed_at,
+    reference: shortReference(view.id),
+  };
+}
 
 export function toDeposit(view: PaymentView, payable: Payable): Deposit {
   // A card payment is not a mobile money deposit: the card screens read it.
@@ -175,7 +238,7 @@ export function createApiPaymentsClient(): PaymentsClient {
       if (live.status === "confirmed") return new PaymentError("not_payable");
       return new PaymentError("already_paying", {
         id: live.id,
-        method: live.method === "bank_transfer" ? "bank_transfer" : "mobile_money",
+        method: live.method === "bank_transfer" || live.method === "card" ? live.method : "mobile_money",
       });
     } catch {
       return new PaymentError("not_payable");
@@ -213,6 +276,59 @@ export function createApiPaymentsClient(): PaymentsClient {
       }
       try {
         return toDeposit(view, await payableFor(view.investment_id));
+      } catch (error) {
+        throw toPaymentError(error);
+      }
+    },
+
+    async getCardOffer(payableId) {
+      try {
+        return toCardOffer(
+          await api("GET /client/investments/{investment_id}/payments/card", {
+            params: { investment_id: payableId },
+          }),
+        );
+      } catch (error) {
+        throw toPaymentError(error, "pay");
+      }
+    },
+
+    async payWithCard(request) {
+      let view: PaymentView;
+      try {
+        view = await api("POST /client/investments/{investment_id}/payments/card", {
+          params: { investment_id: request.payableId },
+          idempotencyKey: request.idempotencyKey,
+        });
+      } catch (error) {
+        // Paused or over a limit since the offer was read: the pay screen reads it again.
+        if (error instanceof ApiError && (error.status === 503 || error.code === "validation_failed")) {
+          throw new PaymentError("card_refused");
+        }
+        throw await whyRefused(request.payableId, error);
+      }
+      try {
+        return toCardPayment(view, await payableFor(view.investment_id));
+      } catch (error) {
+        throw toPaymentError(error);
+      }
+    },
+
+    async getCardPayment(paymentId) {
+      try {
+        const { view, payable } = await readPayment(paymentId);
+        return toCardPayment(view, payable);
+      } catch (error) {
+        throw toPaymentError(error);
+      }
+    },
+
+    async cardReturned(paymentId) {
+      try {
+        const view = await api("POST /client/payments/{payment_id}/card-return", {
+          params: { payment_id: paymentId },
+        });
+        return toCardPayment(view, await payableFor(view.investment_id));
       } catch (error) {
         throw toPaymentError(error);
       }
