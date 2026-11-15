@@ -122,6 +122,36 @@ def site_caddy(site_domains: list[str], published: bool, listed: bool) -> str:
     return text
 
 
+def email_backend(env: Mapping[str, str]) -> str:
+    """The email backend the worker is given. Production sends through Resend unless
+    FINVEST_EMAIL_BACKEND says otherwise (the owner's default). It stays off when the sender or key
+    is missing, because the worker refuses to start with Resend and no key. Staging and local
+    rehearsals keep whatever is set, which is off when blank."""
+    chosen = optional(env, "FINVEST_EMAIL_BACKEND")
+    production = optional(env, "DEPLOY_ENVIRONMENT") == "production" and optional(env, "FINVEST_REHEARSAL") != "true"
+    if chosen or not production:
+        return chosen
+    if optional(env, "FINVEST_EMAIL_FROM") and optional(env, "FINVEST_EMAIL_RESEND_API_KEY"):
+        return "resend"
+    return ""
+
+
+def email_warnings(env: Mapping[str, str]) -> list[str]:
+    """Why a production release would send no email. The deploy still goes ahead (the owner's call),
+    but with email off the worker queues every message without failing anything, so the run says
+    so loudly. Staging and local rehearsals may leave email off."""
+    if optional(env, "DEPLOY_ENVIRONMENT") != "production" or optional(env, "FINVEST_REHEARSAL") == "true":
+        return []
+    warnings = []
+    if optional(env, "FINVEST_EMAIL_BACKEND") not in ("", "resend"):
+        warnings.append("FINVEST_EMAIL_BACKEND is not resend, so production will send no email")
+    if not optional(env, "FINVEST_EMAIL_FROM"):
+        warnings.append("FINVEST_EMAIL_FROM is not set, so production will send no email")
+    if not optional(env, "FINVEST_EMAIL_RESEND_API_KEY"):
+        warnings.append("FINVEST_RESEND_API_KEY is not set, so production will send no email")
+    return warnings
+
+
 def prepare(output: Path, env: Mapping[str, str]) -> None:
     environment = setting(env, "DEPLOY_ENVIRONMENT", pattern="|".join(ENVIRONMENTS))
     rehearsal = optional(env, "FINVEST_REHEARSAL") == "true"
@@ -161,16 +191,6 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         raise SettingError("DATABASE_CA_CERT must be PEM")
     if not ca_cert and not rehearsal:
         raise SettingError("DATABASE_CA_CERT is not set")
-
-    # Production must send email: sign-up links, sign-in codes and statements all go by email, and a
-    # blank backend makes the worker turn sending off without failing anything. Stop here instead.
-    if environment == "production" and not rehearsal:
-        if optional(env, "FINVEST_EMAIL_BACKEND") != "resend":
-            raise SettingError("FINVEST_EMAIL_BACKEND must be resend in production, or no email is sent")
-        if not optional(env, "FINVEST_EMAIL_FROM"):
-            raise SettingError("FINVEST_EMAIL_FROM is not set, so no email can be sent")
-        if not optional(env, "FINVEST_EMAIL_RESEND_API_KEY"):
-            raise SettingError("FINVEST_RESEND_API_KEY is not set, so no email can be sent")
 
     # Validate every database setting before writing anything.
     urls = {service: database_url(env, role) for service, role in ROLES.items()}
@@ -249,8 +269,9 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         api["FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN"] = optional(
             env, "FINVEST_SMS_AFRICASTALKING_CALLBACK_TOKEN"
         )
+    if email_backend(env):
+        worker["FINVEST_EMAIL_BACKEND"] = email_backend(env)
     for name in (
-        "FINVEST_EMAIL_BACKEND",
         "FINVEST_EMAIL_FROM",
         "FINVEST_EMAIL_RESEND_API_KEY",
         # SMS goes out from the worker only (backend app/infrastructure/sms).
@@ -391,6 +412,9 @@ def main() -> None:
         prepare(args.output, os.environ)
     except SettingError as error:
         sys.exit(f"Release not prepared: {error}")
+    for warning in email_warnings(os.environ):
+        # A GitHub Actions annotation: it shows on the run's summary page, not only in the log.
+        print(f"::warning title=Email is off::{warning}")
     print(f"Release prepared in {args.output}")
 
 
