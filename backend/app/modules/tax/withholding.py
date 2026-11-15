@@ -5,7 +5,9 @@ The figures come from the ledger alone, through `ledger.statements.system_totals
 `interest.expense` and `tax.withholding_payable` from entries whose source is an investment.
 The investments module keeps every entry that moves a client's tax under that source (agreed
 with the investing thread, 2026-11-13). Investments are then read in batches for the client,
-product and dates.
+product and dates. Bond coupons are entries whose source is a bond holding
+(`bonds.coupons.SOURCE_TYPE`), read the same way: a holding is a line of its own, named after
+the bond, from the day it started to the bond's maturity.
 """
 
 from dataclasses import dataclass
@@ -14,6 +16,7 @@ from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.infrastructure.sealing import Sealer
+from app.modules.bonds import holdings as bond_holdings
 from app.modules.investments import service as investments
 from app.modules.kyc import service as kyc
 from app.modules.ledger import statements
@@ -33,6 +36,10 @@ from app.shared.money import Currency, Money
 
 INVESTMENT_BATCH = 500
 INTEREST_ACCRUED = "client.interest_accrued"
+# Bond coupons are posted with the holding as their source, and the holding is in this account.
+BOND_SOURCE = "bond_holding"
+BOND_HOLDING = "client.bond_holding"
+SOURCES = (INVESTMENT_SOURCE, BOND_SOURCE)
 
 
 class NoAccount(Exception):
@@ -43,16 +50,21 @@ async def withheld_by_month(
     session: AsyncSession, currency: Currency, *, date_from: date, date_to: date
 ) -> dict[date, Money]:
     """Tax withheld in each month that had any, by the entries' dates."""
-    rows = await statements.system_totals(
-        session,
-        codes=[TAX_PAYABLE],
-        currency=currency,
-        source_type=INVESTMENT_SOURCE,
-        date_from=date_from,
-        date_to=date_to,
-        by_source=False,
-    )
-    return {row.month: -row.amount for row in rows}
+    zero = Money.zero(currency)
+    found: dict[date, Money] = {}
+    for source_type in SOURCES:
+        rows = await statements.system_totals(
+            session,
+            codes=[TAX_PAYABLE],
+            currency=currency,
+            source_type=source_type,
+            date_from=date_from,
+            date_to=date_to,
+            by_source=False,
+        )
+        for row in rows:
+            found[row.month] = found.get(row.month, zero) - row.amount
+    return dict(sorted(found.items()))
 
 
 async def by_investment(
@@ -63,7 +75,70 @@ async def by_investment(
     date_to: date,
     investment_ids: list[str] | None = None,
 ) -> list[InvestmentTax]:
-    """Interest before tax and tax withheld per investment over the dates, both included."""
+    """Interest before tax and tax withheld per investment over the dates, both included.
+
+    Bond holdings are lines too, with the holding's ID in `investment_id`.
+    """
+    found = await _by_investment_only(
+        session, currency, date_from=date_from, date_to=date_to, investment_ids=investment_ids
+    )
+    return found + await _by_bond_holding(
+        session, currency, date_from=date_from, date_to=date_to, holding_ids=investment_ids
+    )
+
+
+async def _by_bond_holding(
+    session: AsyncSession,
+    currency: Currency,
+    *,
+    date_from: date,
+    date_to: date,
+    holding_ids: list[str] | None,
+) -> list[InvestmentTax]:
+    rows = await statements.system_totals(
+        session,
+        codes=[INTEREST_EXPENSE, TAX_PAYABLE],
+        currency=currency,
+        source_type=BOND_SOURCE,
+        date_from=date_from,
+        date_to=date_to,
+        by_source=True,
+        source_ids=holding_ids,
+    )
+    zero = Money.zero(currency)
+    expense: dict[str, Money] = {}
+    payable: dict[str, Money] = {}
+    for row in rows:
+        if row.source_id is None:
+            continue
+        into = expense if row.account_code == INTEREST_EXPENSE else payable
+        into[row.source_id] = into.get(row.source_id, zero) + row.amount
+    found: list[InvestmentTax] = []
+    for holding_id in sorted(set(expense) | set(payable)):
+        holding = await bond_holdings.get_holding(session, holding_id)
+        gross, tax = from_ledger(expense.get(holding_id, zero), payable.get(holding_id, zero))
+        found.append(
+            InvestmentTax(
+                investment_id=holding.id,
+                client_id=holding.client_id,
+                product_name=holding.name,
+                start_date=holding.start_date,
+                maturity_date=holding.issue.maturity_date,
+                gross=gross,
+                tax=tax,
+            )
+        )
+    return found
+
+
+async def _by_investment_only(
+    session: AsyncSession,
+    currency: Currency,
+    *,
+    date_from: date,
+    date_to: date,
+    investment_ids: list[str] | None,
+) -> list[InvestmentTax]:
     rows = await statements.system_totals(
         session,
         codes=[INTEREST_EXPENSE, TAX_PAYABLE],
@@ -180,7 +255,8 @@ async def certificate_figures(
         {
             account.account_reference
             for account in owned
-            if account.account_code == INTEREST_ACCRUED and account.account_reference
+            if account.account_code in (INTEREST_ACCRUED, BOND_HOLDING)
+            and account.account_reference
         }
     )
     items: list[InvestmentTax] = []

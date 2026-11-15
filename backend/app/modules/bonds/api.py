@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.idempotency import IdempotencyKey
 from app.infrastructure.database import Database
-from app.modules.bonds import catalogue, holdings
+from app.modules.bonds import catalogue, coupons, holdings
 from app.modules.bonds.domain.changes import BondChangeAction, BondChangeStatus
 from app.modules.bonds.domain.holdings import HoldingStatus
 from app.modules.bonds.domain.issues import (
@@ -32,12 +32,14 @@ from app.modules.bonds.domain.issues import (
     default_tax_bps,
 )
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
+from app.modules.identity.pins_api import Pins
 from app.modules.identity.service import StaffSession
+from app.modules.payouts import payouts
 from app.shared.actors import Actor
 from app.shared.business_day import business_date
 from app.shared.clock import Clock
 from app.shared.contracts import Contract, PushId
-from app.shared.errors import ErrorEnvelope
+from app.shared.errors import ApplicationError, ErrorEnvelope, FieldProblem
 from app.shared.money import Currency, Money
 
 PUBLIC_CACHE = "public, max-age=300"
@@ -61,6 +63,7 @@ FaceMinor = Annotated[int, Field(ge=1, le=MAX_FACE_MINOR)]
 CurrencyIn = Annotated[Currency, Field(strict=False)]
 DateIn = Annotated[date, Field(strict=False)]
 StatusIn = Annotated[BondStatus, Field(strict=False)]
+PinConfirmation = Annotated[str | None, Field(max_length=200)]
 
 
 # Contracts --------------------------------------------------------------------------------------
@@ -237,6 +240,41 @@ class BondHoldingOut(Contract):
     next_coupon_date: date | None
     # The coupons still to come and the face value at maturity.
     still_to_come_minor: int
+    # Where coupons are paid. None until the client chooses: coupons then wait for one.
+    payout_destination_id: PushId | None
+
+
+class CouponDestinationIn(Contract):
+    # One of the client's approved payout destinations, or None to clear the choice.
+    destination_id: PushId | None
+
+
+class CouponPayOutIn(Contract):
+    destination_id: PushId
+    pin_confirmation: PinConfirmation = None
+
+
+class BondCouponOut(Contract):
+    """A coupon paid to a client's holding, after tax."""
+
+    id: PushId
+    holding_id: PushId
+    code: str
+    name: str
+    coupon_date: date
+    currency: Currency
+    amount_minor: int
+    # `paid_out` once a payout carries it, `held` while it waits for a destination.
+    status: str
+    payout_id: PushId | None
+    # Why it waits: `no_destination`, or the payout's refusal.
+    held_because: str | None
+
+
+class StaffBondCouponOut(BondCouponOut):
+    client_id: PushId
+    gross_minor: int
+    tax_minor: int
 
 
 class StaffBondHoldingOut(Contract):
@@ -469,6 +507,7 @@ def _holding_out(view: holdings.ClientHolding) -> BondHoldingOut:
         coupons_left=view.coupons_left,
         next_coupon_date=view.next_coupon_date,
         still_to_come_minor=view.still_to_come.minor,
+        payout_destination_id=view.payout_destination_id,
     )
 
 
@@ -513,6 +552,83 @@ async def client_bond_holding(
         return _holding_out(
             await holdings.client_holding(session, client.client_id, holding_id, clock)
         )
+
+
+@client_router.put("/bond-holdings/{holding_id}/coupon-destination")
+async def client_choose_coupon_destination(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    holding_id: PushId,
+    body: CouponDestinationIn,
+) -> BondHoldingOut:
+    """Where this holding's coupons are paid: one of the client's approved payout destinations.
+    Coupons paid before this was chosen wait, and are sent on one at a time."""
+    async with _transaction(request, client.actor) as session:
+        await coupons.choose_destination(
+            session, client.actor, holding_id, destination_id=body.destination_id, clock=clock
+        )
+        return _holding_out(
+            await holdings.client_holding(session, client.client_id, holding_id, clock)
+        )
+
+
+def _coupon_out(view: coupons.CouponView) -> BondCouponOut:
+    return BondCouponOut(
+        id=view.id,
+        holding_id=view.holding_id,
+        code=view.code,
+        name=view.name,
+        coupon_date=view.coupon_date,
+        currency=view.net.currency,
+        amount_minor=view.net.minor,
+        status=view.status,
+        payout_id=view.payout_id,
+        held_because=view.payout_refusal,
+    )
+
+
+@client_router.get("/bond-coupons")
+async def client_bond_coupons(request: Request, client: CurrentClient) -> list[BondCouponOut]:
+    """The client's coupons, newest first, after tax."""
+    async with _transaction(request, client.actor) as session:
+        found = await coupons.client_coupons(session, client.client_id)
+    return [_coupon_out(c) for c in found]
+
+
+@client_router.post("/bond-coupons/{coupon_id}/pay-out", responses={428: {"model": ErrorEnvelope}})
+async def client_pay_out_coupon(
+    request: Request,
+    client: CurrentClient,
+    clock: AppClock,
+    pins: Pins,
+    coupon_id: PushId,
+    body: CouponPayOutIn,
+) -> BondCouponOut:
+    """Send on a coupon that is waiting for a destination.
+
+    A repeat after it was sent on is refused with 409 `conflict`, never paid twice. 428
+    `pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh
+    confirmation for `withdrawal`.
+    """
+    try:
+        async with _transaction(request, client.actor) as session:
+            view = await coupons.pay_out_held(
+                session,
+                client.actor,
+                coupon_id,
+                destination_id=body.destination_id,
+                clock=clock,
+                confirm=lambda: pins.spend(
+                    client, "withdrawal", body.pin_confirmation, session=session
+                ),
+            )
+    except payouts.PayoutRefused as refused:
+        raise ApplicationError(
+            "validation_failed",
+            fields=[FieldProblem(field_path=["destination_id"], code=refused.code)],
+        ) from None
+    return _coupon_out(view)
 
 
 # Staff ------------------------------------------------------------------------------------------
@@ -571,6 +687,27 @@ async def staff_bond_holdings(
             start_date=h.start_date,
         )
         for h in found
+    ]
+
+
+@staff_router.get("/bond-coupons")
+async def staff_bond_coupons(
+    request: Request,
+    staff: InvestmentsViewer,
+    status: Annotated[str | None, Query(pattern="^(paid_out|held)$")] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 200,
+) -> list[StaffBondCouponOut]:
+    """Coupons paid, newest first, with the tax withheld. `held` lists those still waiting."""
+    async with _transaction(request, staff.actor) as session:
+        found = await coupons.staff_coupons(session, staff.actor, status, limit)
+    return [
+        StaffBondCouponOut(
+            **_coupon_out(c).model_dump(),
+            client_id=c.client_id,
+            gross_minor=c.gross.minor,
+            tax_minor=c.tax.minor,
+        )
+        for c in found
     ]
 
 

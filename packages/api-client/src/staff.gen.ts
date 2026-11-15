@@ -3514,6 +3514,23 @@ export const SignedOut = z.object({
 });
 export type SignedOut = z.infer<typeof SignedOut>;
 
+export const StaffBondCouponOut = z.object({
+  amount_minor: z.number().int(),
+  client_id: z.string(),
+  code: z.string(),
+  coupon_date: z.string(),
+  currency: Currency,
+  gross_minor: z.number().int(),
+  held_because: z.string().nullable(),
+  holding_id: z.string(),
+  id: z.string(),
+  name: z.string(),
+  payout_id: z.string().nullable(),
+  status: z.string(),
+  tax_minor: z.number().int(),
+});
+export type StaffBondCouponOut = z.infer<typeof StaffBondCouponOut>;
+
 export const StaffBondHoldingOut = z.object({
   accrued_minor: z.number().int(),
   client_id: z.string(),
@@ -4559,6 +4576,20 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: BondChangeOut,
+  },
+  "GET /staff/bond-coupons": {
+    method: "GET",
+    path: "/staff/bond-coupons",
+    params: z.object({}),
+    query: z.object({
+    status: z.string().nullable().optional(),
+    limit: z.number().int().optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(StaffBondCouponOut),
   },
   "GET /staff/bond-holdings": {
     method: "GET",

@@ -2,7 +2,7 @@
 
 Uganda government bonds, sold the way Bank of Uganda sells them. The owner decided on 2026-11-15 that a client buys a part of a specific bond issue, not a bond by tenor counted from the day they pay (see [decisions.md](decisions.md)). The pure rules are in `backend/app/modules/bonds/domain`, the catalogue in `backend/app/modules/bonds/catalogue.py`, the routes in `backend/app/modules/bonds/api.py`, and the database side is migration 0490.
 
-This document covers the catalogue: issues and prices. Buying, coupons, selling early and maturity come in later pull requests, and this document grows with them.
+This document covers the catalogue, buying and the coupon run. Selling early and maturity come in later pull requests, and this document grows with them.
 
 ## How a bond works
 
@@ -100,6 +100,18 @@ The database (migration 0491) lets only the client save a holding, for themselve
 
 The client's view is after tax: the coupon after tax, the coupons still to be paid and everything still to come (those coupons and the face value). It never shows the tax.
 
+## The coupon run
+
+Coupons are paid the way an investment's interest is paid at maturity (`app/modules/bonds/coupons.py`, rules in `domain/coupons.py`, database side migration 0492).
+
+* `bonds.pay_coupons` runs at 01:00 Kampala time every day. It pays every coupon before maturity dated on or before that business day that a holding is owed and has not been paid. So a run that never happened, however long the scheduler was down, is made up by the next one, and a coupon is never lost. The day comes from the time the run was scheduled for, so a late run or a retry pays up to its own day and no further. A coupon paid late keeps its coupon date, and its ledger entry is dated the day it was paid.
+* A holding is owed a coupon when it is active and started on a business day before the coupon date. The last coupon, on the maturity date, is paid with the face value at maturity, not by the run.
+* Each coupon is one ledger entry, `bond.coupon`, dated the day it is paid, with the holding as its source: debit `interest.expense` with the coupon before tax, credit `tax.withholding_payable` with the tax, and credit the rest to the client's payout pending account for that coupon. The tax module reads these entries, so bond tax is in the monthly figures for URA and on the client's certificate, as a line named after the bond.
+* The coupon after tax is then paid out to the destination the client chose for the holding (`PUT /client/bond-holdings/{id}/coupon-destination`). With none chosen, or one the payout module refuses (for example while a new number is in its 24-hour safety wait), the coupon is **held**: the money waits in payouts, and the client sends it on with their app PIN (`POST /client/bond-coupons/{id}/pay-out`). The reason it waits is kept on the coupon.
+* Holdings are paid in batches of 200, each in a transaction only the current holder of the job can commit, and each holding in its own savepoint. One that fails is logged and stays owed, and the run is retried. A holding is never paid a date twice: the coupon is unique per holding and date, the ledger entry's idempotency key is the holding and date, and the holding is locked while it is paid.
+
+The database (migration 0492) lets only the worker save a coupon. A held coupon can be marked paid out once, by the worker or the client it belongs to, and only with a payout of that coupon to that client. No figure on a coupon ever changes, and none is removed. A client may change only the coupon destination on their own holding, and not on a cancelled one. Clients see only their own coupons, after tax.
+
 ## HTTP routes
 
 | Route | Who | What |
@@ -111,12 +123,16 @@ The client's view is after tax: the coupon after tax, the coupons still to be pa
 | `POST /client/bond-holdings` | Signed-in client, with an idempotency key | Buy a face value at today's price. 422 as the quote refuses, 409 with five waiting. |
 | `GET /client/bond-holdings`, `GET /client/bond-holdings/{id}` | Signed-in client | Their holdings, unpaid and active, after tax. |
 | `GET` and `POST /client/bond-holdings/{id}/payments/card`, `POST .../payments/mobile-money`, `GET .../payment` | Signed-in client | Paying the cost, as for an investment. The payment shows `purpose: "bond"`, with the holding's ID in `investment_id`. |
+| `PUT /client/bond-holdings/{id}/coupon-destination` | Signed-in client | Choose where the holding's coupons are paid, or clear it with `null`. 422 on a destination that cannot be paid. |
+| `GET /client/bond-coupons` | Signed-in client | Their coupons, newest first, after tax, and whether each is paid out or waiting. |
+| `POST /client/bond-coupons/{id}/pay-out` | Signed-in client, with the app PIN | Send on a held coupon. 428 without the PIN, 422 when payouts refuse the destination, 409 when it is not waiting. |
 | `GET /staff/bond-holdings?status=` | `investments.view` | Every client's holdings with what each paid. |
+| `GET /staff/bond-coupons?status=` | `investments.view` | Coupons paid, with the tax, and the held ones with why they wait. |
 | `GET /staff/bond-changes?status=` | `products.view` | New issues, prices, pauses and openings, newest first. |
 | `POST /staff/bond-changes/new-issue`, `/price`, `/status`, `POST /staff/bond-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding, with the second person enforced in the database. Approving asks the person to confirm it is them. |
 
-Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested` and `bonds.holding_started`.
+Audit events on resource `bond_change`: `bonds.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the issue's code, ISIN, coupon, tax, maturity and price. On resource `bond_holding`: `bonds.purchase_requested`, `bonds.holding_started` and `bonds.coupon_destination_chosen`.
 
 ## Not built yet
 
-The coupon run, selling early through the dealing desk, maturity, and the client app screens. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.
+Selling early through the dealing desk, maturity (the face value and the last coupon), and the client app screens. No notice is sent when a coupon is paid or held. For bond payments: bank transfers, and the staff tools that undo a payment (reversing a mistaken deposit, moving it to another client, refunding a card), which take investment payments only for now. A bond payment that arrives too late to start its holding waits in the client's awaiting-start account for staff. **Follow-up: let the reversal and card refund tools take bond payments**, so staff can return that money. Until then, staff return it with a ledger correction (two people). No notice is sent when a holding starts. Unit trusts are their own product type, waiting on which fund managers Finvest has agreements with.

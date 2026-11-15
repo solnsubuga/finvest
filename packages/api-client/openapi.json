@@ -2479,6 +2479,89 @@
         "title": "BondChangeStatus",
         "type": "string"
       },
+      "BondCouponOut": {
+        "additionalProperties": false,
+        "description": "A coupon paid to a client's holding, after tax.",
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "coupon_date": {
+            "format": "date",
+            "title": "Coupon Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "held_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Because"
+          },
+          "holding_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Holding Id",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payout_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "holding_id",
+          "code",
+          "name",
+          "coupon_date",
+          "currency",
+          "amount_minor",
+          "status",
+          "payout_id",
+          "held_because"
+        ],
+        "title": "BondCouponOut",
+        "type": "object"
+      },
       "BondHoldingOut": {
         "additionalProperties": false,
         "description": "A client's holding as they see it. Every figure is after tax.",
@@ -2555,6 +2638,20 @@
             ],
             "title": "Pay By"
           },
+          "payout_destination_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Destination Id"
+          },
           "price": {
             "title": "Price",
             "type": "integer"
@@ -2596,7 +2693,8 @@
           "coupon_minor",
           "coupons_left",
           "next_coupon_date",
-          "still_to_come_minor"
+          "still_to_come_minor",
+          "payout_destination_id"
         ],
         "title": "BondHoldingOut",
         "type": "object"
@@ -7604,6 +7702,59 @@
         ],
         "title": "CorrectionStatus",
         "type": "string"
+      },
+      "CouponDestinationIn": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Destination Id"
+          }
+        },
+        "required": [
+          "destination_id"
+        ],
+        "title": "CouponDestinationIn",
+        "type": "object"
+      },
+      "CouponPayOutIn": {
+        "additionalProperties": false,
+        "properties": {
+          "destination_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Destination Id",
+            "type": "string"
+          },
+          "pin_confirmation": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pin Confirmation"
+          }
+        },
+        "required": [
+          "destination_id"
+        ],
+        "title": "CouponPayOutIn",
+        "type": "object"
       },
       "Cover": {
         "enum": [
@@ -23957,6 +24108,106 @@
         "title": "SignupTicketView",
         "type": "object"
       },
+      "StaffBondCouponOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "client_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "coupon_date": {
+            "format": "date",
+            "title": "Coupon Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "gross_minor": {
+            "title": "Gross Minor",
+            "type": "integer"
+          },
+          "held_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Because"
+          },
+          "holding_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Holding Id",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "payout_id": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payout Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tax_minor": {
+            "title": "Tax Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "holding_id",
+          "code",
+          "name",
+          "coupon_date",
+          "currency",
+          "amount_minor",
+          "status",
+          "payout_id",
+          "held_because",
+          "client_id",
+          "gross_minor",
+          "tax_minor"
+        ],
+        "title": "StaffBondCouponOut",
+        "type": "object"
+      },
       "StaffBondHoldingOut": {
         "additionalProperties": false,
         "properties": {
@@ -33150,6 +33401,188 @@
         ]
       }
     },
+    "/client/bond-coupons": {
+      "get": {
+        "description": "The client's coupons, newest first, after tax.",
+        "operationId": "client_bond_coupons_client_bond_coupons_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BondCouponOut"
+                  },
+                  "title": "Response Client Bond Coupons Client Bond Coupons Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Bond Coupons",
+        "tags": [
+          "client bonds"
+        ]
+      }
+    },
+    "/client/bond-coupons/{coupon_id}/pay-out": {
+      "post": {
+        "description": "Send on a coupon that is waiting for a destination.\n\nA repeat after it was sent on is refused with 409 `conflict`, never paid twice. 428\n`pin_required` from the phone app once it has a PIN, unless `pin_confirmation` is a fresh\nconfirmation for `withdrawal`.",
+        "operationId": "client_pay_out_coupon_client_bond_coupons__coupon_id__pay_out_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "coupon_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Coupon Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponPayOutIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondCouponOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Precondition Required"
+          }
+        },
+        "summary": "Client Pay Out Coupon",
+        "tags": [
+          "client bonds"
+        ]
+      }
+    },
     "/client/bond-holdings": {
       "get": {
         "description": "The client's holdings, unpaid and active, newest first.",
@@ -33406,6 +33839,102 @@
           }
         },
         "summary": "Client Bond Holding",
+        "tags": [
+          "client bonds"
+        ]
+      }
+    },
+    "/client/bond-holdings/{holding_id}/coupon-destination": {
+      "put": {
+        "description": "Where this holding's coupons are paid: one of the client's approved payout destinations.\nCoupons paid before this was chosen wait, and are sent on one at a time.",
+        "operationId": "client_choose_coupon_destination_client_bond_holdings__holding_id__coupon_destination_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "holding_id",
+            "required": true,
+            "schema": {
+              "maxLength": 20,
+              "minLength": 20,
+              "pattern": "^[-0-9A-Z_a-z]{20}$",
+              "title": "Holding Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponDestinationIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BondHoldingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Choose Coupon Destination",
         "tags": [
           "client bonds"
         ]
@@ -49370,6 +49899,113 @@
           }
         },
         "summary": "Staff Withdraw Bond Change",
+        "tags": [
+          "staff bonds"
+        ]
+      }
+    },
+    "/staff/bond-coupons": {
+      "get": {
+        "description": "Coupons paid, newest first, with the tax withheld. `held` lists those still waiting.",
+        "operationId": "staff_bond_coupons_staff_bond_coupons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(paid_out|held)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StaffBondCouponOut"
+                  },
+                  "title": "Response Staff Bond Coupons Staff Bond Coupons Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Staff Bond Coupons",
         "tags": [
           "staff bonds"
         ]

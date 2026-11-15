@@ -14,7 +14,7 @@ Every figure here is read from the ledger, as [rules.md](rules.md) requires of r
 | Tax withheld | The credits less debits on `tax.withholding_payable` |
 | Interest after tax | The difference, which is what the client's `client.interest_accrued` was given, because each entry balances |
 
-The investments module keeps every entry that moves a client's tax under `source_type = 'investment'` with the investment's ID (agreed with the investing thread). The daily run, carried-over investments, maturity, early withdrawal and an unwind all do. Sums are signed, so an unwind or a reversal nets out in the month it is posted in. Investments are then read in batches for the client, product and dates.
+The investments module keeps every entry that moves a client's tax under `source_type = 'investment'` with the investment's ID (agreed with the investing thread). The daily run, carried-over investments, maturity, early withdrawal and an unwind all do. Sums are signed, so an unwind or a reversal nets out in the month it is posted in. Investments are then read in batches for the client, product and dates. Bond coupons are read the same way from entries whose source is `bond_holding`: each holding is a line of its own, named after the bond, from the day it started to the bond's maturity (see [bonds.md](bonds.md#the-coupon-run)).
 
 A month is the calendar month of the entries' effective dates. Entries are dated the day they are posted, so a month that has ended does not change, except through an entry dated in it after the fact, which the closed day prevents once the day is closed.
 
