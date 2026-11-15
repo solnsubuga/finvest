@@ -101,6 +101,8 @@ test("the screens before sign-in meet WCAG 2.1 AA", async ({ page }) => {
 test("the not-found page meets WCAG 2.1 AA", async ({ page }) => {
   await page.goto("/this-page-does-not-exist");
   await expect(page.getByText("We could not find that page")).toBeVisible();
+  // The page's start loader fades out for a moment after the first screen is drawn.
+  await expect(page.locator("#finvest-start")).toHaveCount(0);
   expect(await violations(page), "not found").toEqual([]);
 });
 
