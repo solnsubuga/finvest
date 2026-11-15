@@ -1,5 +1,6 @@
 """A signed-in client changes their own password, mobile number and email address."""
 
+import secrets
 from collections.abc import AsyncIterator
 
 import pytest
@@ -179,18 +180,19 @@ async def test_a_new_email_is_unproved_and_the_old_address_is_told(
     api: Api, worker_database: Database
 ) -> None:
     client = await api.client()
-    first = await api.http.put("/client/email", json={"email": "Amara@Example.com"})
+    # Addresses of this test's own: other tests here send to amara@example.com too.
+    tag = secrets.token_hex(4)
+    old, new = f"amara.{tag}@example.com", f"nakato.{tag}@example.com"
+    first = await api.http.put("/client/email", json={"email": f"Amara.{tag}@Example.com"})
     assert first.status_code == 200, first.text
-    assert first.json() == {"email": "amara@example.com"}
-    assert [t for t, _ in await sent(worker_database, "amara@example.com")] == [
-        "email_verification"
-    ]
-    second = await api.http.put("/client/email", json={"email": "nakato@example.com"})
+    assert first.json() == {"email": old}
+    assert [t for t, _ in await sent(worker_database, old)] == ["email_verification"]
+    second = await api.http.put("/client/email", json={"email": new})
     assert second.status_code == 200
     row = await account(api, client)
-    assert row["email"] == "nakato@example.com" and row["email_verified_at"] is None
-    assert "email_changed" in [t for t, _ in await sent(worker_database, "amara@example.com")]
-    same = await api.http.put("/client/email", json={"email": "nakato@example.com"})
+    assert row["email"] == new and row["email_verified_at"] is None
+    assert "email_changed" in [t for t, _ in await sent(worker_database, old)]
+    same = await api.http.put("/client/email", json={"email": new})
     assert same.status_code == 422
 
 

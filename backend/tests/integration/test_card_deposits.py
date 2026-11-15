@@ -45,6 +45,7 @@ from tests.support.investments import request as request_investment
 from tests.support.kyc import SEALER, ready_draft
 from tests.support.ledger import staff as new_staff
 from tests.support.payments import drain, reload
+from tests.support.phones import unique_phone
 from tests.support.settings import clear_settings, set_setting
 
 pytestmark = pytest.mark.integration
@@ -61,9 +62,18 @@ class FakePesapal:
     # The merchant reference (the deposit's ID) of each order sent, in order. Tests share one
     # database, so a drain can also send a deposit another test left behind: count by deposit.
     sent: list[str] = field(default_factory=list)
-    cancels: int = 0
+    # Every order tracking ID a cancel was asked for, in order.
+    cancelled: list[str] = field(default_factory=list)
     registrations: int = 0
     lose_the_answer: bool = False
+
+    def cancels_of(self, merchant_reference: str) -> int:
+        """How many cancels were asked for the order made for `merchant_reference`."""
+        return sum(
+            1
+            for tracking_id in self.cancelled
+            if self.orders.get(tracking_id, {}).get("merchant_reference") == merchant_reference
+        )
 
     def pay(self, deposit_id: str, *, amount: object | None = None) -> None:
         for order in self.orders.values():
@@ -132,8 +142,12 @@ class FakePesapal:
                 ).encode(),
             )
         if path == "/api/Transactions/CancelOrder":
-            self.cancels += 1
-            order = self.orders[json.loads(request.content)["order_tracking_id"]]
+            tracking_id = json.loads(request.content)["order_tracking_id"]
+            self.cancelled.append(tracking_id)
+            order = self.orders.get(tracking_id)
+            if order is None:
+                # Another test's order: this fake never made it.
+                return httpx.Response(200, json={"status": "500"})
             if order["status_code"] != 0:
                 return httpx.Response(200, json={"status": "500"})
             order["status_code"] = 2
@@ -174,7 +188,7 @@ class Setup:
         return httpx.AsyncClient(transport=transport, base_url="https://api")
 
     async def client(self, http: httpx.AsyncClient) -> Actor:
-        phone = "+2567" + "".join(secrets.choice("0123456789") for _ in range(8))
+        phone = unique_phone()
         client_id = await self.identity.create_client(phone=phone, email=None, password=PASSWORD)
         actor = Actor("client", client_id)
         async with self.database.actor_transaction(actor) as session:
@@ -349,7 +363,9 @@ async def test_a_page_left_unpaid_is_cancelled_then_failed(setup: Setup) -> None
         await _sweep(setup)
         failed = await until(setup, deposit, S.FAILED, S.CONFIRMED)
         assert failed.status is S.FAILED and failed.code == "approval_timed_out"
-        assert setup.fake.cancels == 1
+        # The sweep reaches every unpaid card page in the shared database, so count this
+        # deposit's own cancels.
+        assert setup.fake.cancels_of(deposit.id) == 1
 
 
 async def test_a_payment_paid_for_a_different_amount_is_held_for_staff(setup: Setup) -> None:

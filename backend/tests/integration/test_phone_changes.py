@@ -134,8 +134,9 @@ async def test_a_second_person_approves_and_the_number_changes(api: Api) -> None
     # Nothing changes on a proposal alone.
     assert await current_phone(api, client_id) == old
     listed = await api.http.get("/staff/phone-changes", headers=checker)
-    assert [item["id"] for item in listed.json()["items"]] == [change_id]
-    assert listed.json()["items"][0]["new_phone"] == new
+    # Other tests leave changes waiting too, so find this one.
+    [mine] = [item for item in listed.json()["items"] if item["id"] == change_id]
+    assert mine["new_phone"] == new
 
     approved = await api.http.post(f"/staff/phone-changes/{change_id}/approval", headers=checker)
     assert approved.status_code == 204, approved.text

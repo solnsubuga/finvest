@@ -29,6 +29,7 @@ from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
 from tests.support.ledger import client as new_client
 from tests.support.ledger import staff as new_staff
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -452,6 +453,15 @@ async def clear_wordings(migrator_database: Database) -> None:
         await session.execute(text("TRUNCATE notification_wordings"))
 
 
+@pytest.fixture(autouse=True)
+async def built_in_words(migrator_database: Database) -> AsyncIterator[None]:
+    """Put the built-in words back after each test here. Tests in other files tell clients of
+    payments and expect the built-in words, so new words approved here must not outlive the
+    test that approved them."""
+    yield
+    await clear_wordings(migrator_database)
+
+
 async def test_new_words_are_used_only_after_a_second_person_approves(
     app_database: Database, migrator_database: Database, fake_clock: FakeClock
 ) -> None:
@@ -677,7 +687,7 @@ class Api:
 
     async def client(self) -> Actor:
         client_id = await self.identity.create_client(
-            phone=f"+2567{push_id().__hash__() % 10**8:08d}", email=None, password=PASSWORD
+            phone=unique_phone(), email=None, password=PASSWORD
         )
         actor = Actor("client", client_id)
         issued = await self.identity.issue_session(actor, second_step="passkey", transport="token")

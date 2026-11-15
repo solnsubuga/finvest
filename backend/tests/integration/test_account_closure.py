@@ -63,8 +63,9 @@ async def test_closing_takes_two_people_and_ends_every_session(api: Api) -> None
 
     preparer = await api.staff("operations")
     listed = (await api.http.get("/staff/closures")).json()["items"]
-    assert [item["id"] for item in listed] == [request_id]
-    assert listed[0]["can_prepare"] is True and listed[0]["can_approve"] is False
+    # Other tests leave requests open too, so find this one.
+    [mine] = [item for item in listed if item["id"] == request_id]
+    assert mine["can_prepare"] is True and mine["can_approve"] is False
     prepared = await step(api, request_id, "preparation")
     assert prepared.status_code == 200, prepared.text
     assert prepared.json()["status"] == "prepared"

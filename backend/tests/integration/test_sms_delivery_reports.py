@@ -138,8 +138,10 @@ async def test_a_delivery_report_is_recorded_once_and_applied(
     assert (
         await scalar(
             worker_database,
-            "SELECT count(*) FROM jobs WHERE kind = :kind",
+            # This message's reports only: other tests queue reports of their own.
+            "SELECT count(*) FROM jobs WHERE kind = :kind AND payload ->> 'message_id' = :id",
             kind=sms_delivery.APPLY_REPORT,
+            id=message_id,
         )
         == 1
     )
