@@ -40,6 +40,7 @@ from app.modules.organisations.domain.applications import (
     clean_name,
     clean_registration,
     clean_role,
+    most_approvals,
     problems,
 )
 from app.shared.actors import Actor
@@ -280,6 +281,11 @@ async def change(
     )
     new_approvals = found.approvals_needed if approvals_needed is None else approvals_needed
     _approvals(new_approvals)
+    # More approvals than people could never be met; refused now rather than at hand-in.
+    if approvals_needed is not None and approvals_needed > most_approvals(
+        found.kind, len(found.current)
+    ):
+        raise _invalid("approvals_needed", "more_than_signatories")
     try:
         async with session.begin_nested():
             await session.execute(
