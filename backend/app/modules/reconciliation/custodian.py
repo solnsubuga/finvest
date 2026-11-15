@@ -235,6 +235,10 @@ _LAST_SIGNED = text(
     "SELECT id FROM reconciliation_custodian_checks WHERE status = 'signed_off' "
     "ORDER BY statement_date DESC, signed_off_at DESC LIMIT 1"
 )
+_LAST_SIGNED_BY = text(
+    "SELECT id FROM reconciliation_custodian_checks WHERE status = 'signed_off' "
+    "AND statement_date <= :on ORDER BY statement_date DESC, signed_off_at DESC LIMIT 1"
+)
 
 
 def file_key(check_id: str, file_id: str) -> str:
@@ -622,6 +626,13 @@ async def items_of(session: AsyncSession, check_id: str) -> list[ItemView]:
 async def last_signed_off(session: AsyncSession) -> CheckView | None:
     """The latest statement day that has been signed off, for the dealing desk's summary."""
     row = (await session.execute(_LAST_SIGNED)).one_or_none()
+    return None if row is None else await get_check(session, row.id)
+
+
+async def last_signed_off_by(session: AsyncSession, on: date) -> CheckView | None:
+    """The latest signed-off check for a statement day on or before `on`, for the client money
+    check."""
+    row = (await session.execute(_LAST_SIGNED_BY, {"on": on})).one_or_none()
     return None if row is None else await get_check(session, row.id)
 
 

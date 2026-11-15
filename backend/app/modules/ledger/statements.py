@@ -648,3 +648,54 @@ async def day_source_totals(
         )
         for row in rows.all()
     ]
+
+
+# Every account code at the end of a day, for reconciliation's client money check -------------
+
+
+@dataclass(frozen=True, slots=True)
+class CodeBalance:
+    """Every account with one code and kind, on one side of the client line, added together.
+
+    `for_clients` is true for accounts a client owns. The balance is in the kind's normal
+    direction and counts only entries dated on or before the day.
+    """
+
+    code: str
+    kind: str
+    name: str
+    for_clients: bool
+    balance: Money
+
+
+_SELECT_BALANCES_AS_OF = text(
+    "SELECT account.code, account.kind, min(account.name) AS name, "
+    "(account.owner_client_id IS NOT NULL) AS for_clients, "
+    "coalesce(sum(line.amount_minor), 0)::bigint AS debit_minor "
+    "FROM ledger_lines AS line "
+    "JOIN ledger_journal_entries AS entry ON entry.id = line.entry_id "
+    "JOIN ledger_accounts AS account ON account.id = line.account_id "
+    "WHERE line.currency = :currency AND entry.effective_date <= :on "
+    "GROUP BY account.code, account.kind, (account.owner_client_id IS NOT NULL) "
+    "ORDER BY account.code, account.kind, 4"
+)
+
+
+async def balances_as_of(session: AsyncSession, currency: Currency, on: date) -> list[CodeBalance]:
+    """Each account code's balance at the end of `on`, split by kind and by whether clients own
+    the accounts. Names no client. Once the ledger is closed through `on`, these figures cannot
+    change. For staff and the worker."""
+    rows = await session.execute(_SELECT_BALANCES_AS_OF, {"currency": currency.value, "on": on})
+    return [
+        CodeBalance(
+            code=row.code,
+            kind=row.kind,
+            name=row.name,
+            for_clients=bool(row.for_clients),
+            balance=Money(
+                int(row.debit_minor) if row.kind in _DEBIT_NORMAL else -int(row.debit_minor),
+                currency,
+            ),
+        )
+        for row in rows.all()
+    ]

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router";
 import { apiBaseUrl, createHttp } from "@/api/http.ts";
 import { useAuth } from "@/auth/context.ts";
@@ -19,6 +19,10 @@ import { notConnectedCardRefundsApi, type CardRefundsApi } from "./cardrefunds/a
 import { CardRefunds } from "./cardrefunds/CardRefunds.tsx";
 import { createHttpCardRefundsApi } from "./cardrefunds/http.ts";
 import { createStubCardRefundsApi } from "./cardrefunds/stub.ts";
+import { notConnectedClientMoneyApi, type ClientMoneyApi } from "./clientmoney/api.ts";
+import { ClientMoney } from "./clientmoney/ClientMoney.tsx";
+import { createHttpClientMoneyApi } from "./clientmoney/http.ts";
+import { createStubClientMoneyApi, type ClientMoneyStubCase } from "./clientmoney/stub.ts";
 import { notConnectedDayCloseApi, type DayCloseApi } from "./dayclose/api.ts";
 import { DayClose } from "./dayclose/DayClose.tsx";
 import { createHttpDayCloseApi } from "./dayclose/http.ts";
@@ -51,9 +55,11 @@ interface BankTransfersScreenProps {
   canDecide: boolean;
   /** Makes the idempotency key for one command. Every try at the same command carries the same key. */
   newKey?: () => string;
+  /** Shown under the page's title, above the transfers: the client money check. */
+  lead?: ReactNode;
 }
 
-export function BankTransfersScreen({ api, canDecide, newKey = () => crypto.randomUUID() }: BankTransfersScreenProps) {
+export function BankTransfersScreen({ api, canDecide, newKey = () => crypto.randomUUID(), lead = null }: BankTransfersScreenProps) {
   const [params, setParams] = useSearchParams();
   const requestedId = params.get("transfer");
   const [queue, setQueue] = useState<Load<QueueItem[]>>({ state: "loading" });
@@ -162,6 +168,7 @@ export function BankTransfersScreen({ api, canDecide, newKey = () => crypto.rand
   return (
     <>
       <PageHeader title="Reconciliation" summary="The ledger compared with provider and bank statements, and anything that does not match." />
+      {lead}
       <div>
         <h2 className="m-0 text-xl font-extrabold">Bank transfers to check</h2>
         <p className="m-0 text-md text-muted">{summary}</p>
@@ -313,9 +320,25 @@ export default function ReconciliationPage() {
     const base = apiBaseUrl();
     return base ? createHttpCustodianChecksApi(createHttp(base)) : notConnectedCustodianChecksApi;
   });
+  // The client money check: a sample check under the stub, with `?sample=short` for one that does
+  // not tie, and the real route otherwise.
+  const [clientMoney] = useState<ClientMoneyApi>(() => {
+    if (!session) return notConnectedClientMoneyApi;
+    if (isStubAuth()) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      const which: ClientMoneyStubCase = sample === "short" || sample === "empty" || sample === "error" ? sample : "sample";
+      return createStubClientMoneyApi(150, which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpClientMoneyApi(createHttp(base)) : notConnectedClientMoneyApi;
+  });
   return (
     <>
-      <BankTransfersScreen api={api} canDecide={session ? can(session, "bank_transfers.change") : false} />
+      <BankTransfersScreen
+        api={api}
+        canDecide={session ? can(session, "bank_transfers.change") : false}
+        lead={<ClientMoney api={clientMoney} />}
+      />
       <DayClose api={days} canAct={session ? can(session, "reconciliation.change") : false} />
       <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
       <MistakenPayments api={mistaken} canChange={session ? can(session, "deposit_reassignments.change") : false} />

@@ -17,7 +17,7 @@ from app.modules.ledger import closing as ledger_closing
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.ledger.domain.errors import DayClosed
-from app.modules.reconciliation import day_close, statements
+from app.modules.reconciliation import client_money, day_close, statements
 from app.modules.reconciliation.domain.day_close import CloseError, CloseStatus
 from app.modules.reconciliation.domain.matching import ExceptionKind
 from app.modules.reconciliation.domain.pots import Pot
@@ -534,3 +534,32 @@ async def test_a_pot_added_later_needs_a_statement_only_once_it_has_been_used(
     await books.statement(day, line(day, 1_000, "dep-later"))
     assert (await books.prepare(day)).status is CloseStatus.PREPARED
     assert (await books.approve(day)).status is CloseStatus.CLOSED
+
+
+async def test_the_client_money_check_reads_the_last_closed_day_and_accounts_for_it(
+    app_database: Database, books: Books, fake_clock: FakeClock
+) -> None:
+    day = await next_day(app_database, fake_clock)
+    paid_in = f"dep-{push_id()}"
+    await books.post(day, 70_000, paid_in)
+    await books.post(day, 5_000, "in-the-books-only")
+    await books.statement(day, line(day, 70_000, paid_in), line(day, 9_000, "statement-only"))
+    await books.close(day)
+
+    reader = staff()
+    async with app_database.actor_transaction(reader) as session:
+        found = await client_money.client_money(session)
+    assert found is not None
+    figures = found.check
+    assert figures.business_date == day
+    [mine] = [pot for pot in figures.pots if pot.account_reference == books.pot.account_reference]
+    assert (mine.statement, mine.ledger, mine.open_exceptions) == (
+        ugx(79_000),
+        ugx(75_000),
+        ugx(4_000),
+    )
+    # Held is counted from the statements, so the difference from what is owed is exactly what
+    # the open differences and the assets no statement shows account for.
+    assert figures.unexplained == ugx(0)
+    assert figures.difference == figures.open_exceptions - figures.not_on_statement_total
+    assert figures.held == figures.on_statements + figures.bills - figures.not_client_money_total

@@ -134,6 +134,7 @@ In `backend/app/modules/reconciliation/api.py`. Reading needs `reconciliation.vi
 | `POST /staff/reconciliation/days/{day}/prepare` | The first signature. 409 with the first blocker |
 | `POST /staff/reconciliation/days/{day}/approve` | The second signature. 409 `close_not_prepared`, `close_needs_second_person`, `close_needs_someone_who_did_not_import` or `close_changed_since_prepared` |
 | `POST /staff/reconciliation/days/{day}/send-back` | `{reason}`. Declines or withdraws a prepared close |
+| `GET /staff/reconciliation/client-money` | The client money check for the last closed day (see [The client money check](#client-money)). `check` is null before any day is closed |
 | `GET /staff/reconciliation/iotec-wallet` | What ioTec says Finvest's wallet holds now, beside what the ledger says the ioTec pots (`iotec.wallet`, every network) hold now, and the difference. Changes nothing. `connected` is false where ioTec is not the provider, and the wallet figures are null when ioTec could not be read |
 
 The wallet check is the one moment-of-the-day view. The day close still compares each pot with its statement once the day is over. A difference in the wallet check is expected while a payment is on its way or an ioTec fee has not been posted, so it is a prompt to look, not a blocker.
@@ -178,6 +179,22 @@ In `backend/app/modules/reconciliation/transfers_api.py`. Seeing transfers needs
 | `POST /staff/reconciliation/pot-transfers/{id}/decline` | `{reason}`. Nothing is posted. 403 `transfer_needs_second_person`; 409 `transfer_already_decided` |
 
 "Transfers between pots" on the console's Reconciliation screen (`apps/console/src/screens/reconciliation/transfers/`) records a transfer from one pot to another, with what was sent, what arrived, the day and the provider's reference, and shows the provider's fee as it is typed. Below it, each transfer waiting for a second person shows both pots and the three amounts. Anyone else can approve it or decline it with a reason, and the person who recorded it has nothing to press. Someone without `reconciliation.change` sees the list only.
+
+## The client money check {#client-money}
+
+At the top of the Reconciliation screen, "Client money check" says whether what Finvest owes its clients equals what it holds for them, at the end of the last day two people closed (QA finding F-010, the owner's choice on a decision card in the console QA fixes thread, 2026-11-15). The rules are in `domain/client_money.py` and the reading in `client_money.py`. It reads only.
+
+What is owed comes from the ledger: every liability account a client owns, at the end of the day. Interest clients have earned and not been paid (`client.interest_accrued`) is part of it and is shown on its own line, beside the discount still to come on the bills held (face value less cost, from `dealing.holdings.holdings_on`), which is what pays it at maturity.
+
+What is held cannot also come from the ledger, or the check would be circular: the books always balance, so held would always equal owed. So it is counted from outside evidence:
+
+| Held | From |
+| --- | --- |
+| Each cash pot | Its statement's closing balance for the day, as the day close saved it when two people signed |
+| Bills and bonds | The dealing desk's `dealing.bills` at cost, with the latest custodian statement check signed off on or before the day. The screen says when that check is for an earlier day or had differences, and when none is signed off |
+| Less what is not client money | Every other liability and equity account on the ledger (such as tax withheld for URA and Finvest's own money in the buffer), each on its own line, and Finvest's earnings so far (income less costs) on one line. The earnings are below zero while interest accrued waits for the bills to mature, and so add to what is held |
+
+Held less owed is the difference. Because the ledger balances, it is accounted for by two things, each listed under "Why it does not tie": the differences still open on the day's statements, and assets on the books that no statement shows (balances carried over from the paper register and not yet in a pot, or a client owing Finvest for a payment credited by mistake). What neither accounts for is `unexplained`, which should always be zero; anything else means a figure was read wrongly. Only shillings are checked: every pot is in UGX.
 
 ## Custodian statement checks {#custodian}
 

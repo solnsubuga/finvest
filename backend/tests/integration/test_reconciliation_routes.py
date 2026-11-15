@@ -310,3 +310,18 @@ async def test_a_statement_is_imported_in_a_layout_set_on_settings(
         assert imported.json()["line_count"] == 1
     finally:
         await clear_settings(migrator_database)
+
+
+async def test_staff_see_the_client_money_check_and_support_does_not(api: Api) -> None:
+    await api.staff("finance")
+    seen = await api.http.get("/staff/reconciliation/client-money")
+    assert seen.status_code == 200, seen.text
+    found = seen.json()["check"]
+    # Other tests may or may not have closed a day in this database by now.
+    if found is not None:
+        assert found["unexplained"]["minor"] == 0, found
+        assert found["standing"] in ("ties", "short", "over")
+        assert found["difference"]["minor"] == (found["held"]["minor"] - found["owed"]["minor"])
+    await api.staff("support")
+    refused = await api.http.get("/staff/reconciliation/client-money")
+    assert refused.status_code == 403

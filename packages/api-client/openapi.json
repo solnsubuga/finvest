@@ -6147,6 +6147,225 @@
         "title": "ClientLoginStart",
         "type": "object"
       },
+      "ClientMoneyCheckOut": {
+        "additionalProperties": false,
+        "properties": {
+          "check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientMoneyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "check"
+        ],
+        "title": "ClientMoneyCheckOut",
+        "type": "object"
+      },
+      "ClientMoneyCustodianOut": {
+        "additionalProperties": false,
+        "description": "The latest custodian statement check signed off on or before the day.",
+        "properties": {
+          "check_id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Check Id",
+            "type": "string"
+          },
+          "differences": {
+            "title": "Differences",
+            "type": "integer"
+          },
+          "statement_date": {
+            "format": "date",
+            "title": "Statement Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check_id",
+          "statement_date",
+          "differences"
+        ],
+        "title": "ClientMoneyCustodianOut",
+        "type": "object"
+      },
+      "ClientMoneyLineOut": {
+        "additionalProperties": false,
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "amount"
+        ],
+        "title": "ClientMoneyLineOut",
+        "type": "object"
+      },
+      "ClientMoneyOut": {
+        "additionalProperties": false,
+        "description": "What Finvest owes its clients against what it holds for them, at the end of the last\nclosed day. `check` is null before any day is closed.\n\nHeld is the pots' statements, plus the bills at cost, less what is not client money.\n`difference` is held less owed; `open_differences` and `not_on_statement` account for it,\nand `unexplained` is what neither does, which should be zero.",
+        "properties": {
+          "bills": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "business_date": {
+            "format": "date",
+            "title": "Business Date",
+            "type": "string"
+          },
+          "custodian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientMoneyCustodianOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "difference": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "discount_to_come": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "held": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "interest_owed": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "not_client_money": {
+            "items": {
+              "$ref": "#/components/schemas/ClientMoneyLineOut"
+            },
+            "title": "Not Client Money",
+            "type": "array"
+          },
+          "not_client_money_total": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "not_on_statement": {
+            "items": {
+              "$ref": "#/components/schemas/ClientMoneyLineOut"
+            },
+            "title": "Not On Statement",
+            "type": "array"
+          },
+          "not_on_statement_total": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "on_statements": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "open_differences": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "owed": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "pots": {
+            "items": {
+              "$ref": "#/components/schemas/ClientMoneyPotOut"
+            },
+            "title": "Pots",
+            "type": "array"
+          },
+          "standing": {
+            "enum": [
+              "ties",
+              "short",
+              "over"
+            ],
+            "title": "Standing",
+            "type": "string"
+          },
+          "unexplained": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          }
+        },
+        "required": [
+          "business_date",
+          "standing",
+          "owed",
+          "interest_owed",
+          "pots",
+          "on_statements",
+          "bills",
+          "custodian",
+          "discount_to_come",
+          "not_client_money",
+          "not_client_money_total",
+          "held",
+          "difference",
+          "open_differences",
+          "not_on_statement",
+          "not_on_statement_total",
+          "unexplained"
+        ],
+        "title": "ClientMoneyOut",
+        "type": "object"
+      },
+      "ClientMoneyPotOut": {
+        "additionalProperties": false,
+        "description": "One cash pot on the closed day: its statement is what is counted as held.",
+        "properties": {
+          "account_reference": {
+            "title": "Account Reference",
+            "type": "string"
+          },
+          "ledger_closing": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "open_differences": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          },
+          "source": {
+            "enum": [
+              "iotec",
+              "pesapal",
+              "bank"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "statement_closing": {
+            "$ref": "#/components/schemas/app__modules__reconciliation__api__MoneyOut"
+          }
+        },
+        "required": [
+          "source",
+          "account_reference",
+          "name",
+          "statement_closing",
+          "ledger_closing",
+          "open_differences"
+        ],
+        "title": "ClientMoneyPotOut",
+        "type": "object"
+      },
       "ClientOrganisationList": {
         "additionalProperties": false,
         "properties": {
@@ -74549,6 +74768,78 @@
         "summary": "Staff Withdraw Rate",
         "tags": [
           "staff investing"
+        ]
+      }
+    },
+    "/staff/reconciliation/client-money": {
+      "get": {
+        "description": "The client money check for the last closed day, in shillings. Reads only.",
+        "operationId": "client_money_check_staff_reconciliation_client_money_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClientMoneyCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Client Money Check",
+        "tags": [
+          "staff reconciliation"
         ]
       }
     },
