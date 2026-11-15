@@ -1,5 +1,6 @@
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import { Platform, StyleSheet, View } from "react-native";
+import { SafeAreaInsetsContext, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api } from "@/api/http";
 import { Connection, currentConnection, onConnection, reportConnection } from "@/api/connection";
@@ -63,15 +64,21 @@ export function ConnectionProvider({ children }: { children: ReactNode }) {
     setChecking(false);
   }, []);
 
+  // While offline the banner sits above the screen and takes the top of the safe area, so the
+  // screen starts below it with no top inset of its own: its back button and title stay in view.
+  const insets = useSafeAreaInsets();
+  const offline = connection === "offline";
   return (
     <View style={styles.fill}>
-      {children}
+      {offline ? <OfflineBanner /> : null}
+      <SafeAreaInsetsContext.Provider value={offline ? { ...insets, top: 0 } : insets}>
+        <View style={styles.fill}>{children}</View>
+      </SafeAreaInsetsContext.Provider>
       {connection === "maintenance" ? (
         <View style={StyleSheet.absoluteFill}>
           <MaintenanceScreen checking={checking} onRetry={retry} />
         </View>
       ) : null}
-      {connection === "offline" ? <OfflineBanner /> : null}
     </View>
   );
 }

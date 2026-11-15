@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { reportConnection, resetConnection } from "@/api/connection";
 import { setFetch } from "@/api/http";
@@ -46,7 +46,29 @@ afterEach(() => {
   jest.useRealTimers();
 });
 
+/** What a screen reads as its top inset, so a test can see whether it would start under the banner. */
+function TopInset() {
+  return <Text testID="top-inset">{useSafeAreaInsets().top}</Text>;
+}
+
 describe("the offline banner and the maintenance screen", () => {
+  it("takes the top of the screen while offline, so nothing under it is covered", async () => {
+    await render(
+      <SafeAreaProvider initialMetrics={metrics}>
+        <ConnectionProvider>
+          <TopInset />
+        </ConnectionProvider>
+      </SafeAreaProvider>,
+    );
+    expect(screen.getByTestId("top-inset")).toHaveTextContent("47");
+    await act(async () => reportConnection("offline"));
+    // The banner sits in the safe area itself and the screen starts below it.
+    expect(screen.getByTestId("top-inset")).toHaveTextContent("0");
+    expect(screen.getByTestId("offline-banner")).toHaveStyle({ paddingTop: 55 });
+    await act(async () => reportConnection("online"));
+    expect(screen.getByTestId("top-inset")).toHaveTextContent("47");
+  });
+
   it("shows neither while the API answers", async () => {
     await show();
     expect(screen.getByText("Home")).toBeTruthy();
@@ -54,7 +76,7 @@ describe("the offline banner and the maintenance screen", () => {
     expect(screen.queryByTestId("maintenance")).toBeNull();
   });
 
-  it("puts a banner over the screen while offline, and clears it when an answer comes", async () => {
+  it("puts a banner above the screen while offline, and clears it when an answer comes", async () => {
     await show();
     await act(async () => reportConnection("offline"));
     expect(screen.getByTestId("offline-banner")).toHaveTextContent(/No connection/);
