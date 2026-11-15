@@ -162,6 +162,16 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     if not ca_cert and not rehearsal:
         raise SettingError("DATABASE_CA_CERT is not set")
 
+    # Production must send email: sign-up links, sign-in codes and statements all go by email, and a
+    # blank backend makes the worker turn sending off without failing anything. Stop here instead.
+    if environment == "production" and not rehearsal:
+        if optional(env, "FINVEST_EMAIL_BACKEND") != "resend":
+            raise SettingError("FINVEST_EMAIL_BACKEND must be resend in production, or no email is sent")
+        if not optional(env, "FINVEST_EMAIL_FROM"):
+            raise SettingError("FINVEST_EMAIL_FROM is not set, so no email can be sent")
+        if not optional(env, "FINVEST_EMAIL_RESEND_API_KEY"):
+            raise SettingError("FINVEST_RESEND_API_KEY is not set, so no email can be sent")
+
     # Validate every database setting before writing anything.
     urls = {service: database_url(env, role) for service, role in ROLES.items()}
 

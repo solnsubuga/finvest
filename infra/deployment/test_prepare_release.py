@@ -33,6 +33,9 @@ def settings(**overrides):
         "DATABASE_CA_CERT": CERT,
         "ORIGIN_TLS_CERT": CERT,
         "ORIGIN_TLS_KEY": KEY,
+        "FINVEST_EMAIL_BACKEND": "resend",
+        "FINVEST_EMAIL_FROM": "hello@finvestug.com",
+        "FINVEST_EMAIL_RESEND_API_KEY": "re_test_not_a_real_key",
     }
     values.update(overrides)
     return {k: v for k, v in values.items() if v is not None}
@@ -66,6 +69,22 @@ class PrepareRelease(unittest.TestCase):
             for service in pr.ROLES:
                 env = read_env(self.out / "runtime" / f"{service}.env")
                 self.assertEqual(env["FINVEST_ENVIRONMENT"], environment)
+
+    def test_production_refuses_a_release_that_cannot_send_email(self):
+        for missing in (
+            {"FINVEST_EMAIL_BACKEND": None},
+            {"FINVEST_EMAIL_BACKEND": ""},
+            {"FINVEST_EMAIL_BACKEND": "none"},
+            {"FINVEST_EMAIL_FROM": None},
+            {"FINVEST_EMAIL_RESEND_API_KEY": None},
+        ):
+            with self.subTest(missing=missing), self.assertRaises(pr.SettingError):
+                pr.prepare(self.out, settings(**missing))
+            self.assertFalse(self.out.exists())
+
+    def test_staging_may_leave_email_off(self):
+        pr.prepare(self.out, settings(DEPLOY_ENVIRONMENT="staging", FINVEST_EMAIL_BACKEND=None))
+        self.assertNotIn("FINVEST_EMAIL_BACKEND", read_env(self.out / "runtime" / "worker.env"))
 
     def test_password_is_percent_encoded(self):
         pr.prepare(self.out, settings())
