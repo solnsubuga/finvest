@@ -4,6 +4,7 @@ Issues are never removed and tests share one database, so every test makes its o
 its own code and ISIN, and pauses it again before it ends.
 """
 
+import asyncio
 import secrets
 import uuid
 from collections.abc import AsyncIterator
@@ -19,7 +20,12 @@ from app.api.app import create_app
 from app.infrastructure.database import Database
 from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.bonds import catalogue, holdings
-from app.modules.bonds.domain.holdings import CANCEL_GRACE, PAYMENT_WINDOW, HoldingStatus
+from app.modules.bonds.domain.holdings import (
+    CANCEL_GRACE,
+    MAX_UNPAID,
+    PAYMENT_WINDOW,
+    HoldingStatus,
+)
 from app.modules.bonds.domain.issues import BondStatus, quote
 from app.modules.bonds.events import START_KIND
 from app.modules.bonds.jobs import BondJobs
@@ -35,7 +41,7 @@ from app.shared.clock import Clock
 from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
-from tests.support.clock import FakeClock
+from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
 from tests.support.investments import approved_client
 from tests.support.kyc import SEALER, ready_draft
@@ -506,3 +512,107 @@ async def test_a_client_buys_a_bond_and_pays_by_mobile_money_over_http(
         )
         assert other.status_code == 404
         assert client.id is not None
+
+
+# Races, each side in its own transaction -------------------------------------------------------
+
+
+async def test_the_sweep_racing_the_start_never_strands_the_money(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = now()
+    client = await approved_client(app_database, clock)
+    async with live_issue(app_database, clock) as code:
+        holding = await buy(app_database, client, code, clock)
+        # The money arrived, and both the sweep and the start run once the window is long shut.
+        await pay(worker_database, holding, holding.cost, clock)
+        later = FakeClock(clock.now() + PAYMENT_WINDOW + CANCEL_GRACE)
+        barrier = AsyncBarrier(2)
+
+        async def sweep() -> int:
+            async with worker_database.actor_transaction(SYSTEM) as session:
+                await barrier.wait()
+                return await holdings.cancel_unpaid(session, later)
+
+        async def start() -> HoldingStatus:
+            async with worker_database.actor_transaction(SYSTEM) as session:
+                await barrier.wait()
+                started = await holdings.start_holding(
+                    session, holding.id, confirmed_on=business_date(clock.now()), clock=later
+                )
+                return started.status
+
+        _, started = await asyncio.gather(sweep(), start())
+        assert started is HoldingStatus.ACTIVE
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            assert (await holdings.get_holding(session, holding.id)).status is (
+                HoldingStatus.ACTIVE
+            )
+        # Other tests' unpaid holdings may be swept too, but never this one.
+        assert holding.id not in await cancelled_ids(worker_database, client)
+        assert await balance(worker_database, awaiting_spec(holding), clock) == 0
+        held = holdings.holding_account(holding)
+        assert await balance(worker_database, held, clock) == holding.cost.minor
+
+
+async def test_two_workers_starting_one_holding_post_one_entry(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = now()
+    client = await approved_client(app_database, clock)
+    async with live_issue(app_database, clock) as code:
+        holding = await buy(app_database, client, code, clock)
+        await pay(worker_database, holding, holding.cost, clock)
+        barrier = AsyncBarrier(2)
+
+        async def run() -> HoldingStatus:
+            async with worker_database.actor_transaction(SYSTEM) as session:
+                await barrier.wait()
+                started = await holdings.start_holding(
+                    session, holding.id, confirmed_on=business_date(clock.now()), clock=clock
+                )
+                return started.status
+
+        assert list(await asyncio.gather(run(), run())) == [
+            HoldingStatus.ACTIVE,
+            HoldingStatus.ACTIVE,
+        ]
+        held = holdings.holding_account(holding)
+        assert await balance(worker_database, held, clock) == holding.cost.minor
+        assert await balance(worker_database, awaiting_spec(holding), clock) == 0
+
+
+async def test_the_cap_of_five_waiting_holds_when_purchases_race(app_database: Database) -> None:
+    clock = now()
+    client = await approved_client(app_database, clock)
+    async with live_issue(app_database, clock) as code:
+        for _ in range(MAX_UNPAID - 1):
+            await buy(app_database, client, code, clock)
+        barrier = AsyncBarrier(2)
+
+        async def ask() -> str:
+            try:
+                async with app_database.actor_transaction(client) as session:
+                    await barrier.wait()
+                    await holdings.request_purchase(
+                        session,
+                        client,
+                        idempotency_key=key(),
+                        code=code,
+                        face=ugx(1_000_000),
+                        clock=clock,
+                    )
+            except ApplicationError as error:
+                return error.code
+            return "saved"
+
+        assert sorted(await asyncio.gather(ask(), ask())) == ["conflict", "saved"]
+
+
+async def cancelled_ids(worker: Database, client: Actor) -> set[str]:
+    async with worker.actor_transaction(SYSTEM) as session:
+        rows = await session.execute(
+            text("SELECT id FROM bond_holdings WHERE client_id = :id AND status = 'cancelled'"),
+            {"id": client.id},
+        )
+        return {row.id for row in rows}
