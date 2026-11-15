@@ -10,6 +10,7 @@ import { Txt } from "@/components/Txt";
 import { colors, radii } from "@/theme";
 
 import { sidebarGroups } from "./destinations";
+import { useStartLoaderDone } from "./useStartLoaderDone";
 
 type Props = { activeName: string; session: Session };
 
@@ -17,6 +18,7 @@ type Props = { activeName: string; session: Session };
 export function Sidebar({ activeName, session }: Props) {
   const router = useRouter();
   const { demo } = useAuth();
+  useStartLoaderDone();
   return (
     <View style={styles.sidebar} accessibilityRole="navigation" accessibilityLabel="Main">
       <View style={styles.logo}>

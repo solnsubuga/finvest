@@ -19,7 +19,7 @@ Run `pnpm install` once at the repository root, then from `apps/client`:
 | `pnpm lint` | ESLint with the Expo rules |
 | `pnpm typecheck` | `tsc --noEmit` |
 | `pnpm test` | Jest unit tests and the flow tests for sign-in and for Sign in and security |
-| `pnpm build:web` | Exports the static web build to `dist/`, then lists its screen files in `index.html` (`scripts/route-chunks.mjs`) |
+| `pnpm build:web` | Exports the static web build to `dist/`, then lists its screen files in `index.html` (`scripts/route-chunks.mjs`) and adds the start-up hints: preloads for the scripts, fonts and first screens, and a preconnect to the API (`scripts/start-hints.mjs`) |
 
 Add Expo packages with `npx expo install <package>` so the version matches the SDK.
 
@@ -191,3 +191,7 @@ The screens talk to the `SupportClient` interface in `src/support/types.ts`, who
 - In the demo (tests, or `EXPO_PUBLIC_DEMO_AUTH=1`) each signed-in account has its own memory. The two ready-made accounts start with the canvas's notifications and one closed complaint. An account made by signing up starts empty. A chat message gets one canned reply a few seconds later, which says it is the demo.
 
 Not built: push notifications on the device (they come with the backend's sending work), attachments in chat, and the screens behind payout, payout account and identity check notifications.
+
+## Starting on the web
+
+The page shell is `public/index.html`, which Expo uses in place of its own. It paints the Finvest mark on brand black from the HTML alone, before any script arrives, so a first visit never shows an empty page. The first screen drawn in `Screen`, the tab bar or the sidebar removes it once the app's font is in (`src/navigation/useStartLoaderDone.ts`), and the root layout removes it after eight seconds regardless. After fifteen seconds it says the start is slow and offers a reload. The shell has no inline script, so the Content-Security-Policy is unchanged. `metro.config.js` leaves Zod's message translations out of the bundle (about 290 KB); the app uses English only.
