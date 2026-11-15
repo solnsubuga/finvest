@@ -9,6 +9,8 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.approvals.domain.inbox import InboxItem, Kind, Waiting, inbox, visible_kinds
+from app.modules.bonds import catalogue as bonds
+from app.modules.bonds.domain.changes import BondChangeStatus
 from app.modules.closures import service as closures
 from app.modules.console import actions as client_actions
 from app.modules.dealing import auctions, buffer, capital
@@ -69,6 +71,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _rates(session, staff)
     if "product_change" in kinds:
         found += await _product_changes(session, staff)
+    if "bond_change" in kinds:
+        found += await _bond_changes(session, staff)
     if kinds & {"migration_totals", "migration_sign_off"}:
         found += await _migration(session)
     if "phone_change" in kinds:
@@ -286,6 +290,13 @@ async def _product_changes(session: AsyncSession, staff: StaffSession) -> list[W
         for c in await investments.list_product_changes(
             session, staff.actor, status=ProposalStatus.PROPOSED
         )
+    ]
+
+
+async def _bond_changes(session: AsyncSession, staff: StaffSession) -> list[Waiting]:
+    return [
+        Waiting("bond_change", c.id, c.code, c.proposed_by, c.proposed_at)
+        for c in await bonds.list_changes(session, staff.actor, status=BondChangeStatus.PROPOSED)
     ]
 
 
