@@ -65,6 +65,22 @@ def test_every_default_renders_with_its_own_variables_and_leaves_no_placeholder(
     assert len(rendered.sms) <= MAX_RENDERED_SMS
 
 
+def test_a_value_that_ends_a_sentence_takes_the_full_stop_after_it() -> None:
+    rendered = render(
+        EVENTS["investment_sent"],
+        DEFAULTS["investment_sent"],
+        {
+            "amount": Money(100_000, Currency.UGX),
+            "product": "91 Day Treasury Bill",
+            "person": "Moses O.",
+        },
+    )
+    assert (
+        rendered.body == "Your 91 Day Treasury Bill went to Moses O. See what you kept in the app."
+    )
+    assert ".." not in rendered.sms
+
+
 def test_an_unknown_event_is_refused() -> None:
     with pytest.raises(UnknownEvent):
         event("free_money")

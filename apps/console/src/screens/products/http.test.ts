@@ -3,7 +3,7 @@ import { createHttp } from "@/api/http.ts";
 import { CatalogueError, catalogueErrorMessage } from "./api.ts";
 import { createHttpCatalogueApi } from "./http.ts";
 
-const RATE = { effective_from: "2026-11-01", annual_rate_bps: 1250, tax_bps: 1500, client_rate_percent: "10.63" };
+const RATE = { effective_from: "2026-11-01", annual_rate_bps: 1250, tax_bps: 1500, client_rate_percent: "10.62" };
 
 const PRODUCT = {
   id: "-NproductTREA91000001",
@@ -55,7 +55,7 @@ describe("products and rates over HTTP", () => {
       minimum: { minor: 100_000, currency: "UGX" },
       interestPaid: "at_maturity",
       status: "live",
-      rate: { effectiveFrom: "2026-11-01", annualRateBps: 1250, taxBps: 1500, clientRatePercent: "10.63" },
+      rate: { effectiveFrom: "2026-11-01", annualRateBps: 1250, taxBps: 1500, clientRatePercent: "10.62" },
       nextRate: null,
     });
   });
@@ -64,7 +64,7 @@ describe("products and rates over HTTP", () => {
     const fetch = vi.fn<typeof globalThis.fetch>(() => reply(200, [RATE]));
     const rates = await createHttpCatalogueApi(createHttp("https://api.test", fetch)).rateHistory("USD BOND");
     expect(fetch.mock.calls[0]?.[0]).toBe("https://api.test/staff/products/USD%20BOND/rates");
-    expect(rates).toEqual([{ effectiveFrom: "2026-11-01", annualRateBps: 1250, taxBps: 1500, clientRatePercent: "10.63" }]);
+    expect(rates).toEqual([{ effectiveFrom: "2026-11-01", annualRateBps: 1250, taxBps: 1500, clientRatePercent: "10.62" }]);
   });
 
   it("asks for proposals in one status, or every status", async () => {

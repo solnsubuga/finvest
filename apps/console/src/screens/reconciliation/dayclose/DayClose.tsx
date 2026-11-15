@@ -31,12 +31,15 @@ interface DayCloseProps {
   now?: () => Date;
 }
 
-/** The pots share a name per provider, so the account says which one. */
-const ACCOUNT_LABELS: Record<string, string> = { mtn: "MTN", airtel: "Airtel", trust: "Stanbic trust" };
+/**
+ * The wallets share a name per provider, so the account says which one. There is one trust
+ * account, named by its pot alone: which bank holds it is a setting, never written here.
+ */
+const ACCOUNT_LABELS: Record<string, string | null> = { mtn: "MTN", airtel: "Airtel", trust: null };
 
 export function potTitle(position: Pick<Position, "name" | "accountReference">): string {
-  const account = ACCOUNT_LABELS[position.accountReference] ?? position.accountReference;
-  return `${position.name}, ${account}`;
+  const account = position.accountReference in ACCOUNT_LABELS ? ACCOUNT_LABELS[position.accountReference] : position.accountReference;
+  return account ? `${position.name}, ${account}` : position.name;
 }
 
 /**
@@ -55,13 +58,19 @@ export function DayClose({ api, canAct, now = () => new Date() }: DayCloseProps)
   const [failure, setFailure] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  const today = kampalaToday(now());
   const fetchDay = useCallback(
-    (day: string): Promise<Load<Day>> =>
-      api.getDay(day).then(
+    async (day: string): Promise<Load<Day>> => {
+      // What other screens recorded since, such as a bank transfer matched and approved after
+      // its statement came in, is paired before the day is shown. Safe to run again, and a
+      // reader who cannot change anything sees the last pairing.
+      if (canAct && day < today) await api.refresh(day).catch(() => undefined);
+      return api.getDay(day).then(
         (value) => ({ state: "ready", value }),
         (error: unknown) => ({ state: "failed", message: dayCloseErrorMessage(error) }),
-      ),
-    [api],
+      );
+    },
+    [api, canAct, today],
   );
 
   useEffect(() => {

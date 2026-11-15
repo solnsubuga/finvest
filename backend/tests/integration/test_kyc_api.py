@@ -308,14 +308,14 @@ async def test_staff_see_the_number_masked_and_each_look_is_on_the_audit_trail(a
     assert "tin" not in check
     assert check["date_of_birth"] == "1994-06-22"
     assert check["allowed"] == ["approve", "reject", "ask_for_photos", "escalate"]
-    assert [photo["kind"] for photo in check["photos"]] == ["back", "front", "selfie"]
+    assert [photo["kind"] for photo in check["photos"]] == ["front", "back", "selfie"]
     assert "kyc.check.document_number_shown" not in await actions(api, check_id)
 
     shown = await api.http.post(f"/staff/identity-checks/{check_id}/document-number", headers=staff)
     assert shown.json() == {"document_number": number}
     links = await api.http.post(f"/staff/identity-checks/{check_id}/photo-links", headers=staff)
     photos = links.json()["photos"]
-    assert [photo["kind"] for photo in photos] == ["back", "front", "selfie"]
+    assert [photo["kind"] for photo in photos] == ["front", "back", "selfie"]
     assert all(photo["url"].startswith(f"memory://kyc/{check_id}/") for photo in photos)
     assert links.json()["expires_at"] == (
         api.clock.now() + timedelta(minutes=5)

@@ -399,6 +399,7 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       .filter(({ view: item }) => item.maturityDate !== null && item.termDays !== null && item.maturityDate >= today && item.withdrawalRequestedAt === null)
       .sort((a, b) => (a.view.maturityDate ?? "").localeCompare(b.view.maturityDate ?? ""));
     const first = maturing[0]?.view;
+    const soonest = (items: typeof running) => maturing.find((item) => items.includes(item))?.view.maturityDate ?? null;
     return {
       currency,
       invested: sum(running, (item) => item.amount),
@@ -408,8 +409,8 @@ export function createStubInvestingClient(options: StubOptions = {}): InvestingC
       interestToday: sum(running, (item) => item.interestToday),
       activeCount: running.length,
       awaitingPaymentCount: views.filter(({ view: item }) => item.status === "awaiting_payment").length,
-      outsideGoals: { worth: sum(outside, (item) => item.value), count: outside.length },
-      inGoals: { worth: sum(inGoals, (item) => item.value), count: inGoals.length },
+      outsideGoals: { worth: sum(outside, (item) => item.value), count: outside.length, nextMaturesOn: soonest(outside) },
+      inGoals: { worth: sum(inGoals, (item) => item.value), count: inGoals.length, nextMaturesOn: soonest(inGoals) },
       openGoals: currency === "UGX" ? demoOpenGoals : 0,
       products: ordered.map((items, index) => ({
         productCode: items[0]?.view.productCode ?? "",

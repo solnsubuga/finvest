@@ -385,7 +385,9 @@ export function PrepareForm({ desk, busy, error, onCancel, onSubmit }: PrepareFo
           hint={
             kind === "secondary_sale"
               ? `Face value held: ${formatExact(position.faceHeld)}`
-              : `To buy: ${formatShort(position.toBuy)}. Already on order: ${formatShort(position.onOrder)}.`
+              : `To buy: ${formatShort(position.toBuy)} of client money. Already on order: ${formatShort(position.onOrder)}.${
+                  position.discountOnly ? " A bill costs less than its face value, so bid a face value above the money to buy, or some stays to buy." : ""
+                }`
           }
         >
           {(control) => (

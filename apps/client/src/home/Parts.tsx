@@ -107,16 +107,16 @@ export function QuickActions({ actions }: { actions: QuickAction[] }) {
 /** Investments and Goals, each with what it is worth: the two add up to the total. */
 export function HoldingRows({
   portfolio,
-  nextMaturesOn,
   onInvestments,
   onGoals,
 }: {
   portfolio: Portfolio;
-  nextMaturesOn: string | null;
   onInvestments: () => void;
   onGoals: () => void;
 }) {
   const investments = portfolio.outsideGoals;
+  // The date of their own investments only: a goal's saving maturing first is not "next" here.
+  const nextMaturesOn = investments.nextMaturesOn;
   const goalsDetail =
     portfolio.openGoals === 0
       ? "Save towards something"

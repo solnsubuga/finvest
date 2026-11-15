@@ -109,14 +109,20 @@ export function Review({ check, busy, error, onDecide, onShowNumber, canDecide =
             <figure
               key={photo.kind}
               className={cn(
-                "m-0 flex h-[150px] flex-col items-center justify-center gap-1 overflow-hidden rounded-lg text-sm text-muted",
+                "relative m-0 flex h-[150px] flex-col items-center justify-center gap-1 overflow-hidden rounded-lg text-sm text-muted",
                 doubt ? "border-2 border-warning" : "border border-dashed border-neutral",
               )}
             >
               {photo.url ? (
-                <a href={photo.url} target="_blank" rel="noreferrer" className="block size-full">
-                  <img src={photo.url} alt={label} referrerPolicy="no-referrer" className="size-full object-cover" />
-                </a>
+                <>
+                  <a href={photo.url} target="_blank" rel="noreferrer" className="block size-full">
+                    <img src={photo.url} alt={label} referrerPolicy="no-referrer" className="size-full object-cover" />
+                  </a>
+                  {/* Named on the picture too, so the front and the back are never mistaken. */}
+                  <figcaption aria-hidden className="pointer-events-none absolute top-2 left-2 rounded-pill bg-surface/90 px-2 py-0.5 text-2xs font-bold text-ink">
+                    {label}
+                  </figcaption>
+                </>
               ) : (
                 <figcaption>{label}</figcaption>
               )}

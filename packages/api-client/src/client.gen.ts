@@ -131,6 +131,20 @@ export type BodyUploadProofClientPayoutDestinationsDestinationIdProofPost = z.in
 export const Currency = z.enum(["UGX", "USD"]);
 export type Currency = z.infer<typeof Currency>;
 
+export const BondCouponOut = z.object({
+  amount_minor: z.number().int(),
+  code: z.string(),
+  coupon_date: z.string(),
+  currency: Currency,
+  held_because: z.string().nullable(),
+  holding_id: z.string(),
+  id: z.string(),
+  name: z.string(),
+  payout_id: z.string().nullable(),
+  status: z.string(),
+});
+export type BondCouponOut = z.infer<typeof BondCouponOut>;
+
 export const HoldingStatus = z.enum(["unpaid", "active", "cancelled"]);
 export type HoldingStatus = z.infer<typeof HoldingStatus>;
 
@@ -148,6 +162,7 @@ export const BondHoldingOut = z.object({
   name: z.string(),
   next_coupon_date: z.string().nullable(),
   pay_by: z.string().nullable(),
+  payout_destination_id: z.string().nullable(),
   price: z.number().int(),
   start_date: z.string().nullable(),
   status: HoldingStatus,
@@ -571,6 +586,17 @@ export const Confirmed = z.object({
   confirmed_until: z.string(),
 });
 export type Confirmed = z.infer<typeof Confirmed>;
+
+export const CouponDestinationIn = z.object({
+  destination_id: z.string().nullable(),
+});
+export type CouponDestinationIn = z.infer<typeof CouponDestinationIn>;
+
+export const CouponPayOutIn = z.object({
+  destination_id: z.string(),
+  pin_confirmation: z.string().nullable().optional(),
+});
+export type CouponPayOutIn = z.infer<typeof CouponPayOutIn>;
 
 export const DestinationOut = z.object({
   account: z.string(),
@@ -1297,6 +1323,7 @@ export type PortfolioMaturityView = z.infer<typeof PortfolioMaturityView>;
 
 export const PortfolioPartView = z.object({
   count: z.number().int(),
+  next_matures_on: z.string().nullable(),
   worth_minor: z.number().int(),
 });
 export type PortfolioPartView = z.infer<typeof PortfolioPartView>;
@@ -1755,6 +1782,30 @@ export const operations = {
     status: 200,
     response: z.array(BankOut),
   },
+  "GET /client/bond-coupons": {
+    method: "GET",
+    path: "/client/bond-coupons",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: z.array(BondCouponOut),
+  },
+  "POST /client/bond-coupons/{coupon_id}/pay-out": {
+    method: "POST",
+    path: "/client/bond-coupons/{coupon_id}/pay-out",
+    params: z.object({
+    coupon_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CouponPayOutIn,
+    bodyKind: "json",
+    idempotent: false,
+    status: 200,
+    response: BondCouponOut,
+  },
   "GET /client/bond-holdings": {
     method: "GET",
     path: "/client/bond-holdings",
@@ -1786,6 +1837,19 @@ export const operations = {
     query: z.object({}),
     body: null,
     bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: BondHoldingOut,
+  },
+  "PUT /client/bond-holdings/{holding_id}/coupon-destination": {
+    method: "PUT",
+    path: "/client/bond-holdings/{holding_id}/coupon-destination",
+    params: z.object({
+    holding_id: z.string(),
+  }),
+    query: z.object({}),
+    body: CouponDestinationIn,
+    bodyKind: "json",
     idempotent: false,
     status: 200,
     response: BondHoldingOut,

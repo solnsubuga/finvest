@@ -85,6 +85,8 @@ class Holding:
     pay_by: datetime
     start_date: date | None
     issue: BondIssue
+    # Where the client wants coupons paid. None until they choose.
+    payout_destination_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,6 +112,7 @@ class ClientHolding:
     next_coupon_date: date | None
     # Everything still to come if held to maturity: the coupons and the face value.
     still_to_come: Money
+    payout_destination_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +125,7 @@ class PayableHolding:
 _COLUMNS = (
     "h.id, h.client_id, h.issue_id, h.currency, h.face_minor, h.price, h.accrued_minor, "
     "h.cost_minor, h.quoted_on, h.status, h.created_at, h.pay_by, h.start_date, "
+    "h.payout_destination_id, "
     "b.code, b.isin, b.name, b.coupon_bps, b.tax_bps, b.issue_date, b.maturity_date, "
     "b.minimum_face_minor, b.face_step_minor, b.status AS issue_status"
 )
@@ -484,6 +488,7 @@ def client_view(holding: Holding, today: date) -> ClientHolding:
         coupons_left=len(left),
         next_coupon_date=left[0] if left else None,
         still_to_come=still_to_come,
+        payout_destination_id=holding.payout_destination_id,
     )
 
 
@@ -518,4 +523,5 @@ def _from_row(row: Row[Any]) -> Holding:
         pay_by=row.pay_by,
         start_date=row.start_date,
         issue=issue,
+        payout_destination_id=row.payout_destination_id,
     )

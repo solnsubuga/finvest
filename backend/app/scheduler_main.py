@@ -22,6 +22,7 @@ from app.infrastructure.settings import Settings
 from app.modules.autoinvest.jobs import OPEN_DUE_KIND as AUTOINVEST_OPEN_KIND
 from app.modules.autoinvest.jobs import SETTLE_KIND as AUTOINVEST_SETTLE_KIND
 from app.modules.bonds.jobs import CANCEL_UNPAID_KIND as BONDS_CANCEL_UNPAID_KIND
+from app.modules.bonds.jobs import PAY_COUPONS_KIND as BONDS_PAY_COUPONS_KIND
 from app.modules.dealing.jobs import ALLOCATE_KIND, MATURITIES_KIND, RELEASE_KIND
 from app.modules.documents.service import EXPIRE_EMAILS_KIND, MONTHLY_KIND
 from app.modules.goals.jobs import REFRESH_GROUPS_KIND, SEND_REMINDERS_KIND
@@ -95,6 +96,16 @@ def schedules() -> list[Schedule]:
             name="investments.accrue_interest",
             trigger=CronTrigger(hour=0, minute=30, timezone=KAMPALA),
             kind=ACCRUE_KIND,
+            catch_up="all",
+            max_catch_up=31,
+            max_age=timedelta(days=7),
+        ),
+        # Pays bond coupons due today. A missed day is run for its own date, since a coupon
+        # date passes only twice a year for each issue.
+        Schedule(
+            name="bonds.pay_coupons",
+            trigger=CronTrigger(hour=1, minute=0, timezone=KAMPALA),
+            kind=BONDS_PAY_COUPONS_KIND,
             catch_up="all",
             max_catch_up=31,
             max_age=timedelta(days=7),

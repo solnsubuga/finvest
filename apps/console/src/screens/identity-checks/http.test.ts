@@ -95,6 +95,20 @@ describe("identity checks over HTTP", () => {
     expect(linkCalls()).toBe(2);
   });
 
+  it("shows the front of the ID before its back, then the selfie, whatever order they arrive in", async () => {
+    const photos = [
+      { id: "-NphotoSelfie0000001", kind: "selfie" },
+      { id: "-NphotoBack000000001", kind: "back" },
+      { id: "-NphotoFront00000001", kind: "front" },
+    ];
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementationOnce(() => reply(200, { ...CHECK, photos }))
+      .mockImplementationOnce(() => reply(200, LINKS));
+    const check = await createHttpKycApi(createHttp("https://api.test", fetch)).getCheck(CHECK.id);
+    expect(check.photos.map((photo) => photo.kind)).toEqual(["front", "back", "selfie"]);
+  });
+
   it("still opens the check when its photos cannot be linked", async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()

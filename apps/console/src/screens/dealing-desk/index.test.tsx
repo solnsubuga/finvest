@@ -93,6 +93,14 @@ describe("dealing desk screen", () => {
     expect(screen.queryByRole("form", { name: "Prepare an order" })).not.toBeInTheDocument();
   });
 
+  it("says a bill costs less than its face value when preparing a bid", async () => {
+    const { user } = renderDesk();
+    await order(BID_91);
+    await user.click(screen.getByRole("button", { name: "Prepare an order" }));
+    const form = screen.getByRole("form", { name: "Prepare an order" });
+    expect(within(form).getByText(/costs less than its face value, so bid a face value above the money to buy/)).toBeInTheDocument();
+  });
+
   it("checks a new order before sending it", async () => {
     const { user, api } = renderDesk();
     const prepare = vi.spyOn(api, "prepareOrder");

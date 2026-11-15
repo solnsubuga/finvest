@@ -1,5 +1,6 @@
 import { KycError, type CheckDetail, type Decision, type KycApi, type PhotoKind, type QueueItem } from "./api.ts";
 import { maskDocumentNumber } from "./labels.ts";
+import { SAMPLE_PHOTOS } from "./stub-photos.ts";
 
 /**
  * Sample identity checks for `pnpm dev` and previews. Not real people and not
@@ -15,8 +16,9 @@ function ago(minutes: number): string {
 }
 
 const photos = (...kinds: PhotoKind[]) => kinds.map((kind) => ({ kind, url: null, live: false }));
-/** The same, with the selfie captured by a live check. */
-const withLiveSelfie = (...kinds: PhotoKind[]) => photos(...kinds).map((photo) => ({ ...photo, live: photo.kind === "selfie" }));
+/** The same, with the selfie captured by a live check, and drawn pictures to look at. */
+const withLiveSelfie = (...kinds: PhotoKind[]) =>
+  photos(...kinds).map((photo) => ({ ...photo, url: SAMPLE_PHOTOS[photo.kind], live: photo.kind === "selfie" }));
 
 /** The whole document numbers, which the routes give out only one at a time. */
 const NUMBERS: Record<string, string> = {};

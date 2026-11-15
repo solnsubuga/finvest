@@ -151,6 +151,8 @@ def _summary(pdf: _Page, statement: Statement, summary: Summary) -> None:
         ("Interest earned, after tax", summary.earned, "+"),
         ("Paid out", summary.paid_out, "-"),
     ]
+    if not summary.transferred.is_zero:
+        rows.append(("Investments sent and received", summary.transferred, ""))
     if not summary.corrections.is_zero:
         rows.append(("Corrections", summary.corrections, ""))
     row_h = 8.0

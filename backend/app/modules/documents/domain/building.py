@@ -81,9 +81,9 @@ def activity_line(change: EntryChange, names: Names) -> Activity | None:
         product = names.products.get(investment, "your investment")
         return Activity(change.on, ActivityKind.EARNED, f"Interest, {product}", investment, owed)
     if change.entry_type == TRANSFERRED:
-        if owed.is_positive:
-            return Activity(change.on, ActivityKind.PAID_IN, "Investment received", reference, owed)
-        return Activity(change.on, ActivityKind.PAID_OUT, "Investment sent", reference, owed)
+        # Moved between two clients inside Finvest: not paid in, and never paid out.
+        description = "Investment received" if owed.is_positive else "Investment sent"
+        return Activity(change.on, ActivityKind.TRANSFERRED, description, reference, owed)
     if change.entry_type.startswith(PAYOUT_PREFIX):
         if owed.is_negative:
             where = destination_name(names.payout_kinds.get(reference, ""))

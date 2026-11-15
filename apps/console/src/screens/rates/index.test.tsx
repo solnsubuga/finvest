@@ -28,10 +28,10 @@ describe("rates screen", () => {
     renderRates();
     await waitingCard();
     expect(historyRows()).toEqual([
-      ["91 Day Treasury Bill", "12.5%", "15%", "10.63%", "1 Jan 2026", "In force"],
-      ["182 Day Treasury Bill", "13.75%", "15%", "11.69%", "1 Jul 2026", "In force"],
+      ["91 Day Treasury Bill", "12.5%", "15%", "10.62%", "1 Jan 2026", "In force"],
+      ["182 Day Treasury Bill", "13.75%", "15%", "11.68%", "1 Jul 2026", "In force"],
       ["182 Day Treasury Bill", "14%", "15%", "11.90%", "1 Jan 2026", "Replaced"],
-      ["USD Fixed Income", "7.25%", "5%", "6.89%", "1 Jan 2026", "In force"],
+      ["USD Fixed Income", "7.25%", "5%", "6.88%", "1 Jan 2026", "In force"],
     ]);
   });
 
@@ -50,7 +50,7 @@ describe("rates screen", () => {
     const card = await waitingCard();
     expect(within(card).getByText("Change waiting for you")).toBeInTheDocument();
     expect(within(card).getByText("12.5% to 13%")).toBeInTheDocument();
-    expect(within(card).getByText("10.63% to 11.05%")).toBeInTheDocument();
+    expect(within(card).getByText("10.62% to 11.05%")).toBeInTheDocument();
     expect(within(card).getByText("1 Dec 2026")).toBeInTheDocument();
     await user.click(within(card).getByRole("button", { name: "Approve as second person" }));
     expect(await screen.findByText("Nothing waiting for approval")).toBeInTheDocument();
