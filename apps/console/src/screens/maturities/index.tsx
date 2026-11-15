@@ -201,7 +201,7 @@ function Tiles({ days, today, dueToday, held }: { days: readonly MaturityDay[]; 
       <Tile
         name="Chosen for what is coming"
         value={`${count(sum(ahead.map((a) => a.rollOver)))} roll over`}
-        note={`${count(sum(ahead.map((a) => a.payOut)))} to pay out, so cash is needed for those`}
+        note={sum(ahead.map((a) => a.payOut)) === 0 ? "Nothing to pay out" : `${count(sum(ahead.map((a) => a.payOut)))} to pay out, so cash is needed for those`}
       />
       <Tile name="Held for clients" value={terms(held.length)} note={held.length === 0 ? "Nothing waiting" : totals(held, proceeds)} warn={held.length > 0} />
     </section>
