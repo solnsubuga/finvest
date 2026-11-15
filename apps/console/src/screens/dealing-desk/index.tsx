@@ -19,6 +19,10 @@ import { createStubAuctionsApi } from "./auctionsStub.ts";
 import { notConnectedAllocationsApi, type AllocationsApi } from "./allocations.ts";
 import { createHttpAllocationsApi } from "./allocationsHttp.ts";
 import { createStubAllocationsApi } from "./allocationsStub.ts";
+import { BondSalesSection } from "./BondSales.tsx";
+import { notConnectedBondSalesApi, type BondSalesApi } from "./bondSales.ts";
+import { createHttpBondSalesApi } from "./bondSalesHttp.ts";
+import { createStubBondSalesApi } from "./bondSalesStub.ts";
 import { BufferSection } from "./Buffer.tsx";
 import { notConnectedBufferApi, type BufferApi } from "./buffer.ts";
 import { createHttpBufferApi } from "./bufferHttp.ts";
@@ -278,6 +282,18 @@ export default function DealingDeskPage() {
     const base = apiBaseUrl();
     return base ? createHttpAllocationsApi(createHttp(base)) : notConnectedAllocationsApi;
   });
+  // Clients' bonds sold early, with the same samples under the stub.
+  const [bondSales] = useState<BondSalesApi>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      if (sample === "offline") return notConnectedBondSalesApi;
+      return createStubBondSalesApi({ id: session.staffId, name: session.name }, sample === "empty" ? "empty" : "sample", kampalaToday);
+    }
+    const base = apiBaseUrl();
+    if (!base) return notConnectedBondSalesApi;
+    const http = createHttp(base);
+    return createHttpBondSalesApi(http, createHttpDirectory(http));
+  });
   return (
     <>
       <DealingDeskScreen api={api} auctions={auctions} />
@@ -290,6 +306,7 @@ export default function DealingDeskPage() {
           today={kampalaToday}
         />
       ) : null}
+      {session ? <BondSalesSection api={bondSales} today={kampalaToday} /> : null}
       {session ? <AllocationSection api={allocations} /> : null}
     </>
   );
