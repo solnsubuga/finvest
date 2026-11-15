@@ -371,3 +371,20 @@ def _view(row: Row[Any]) -> DocumentView:
         not_final_from=row.not_final_from,
         spreadsheet_byte_size=row.spreadsheet_byte_size,
     )
+
+
+_DOCUMENTS_WITH_SUFFIX = text(
+    "SELECT id, client_id, kind FROM documents WHERE right(id, 8) = :suffix ORDER BY id DESC"
+)
+
+
+async def documents_with_reference(
+    session: AsyncSession, suffix: str
+) -> list[tuple[str, str, str]]:
+    """(document ID, client ID, reference prefix) for each document whose short reference leads
+    to this suffix. The prefix is "ST", "RC", "TC" or "IN", as the document's PDF prints it.
+
+    `suffix` comes from `app.shared.references.push_id_suffix`. Almost always one row or none.
+    """
+    rows = await session.execute(_DOCUMENTS_WITH_SUFFIX, {"suffix": suffix})
+    return [(row.id, row.client_id, _REFERENCE_PREFIX[DocumentKind(row.kind)]) for row in rows]

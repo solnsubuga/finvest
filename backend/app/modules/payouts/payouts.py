@@ -827,3 +827,17 @@ async def open_payout_count(session: AsyncSession, client_id: str) -> int:
     return int(
         await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id, "final": final}) or 0
     )
+
+
+_PAYOUTS_WITH_SUFFIX = text(
+    "SELECT id, client_id FROM payouts WHERE right(id, 8) = :suffix ORDER BY id DESC"
+)
+
+
+async def payouts_with_reference(session: AsyncSession, suffix: str) -> list[tuple[str, str]]:
+    """(payout ID, client ID) for each payout whose short reference leads to this suffix.
+
+    `suffix` comes from `app.shared.references.push_id_suffix`. Almost always one row or none.
+    """
+    rows = await session.execute(_PAYOUTS_WITH_SUFFIX, {"suffix": suffix})
+    return [(row.id, row.client_id) for row in rows]

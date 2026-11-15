@@ -912,3 +912,17 @@ _OPEN_FOR_CLIENT = text(
 async def open_deposit_count(session: AsyncSession, client_id: str) -> int:
     """How many of the client's deposits have not ended, including any whose outcome is unclear."""
     return int(await session.scalar(_OPEN_FOR_CLIENT, {"client_id": client_id}) or 0)
+
+
+_DEPOSITS_WITH_SUFFIX = text(
+    "SELECT id, client_id FROM payment_deposits WHERE right(id, 8) = :suffix ORDER BY id DESC"
+)
+
+
+async def deposits_with_reference(session: AsyncSession, suffix: str) -> list[tuple[str, str]]:
+    """(deposit ID, client ID) for each payment whose short reference leads to this suffix.
+
+    `suffix` comes from `app.shared.references.push_id_suffix`. Almost always one row or none.
+    """
+    rows = await session.execute(_DEPOSITS_WITH_SUFFIX, {"suffix": suffix})
+    return [(row.id, row.client_id) for row in rows]

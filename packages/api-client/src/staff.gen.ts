@@ -903,6 +903,7 @@ export const ClientRowView = z.object({
   account_number: z.string().nullable(),
   created_at: z.string(),
   email: z.string().nullable(),
+  found_by: z.string().nullable().optional(),
   id: z.string(),
   phone: z.string(),
   status: z.enum(["unclaimed", "active", "locked", "closed"]),

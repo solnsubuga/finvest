@@ -5207,6 +5207,17 @@
             ],
             "title": "Email"
           },
+          "found_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found By"
+          },
           "id": {
             "maxLength": 20,
             "minLength": 20,
