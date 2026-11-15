@@ -30872,14 +30872,22 @@
     },
     "/client/claim": {
       "get": {
-        "description": "The signed-in client's claim. `not_found` for a client who signed up in Finvest 2.0.",
+        "description": "The signed-in client's claim, or null for a client who signed up in Finvest 2.0.\n\nEvery client's app asks on each start, and most have no claim, so that is an ordinary\nanswer and not a 404 in the browser's console.",
         "operationId": "my_claim_client_claim_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ClaimStateView"
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ClaimStateView"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response My Claim Client Claim Get"
                 }
               }
             },

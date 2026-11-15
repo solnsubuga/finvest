@@ -15,6 +15,8 @@ import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { colors, fontSizes } from "@/theme";
 
+const SAME_PASSWORD = "That is the password you have now. Choose a different one.";
+
 /**
  * Forgot password, step 2: the texted code and the new password together,
  * because the server checks the code only when the password is set.
@@ -65,7 +67,9 @@ export default function ResetNew() {
       setReset(null);
       router.replace("/reset/done");
     } catch (caught) {
-      setError(describeAuthError(caught));
+      setError(
+        caught instanceof AuthError && caught.code === "same_as_now" ? SAME_PASSWORD : describeAuthError(caught),
+      );
       if (caught instanceof AuthError && caught.code === "invalid_code") {
         setCodeWrong(true);
         setCode("");
