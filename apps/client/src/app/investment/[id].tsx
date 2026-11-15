@@ -8,7 +8,7 @@ import { Notice } from "@/components/Blocks";
 import { Button, TextLink } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Eyebrow, Title, Txt } from "@/components/Txt";
-import { atMaturityLabel, formatAmount, formatDay, investmentLabel } from "@/investing/format";
+import { atMaturityLabel, earnedLabel, formatAmount, formatDay, investmentLabel } from "@/investing/format";
 import { useInvesting } from "@/investing/InvestingProvider";
 import { Failed } from "@/investing/Parts";
 import { Investment } from "@/investing/types";
@@ -160,8 +160,8 @@ function Body({ investment, onOpen }: { investment: Investment; onOpen: (href: H
             : investment.withdrawalRequestedAt
               ? `Asked for on ${formatDateTime(investment.withdrawalRequestedAt)}, after ${investment.daysEarned} days`
               : investment.interestToday.minor > 0
-              ? `+${formatAmount(investment.interestToday)} today, ${investment.daysEarned} days earned`
-              : `${investment.daysEarned} days earned`}
+              ? `+${formatAmount(investment.interestToday)} today, ${earnedLabel(investment)}`
+              : earnedLabel(investment)}
         </Txt>
         {running && investment.termDays ? (
           <View style={{ gap: 8, marginTop: 12 }} testID="term-progress">

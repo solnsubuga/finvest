@@ -95,3 +95,18 @@ export const statusLabel: Record<InvestmentStatus, string> = {
 export function investmentLabel(investment: { status: InvestmentStatus; withdrawalRequestedAt: string | null }): string {
   return investment.withdrawalRequestedAt ? statusLabel.withdrawn : statusLabel[investment.status];
 }
+
+/**
+ * How long the interest shown has been earning. A part kept after sending some of an investment
+ * carries on its term, so its days count from the term's start, but its interest so far is only
+ * its own: say the day it began instead of a count of days.
+ */
+export function earnedLabel(investment: { daysEarned: number; termDays: number | null; startDate: string | null; maturityDate: string | null }): string {
+  if (investment.startDate && investment.maturityDate && investment.termDays) {
+    const termStart = new Date(Date.parse(`${investment.maturityDate}T00:00:00Z`) - investment.termDays * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    if (termStart < investment.startDate) return `earning since ${formatDay(investment.startDate)}`;
+  }
+  return `${investment.daysEarned} days earned`;
+}
