@@ -26,7 +26,7 @@ export function PoweredByRegula() {
         <View style={styles.tip} accessibilityLiveRegion="polite" testID="powered-by-regula-tip">
           <Txt size={fontSizes.sm} color={colors.white}>
             A short check by our identity partner, right here in Finvest. You look at the camera and move as it asks, so
-            we know a real person is in front of it. Then come four quick head turns.
+            we know a real person is in front of it.
           </Txt>
           <Txt size={fontSizes.sm} color={colors.white}>
             They take the picture and get no name or number from us. Finvest uses it only to confirm it is you.

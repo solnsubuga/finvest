@@ -33,7 +33,8 @@ import {
  *
  * The demo account with a passkey (+256 772 123 456) starts approved.
  *
- * With `guided`, the selfie is the guided one, as with Regula: four pose frames follow it. The
+ * With `guided`, the selfie is the guided one, as with Regula: four pose frames follow a camera
+ * selfie, and none a live one. The
  * demo cannot judge a picture, so it keeps every frame but one: the first "look up" frame of a
  * check is refused as not tilted far enough, so the retake prompt can be seen. With a document
  * number ending in 6, the first guided selfie sent finds the face check unavailable, as a 503 does.
@@ -121,7 +122,7 @@ function seededCheck(): Stored {
 function missingFor(check: Stored): string[] {
   const missing: string[] = requiredPhotos(check.documentType).filter((kind) => !check.photos.includes(kind));
   if (!check.detailsConfirmed) missing.push("details");
-  if (check.guidedSelfie && requiredPhotos(check.documentType).includes("selfie")) {
+  if (check.guidedSelfie && !check.liveSelfie && requiredPhotos(check.documentType).includes("selfie")) {
     missing.push(...POSES.filter((pose) => !check.poses.includes(pose)).map((pose) => `pose_${pose}`));
   }
   return missing;

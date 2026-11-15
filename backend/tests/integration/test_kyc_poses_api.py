@@ -22,8 +22,10 @@ from app.shared.push_ids import push_id
 from tests.integration.test_kyc_api import (
     CLIENT_ORIGIN,
     HASHER,
+    PASSWORD,
     STAFF_ORIGIN,
     Api,
+    _numbers,
     a_number,
     an_app,
     details,
@@ -31,7 +33,7 @@ from tests.integration.test_kyc_api import (
 )
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
-from tests.support.kyc import SEALER
+from tests.support.kyc import SEALER, live_selfie
 from tests.support.ledger import staff as new_staff
 
 pytestmark = pytest.mark.integration
@@ -190,6 +192,34 @@ async def test_a_client_takes_the_guided_selfie_and_hands_it_in(api: Guided) -> 
     # Handed in, the frames cannot change.
     late = await api.http.put(f"{BASE}/poses/left", files=upload("left"), headers=client)
     assert late.status_code == 409
+
+
+async def test_a_selfie_from_a_passed_liveness_check_needs_no_poses(
+    api: Guided, worker_database: Database
+) -> None:
+    # The owner's choice (2026-11-15): the liveness check is the proof, so the head turns are
+    # only the way to a selfie when it cannot run.
+    client_id = await api.identity.create_client(
+        phone=f"+256{next(_numbers)}", email=None, password=PASSWORD
+    )
+    actor = Actor("client", client_id)
+    issued = await api.identity.issue_session(actor, second_step="passkey", transport="token")
+    client = {"Authorization": f"Bearer {issued.token}"}
+    document = {"document_type": "national_id", "document_country": "UG"}
+    assert (await api.http.put(f"{BASE}/document", json=document, headers=client)).is_success
+    for kind in ("front", "back"):
+        sent = await api.http.put(f"{BASE}/photos/{kind}", files=upload(kind), headers=client)
+        assert sent.is_success
+    saved = await api.http.put(f"{BASE}/details", json=details(a_number()), headers=client)
+    assert saved.is_success
+    await live_selfie(api.database, worker_database, actor, api.clock)
+
+    body = (await api.http.get(BASE, headers=client)).json()["check"]
+    assert body["guided_selfie"] is True
+    assert body["missing"] == []
+    submitted = await api.http.post(f"{BASE}/submit", headers=client)
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["status"] == "needs_review"
 
 
 async def test_a_frame_is_refused_with_its_reasons_and_kept_only_when_good(api: Guided) -> None:

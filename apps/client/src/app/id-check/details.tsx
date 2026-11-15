@@ -12,6 +12,8 @@ import { Title, Txt } from "@/components/Txt";
 import { DetailErrors, describeDetailProblem, DetailsForm, emptyForm, readForm } from "@/identity/details";
 import { useIdentity } from "@/identity/IdentityProvider";
 import { StepTop } from "@/identity/Parts";
+import { turnsCounted } from "@/identity/poses";
+import { regulaCanRun } from "@/identity/regula/types";
 import { kampalaToday } from "@/identity/photo";
 import { hrefFor, stepAfter } from "@/identity/steps";
 import { describeIdentityError, documentCopy, IdentityCheck, IdentityError } from "@/identity/types";
@@ -85,7 +87,7 @@ function DetailsFormScreen({ check }: { check: IdentityCheck }) {
       footer={<Button label="These are correct" onPress={save} loading={busy} testID="details-save" />}
     >
       <Stack.Screen options={{ title: "Check your details" }} />
-      <StepTop step="details" documentType={check.documentType} guided={check.guidedSelfie} fallback="/id-check" />
+      <StepTop step="details" documentType={check.documentType} guided={turnsCounted(check, regulaCanRun())} fallback="/id-check" />
       <View style={{ marginTop: 28, gap: 8 }}>
         <Title>Your details</Title>
         <Txt color={colors.muted}>Type them exactly as they are printed on your ID. We check them against your photos.</Txt>

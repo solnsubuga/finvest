@@ -71,3 +71,8 @@ export function finished(transactionId: string | null | undefined): RegulaOutcom
     ? { kind: "done", transactionId: transactionId.toLowerCase() }
     : { kind: "trouble", reason: "failed" };
 }
+
+/** Whether this build can run Regula's liveness: it knows Regula's Face service, or is the demo. */
+export function regulaCanRun(): boolean {
+  return regulaFaceUrl() !== null || process.env.EXPO_PUBLIC_DEMO_AUTH === "1";
+}

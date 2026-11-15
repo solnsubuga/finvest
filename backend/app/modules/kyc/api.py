@@ -124,7 +124,8 @@ class ClientCheck(Contract):
     submitted_at: datetime | None
     account_number: str | None
     # True when the selfie is the guided one: after the straight-on selfie, a frame for each
-    # pose (`PUT /poses/{pose}`). Missing poses are listed in `missing` as `pose_<pose>`.
+    # pose (`PUT /poses/{pose}`). Missing poses are listed in `missing` as `pose_<pose>`. A
+    # selfie captured by a passed liveness check needs no poses, so none are listed.
     guided_selfie: bool = False
     # The pose frames kept with the current selfie.
     poses: list[Pose] = Field(default_factory=list)
@@ -270,7 +271,11 @@ class AskForPhotosBody(Contract):
 def _client_check(view: service.CheckView, *, guided: bool = False) -> ClientCheck:
     details = view.details
     missing = list(view.missing)
-    if guided and PhotoKind.SELFIE in required_photos(view.document_type):
+    if (
+        guided
+        and PhotoKind.SELFIE in required_photos(view.document_type)
+        and not service.selfie_is_live(view)
+    ):
         missing += [f"pose_{pose.value}" for pose in Pose if pose not in view.poses]
     return ClientCheck(
         id=view.id,

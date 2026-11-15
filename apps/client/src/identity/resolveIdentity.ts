@@ -27,7 +27,7 @@ function loadStub(): StubModule | null {
 export function resolveIdentityClient(phone: string | null, stub: StubModule | null = loadStub()): IdentityClient {
   if (stub) {
     // One demo account offers the ioTec live selfie check. The others take the guided selfie, as
-    // the API does with Regula: Regula's liveness in the app first, then the head turns.
+    // the API does with Regula: Regula's liveness in the app, with the head turns only after a camera selfie.
     const iotec = phone === LIVE_CHECK_DEMO_PHONE;
     return stub.createStubIdentityClient({
       seeded: phone === SEEDED_DEMO_PHONE,

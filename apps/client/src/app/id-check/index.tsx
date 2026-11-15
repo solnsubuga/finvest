@@ -15,7 +15,8 @@ import { handInIdCheck } from "@/claim/handInIdCheck";
 import { ClaimError, describeClaimError } from "@/claim/types";
 import { useIdentity } from "@/identity/IdentityProvider";
 import { Badge, Progress, StatusLine } from "@/identity/Parts";
-import { posesMissing } from "@/identity/poses";
+import { posesMissing, turnsCounted } from "@/identity/poses";
+import { regulaCanRun } from "@/identity/regula/types";
 import { hrefFor, nextStep, stepMissing, stepsFor } from "@/identity/steps";
 import {
   beingChecked,
@@ -90,7 +91,7 @@ function Draft({ check, onSent }: { check: IdentityCheck; onSent: (check: Identi
     selfie: "Selfie",
     poses: "Head turns",
   };
-  const steps = stepsFor(check.documentType, check.guidedSelfie);
+  const steps = stepsFor(check.documentType, turnsCounted(check, regulaCanRun()));
   const firstOpen = steps.find((step) => stepMissing(step, check));
 
   return (
@@ -190,8 +191,9 @@ function Retake({ check, onSent }: { check: IdentityCheck; onSent: (check: Ident
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const done = retaken(check.id);
-  // A new guided selfie needs its head turns again.
-  const turnsNeeded = check.guidedSelfie && check.retakePhotos.includes("selfie");
+  // A new guided selfie needs its head turns again, unless a live check took it.
+  const turnsNeeded =
+    check.guidedSelfie && check.retakePhotos.includes("selfie") && !(done.includes("selfie") && check.liveSelfie);
   // Until the new selfie is in, the turns kept are the old selfie's, so they are still to take.
   const turnsLeft = !done.includes("selfie") || posesMissing(check).length > 0;
   const allDone = check.retakePhotos.every((kind) => done.includes(kind)) && !(turnsNeeded && turnsLeft);

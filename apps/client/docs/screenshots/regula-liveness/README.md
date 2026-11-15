@@ -26,9 +26,9 @@ From the demo web build. The demo has no Regula service, so a stand-in shows whe
 
 ![Live selfie done (phone)](phone-05-live-selfie-done.png)
 
-## Then the head turns (phone)
+## Handed in, no head turns (phone)
 
-![Then the head turns (phone)](phone-06-then-head-turns.png)
+![Handed in, no head turns (phone)](phone-06-handed-in.png)
 
 ## Not a live person: try again (phone)
 
@@ -58,9 +58,9 @@ From the demo web build. The demo has no Regula service, so a stand-in shows whe
 
 ![Live selfie done (wide)](wide-05-live-selfie-done.png)
 
-## Then the head turns (wide)
+## Handed in, no head turns (wide)
 
-![Then the head turns (wide)](wide-06-then-head-turns.png)
+![Handed in, no head turns (wide)](wide-06-handed-in.png)
 
 ## Not a live person: try again (wide)
 

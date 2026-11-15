@@ -117,7 +117,7 @@ async function startSession() {
 beforeAll(warmRouter, WARM_ROUTER_MS);
 
 describe("Regula's liveness in the app", () => {
-  it("runs Regula with the attempt's tag, reports the transaction, then goes on to the head turns", async () => {
+  it("runs Regula with the attempt's tag, reports the transaction, then hands the check in", async () => {
     await upToTheSelfie();
     // What the check is sits behind "Powered by Regula".
     expect(screen.queryByText(/A short check by our identity partner/)).toBeNull();
@@ -136,10 +136,12 @@ describe("Regula's liveness in the app", () => {
 
     for (let read = 0; read < 4 && !screen.queryByText("Live selfie done"); read++) await nextRead();
     expect(await screen.findByText("Live selfie done")).toBeTruthy();
-    expect(screen.getByText(/Next come four quick head turns/)).toBeTruthy();
+    // A passed Regula check is the proof on its own: no head turns follow it.
+    expect(screen.queryByText(/head turns/)).toBeNull();
+    expect((await client.getCheck())!.missing).toEqual([]);
     await fireEvent.press(await top("live-continue"));
-    expect(await screen.findByText("Now four quick head turns")).toBeTruthy();
-    expect(screen.getByText("6 of 6")).toBeTruthy();
+    expect(await screen.findByText(/We are checking now/)).toBeTruthy();
+    expect((await client.getCheck())!.status).not.toBe("draft");
   });
 
   it("does not open a closed session again by itself, and opens it when asked", async () => {

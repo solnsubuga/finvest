@@ -28,8 +28,8 @@ type Props = {
   /** The live capture is now the selfie. `updated` is the check read again. */
   onDone: (updated: IdentityCheck) => Promise<void>;
   /**
-   * The check is Regula's, run in the app (docs/identity-checks.md#regula-liveness), and the
-   * guided selfie's head turns come after it. The copy says so before a check is started.
+   * The check is Regula's, run in the app (docs/identity-checks.md#regula-liveness). Its capture
+   * is the selfie, with no head turns after it.
    */
   regula?: boolean;
 };
@@ -244,7 +244,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
         signedIn
         footer={
           <Button
-            label={regula ? "Next: head turns" : retake ? "Send my new selfie" : "Hand in my ID check"}
+            label={retake ? "Send my new selfie" : "Hand in my ID check"}
             onPress={() => void finish()}
             loading={busy}
             testID="live-continue"
@@ -255,9 +255,7 @@ export function LiveSelfie({ check, top, frame, onCamera, onDone, regula = false
         <View style={{ marginTop: 28, gap: 8 }}>
           <Title>Live selfie done</Title>
           <Txt color={colors.muted}>
-            {regula
-              ? "The check saw a live person. What it captured is now your selfie. Next come four quick head turns."
-              : "The check saw a live person. What it captured is now your selfie, and we match it to your ID."}
+            The check saw a live person. What it captured is now your selfie, and we match it to your ID.
           </Txt>
         </View>
         <View style={{ marginTop: 20, gap: 14 }}>

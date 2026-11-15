@@ -16,7 +16,7 @@ import { FaceReading, movedAngle } from "@/identity/guidance";
 import { GuidedCapture } from "@/identity/GuidedCapture";
 import { useIdentity } from "@/identity/IdentityProvider";
 import { StatusLine, StepTop } from "@/identity/Parts";
-import { OPPOSITE, Pose, POSES, poseCopy, posesMissing } from "@/identity/poses";
+import { headTurns, OPPOSITE, Pose, POSES, poseCopy, posesMissing } from "@/identity/poses";
 import { IdentityCheck, IdentityError, PhotoFile } from "@/identity/types";
 import { useIdentityCheck } from "@/identity/useIdentityCheck";
 import { colors, fontSizes } from "@/theme";
@@ -47,7 +47,7 @@ export default function HeadTurns() {
   }
   const check = state.check;
   if (!check) return <Redirect href="/id-check/document" />;
-  if (!check.guidedSelfie || !selfieOpen(check)) return <Redirect href="/id-check" />;
+  if (!headTurns(check) || !selfieOpen(check)) return <Redirect href="/id-check" />;
   if (check.missing.includes("selfie") || (check.status === "awaiting_client" && !check.photos.includes("selfie"))) {
     return <Redirect href="/id-check/photo/selfie" />;
   }

@@ -1,11 +1,11 @@
 """Regula's liveness check, the first step of the guided selfie.
 
-See docs/identity-checks.md#regula-liveness. The owner's choice (2026-11-14): Regula's liveness
-plus the guided poses. Regula's capture is the straight-on selfie, and the client then takes the
-four turns with it. Regula's liveness runs in the app, against Regula, with Regula's own capture
-and guidance; no page is opened. The attempt's ID is the session's tag, so `start` asks nothing
-of Regula: the "page" it hands the app is `regula-liveness:<tag>`, which tells the app to run
-Regula's liveness with that tag.
+See docs/identity-checks.md#regula-liveness. The owner's choice (2026-11-15): Regula's capture
+is the selfie, and a passed check needs no guided poses; the poses go with a camera selfie, the
+fallback when Regula cannot run. Regula's liveness runs in the app, against Regula, with
+Regula's own capture and guidance; no page is opened. The attempt's ID is the session's tag, so
+`start` asks nothing of Regula: the "page" it hands the app is `regula-liveness:<tag>`, which
+tells the app to run Regula's liveness with that tag.
 
 When the session ends the app sends its transaction ID (`liveness.report_transaction`). The
 worker then reads `GET /api/v2/liveness?transactionId=` from Regula itself, never taking the
