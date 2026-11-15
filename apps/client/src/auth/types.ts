@@ -87,6 +87,8 @@ export type AuthErrorCode =
   | "sign_in_again"
   | "passkey_failed"
   | "passkey_unsupported"
+  /** This device already holds a passkey for the account, so the browser will not make another. */
+  | "passkey_on_device"
   | "rate_limited"
   | "not_found"
   | "not_accepted"
@@ -402,6 +404,8 @@ const messages: Record<AuthErrorCode, string> = {
   passkey_failed: "We could not confirm your passkey. Try again, or use another way to log in.",
   passkey_unsupported:
     "Passkeys are not available in this app yet. Use an authenticator app or an SMS code for now.",
+  passkey_on_device:
+    "This device already has a passkey for your Finvest account, so there is nothing to add. You can log in with it now.",
   rate_limited: "Too many tries. Wait a few minutes and try again.",
   not_found: "That has already gone. The list below is up to date.",
   not_accepted: "Something in that was not accepted. Check what you entered and try again.",

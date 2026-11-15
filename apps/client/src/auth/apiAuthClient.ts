@@ -5,7 +5,7 @@ import { saveToken } from "@/api/token";
 import { forgetPush } from "@/push/registration";
 
 import { AuthClient, AuthError, AuthErrorCode, Device, SecondStep, SelfieAttempt, Session } from "./types";
-import { createPasskey, PasskeyCancelled, passkeysSupported, signWithPasskey } from "./webauthn";
+import { createPasskey, PasskeyAlreadyOnDevice, PasskeyCancelled, passkeysSupported, signWithPasskey } from "./webauthn";
 
 /**
  * The sign-in screens' contract, answered by the real API
@@ -32,6 +32,7 @@ const PASSTHROUGH: ReadonlySet<AuthErrorCode> = new Set([
 export function toAuthError(error: unknown): AuthError {
   if (error instanceof AuthError) return error;
   if (error instanceof PasskeyCancelled) return new AuthError("cancelled");
+  if (error instanceof PasskeyAlreadyOnDevice) return new AuthError("passkey_on_device");
   if (error instanceof ApiError) {
     if (PASSTHROUGH.has(error.code as AuthErrorCode)) return new AuthError(error.code as AuthErrorCode);
     // A setting-up screen whose session has gone: logging in again brings the client back.

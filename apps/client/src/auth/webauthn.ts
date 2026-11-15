@@ -110,6 +110,17 @@ function requestOptions(json: Json): PublicKeyCredentialRequestOptions {
   } as PublicKeyCredentialRequestOptions;
 }
 
+/**
+ * The device already holds a passkey for this account: the browser refuses a second one with
+ * InvalidStateError, because the API lists the passkeys the account has.
+ */
+export class PasskeyAlreadyOnDevice extends Error {
+  constructor() {
+    super("This device already holds a passkey for the account");
+    this.name = "PasskeyAlreadyOnDevice";
+  }
+}
+
 /** The browser throws NotAllowedError when the person dismisses the prompt or it times out. */
 function isCancel(error: unknown): boolean {
   return error instanceof DOMException && (error.name === "NotAllowedError" || error.name === "AbortError");
@@ -124,6 +135,7 @@ export async function createPasskey(options: Json): Promise<Json> {
     credential = (await navigator.credentials.create({ publicKey: creationOptions(options) })) as PublicKeyCredential | null;
   } catch (error) {
     if (isCancel(error)) throw new PasskeyCancelled();
+    if (error instanceof DOMException && error.name === "InvalidStateError") throw new PasskeyAlreadyOnDevice();
     throw error;
   }
   if (!credential) throw new PasskeyCancelled();
