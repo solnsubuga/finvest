@@ -25480,6 +25480,19 @@
             ],
             "title": "Accrued Minor"
           },
+          "allowed": {
+            "items": {
+              "enum": [
+                "price",
+                "approve",
+                "send_back",
+                "withdraw"
+              ],
+              "type": "string"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
           "amount_minor": {
             "anyOf": [
               {
@@ -25754,7 +25767,8 @@
           "payout_status",
           "payout_id",
           "held_because",
-          "closed_at"
+          "closed_at",
+          "allowed"
         ],
         "title": "StaffBondSaleOut",
         "type": "object"

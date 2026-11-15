@@ -7,6 +7,8 @@ import pytest
 from app.modules.bonds.domain.sales import (
     MAX_TEXT_LENGTH,
     SaleRefusal,
+    SaleStatus,
+    allowed_steps,
     check_request,
     check_sold_on,
     check_text,
@@ -110,3 +112,15 @@ def test_the_desk_reference_and_a_note_are_required_and_short() -> None:
     assert check_text("  ") is SaleRefusal.TEXT_REQUIRED
     assert check_text(None) is SaleRefusal.TEXT_REQUIRED
     assert check_text("x" * (MAX_TEXT_LENGTH + 1)) is SaleRefusal.TEXT_TOO_LONG
+
+
+def test_staff_see_the_steps_two_people_may_take() -> None:
+    assert allowed_steps(SaleStatus.REQUESTED, None, "me", may_change=True) == ("price",)
+    assert allowed_steps(SaleStatus.PRICED, "me", "me", may_change=True) == ("withdraw",)
+    assert allowed_steps(SaleStatus.PRICED, "them", "me", may_change=True) == (
+        "approve",
+        "send_back",
+    )
+    assert allowed_steps(SaleStatus.PRICED, "them", "me", may_change=False) == ()
+    for status in (SaleStatus.APPROVED, SaleStatus.SOLD, SaleStatus.CANCELLED, SaleStatus.CLOSED):
+        assert allowed_steps(status, "them", "me", may_change=True) == ()

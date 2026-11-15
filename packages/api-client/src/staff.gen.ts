@@ -3726,6 +3726,7 @@ export type StaffBondRepaymentOut = z.infer<typeof StaffBondRepaymentOut>;
 
 export const StaffBondSaleOut = z.object({
   accrued_minor: z.number().int().nullable(),
+  allowed: z.array(z.enum(["price", "approve", "send_back", "withdraw"])),
   amount_minor: z.number().int().nullable(),
   clean_minor: z.number().int().nullable(),
   client_id: z.string(),

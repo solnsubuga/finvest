@@ -17,7 +17,7 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import date, datetime
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import Field
@@ -35,7 +35,7 @@ from app.modules.bonds.domain.issues import (
     Quote,
     default_tax_bps,
 )
-from app.modules.bonds.domain.sales import SaleStatus
+from app.modules.bonds.domain.sales import SaleStatus, allowed_steps
 from app.modules.identity.api import CurrentClient, require_confirmed, require_permission
 from app.modules.identity.pins_api import Pins
 from app.modules.identity.service import StaffSession
@@ -69,6 +69,7 @@ CurrencyIn = Annotated[Currency, Field(strict=False)]
 DateIn = Annotated[date, Field(strict=False)]
 StatusIn = Annotated[BondStatus, Field(strict=False)]
 PinConfirmation = Annotated[str | None, Field(max_length=200)]
+SaleStep = Literal["price", "approve", "send_back", "withdraw"]
 
 
 # Contracts --------------------------------------------------------------------------------------
@@ -393,6 +394,8 @@ class StaffBondSaleOut(Contract):
     payout_id: PushId | None
     held_because: str | None
     closed_at: datetime | None
+    # What the reader may do with it now: `price`, `approve`, `send_back` or `withdraw`.
+    allowed: list[SaleStep]
 
 
 class PriceSaleIn(Contract):
@@ -830,7 +833,13 @@ def _sale_out(view: sales.SaleView) -> BondSaleOut:
     )
 
 
-def _staff_sale_out(view: sales.SaleView) -> StaffBondSaleOut:
+def _staff_sale_out(view: sales.SaleView, staff: StaffSession) -> StaffBondSaleOut:
+    steps = allowed_steps(
+        view.status,
+        view.priced_by,
+        staff.staff_id,
+        may_change="dealing_orders.change" in staff.permissions,
+    )
     return StaffBondSaleOut(
         id=view.id,
         holding_id=view.holding_id,
@@ -860,6 +869,7 @@ def _staff_sale_out(view: sales.SaleView) -> StaffBondSaleOut:
         payout_id=view.payout_id,
         held_because=view.payout_refusal,
         closed_at=view.closed_at,
+        allowed=[cast(SaleStep, step) for step in steps],
     )
 
 
@@ -1150,7 +1160,7 @@ async def staff_bond_sales(
     `priced` those waiting for a second person."""
     async with _transaction(request, staff.actor) as session:
         found = await sales.staff_sales(session, staff.actor, status, limit)
-    return [_staff_sale_out(v) for v in found]
+    return [_staff_sale_out(v, staff) for v in found]
 
 
 @staff_router.post("/bond-sales/{sale_id}/price")
@@ -1173,7 +1183,7 @@ async def staff_price_bond_sale(
             reason=body.reason,
             clock=clock,
         )
-    return _staff_sale_out(view)
+    return _staff_sale_out(view, staff)
 
 
 @staff_router.post("/bond-sales/{sale_id}/approve")
@@ -1184,7 +1194,7 @@ async def staff_approve_bond_sale(
     confirm it is them."""
     async with _transaction(request, staff.actor) as session:
         view = await sales.approve_sale(session, staff.actor, sale_id, clock)
-    return _staff_sale_out(view)
+    return _staff_sale_out(view, staff)
 
 
 @staff_router.post("/bond-sales/{sale_id}/send-back")
@@ -1195,7 +1205,7 @@ async def staff_send_back_bond_sale(
         view = await sales.send_back_sale(
             session, staff.actor, sale_id, note=body.note, clock=clock
         )
-    return _staff_sale_out(view)
+    return _staff_sale_out(view, staff)
 
 
 @staff_router.post("/bond-sales/{sale_id}/withdraw")
@@ -1204,7 +1214,7 @@ async def staff_withdraw_bond_sale(
 ) -> StaffBondSaleOut:
     async with _transaction(request, staff.actor) as session:
         view = await sales.withdraw_sale(session, staff.actor, sale_id, clock)
-    return _staff_sale_out(view)
+    return _staff_sale_out(view, staff)
 
 
 routers = (public_router, client_router, staff_router)

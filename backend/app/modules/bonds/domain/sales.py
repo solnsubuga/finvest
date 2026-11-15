@@ -105,6 +105,19 @@ def check_sold_on(
     return None
 
 
+def allowed_steps(
+    status: SaleStatus, priced_by: str | None, reader: str, *, may_change: bool
+) -> tuple[str, ...]:
+    """What a member of staff may do with a sale as it stands. The database checks it again."""
+    if not may_change:
+        return ()
+    if status is SaleStatus.REQUESTED:
+        return ("price",)
+    if status is SaleStatus.PRICED:
+        return ("withdraw",) if priced_by == reader else ("approve", "send_back")
+    return ()
+
+
 def check_text(value: str | None) -> SaleRefusal | None:
     if value is None or not value.strip():
         return SaleRefusal.TEXT_REQUIRED
