@@ -20,7 +20,15 @@ const LINE_NAMES: Record<string, string> = {
   earnings: "Finvest's earnings so far, income less costs",
 };
 
-const lineName = (line: CheckLine) => LINE_NAMES[line.code] ?? line.name;
+/** Carried-over accounts are named by the old platform in the ledger, so any such code gets a neutral name. */
+const lineName = (line: CheckLine) =>
+  LINE_NAMES[line.code] ?? (line.code.startsWith("migration.") ? "Balances carried over from the paper register" : line.name);
+
+/** A row under held: what is taken off, or, for earnings below zero, the costs above income that are added back. */
+function heldLabel(line: CheckLine): string {
+  if (line.amount.minor >= 0) return `Less: ${lineName(line)}`;
+  return line.code === "earnings" ? "Plus: Finvest's costs so far above its income" : `Plus: ${lineName(line)}, below zero`;
+}
 const negate = (amount: Amount): Amount => ({ ...amount, minor: -amount.minor });
 const absolute = (amount: Amount): Amount => ({ ...amount, minor: Math.abs(amount.minor) });
 
@@ -129,11 +137,11 @@ function Figures({ check }: { check: ClientMoneyCheck }) {
           {check.notClientMoney.map((line) => (
             <Row
               key={line.code}
-              label={`${line.amount.minor < 0 ? "Plus" : "Less"}: ${lineName(line)}`}
+              label={heldLabel(line)}
               amount={negate(line.amount)}
               note={
                 line.amount.minor < 0 && line.code === "earnings"
-                  ? "Below zero: Finvest's costs so far, mostly interest clients have earned, are more than its income until the bills mature."
+                  ? "Mostly interest clients have earned, which the bills pay for when they mature."
                   : undefined
               }
             />
