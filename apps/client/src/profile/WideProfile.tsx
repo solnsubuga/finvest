@@ -21,7 +21,7 @@ import { useOrganisations } from "@/organisations/OrganisationsProvider";
 import { networkName } from "@/payments/format";
 import { usePayouts } from "@/payouts/PayoutsProvider";
 import { PayoutAccount } from "@/payouts/types";
-import { colors, radii } from "@/theme";
+import { colors, radii, TWO_COLUMN_BREAKPOINT } from "@/theme";
 
 import { initials } from "./initials";
 import { useProfile } from "./ProfileProvider";
@@ -128,8 +128,11 @@ export function WideProfile({ session }: { session: Session }) {
   );
 }
 
+/** Below this window width the three facts sit one under another, as on a tablet held upright. */
+
 function Header({ session, check }: { session: Session; check: IdentityCheck | null | undefined }) {
   const router = useRouter();
+  const stacked = useWindowDimensions().width < TWO_COLUMN_BREAKPOINT;
   const [copied, setCopied] = useState(false);
   const email = useEmailProof();
   const approved = check?.status === "approved";
@@ -179,8 +182,8 @@ function Header({ session, check }: { session: Session; check: IdentityCheck | n
           ) : null}
         </View>
       </View>
-      <View style={styles.facts}>
-        <Fact label="Account number" first>
+      <View style={[styles.facts, stacked && styles.factsStacked]}>
+        <Fact label="Account number" first stacked={stacked}>
           {accountNumber ? (
             <View style={styles.factValue}>
               <Txt size={17} weight="bold" color={colors.white} style={{ letterSpacing: 1 }} testID="profile-account-number">
@@ -208,12 +211,12 @@ function Header({ session, check }: { session: Session; check: IdentityCheck | n
             </Txt>
           )}
         </Fact>
-        <Fact label="Mobile number">
+        <Fact label="Mobile number" stacked={stacked}>
           <Txt size={17} weight="bold" color={colors.white}>
             {formatE164(session.phone)}
           </Txt>
         </Fact>
-        <Fact label="Email" grow={1.4}>
+        <Fact label="Email" grow={1.4} stacked={stacked}>
           {session.email ? (
             <View style={[styles.factValue, { flexWrap: "wrap" }]} testID="profile-email">
               <Txt size={17} weight="bold" color={colors.white} style={{ flexShrink: 1 }}>
@@ -530,15 +533,17 @@ function Fact({
   label,
   first = false,
   grow = 1,
+  stacked = false,
   children,
 }: {
   label: string;
   first?: boolean;
   grow?: number;
+  stacked?: boolean;
   children: ReactNode;
 }) {
   return (
-    <View style={[styles.fact, { flex: grow }, first && styles.factFirst]}>
+    <View style={[styles.fact, stacked ? styles.factStacked : { flex: grow }, first && styles.factFirst]}>
       <Txt size={13} color={colors.onBlackMuted}>
         {label}
       </Txt>
@@ -620,6 +625,8 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.onBlackDivider,
     minWidth: 0,
   },
+  factsStacked: { flexDirection: "column", gap: 14 },
+  factStacked: { paddingHorizontal: 0, borderLeftWidth: 0 },
   factFirst: { paddingLeft: 0, borderLeftWidth: 0 },
   factValue: { flexDirection: "row", alignItems: "center", gap: 8 },
   prompt: {

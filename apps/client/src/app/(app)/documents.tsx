@@ -33,7 +33,7 @@ import { formatDateTime } from "@/payments/format";
 import { newIdempotencyKey } from "@/payments/idempotency";
 import { Loading } from "@/payments/Parts";
 import { colors, fontFor, fontSizes, radii } from "@/theme";
-import { useIsWide } from "@/theme/useIsWide";
+import { useHasTwoColumns, useIsWide } from "@/theme/useIsWide";
 
 /** Error text on the black card. The light-background red is too dark to read there. */
 const ON_BLACK_DANGER = "#FF9D94";
@@ -70,6 +70,7 @@ const FORMATS: { format: FileFormat; label: string }[] = [
 export default function Documents() {
   const client = useDocuments();
   const wide = useIsWide();
+  const twoColumns = useHasTwoColumns();
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [agreements, setAgreements] = useState<AgreementsState>({ status: "loading" });
   const [request, setRequest] = useState<Request>({ step: "form" });
@@ -188,7 +189,7 @@ export default function Documents() {
       <DocumentLists items={list.items} agreements={agreements} />
     );
 
-  if (wide) {
+  if (wide && twoColumns) {
     return (
       <AppPage title="Documents" subtitle="Statements, receipts and tax certificates for your investments.">
         <View style={styles.columns}>
@@ -199,7 +200,10 @@ export default function Documents() {
     );
   }
   return (
-    <AppPage title="Documents">
+    <AppPage
+      title="Documents"
+      subtitle={wide ? "Statements, receipts and tax certificates for your investments." : undefined}
+    >
       {panel}
       {lists}
     </AppPage>

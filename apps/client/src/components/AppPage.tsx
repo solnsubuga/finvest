@@ -40,7 +40,7 @@ export function AppPage({ title, subtitle, action, children, header, roomy = fal
       <DemoLabel signedIn />
       {header ?? (
       <View style={styles.heading}>
-        <View style={{ flex: 1, gap: 4 }}>
+        <View style={styles.titles}>
           <Txt
             accessibilityRole="header"
             size={26}
@@ -78,6 +78,8 @@ export function ComingLater({ title, what }: { title: string; what: string }) {
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingHorizontal: 20, paddingBottom: spacing[6], gap: spacing[4] },
-  heading: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  // At tablet widths the page's buttons go under the title rather than squeeze it.
+  heading: { flexDirection: "row", flexWrap: "wrap", alignItems: "flex-start", gap: 12 },
+  titles: { flexGrow: 1, flexShrink: 1, flexBasis: 280, gap: 4 },
   wide: { paddingTop: 28, paddingHorizontal: 32, maxWidth: 960 },
 });

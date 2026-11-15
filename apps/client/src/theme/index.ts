@@ -37,8 +37,17 @@ export function fontFor(weight: FontWeightName): string {
   return families[weight];
 }
 
-/** Screens at least this wide get the sidebar and the centred column. */
-export const WIDE_BREAKPOINT = 900;
+/**
+ * Screens at least this wide get the sidebar and the centred column. 768 is a tablet held
+ * upright, which got a stretched phone layout when this was 900 (QA F-029).
+ */
+export const WIDE_BREAKPOINT = 768;
+
+/**
+ * Wide screens narrower than this (a tablet, a small laptop window) keep one column of
+ * content beside the sidebar: two columns there squeeze text a letter to a line.
+ */
+export const TWO_COLUMN_BREAKPOINT = 1100;
 
 /** Width of the phone column that auth and detail screens keep on wide screens. */
 export const COLUMN_WIDTH = 440;
