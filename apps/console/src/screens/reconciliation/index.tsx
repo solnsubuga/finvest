@@ -15,6 +15,10 @@ import {
   type TransferDetail,
 } from "./api.ts";
 import { Queue } from "./Queue.tsx";
+import { notConnectedCardRefundsApi, type CardRefundsApi } from "./cardrefunds/api.ts";
+import { CardRefunds } from "./cardrefunds/CardRefunds.tsx";
+import { createHttpCardRefundsApi } from "./cardrefunds/http.ts";
+import { createStubCardRefundsApi } from "./cardrefunds/stub.ts";
 import { notConnectedDayCloseApi, type DayCloseApi } from "./dayclose/api.ts";
 import { DayClose } from "./dayclose/DayClose.tsx";
 import { createHttpDayCloseApi } from "./dayclose/http.ts";
@@ -277,6 +281,16 @@ export default function ReconciliationPage() {
     const base = apiBaseUrl();
     return base ? createHttpMistakenPaymentsApi(createHttp(base)) : notConnectedMistakenPaymentsApi;
   });
+  // Card payments paid back to the card: sample refunds under the stub, the real routes otherwise.
+  const [cardRefunds] = useState<CardRefundsApi>(() => {
+    if (!session) return notConnectedCardRefundsApi;
+    if (isStubAuth()) {
+      const which = stubCase();
+      return createStubCardRefundsApi(session.staffId, 150, which === "unsorted" ? "sample" : which);
+    }
+    const base = apiBaseUrl();
+    return base ? createHttpCardRefundsApi(createHttp(base)) : notConnectedCardRefundsApi;
+  });
   // Transfers between pots: sample pots under the stub, the real routes otherwise.
   const [potTransfers] = useState<PotTransfersApi>(() => {
     if (!session) return notConnectedPotTransfersApi;
@@ -305,6 +319,7 @@ export default function ReconciliationPage() {
       <DayClose api={days} canAct={session ? can(session, "reconciliation.change") : false} />
       <Reassignments api={moves} canChange={session ? can(session, "deposit_reassignments.change") : false} />
       <MistakenPayments api={mistaken} canChange={session ? can(session, "deposit_reassignments.change") : false} />
+      <CardRefunds api={cardRefunds} canChange={session ? can(session, "deposit_reassignments.change") : false} />
       <PotTransfers api={potTransfers} me={session?.staffId ?? ""} canChange={session ? can(session, "reconciliation.change") : false} />
       <CustodianChecks api={custodian} canChange={session ? can(session, "reconciliation.change") : false} />
     </>

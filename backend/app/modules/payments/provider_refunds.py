@@ -564,6 +564,14 @@ async def record_answer(
     """Record the provider's answer to the one request for a `sending` refund."""
     refund = await _locked(session, refund_id)
     if refund.status is not RefundStatus.SENDING:
+        # Most often the read job made it uncertain first. The answer changes nothing now, but
+        # staff settling it should know Pesapal did answer, and how.
+        logger.warning(
+            "provider_refund_answer_late",
+            refund_id=refund.id,
+            status=refund.status.value,
+            answer=result.value,
+        )
         return refund
     status = after_request(result)
     if status is RefundStatus.FAILED:
