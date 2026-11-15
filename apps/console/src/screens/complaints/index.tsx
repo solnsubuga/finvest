@@ -197,6 +197,12 @@ export function ComplaintsScreen({
     latest.current = { shown, busy, show };
   }, [shown, busy, show]);
   const shownId = shown?.complaint.id ?? null;
+  // True while a form in the panel holds typed words. A change from someone else then updates
+  // what is shown without starting the panel again, so those words stay.
+  const drafting = useRef(false);
+  const onDraft = useCallback((value: boolean) => {
+    drafting.current = value;
+  }, []);
   useEffect(() => {
     if (pollMs <= 0 || shownId === null) return;
     let live = true;
@@ -208,7 +214,7 @@ export function ComplaintsScreen({
           if (!live || before?.complaint.id !== shownId || JSON.stringify(before) === JSON.stringify(value)) return;
           lookUp([value.complaint.clientId], [value.complaint.ownerId, ...value.history.map((item) => item.actorId)]);
           setDetail({ state: "ready", value });
-          setRound((count) => count + 1);
+          if (!drafting.current) setRound((count) => count + 1);
           void fetchRegister(latest.current.show).then((next) => live && next.state === "ready" && setRegister(next));
         },
         // A failed read leaves what is shown. The next one tries again.
@@ -433,6 +439,7 @@ export function ComplaintsScreen({
                   busy={busy}
                   error={failed?.on === detail.value.complaint.id ? failed.message : null}
                   onCommand={(next) => command(detail.value.complaint.id, next)}
+                  onDraft={onDraft}
                 />
               )}
             </aside>
@@ -441,6 +448,15 @@ export function ComplaintsScreen({
       )}
     </>
   );
+}
+
+function noteElsewhere(joel: ComplaintsApi) {
+  window.setTimeout(() => {
+    void joel.register("open").then(async ({ complaints }) => {
+      const complaint = complaints.find((item) => item.reference === "C-2611");
+      if (complaint) await joel.addNote(complaint.id, "Rang the bank. The payout left on 11 Nov and is on its way back.");
+    });
+  }, 8000);
 }
 
 function closeElsewhere(grace: ComplaintsApi) {
@@ -467,7 +483,10 @@ export default function ComplaintsPage() {
       const api = createStubComplaintsApi(me, kampalaToday, Date.now, sample === "empty" ? "empty" : "sample", shared);
       // `?sample=closed-elsewhere`: a few seconds in, Joel confirms the outcome Daniel proposed for
       // C-2615 in his own browser, to show the open complaint moving on without a reload.
-      if (sample === "closed-elsewhere") closeElsewhere(createStubComplaintsApi({ id: "sample-staff-joel", name: "Joel Mukasa" }, kampalaToday, Date.now, "sample", shared));
+      // `?sample=note-elsewhere`: Joel adds a note to C-2611 instead, so a note being written stays.
+      const joel = () => createStubComplaintsApi({ id: "sample-staff-joel", name: "Joel Mukasa" }, kampalaToday, Date.now, "sample", shared);
+      if (sample === "closed-elsewhere") closeElsewhere(joel());
+      if (sample === "note-elsewhere") noteElsewhere(joel());
       return { api, directory: createStubDirectory(me) };
     }
     const base = apiBaseUrl();
