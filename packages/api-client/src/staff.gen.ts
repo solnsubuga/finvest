@@ -459,7 +459,7 @@ export const BillsOut = z.object({
 });
 export type BillsOut = z.infer<typeof BillsOut>;
 
-export const Blocker = z.enum(["investments_running", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
+export const Blocker = z.enum(["investments_running", "investments_unpaid", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
 export type Blocker = z.infer<typeof Blocker>;
 
 export const BodyImportStatementStaffReconciliationStatementsPost = z.object({
@@ -3337,6 +3337,7 @@ export const StandingView = z.object({
   open_payouts: z.number().int(),
   owed: z.array(ClosuresApiAmountView),
   running_investments: z.number().int(),
+  unpaid_investments: z.number().int(),
 });
 export type StandingView = z.infer<typeof StandingView>;
 

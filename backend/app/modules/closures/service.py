@@ -22,7 +22,7 @@ from app.modules.autoinvest.plans import live_plan_count
 from app.modules.closures.domain.blockers import Blocker, Standing, blockers
 from app.modules.goals.service import open_goal_count
 from app.modules.identity import client_locks
-from app.modules.investments.holdings import running_count
+from app.modules.investments.holdings import running_count, unpaid_count
 from app.modules.ledger.statements import client_owed_as_of
 from app.modules.payments.service import open_deposit_count
 from app.modules.payouts.payouts import open_payout_count
@@ -88,6 +88,7 @@ async def standing(session: AsyncSession, client_id: str) -> Standing:
         open_payouts=await open_payout_count(session, client_id),
         open_goals=await open_goal_count(session, client_id),
         live_plans=await live_plan_count(session, client_id),
+        unpaid_investments=await unpaid_count(session, client_id),
     )
 
 
