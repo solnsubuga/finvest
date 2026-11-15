@@ -36,7 +36,7 @@ describe("closing the day", { timeout: 15_000 }, () => {
     expect(within(close).queryByRole("button", { name: "Prepare the close" })).not.toBeInTheDocument();
     const mtn = await pot("ioTec wallet, MTN");
     expect(within(mtn).getByText("Statement missing")).toBeInTheDocument();
-    const trust = await pot("Trust bank account, Stanbic trust");
+    const trust = await pot("Trust bank account");
     expect(within(trust).getAllByText("On the statement, not in the ledger")).toHaveLength(2);
     expect(within(trust).getByText("In the ledger, not on the statement")).toBeInTheDocument();
     expect(within(trust).getByText("MONTHLY SERVICE CHARGE", { exact: false })).toBeInTheDocument();
@@ -53,7 +53,7 @@ describe("closing the day", { timeout: 15_000 }, () => {
     await user.click(within(mtn).getByRole("button", { name: "Import" }));
     expect(await within(await pot("ioTec wallet, MTN")).findByText("Agrees", undefined, WAIT)).toBeInTheDocument();
 
-    const trust = await pot("Trust bank account, Stanbic trust");
+    const trust = await pot("Trust bank account");
     await user.click(within(trust).getByRole("button", { name: "Pair by hand" }));
     const form = within(trust).getByRole("form", { name: "Pair by hand" });
     await user.click(within(form).getByRole("button", { name: "Pair them" }));
@@ -61,7 +61,7 @@ describe("closing the day", { timeout: 15_000 }, () => {
     await user.type(within(form).getByLabelText("How you know they are the same money"), "Same client, the bank cut the reference");
     await user.click(within(form).getByRole("button", { name: "Pair them" }));
     expect(await within(await status()).findByText("Paired. The difference is no longer open.", undefined, WAIT)).toBeInTheDocument();
-    expect(within(await pot("Trust bank account, Stanbic trust")).queryByText("TRANSFER FROM S NAMUKASA", { exact: false })).not.toBeInTheDocument();
+    expect(within(await pot("Trust bank account")).queryByText("TRANSFER FROM S NAMUKASA", { exact: false })).not.toBeInTheDocument();
 
     const ready = await status();
     expect(within(ready).getByRole("heading", { name: "Ready to prepare" })).toBeInTheDocument();
@@ -115,9 +115,27 @@ describe("closing the day", { timeout: 15_000 }, () => {
     expect(getDay.mock.calls.map((call) => call[0])).toEqual(["2026-11-14", "2026-11-12"]);
   });
 
+  it("pairs what was recorded since before showing the day, for someone who can act", async () => {
+    const api = createStubDayCloseApi(ME, 0, "sample", now);
+    const order: string[] = [];
+    const refresh = vi.spyOn(api, "refresh").mockImplementation(async (day) => void order.push(`refresh ${day}`));
+    const getDay = api.getDay.bind(api);
+    vi.spyOn(api, "getDay").mockImplementation((day) => {
+      order.push(`read ${day}`);
+      return getDay(day);
+    });
+    renderDay("sample", api);
+    await status();
+    expect(order.slice(0, 2)).toEqual(["refresh 2026-11-12", "read 2026-11-12"]);
+    expect(refresh).toHaveBeenCalled();
+  });
+
   it("lets someone who can only see reconciliation read the day, and nothing more", async () => {
-    render(<DayClose api={createStubDayCloseApi(ME, 0, "prepared", now)} canAct={false} now={now} />);
+    const api = createStubDayCloseApi(ME, 0, "prepared", now);
+    const refresh = vi.spyOn(api, "refresh");
+    render(<DayClose api={api} canAct={false} now={now} />);
     const close = await status();
+    expect(refresh).not.toHaveBeenCalled();
     expect(within(close).getByRole("heading", { name: "Prepared, waiting for a second person" })).toBeInTheDocument();
     expect(within(close).getByText(/You can see this day/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Approve and close the day" })).not.toBeInTheDocument();

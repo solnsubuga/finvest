@@ -32,7 +32,8 @@ from app.modules.payments.domain.bank_transfers import (
 )
 from app.modules.payments.domain.deposits import DepositStatus, Method, Purpose
 from app.modules.payments.service import Deposit, DepositExists
-from app.modules.reconciliation import statements
+from app.modules.reconciliation import day_close, statements
+from app.modules.reconciliation.domain.pots import Pot
 from app.modules.reconciliation.domain.statements import (
     CsvFormat,
     Direction,
@@ -924,3 +925,30 @@ async def test_staff_are_told_when_a_receipt_file_or_transaction_was_used_before
     async with app_database.actor_transaction(client()) as session:
         with pytest.raises(ApplicationError):
             await bank.earlier_uses(session, client(), first.deposit.id)
+
+
+async def test_a_matched_transfer_leaves_nothing_open_at_the_day_close(
+    app_database: Database, worker_database: Database, worker: Worker, fake_clock: FakeClock
+) -> None:
+    minor = amount()
+    transfer = await submit(app_database, fake_clock, minor)
+    pot = await statement(app_database, fake_clock, ((date(2026, 11, 18), minor, 0),))
+    reviewer = staff()
+    async with app_database.actor_transaction(reviewer) as session:
+        candidates = await bank.candidate_lines(session, reviewer, transfer.deposit.id)
+    line = next(found for found in candidates if found.account_reference == pot)
+    await review(app_database, fake_clock, transfer, Matched(line.id), reviewer=reviewer)
+    await approve(app_database, fake_clock, transfer)
+    await drain(worker)
+    await drain(worker)
+    assert (await reload(worker_database, transfer.deposit)).status is S.CONFIRMED
+
+    spec = bank.bank_account(Currency.UGX, pot)
+    trust = Pot(StatementSource.BANK, pot, spec.code, spec.reference, spec.name)
+    closer = staff()
+    day = date(2026, 11, 28)
+    async with app_database.actor_transaction(closer) as session:
+        await day_close.refresh(session, closer, day, fake_clock, pots=[trust])
+    async with app_database.actor_transaction(closer) as session:
+        still_open = await day_close.open_exceptions(session, trust, day)
+    assert still_open == ()
