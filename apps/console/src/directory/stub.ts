@@ -14,6 +14,7 @@ export const SAMPLE_CLIENTS: readonly ClientCard[] = [
 const SAMPLE_STAFF: Record<string, string> = {
   "sample-staff-grace": "Grace Auma",
   "sample-staff-daniel": "Daniel Kato",
+  "sample-staff-joel": "Joel Mukasa",
 };
 
 export function createStubDirectory(me?: { id: string; name: string }): Directory {
