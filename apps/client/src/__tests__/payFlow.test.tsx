@@ -136,9 +136,22 @@ describe("paying for an investment by mobile money", () => {
     expect(mockPay).not.toHaveBeenCalled();
 
     await fireEvent.changeText(screen.getByTestId("pay-other-number"), "701 999 999");
+    // An Airtel number: the network is guessed again from it.
+    expect(screen.getByTestId("network-airtel")).toBeChecked();
     await fireEvent.press(screen.getByTestId("pay-submit"));
     await screen.findByText("Approve on your phone");
-    expect(mockPay).toHaveBeenCalledWith(expect.objectContaining({ payer: "+256701999999" }));
+    expect(mockPay).toHaveBeenCalledWith(expect.objectContaining({ payer: "+256701999999", network: "airtel" }));
+  });
+
+  it("lets the client pick the network by hand after it is guessed from the number", async () => {
+    await openPayScreen();
+    await fireEvent.press(screen.getByTestId("pay-number-toggle"));
+    await fireEvent.changeText(screen.getByTestId("pay-other-number"), "701 999 999");
+    await fireEvent.press(screen.getByTestId("network-mtn"));
+    expect(screen.getByTestId("network-mtn")).toBeChecked();
+    await fireEvent.press(screen.getByTestId("pay-submit"));
+    await screen.findByText("Approve on your phone");
+    expect(mockPay).toHaveBeenCalledWith(expect.objectContaining({ payer: "+256701999999", network: "mtn" }));
   });
 
   it("goes back to the account's own number", async () => {
@@ -147,6 +160,8 @@ describe("paying for an investment by mobile money", () => {
     await fireEvent.changeText(screen.getByTestId("pay-other-number"), "701 999 999");
     await fireEvent.press(screen.getByTestId("pay-number-toggle"));
     expect(screen.getByText("+256 772 123 456")).toBeTruthy();
+    // Back on the account's MTN number, the network is guessed from it again.
+    expect(screen.getByTestId("network-mtn")).toBeChecked();
     await fireEvent.press(screen.getByTestId("pay-submit"));
     await screen.findByText("Approve on your phone");
     expect(mockPay).toHaveBeenCalledWith(expect.objectContaining({ payer: "+256772123456" }));

@@ -316,6 +316,8 @@ export default function Pay() {
                 onChangeText={(text) => {
                   setOtherNumber(text);
                   setNumberError(null);
+                  // Guess the network again from the typed number. The client can still change it.
+                  if (nationalDigits(text).length >= 2) setNetwork(likelyNetwork(nationalDigits(text)));
                 }}
                 hint={`${networkName[network]} sends the prompt to this number, and whoever has the phone approves it with their mobile money PIN. The payment counts for your investment.`}
                 error={numberError}
@@ -326,6 +328,7 @@ export default function Pay() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
+                  if (otherNumber !== null) setNetwork(likelyNetwork(nationalDigits(ownNumber)));
                   setOtherNumber(otherNumber === null ? "" : null);
                   setNumberError(null);
                 }}
