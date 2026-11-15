@@ -86,7 +86,7 @@ export default function Review() {
       signedIn
       footer={
         loaded.state === "ready" ? (
-          <Button label="Confirm and pay" onPress={confirm} loading={busy} testID="confirm" />
+          <Button label="Confirm and pay" variant="lime" onPress={confirm} loading={busy} testID="confirm" />
         ) : null
       }
     >

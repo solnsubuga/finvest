@@ -111,7 +111,7 @@ describe("investing", () => {
     await signIn();
     await fireEvent.press(screen.getByLabelText("Invest"));
     const bill = await screen.findByTestId("product-TREA-91");
-    expect(within(bill).getByText("10.63%")).toBeTruthy();
+    expect(within(bill).getByText("10.62%")).toBeTruthy();
     expect(within(bill).getByText("From UGX 100,000")).toBeTruthy();
     expect(within(screen.getByTestId("product-USD-BOND")).getByText("Paused for new investments")).toBeTruthy();
     expect(screen.queryByText(/15%/)).toBeNull();

@@ -37,6 +37,7 @@ const ACTIONS: readonly { permission: Permission; label: string; under: ScreenPe
   { permission: "payout_accounts.change", label: "Check payout accounts", under: "review_queue.view" },
   { permission: "bank_payouts.change", label: "Pay and settle bank payouts", under: "money_movement.view" },
   { permission: "dealing_orders.change", label: "Deal and settle orders", under: "dealing_desk.view" },
+  { permission: "finance.close", label: "Close a month's books", under: "finance.view" },
   { permission: "tax_remittances.change", label: "Pay withholding tax to URA", under: "finance.view" },
   { permission: "rates.change", label: "Change rates", under: "rates.view" },
   { permission: "products.change", label: "Add, change, pause and open products", under: "products.view" },

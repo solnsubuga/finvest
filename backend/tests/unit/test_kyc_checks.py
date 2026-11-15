@@ -144,6 +144,8 @@ def test_details_are_normalised_before_they_are_checked() -> None:
         ({"document_number": "CF94-1234"}, "document_number", "invalid_document_number"),
         ({"date_of_birth": date(2026, 11, 14)}, "date_of_birth", "in_the_future"),
         ({"date_of_birth": date(2008, 11, 14)}, "date_of_birth", "under_age"),
+        ({"date_of_birth": date(1905, 11, 13)}, "date_of_birth", "too_old"),
+        ({"date_of_birth": date(1890, 1, 1)}, "date_of_birth", "too_old"),
         ({"document_expires_on": date(2026, 11, 12)}, "document_expires_on", "document_expired"),
         ({"tin": "12345"}, "tin", "invalid_tin"),
     ],
@@ -158,6 +160,11 @@ def test_a_client_is_an_adult_on_their_eighteenth_birthday_and_an_id_is_good_on_
 ):
     assert detail_problems(replace(GOOD, date_of_birth=date(2008, 11, 13)), TODAY) == []
     assert detail_problems(replace(GOOD, document_expires_on=TODAY), TODAY) == []
+
+
+def test_a_client_of_exactly_one_hundred_and_twenty_is_still_accepted() -> None:
+    # The day before their 121st birthday: anyone older is a typing mistake.
+    assert detail_problems(replace(GOOD, date_of_birth=date(1905, 11, 14)), TODAY) == []
 
 
 def test_an_unknown_expiry_is_not_a_problem() -> None:

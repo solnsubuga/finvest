@@ -359,6 +359,8 @@ class PrepareRelease(unittest.TestCase):
             "@app_links path /.well-known/apple-app-site-association /.well-known/assetlinks.json", site
         )
         self.assertIn(" 503", site)
+        # The holding answer is plain text, so it may run nothing and be framed by nobody.
+        self.assertIn("header Content-Security-Policy \"default-src 'none'; frame-ancestors 'none'\"", site)
         self.assertNotIn("FINVEST_SITE_DOMAIN", read_env(self.out / "release.env"))
 
     def test_production_serves_the_website_once_published(self):
@@ -396,6 +398,9 @@ class PrepareRelease(unittest.TestCase):
         site = (self.out / "edge" / "site.caddy").read_text()
         self.assertIn("www.finvestug.com {", site)
         self.assertIn("redir https://finvestug.com{uri} 308", site)
+        # The redirect carries HSTS too, so a visitor who types www is held to HTTPS from then on.
+        redirect = site[site.index("www.finvestug.com {"):]
+        self.assertIn("import common_headers", redirect)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import {
   formatTime,
   humanize,
   LOCK_STATUS,
+  holdingName,
   owedLabel,
   secondSteps,
   STATUS_LABELS,
@@ -37,10 +38,10 @@ function Card({ title, children, className }: { title: string; children: ReactNo
 
 function Facts({ rows }: { rows: [string, ReactNode][] }) {
   return (
-    <dl className="m-0 grid gap-x-4 gap-y-2 text-sm [grid-template-columns:max-content_minmax(0,1fr)]">
+    <dl className="m-0 grid gap-x-4 gap-y-2 text-sm [grid-template-columns:minmax(0,max-content)_minmax(0,1fr)]">
       {rows.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="font-bold text-muted">{label}</dt>
+          <dt className="max-w-[160px] font-bold text-muted">{label}</dt>
           <dd className="m-0 break-words">{value}</dd>
         </div>
       ))}
@@ -91,7 +92,7 @@ export function ClientDetails({ page }: { page: ClientPage }) {
             ["Email", account.email ?? "None given"],
             ["Second step", secondSteps(account)],
             ["Last signed in", account.lastSignedInAt ? formatTime(account.lastSignedInAt) : "Never"],
-            ...(account.restrictedUntil ? ([["Sign-in held back until", formatTime(account.restrictedUntil)]] as [string, ReactNode][]) : []),
+            ...(account.restrictedUntil ? ([["Withdrawals limited to known accounts until", formatTime(account.restrictedUntil)]] as [string, ReactNode][]) : []),
           ]}
         />
       </Card>
@@ -118,7 +119,7 @@ export function ClientDetails({ page }: { page: ClientPage }) {
                 <li key={`${item.accountCode}:${item.accountReference ?? ""}:${item.currency}`} className="flex items-baseline justify-between gap-3">
                   <span>
                     {owedLabel(item)}
-                    {item.accountReference ? <span className="text-muted"> · {item.accountReference}</span> : null}
+                    {holdingName(item) ? <span className="text-muted"> · {holdingName(item)}</span> : null}
                   </span>
                   <span className="font-bold whitespace-nowrap tabular-nums">{formatAmount(item.minor, item.currency)}</span>
                 </li>

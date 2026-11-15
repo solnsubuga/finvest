@@ -49,6 +49,7 @@ export type RiskProfile = {
 
 export type Blocker =
   | "investments_running"
+  | "investments_unpaid"
   | "money_owed"
   | "deposits_in_progress"
   | "payouts_in_progress"
@@ -56,7 +57,10 @@ export type Blocker =
   | "plans_live";
 
 export type Standing = {
+  /** Started and still running, goal savings included: what Portfolio lists as running. */
   runningInvestments: number;
+  /** Asked for but not paid yet. Not in `runningInvestments` or `owed`. */
+  unpaidInvestments: number;
   owed: Money[];
   openDeposits: number;
   openPayouts: number;

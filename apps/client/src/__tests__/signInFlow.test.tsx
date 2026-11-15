@@ -159,6 +159,34 @@ describe("the shell, from the first screen", () => {
     expect(screen.getByText(/Demo\. Not connected to Finvest yet/)).toBeTruthy();
   });
 
+  it("says in words why the terms box is needed, and stops praising a leaked password", async () => {
+    await openApp();
+    await press("Create an account");
+    await screen.findByText("Create your account");
+    await fireEvent.changeText(screen.getByTestId("phone-input"), "701555014");
+    await fireEvent.changeText(screen.getByTestId("email-input"), "new@example.com");
+    await fireEvent.press(screen.getByTestId("signup-submit"));
+    expect(screen.getByText("Tick the box to agree to the terms and confirm you are 18 or older.")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("terms-checkbox"));
+    expect(screen.queryByTestId("terms-error")).toBeNull();
+    await fireEvent.press(screen.getByTestId("signup-submit"));
+
+    await screen.findByText("Enter the code we sent you");
+    await fireEvent.changeText(screen.getByTestId("code-input"), DEMO_CODE);
+    await fireEvent.press(screen.getByTestId("code-submit"));
+    await screen.findByText("Create a password");
+    await fireEvent.changeText(screen.getByTestId("password-input"), "Password123");
+    await fireEvent.changeText(screen.getByTestId("password-confirm-input"), "Password123");
+    expect(screen.getByText("Good password")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("password-submit"));
+    await screen.findByText(/appeared in a known leak/);
+    expect(screen.queryByText("Good password")).toBeNull();
+    expect(screen.getByText("Not accepted")).toBeTruthy();
+    // A different password is judged afresh.
+    await fireEvent.changeText(screen.getByTestId("password-input"), "green matooke sunday");
+    expect(screen.getByText("Strong password")).toBeTruthy();
+  });
+
   it("tells only the owner of a number that it already has an account", async () => {
     await openApp();
     await press("Create an account");

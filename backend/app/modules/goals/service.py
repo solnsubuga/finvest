@@ -89,7 +89,7 @@ class ClientPlan:
 
     product_code: str
     product_name: str
-    # "10.63": the yearly rate after tax, as a label.
+    # "10.62": the yearly rate after tax, as a label.
     rate_percent: str
     term_days: int
     saving: Money
@@ -781,6 +781,7 @@ def _invalid(refusal: GoalRefusal) -> ApplicationError:
         GoalRefusal.NAME_EMPTY: "name",
         GoalRefusal.NAME_TOO_LONG: "name",
         GoalRefusal.TARGET_NOT_POSITIVE: "target_minor",
+        GoalRefusal.TARGET_TOO_LARGE: "target_minor",
         GoalRefusal.DATE_NOT_IN_FUTURE: "target_date",
         GoalRefusal.DATE_TOO_FAR: "target_date",
     }[refusal]

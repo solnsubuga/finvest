@@ -59,7 +59,10 @@ class AmountView(Contract):
 
 
 class StandingView(Contract):
+    # Started and still running, goal savings included.
     running_investments: int
+    # Asked for but not paid yet: not in `running_investments` or `owed`.
+    unpaid_investments: int
     owed: list[AmountView]
     open_deposits: int
     open_payouts: int
@@ -119,6 +122,7 @@ class NoteBody(Contract):
 def _standing(found: Standing) -> StandingView:
     return StandingView(
         running_investments=found.running_investments,
+        unpaid_investments=found.unpaid_investments,
         owed=[AmountView(amount_minor=m.minor, currency=m.currency.value) for m in found.owed],
         open_deposits=found.open_deposits,
         open_payouts=found.open_payouts,

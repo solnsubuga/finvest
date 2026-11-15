@@ -64,7 +64,7 @@ interface FinanceScreenProps {
   today?: () => string;
   save?: (exported: TaxExport) => void;
   /** Closing the month, with the reader's own staff ID. Left out, the screen does not offer it. */
-  monthClose?: { api: MonthCloseApi; me: string } | null;
+  monthClose?: { api: MonthCloseApi; me: string; canClose: boolean } | null;
 }
 
 export function FinanceScreen({ api, booksApi, canPay, newKey = () => crypto.randomUUID(), today = kampalaToday, save = saveFile, monthClose = null }: FinanceScreenProps) {
@@ -174,7 +174,7 @@ export function FinanceScreen({ api, booksApi, canPay, newKey = () => crypto.ran
   const top = (
     <>
       {header}
-      {monthClose ? <MonthCloseSection api={monthClose.api} me={monthClose.me} newKey={newKey} /> : null}
+      {monthClose ? <MonthCloseSection api={monthClose.api} me={monthClose.me} canClose={monthClose.canClose} newKey={newKey} /> : null}
       {booksApi ? <BooksSection key={currency} api={booksApi} currency={currency} today={today()} save={save} /> : null}
       {booksApi ? <h2 className="m-0 mt-4 text-xl font-extrabold">Withholding tax</h2> : null}
     </>
@@ -766,7 +766,7 @@ export default function FinancePage() {
       api={api}
       booksApi={booksApi}
       canPay={session ? can(session, "tax_remittances.change") : false}
-      monthClose={session ? { api: monthCloseApi, me: session.staffId } : null}
+      monthClose={session ? { api: monthCloseApi, me: session.staffId, canClose: can(session, "finance.close") } : null}
     />
   );
 }

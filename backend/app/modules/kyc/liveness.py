@@ -174,6 +174,15 @@ async def availability(
     attempts = await _count(session, row.id)
     latest_row = (await session.execute(_LATEST, {"check_id": row.id})).one_or_none()
     latest = None if latest_row is None else _view(latest_row, sealer, now)
+    if (
+        latest_row is not None
+        and row.retake_requested_at is not None
+        and PhotoKind.SELFIE in _retakes(row)
+        and latest_row.created_at < row.retake_requested_at
+    ):
+        # Staff asked for a new selfie since this attempt: it was for the old one, so the client
+        # is offered a new attempt, not its result.
+        latest = None
     problem = None
     if provider_on:
         problem = start_problem(

@@ -45,8 +45,8 @@ describe("clients over HTTP", () => {
             verified_name: "Sarah Nakato",
             identity_check: null,
             owed: [
-              { account_code: "client.holding", account_reference: "TB-1", amount_minor: 2500000, currency: "UGX" },
-              { account_code: "client.holding", account_reference: "X", amount_minor: 1, currency: "KES" },
+              { account_code: "client.holding", account_reference: "TB-1", product_name: "364 Day Treasury Bill", matures_on: "2027-08-12", amount_minor: 2500000, currency: "UGX" },
+              { account_code: "client.holding", account_reference: "X", product_name: null, matures_on: null, amount_minor: 1, currency: "KES" },
             ],
             destinations: [],
             locks: [LOCK],
@@ -60,7 +60,7 @@ describe("clients over HTTP", () => {
     expect(await api.search(" 0772 123456 ")).toHaveLength(1);
     expect(fetch).toHaveBeenCalledWith("https://api.test/staff/clients/search?q=0772+123456", expect.objectContaining({ method: "GET" }));
     const page = await api.client(ACCOUNT.id);
-    expect(page.owed).toEqual([{ accountCode: "client.holding", accountReference: "TB-1", minor: 2500000, currency: "UGX" }]);
+    expect(page.owed).toEqual([{ accountCode: "client.holding", accountReference: "TB-1", productName: "364 Day Treasury Bill", maturesOn: "2027-08-12", minor: 2500000, currency: "UGX" }]);
     expect(page.locks[0]).toMatchObject({ proposedByName: "Grace Auma", yours: false });
     expect(page.freezes).toEqual([{ id: "-NFreeze000000000001", frozenAt: "2026-11-14T06:00:00Z", reason: null }]);
     expect(page.complaints).toBeNull();

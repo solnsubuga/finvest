@@ -131,6 +131,16 @@ describe("identity checks over HTTP", () => {
   it("turns refusals into the screen's errors", async () => {
     const conflict = vi.fn<typeof globalThis.fetch>(() => refusal(409, "conflict"));
     await expect(createHttpKycApi(createHttp("https://api.test", conflict)).approve(CHECK.id, "x")).rejects.toMatchObject({ code: "conflict" });
+    const held = vi.fn<typeof globalThis.fetch>(() =>
+      reply(409, {
+        request_id: "req",
+        error: { code: "conflict", message: "conflict", fields: [{ field_path: ["document_number"], code: "duplicate_document" }] },
+      }),
+    );
+    // Another approved client holds the ID: the screen says so, not that someone else acted.
+    await expect(createHttpKycApi(createHttp("https://api.test", held)).approve(CHECK.id, "x")).rejects.toMatchObject({
+      code: "duplicate_document",
+    });
     const forbidden = vi.fn<typeof globalThis.fetch>(() => refusal(403, "forbidden"));
     await expect(createHttpKycApi(createHttp("https://api.test", forbidden)).escalate(CHECK.id, "x")).rejects.toMatchObject({
       code: "forbidden",

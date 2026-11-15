@@ -82,7 +82,7 @@ class ProductOut(Contract):
     minimum_minor: int
     interest_paid: InterestPaid
     status: ProductStatus
-    # "10.63": the yearly rate after tax, as a label. No amount is worked out from it.
+    # "10.62": the yearly rate after tax, as a label. No amount is worked out from it.
     client_rate_percent: str
 
 

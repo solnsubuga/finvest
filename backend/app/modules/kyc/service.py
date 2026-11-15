@@ -80,6 +80,8 @@ MAX_PHOTO_BYTES = 10 * 1024 * 1024
 MAX_PHOTOS_PER_CHECK = 30
 PHOTO_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "image/webp"})
 MAX_CLIENT_MESSAGE = 300
+# Staff see it on a check whose identity document another approved client holds: never approvable.
+DUPLICATE_DOCUMENT = "duplicate_document"
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 200
 # What staff work through, oldest first. `awaiting_client` is listed so they can see who was asked.
@@ -240,6 +242,11 @@ _UNANSWERED = text(
     "SELECT id, submission FROM kyc_checks WHERE status = 'submitted' AND submitted_at < :before "
     "ORDER BY submitted_at, id LIMIT :limit FOR UPDATE SKIP LOCKED"
 )
+_DOCUMENT_HELD = text(
+    "SELECT EXISTS (SELECT FROM kyc_checks AS mine JOIN kyc_checks AS held "
+    "ON held.document_fingerprint = mine.document_fingerprint "
+    "WHERE mine.id = :id AND held.status = 'approved' AND held.id <> mine.id)"
+)
 _DOCUMENT_TAKEN = text(
     "SELECT EXISTS (SELECT FROM kyc_checks WHERE status = 'approved' "
     "AND document_fingerprint = :document_fingerprint)"
@@ -280,7 +287,9 @@ _INSERT_PHOTO = text(
 )
 _QUEUE = text(
     "SELECT id, client_id, status, document_type, surname, given_names, submitted_at, "
-    "review_flags "
+    "review_flags, EXISTS (SELECT FROM kyc_checks AS held WHERE held.status = 'approved' "
+    "AND held.document_fingerprint = kyc_checks.document_fingerprint "
+    "AND held.id <> kyc_checks.id) AS document_held "
     "FROM kyc_checks WHERE status = ANY(:statuses) "
     "ORDER BY array_position(:statuses, status::text), submitted_at, id LIMIT :limit"
 )
@@ -663,7 +672,7 @@ async def record_provider_result(
     if decision.approve and row.document_expires_on < clock.now().date():
         flags = ["document_expired"]
     elif decision.approve and await _document_taken(session, row):
-        flags = ["duplicate_document"]
+        flags = [DUPLICATE_DOCUMENT]
     elif decision.approve and not await _phone_name_allows(session, row.id):
         flags = ["phone_name_not_confirmed"]
     checks = json.dumps([_outcome_json(outcome) for outcome in outcomes], separators=(",", ":"))
@@ -680,7 +689,7 @@ async def record_provider_result(
         if approved:
             await _audit(session, system, "change", "kyc.check.approved", row.id, clock)
             return await _view_by_id(session, sealer, row.id)
-        flags = ["duplicate_document"]
+        flags = [DUPLICATE_DOCUMENT]
     await session.execute(
         _TO_REVIEW,
         {
@@ -781,10 +790,29 @@ async def review_queue(session: AsyncSession, *, limit: int = DEFAULT_PAGE_SIZE)
             surname=row.surname,
             given_names=row.given_names,
             submitted_at=row.submitted_at,
-            review_flags=tuple(row.review_flags),
+            review_flags=with_held(tuple(row.review_flags), held=row.document_held),
         )
         for row in rows.all()
     ]
+
+
+async def document_held_elsewhere(session: AsyncSession, check: CheckView) -> bool:
+    """Whether another approved client holds this check's identity document. Staff only.
+
+    Such a check can never be approved, so staff are shown `duplicate_document` on it however
+    it reached them, even when the other client was approved after it was handed in.
+    """
+    if check.status is CheckStatus.APPROVED:
+        return False
+    held = await session.execute(_DOCUMENT_HELD, {"id": check.id})
+    return bool(held.scalar_one())
+
+
+def with_held(flags: tuple[str, ...], *, held: bool) -> tuple[str, ...]:
+    # First, because it decides the check: the console shows the first flag.
+    if not held:
+        return flags
+    return (DUPLICATE_DOCUMENT, *(flag for flag in flags if flag != DUPLICATE_DOCUMENT))
 
 
 _STATUS_COUNTS = text("SELECT status, count(*) AS checks FROM kyc_checks GROUP BY status")
@@ -1133,8 +1161,12 @@ async def approve(
         clock=clock,
     )
     if not approved:
-        # Another approved client already holds this identity document.
-        raise ApplicationError("conflict")
+        # Another approved client already holds this identity document. Staff see the flag on
+        # the check (`document_held_elsewhere`), so the next reviewer knows before deciding.
+        raise ApplicationError(
+            "conflict",
+            fields=[FieldProblem(field_path=["document_number"], code=DUPLICATE_DOCUMENT)],
+        )
     await _audit(session, staff, "approval", "kyc.check.approved", row.id, clock, reason=reason)
     return await _view_by_id(session, sealer, row.id)
 

@@ -15,6 +15,7 @@ from app.shared.money import Money
 
 class Blocker(StrEnum):
     INVESTMENTS_RUNNING = "investments_running"
+    INVESTMENTS_UNPAID = "investments_unpaid"
     MONEY_OWED = "money_owed"
     DEPOSITS_IN_PROGRESS = "deposits_in_progress"
     PAYOUTS_IN_PROGRESS = "payouts_in_progress"
@@ -26,6 +27,7 @@ class Blocker(StrEnum):
 class Standing:
     """The client's position as the owning modules report it."""
 
+    # Started and still running, goal savings included.
     running_investments: int
     # What Finvest owes the client, per currency, from the ledger. Only non-zero amounts.
     owed: tuple[Money, ...]
@@ -33,6 +35,8 @@ class Standing:
     open_payouts: int
     open_goals: int
     live_plans: int
+    # Asked for but not paid yet. Counted apart, as they hold no money.
+    unpaid_investments: int = 0
 
 
 def blockers(standing: Standing) -> list[Blocker]:
@@ -40,6 +44,8 @@ def blockers(standing: Standing) -> list[Blocker]:
     found: list[Blocker] = []
     if standing.running_investments:
         found.append(Blocker.INVESTMENTS_RUNNING)
+    if standing.unpaid_investments:
+        found.append(Blocker.INVESTMENTS_UNPAID)
     if any(amount.minor for amount in standing.owed):
         found.append(Blocker.MONEY_OWED)
     if standing.open_deposits:

@@ -21,11 +21,19 @@ from app.modules.documents.domain.statements import (
     StatementKind,
     summarise,
 )
-from app.modules.documents.pdf import receipt_pdf, statement_pdf, tax_certificate_pdf
+from app.modules.documents.pdf import (
+    CONTENT_W,
+    _fit,
+    _Page,
+    receipt_pdf,
+    statement_pdf,
+    tax_certificate_pdf,
+)
 from app.modules.tax import service as tax
 from app.shared.business_day import KAMPALA
 from app.shared.email_layout import Links
 from app.shared.money import Currency, Money
+from app.shared.references import short_reference
 
 
 def ugx(amount: int) -> Money:
@@ -348,3 +356,38 @@ def test_a_statement_with_a_check_code_says_where_to_check_it() -> None:
     assert f"contact Finvest and quote {plain.reference}" in older.replace("\n", " ")
     with pytest.raises(ValueError):
         dataclasses.replace(plain, check_code="k7q2-9xma-4tpd")
+
+
+def test_a_statement_shows_short_references_and_never_the_raw_ids() -> None:
+    payment, investment = "-P6TNMgBJ0qtT-C9Ed1Q", "-P6TNMfOTZSn2UB4N3ml"
+    base = statement(lines=1)
+    line = dataclasses.replace(base.activity[0], reference=payment)
+    holding = dataclasses.replace(base.holdings[0], reference=investment)
+    shown = dataclasses.replace(base, activity=(line,), holdings=(holding,))
+    text = "".join(page.extract_text() for page in PdfReader(BytesIO(statement_pdf(shown))).pages)
+    assert short_reference(payment) in text
+    assert short_reference(investment) in text
+    assert payment not in text
+    assert investment not in text
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["FV-3R0D5-3X44V", "UGX 1,000,000,000", "Payment received, MTN Mobile Money", "x" * 200],
+)
+@pytest.mark.parametrize("weight", ["", "B"])
+def test_a_cell_never_runs_into_the_next_column(text: str, weight: str) -> None:
+    page = _Page(title="t", footer_left="f")
+    page.add_page()
+    for share in (0.13, 0.15, 0.20, 0.37):
+        width = CONTENT_W * share
+        fitted = _fit(page, text, width, size=9, weight=weight)
+        assert page.get_string_width(fitted) <= width - 2 * page.c_margin
+        assert fitted == text or fitted.endswith("…")
+
+
+def test_a_reference_and_an_amount_fit_whole_in_the_statement_columns() -> None:
+    page = _Page(title="t", footer_left="f")
+    page.add_page()
+    assert _fit(page, "FV-WWWWW-WWWWW", CONTENT_W * 0.20, size=9) == "FV-WWWWW-WWWWW"
+    assert _fit(page, "UGX 999,999,999", CONTENT_W * 0.15, size=9, weight="B") == "UGX 999,999,999"

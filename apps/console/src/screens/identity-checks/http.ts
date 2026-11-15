@@ -108,9 +108,10 @@ export function toKycError(error: unknown): KycError {
       return new KycError("invalid");
     case "not_found":
       return new KycError("not_found");
-    // A decision the check's state no longer allows, or a document another approved client holds.
+    // A decision the check's state no longer allows, or a document another approved client
+    // holds, which the API names on the field.
     case "conflict":
-      return new KycError("conflict");
+      return new KycError(error.fieldCode === "duplicate_document" ? "duplicate_document" : "conflict");
     // The person closed the "confirm it is you" dialog, so nothing was done.
     case "confirm_it_is_you":
       return new KycError("not_confirmed");

@@ -73,6 +73,10 @@ class IdentityCheckView(Contract):
 class OwedView(Contract):
     account_code: str
     account_reference: str | None
+    # When the line is held on an investment: its product's name, and its maturity for a fixed
+    # term. Null for other lines, and for an open term's maturity.
+    product_name: str | None
+    matures_on: date | None
     # Whole units of the smallest denomination: shillings for UGX, cents for USD.
     amount_minor: int
     currency: str
@@ -242,10 +246,13 @@ async def client_page(
             OwedView(
                 account_code=item.account_code,
                 account_reference=item.account_reference,
+                product_name=holding.product_name if holding else None,
+                matures_on=holding.matures_on if holding else None,
                 amount_minor=item.owed.minor,
                 currency=item.owed.currency.value,
             )
             for item in page.owed
+            for holding in [page.holdings.get(item.account_reference or "")]
         ],
         destinations=[
             DestinationView(

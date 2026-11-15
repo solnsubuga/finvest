@@ -95,7 +95,7 @@ describe("the payments client for the real API", () => {
       payer: "+256 77• ••• •56",
       status: "sending",
       failure: null,
-      reference: PAYMENT,
+      reference: "FV-39MTD-6K9MT",
       payable: { title: "91 Day Treasury Bill", amount: { minor: 1_000_000, currency: "UGX" } },
     });
   });

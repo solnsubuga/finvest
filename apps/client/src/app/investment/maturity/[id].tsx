@@ -92,7 +92,7 @@ export default function MaturityChoiceScreen() {
   return (
     <Screen
       signedIn
-      footer={canSave ? <Button label="Save" onPress={save} loading={busy} testID="maturity-save" /> : null}
+      footer={canSave ? <Button label="Save" variant="lime" onPress={save} loading={busy} testID="maturity-save" /> : null}
     >
       <Stack.Screen options={{ title: "When the term ends" }} />
       <BackButton fallback={`/investment/${id}`} />

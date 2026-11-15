@@ -38,7 +38,7 @@ export type Product = {
   interestPaid: InterestPaid;
   /** A paused product is shown but takes no new investments. */
   status: ProductStatus;
-  /** The yearly rate after tax, as a label: "10.63". Nothing is worked out from it. */
+  /** The yearly rate after tax, as a label: "10.62". Nothing is worked out from it. */
   ratePercent: string;
 };
 
@@ -283,6 +283,8 @@ export interface InvestingClient {
 
 export type InvestingErrorCode =
   | "below_minimum"
+  /** Above the largest single investment (src/investing/limits.ts). */
+  | "above_maximum"
   | "product_not_open"
   | "not_verified"
   | "too_many_unpaid"
@@ -326,6 +328,7 @@ export class InvestingError extends Error {
 const messages: Record<InvestingErrorCode, string> = {
   account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
   below_minimum: "That is below the smallest amount for this product.",
+  above_maximum: "That is more than one investment can hold. Split a larger sum over several investments.",
   product_not_open: "This product is not taking new investments right now.",
   not_verified: "You can invest once your ID check is approved.",
   too_many_unpaid: "You have investments waiting to be paid for. Pay for one of those, or let it lapse, before starting another.",

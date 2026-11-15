@@ -39,6 +39,7 @@ export function toClosure(view: ClientClosureView): Closure {
   return {
     standing: {
       runningInvestments: s.running_investments,
+      unpaidInvestments: s.unpaid_investments,
       owed: s.owed.map((m) => ({ minor: m.amount_minor, currency: m.currency as "UGX" | "USD" })),
       openDeposits: s.open_deposits,
       openPayouts: s.open_payouts,

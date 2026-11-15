@@ -14,7 +14,7 @@ The catalogue starts with the three products Finvest 1.0 sold.
 
 A product is draft, live or paused. Only a live product takes new investments. A paused product takes none, and its running investments carry on. The dollar product is paused until paying in and out in dollars is built.
 
-There is no wallet, so an investment is paid for in one payment and that payment must meet the minimum by itself.
+There is no wallet, so an investment is paid for in one payment and that payment must meet the minimum by itself. It may not be more than the largest single investment, UGX 5,000,000,000 or USD 1,500,000 (`app/shared/limits.py`), refused with `above_maximum`; a larger sum is split over several investments. The same ceiling applies to a goal target (`target_too_large`). A rollover, a transfer and interest saved to a goal are not new requests, so they are not refused for passing it.
 
 ### Changing a product
 
@@ -37,9 +37,9 @@ A product does not hold a rate. Each product has dated rate versions: the yearly
 
 | Product | Yearly rate | Tax on interest | Clients see |
 | --- | --- | --- | --- |
-| 91 Day Treasury Bill | 12.50% | 15% | 10.63% a year, after tax |
-| 182 Day Treasury Bill | 13.75% | 15% | 11.69% a year, after tax |
-| USD Fixed Income | 7.25% | 5% | 6.89% a year, after tax |
+| 91 Day Treasury Bill | 12.50% | 15% | 10.62% a year, after tax |
+| 182 Day Treasury Bill | 13.75% | 15% | 11.68% a year, after tax |
+| USD Fixed Income | 7.25% | 5% | 6.88% a year, after tax |
 
 Rates are stored as whole basis points (12.5% is 1250), never as decimals or floats.
 
@@ -217,7 +217,7 @@ Seeing rates needs `rates.view`. Proposing, approving, sending back and withdraw
 
 ## What clients see
 
-Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from, and the service functions `client_products` and `client_quote` are the only ones a client-facing route may call. `client_quote` is the returns calculator and the review screen: what an amount earns after tax if it starts today, and when it matures. The rate shown is a label, rounded to two decimal places. No amount is ever worked out from it.
+Clients see the yearly rate after tax and the interest they earn after tax. They never see the tax rate, the tax amount or the rate before tax. In the code, `ClientReturns` and `RateVersion.client_rate_percent` are the only figures a client-facing response is built from, and the service functions `client_products` and `client_quote` are the only ones a client-facing route may call. `client_quote` is the returns calculator and the review screen: what an amount earns after tax if it starts today, and when it matures. The rate shown is a label, rounded down to two decimal places so it never promises more than the client earns (10.625% shows as 10.62%). No amount is ever worked out from it.
 
 ## An investment
 

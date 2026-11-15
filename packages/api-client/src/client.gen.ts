@@ -95,7 +95,7 @@ export const BankTransferDetails = z.object({
 });
 export type BankTransferDetails = z.infer<typeof BankTransferDetails>;
 
-export const Blocker = z.enum(["investments_running", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
+export const Blocker = z.enum(["investments_running", "investments_unpaid", "money_owed", "deposits_in_progress", "payouts_in_progress", "goals_open", "plans_live"]);
 export type Blocker = z.infer<typeof Blocker>;
 
 export const BodyAddDocumentClientOrganisationsOrganisationIdDocumentsKindPut = z.object({
@@ -280,6 +280,7 @@ export const StandingView = z.object({
   open_payouts: z.number().int(),
   owed: z.array(ClosuresApiAmountView),
   running_investments: z.number().int(),
+  unpaid_investments: z.number().int(),
 });
 export type StandingView = z.infer<typeof StandingView>;
 
@@ -1673,7 +1674,7 @@ export const operations = {
     bodyKind: null,
     idempotent: false,
     status: 200,
-    response: ClaimStateView,
+    response: ClaimStateView.nullable(),
   },
   "POST /client/claim/complete": {
     method: "POST",

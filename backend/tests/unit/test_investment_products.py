@@ -45,6 +45,8 @@ def test_treasury_bills_are_open_and_the_dollar_product_waits_for_dollar_payment
     [
         (ugx(100_000), None),
         (ugx(5_000_000_000), None),
+        (ugx(5_000_000_001), Refusal.ABOVE_MAXIMUM),
+        (ugx(10_000_000_000_000), Refusal.ABOVE_MAXIMUM),
         (ugx(99_999), Refusal.BELOW_MINIMUM),
         (ugx(0), Refusal.AMOUNT_NOT_POSITIVE),
         (ugx(-100_000), Refusal.AMOUNT_NOT_POSITIVE),
@@ -98,3 +100,10 @@ def test_an_open_term_product_pays_interest_on_a_schedule() -> None:
     )
     assert not product.has_fixed_term
     assert BILL.has_fixed_term
+
+
+def test_the_largest_investment_is_the_same_in_both_currencies_near_enough() -> None:
+    # A dollar product, were one live, refuses above USD 1.5 million.
+    dollars = replace(BILL, currency=Currency.USD, minimum=Money(100_00, Currency.USD))
+    assert check_new_investment(dollars, Money(150_000_000, Currency.USD)) is None
+    assert check_new_investment(dollars, Money(150_000_001, Currency.USD)) is Refusal.ABOVE_MAXIMUM

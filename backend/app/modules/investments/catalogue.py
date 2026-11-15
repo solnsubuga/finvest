@@ -98,7 +98,7 @@ class ClientProduct:
     term_days: int | None
     minimum: Money
     interest_paid: InterestPaid
-    # "10.63": the yearly rate after tax, two decimal places.
+    # "10.62": the yearly rate after tax, two decimal places.
     rate_percent: str
     # Live, or paused for the public website's "Coming soon". Clients see live ones only.
     status: ProductStatus = ProductStatus.LIVE
