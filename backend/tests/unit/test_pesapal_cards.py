@@ -337,3 +337,33 @@ async def test_a_paid_back_payment_reads_as_reversed(
         request_id="-OdDeposit0000000001", provider_reference="track-1"
     )
     assert seen is expected
+
+
+@pytest.mark.parametrize(
+    ("account", "paid_from"),
+    [
+        ("256772123456", "+256772123456"),
+        ("0772123456", "+256772123456"),
+        ("+256 772 123 456", "+256772123456"),
+        ("476173**0010", None),
+        (None, None),
+    ],
+)
+async def test_the_number_that_paid_mobile_money_is_read(
+    account: str | None, paid_from: str | None
+) -> None:
+    fields = {
+        "status_code": 1,
+        "merchant_reference": "-OdDeposit0000000001",
+        "amount": 1_000_000,
+        "currency": "UGX",
+        "payment_method": "MTN",
+        "payment_account": account,
+        "confirmation_code": "MP123",
+        "status": "200",
+    }
+    fake = Pesapal(lambda _: httpx.Response(200, json=fields))
+    found = await adapter(fake).order_status(
+        request_id="-OdDeposit0000000001", provider_reference="track-1"
+    )
+    assert found.paid_from == paid_from

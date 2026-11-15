@@ -53,9 +53,15 @@ export interface CardPayments {
   max30DaysMinor: number;
 }
 
+/** Who collects a client's mobile money payment. Automatic payments always use ioTec. */
+export interface MobileMoneyCollector {
+  provider: "iotec" | "pesapal";
+}
+
 export interface Values {
   payment_channels: Channels;
   card_payments: CardPayments;
+  mobile_money_collector: MobileMoneyCollector;
   public_holidays: Holiday[];
   /** HH:MM, Kampala time. */
   bank_payout_cutoff: string;
@@ -71,6 +77,7 @@ export type SettingKey = keyof Values;
 export const SETTING_KEYS: readonly SettingKey[] = [
   "payment_channels",
   "card_payments",
+  "mobile_money_collector",
   "public_holidays",
   "bank_payout_cutoff",
   "maturity_reminders",

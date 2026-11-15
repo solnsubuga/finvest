@@ -1713,6 +1713,22 @@
             "title": "Method",
             "type": "string"
           },
+          "on_page": {
+            "default": false,
+            "title": "On Page",
+            "type": "boolean"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
           "payer": {
             "anyOf": [
               {
@@ -12475,6 +12491,144 @@
         "title": "MessageItem",
         "type": "object"
       },
+      "MobileMoneyCollectorProposal": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "proposed_at": {
+            "format": "date-time",
+            "title": "Proposed At",
+            "type": "string"
+          },
+          "proposed_by": {
+            "maxLength": 20,
+            "minLength": 20,
+            "pattern": "^[-0-9A-Z_a-z]{20}$",
+            "title": "Proposed By",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/MobileMoneyCollectorValue"
+          },
+          "yours": {
+            "title": "Yours",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "reason",
+          "proposed_by",
+          "proposed_at",
+          "yours",
+          "value"
+        ],
+        "title": "MobileMoneyCollectorProposal",
+        "type": "object"
+      },
+      "MobileMoneyCollectorSetting": {
+        "additionalProperties": false,
+        "properties": {
+          "can_change": {
+            "title": "Can Change",
+            "type": "boolean"
+          },
+          "changed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed At"
+          },
+          "changed_by": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "minLength": 20,
+                "pattern": "^[-0-9A-Z_a-z]{20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changed By"
+          },
+          "key": {
+            "const": "mobile_money_collector",
+            "title": "Key",
+            "type": "string"
+          },
+          "proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MobileMoneyCollectorProposal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "section": {
+            "enum": [
+              "channels",
+              "calendar",
+              "staff_security",
+              "statement_import"
+            ],
+            "title": "Section",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/MobileMoneyCollectorValue"
+          }
+        },
+        "required": [
+          "section",
+          "changed_at",
+          "changed_by",
+          "can_change",
+          "key",
+          "value",
+          "proposal"
+        ],
+        "title": "MobileMoneyCollectorSetting",
+        "type": "object"
+      },
+      "MobileMoneyCollectorValue": {
+        "additionalProperties": false,
+        "description": "Who collects a client's mobile money payment: `iotec` prompts the client's phone,\n`pesapal` sends the client to Pesapal's page. Automatic payments always use ioTec.",
+        "properties": {
+          "provider": {
+            "enum": [
+              "iotec",
+              "pesapal"
+            ],
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "title": "MobileMoneyCollectorValue",
+        "type": "object"
+      },
       "MobileMoneyPayment": {
         "additionalProperties": false,
         "properties": {
@@ -15162,6 +15316,22 @@
             "title": "Method",
             "type": "string"
           },
+          "on_page": {
+            "default": false,
+            "title": "On Page",
+            "type": "boolean"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
           "payer": {
             "anyOf": [
               {
@@ -17314,6 +17484,32 @@
           "reason"
         ],
         "title": "ProposeMaturityReminders",
+        "type": "object"
+      },
+      "ProposeMobileMoneyCollector": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "const": "mobile_money_collector",
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/MobileMoneyCollectorValue"
+          }
+        },
+        "required": [
+          "key",
+          "value",
+          "reason"
+        ],
+        "title": "ProposeMobileMoneyCollector",
         "type": "object"
       },
       "ProposeOfficeNetworks": {
@@ -22298,7 +22494,8 @@
               "staff_idle_minutes",
               "office_networks",
               "statement_layouts",
-              "card_payments"
+              "card_payments",
+              "mobile_money_collector"
             ],
             "title": "Key",
             "type": "string"
@@ -22328,6 +22525,9 @@
               },
               {
                 "$ref": "#/components/schemas/CardPaymentsProposal"
+              },
+              {
+                "$ref": "#/components/schemas/MobileMoneyCollectorProposal"
               }
             ],
             "title": "Proposal"
@@ -22366,6 +22566,7 @@
                   "bank_payout_cutoff": "#/components/schemas/BankPayoutCutoffSetting",
                   "card_payments": "#/components/schemas/CardPaymentsSetting",
                   "maturity_reminders": "#/components/schemas/MaturityRemindersSetting",
+                  "mobile_money_collector": "#/components/schemas/MobileMoneyCollectorSetting",
                   "office_networks": "#/components/schemas/OfficeNetworksSetting",
                   "payment_channels": "#/components/schemas/PaymentChannelsSetting",
                   "public_holidays": "#/components/schemas/PublicHolidaysSetting",
@@ -22398,6 +22599,9 @@
                 },
                 {
                   "$ref": "#/components/schemas/CardPaymentsSetting"
+                },
+                {
+                  "$ref": "#/components/schemas/MobileMoneyCollectorSetting"
                 }
               ]
             },
@@ -37350,7 +37554,7 @@
     },
     "/client/investments/{investment_id}/payments/mobile-money": {
       "post": {
-        "description": "Ask for a mobile money prompt on the client's own number, for exactly the amount owed.\n\n409 if the investment already has a payment under way or paid: fetch it from\n`GET /client/investments/{investment_id}/payment`.",
+        "description": "Ask for a mobile money payment from the client's own number, for exactly the amount\nowed.\n\nWho collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the\nclient's phone. Pesapal opens an order on its page instead: poll\n`GET /client/payments/{payment_id}` until `page_url` is set and send the client there,\nas for a card. When the chosen collector is not running here, the other one is used.\n409 if the investment already has a payment under way or paid: fetch it from\n`GET /client/investments/{investment_id}/payment`.",
         "operationId": "pay_by_mobile_money_client_investments__investment_id__payments_mobile_money_post",
         "parameters": [
           {
@@ -40542,7 +40746,7 @@
     },
     "/client/payments/{payment_id}/card-return": {
       "post": {
-        "description": "The client is back from the card provider's page. Asks for the result to be read\nnow; it changes nothing by itself. Poll the payment for the outcome.",
+        "description": "The client is back from the provider's hosted page, after a card or a mobile money\npayment there. Asks for the result to be read now; it changes nothing by itself. Poll\nthe payment for the outcome.",
         "operationId": "card_return_client_payments__payment_id__card_return_post",
         "parameters": [
           {
@@ -74680,6 +74884,7 @@
                     "bank_payout_cutoff": "#/components/schemas/ProposeBankPayoutCutoff",
                     "card_payments": "#/components/schemas/ProposeCardPayments",
                     "maturity_reminders": "#/components/schemas/ProposeMaturityReminders",
+                    "mobile_money_collector": "#/components/schemas/ProposeMobileMoneyCollector",
                     "office_networks": "#/components/schemas/ProposeOfficeNetworks",
                     "payment_channels": "#/components/schemas/ProposePaymentChannels",
                     "public_holidays": "#/components/schemas/ProposePublicHolidays",
@@ -74712,6 +74917,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/ProposeCardPayments"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ProposeMobileMoneyCollector"
                   }
                 ],
                 "title": "Body"

@@ -54,8 +54,9 @@ SWEEP_BATCH = 200
 _OPEN = (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN)
 _STRAGGLERS = text(
     "SELECT id, status, created_at, updated_at FROM payment_deposits "
-    # Card deposits have their own sweep, in `card_jobs.py`.
-    "WHERE method IN ('mtn', 'airtel') AND ((status = 'created' AND created_at <= :unsent) "
+    # This provider's own: hosted page orders, card or mobile money, have their own sweep.
+    "WHERE method IN ('mtn', 'airtel') AND provider = :provider "
+    "AND ((status = 'created' AND created_at <= :unsent) "
     "OR (status = 'sending' AND updated_at <= :interrupted) "
     "OR (status = 'awaiting_approval' AND updated_at <= :quiet)) "
     "ORDER BY updated_at LIMIT :limit FOR UPDATE SKIP LOCKED"
@@ -195,6 +196,7 @@ class DepositJobs:
             rows = await session.execute(
                 _STRAGGLERS,
                 {
+                    "provider": self._provider.name,
                     "unsent": now - UNSENT_EXPIRY,
                     "interrupted": now - SENDING_GRACE,
                     "quiet": now - SENDING_GRACE,

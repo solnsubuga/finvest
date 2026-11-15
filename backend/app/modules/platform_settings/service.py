@@ -28,6 +28,7 @@ from app.modules.platform_settings.domain.catalogue import (
     InvalidSetting,
     Key,
     MaturityReminders,
+    MobileMoneyCollector,
     OfficeNetworks,
     PaymentChannels,
     PublicHolidays,
@@ -239,6 +240,10 @@ async def payment_channels(session: AsyncSession, now: datetime) -> PaymentChann
 
 async def card_payments(session: AsyncSession, now: datetime) -> CardPayments:
     return await _typed(session, "card_payments", CardPayments, now)
+
+
+async def mobile_money_collector(session: AsyncSession, now: datetime) -> MobileMoneyCollector:
+    return await _typed(session, "mobile_money_collector", MobileMoneyCollector, now)
 
 
 async def public_holidays(session: AsyncSession, now: datetime) -> PublicHolidays:

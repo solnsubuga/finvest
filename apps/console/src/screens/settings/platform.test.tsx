@@ -222,6 +222,27 @@ describe("settings: platform over the API", () => {
   });
 });
 
+describe("mobile money collector", () => {
+  it("shows ioTec by default and proposes Pesapal for a second person", async () => {
+    const { user } = renderSections("empty");
+    const channels = await card("Payment channels");
+    expect(within(channels).getByText("Mobile money collected by")).toBeInTheDocument();
+    await user.click(await within(channels).findByRole("button", { name: "Change mobile money collected by" }));
+    const form = within(channels).getByRole("form", { name: "New mobile money collected by" });
+    expect(within(form).getByRole("radio", { name: /ioTec/ })).toBeChecked();
+    await user.click(within(form).getByRole("radio", { name: /Pesapal/ }));
+    await user.type(within(form).getByRole("textbox", { name: /Why is it changing/ }), "Owner's decision");
+    await user.click(within(form).getByRole("button", { name: "Send for approval" }));
+    const waiting = await within(channels).findByRole("region", { name: /Mobile money collected by: change waiting/ });
+    expect(within(waiting).getAllByText("Pesapal").length).toBeGreaterThan(0);
+  });
+
+  it("passes the collector to the API as it is", () => {
+    expect(valueIn("mobile_money_collector", { provider: "pesapal" })).toEqual({ provider: "pesapal" });
+    expect(valueOut("mobile_money_collector", { provider: "iotec" })).toEqual({ provider: "iotec" });
+  });
+});
+
 describe("card payment values", () => {
   it("writes basis points as a percentage and reads one back, with no floating point", () => {
     expect(percentText(350)).toBe("3.5%");

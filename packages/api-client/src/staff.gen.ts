@@ -352,6 +352,8 @@ export const BankTransferInQueue = z.object({
   id: z.string(),
   investment_id: z.string(),
   method: z.enum(["mtn", "airtel", "bank_transfer", "card"]),
+  on_page: z.boolean().optional(),
+  page_url: z.string().nullable().optional(),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
   receipt_used_before: z.boolean(),
@@ -381,6 +383,8 @@ export const PaymentView = z.object({
   id: z.string(),
   investment_id: z.string(),
   method: z.enum(["mtn", "airtel", "bank_transfer", "card"]),
+  on_page: z.boolean().optional(),
+  page_url: z.string().nullable().optional(),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),
@@ -2108,6 +2112,21 @@ export const MessageItem = z.object({
 });
 export type MessageItem = z.infer<typeof MessageItem>;
 
+export const MobileMoneyCollectorValue = z.object({
+  provider: z.enum(["iotec", "pesapal"]),
+});
+export type MobileMoneyCollectorValue = z.infer<typeof MobileMoneyCollectorValue>;
+
+export const MobileMoneyCollectorProposal = z.object({
+  id: z.string(),
+  proposed_at: z.string(),
+  proposed_by: z.string(),
+  reason: z.string(),
+  value: MobileMoneyCollectorValue,
+  yours: z.boolean(),
+});
+export type MobileMoneyCollectorProposal = z.infer<typeof MobileMoneyCollectorProposal>;
+
 export const MoneyIn = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -3382,8 +3401,8 @@ export const StatementLayoutsProposal = z.object({
 export type StatementLayoutsProposal = z.infer<typeof StatementLayoutsProposal>;
 
 export const SettingProposalOut = z.object({
-  key: z.enum(["payment_channels", "public_holidays", "bank_payout_cutoff", "maturity_reminders", "staff_idle_minutes", "office_networks", "statement_layouts", "card_payments"]),
-  proposal: z.union([PaymentChannelsProposal, PublicHolidaysProposal, BankPayoutCutoffProposal, MaturityRemindersProposal, StaffIdleMinutesProposal, OfficeNetworksProposal, StatementLayoutsProposal, CardPaymentsProposal]),
+  key: z.enum(["payment_channels", "public_holidays", "bank_payout_cutoff", "maturity_reminders", "staff_idle_minutes", "office_networks", "statement_layouts", "card_payments", "mobile_money_collector"]),
+  proposal: z.union([PaymentChannelsProposal, PublicHolidaysProposal, BankPayoutCutoffProposal, MaturityRemindersProposal, StaffIdleMinutesProposal, OfficeNetworksProposal, StatementLayoutsProposal, CardPaymentsProposal, MobileMoneyCollectorProposal]),
 });
 export type SettingProposalOut = z.infer<typeof SettingProposalOut>;
 

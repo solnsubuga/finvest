@@ -45,6 +45,9 @@ from app.modules.payments.domain.outcomes import (
 )
 from app.shared.money import Currency, Money
 
+# Providers whose payer pays on their own hosted page. A card always goes through one; mobile
+# money does when Settings says Pesapal collects it.
+HOSTED_PROVIDERS = frozenset({"pesapal", "card_sandbox"})
 # How long a payer has to pay on the provider's page before the order is cancelled.
 CARD_WINDOW = timedelta(minutes=30)
 # Seconds to wait before each status read while the payer has the page. The sweep reads every
@@ -171,10 +174,12 @@ class CardDetails:
 
 @dataclass(frozen=True, slots=True)
 class CardReading:
-    """A status read of a card order, and the card's details when it was paid."""
+    """A status read of a hosted order, the card's details when a card paid, and the number
+    that paid when it was mobile money (`+256` and nine digits, None when not given)."""
 
     reading: StatusReading
     details: CardDetails | None = None
+    paid_from: str | None = None
 
 
 class CancelResult(StrEnum):
@@ -209,6 +214,8 @@ def after_card_status(
     *,
     expected: Money,
     credited: Money,
+    payer: str | None = None,
+    paid_from: str | None = None,
 ) -> Move | None:
     """The next state of a card deposit from a status read, or None to leave it as it is.
 
@@ -216,6 +223,10 @@ def after_card_status(
     `credited` is what the client's investment receives, posted only when exactly `expected`
     was collected. A pending order is left as it is here: cancelling an overdue one is the
     worker's job, because it calls the provider.
+
+    `payer` is the client's own number, for a mobile money payment on a hosted page. It must be
+    the number that paid: a payment from any other number, or one the provider does not name,
+    is held as uncertain for staff, as one for the wrong amount is.
     """
     if current not in (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN):
         return None
@@ -227,6 +238,14 @@ def after_card_status(
                 return Move(
                     DepositStatus.UNCERTAIN,
                     code=Code.AMOUNT_MISMATCH.value,
+                    provider_reference=reference,
+                )
+            if payer is not None and paid_from != payer:
+                if current is DepositStatus.UNCERTAIN:
+                    return None
+                return Move(
+                    DepositStatus.UNCERTAIN,
+                    code=Code.PAYER_DIFFERS.value,
                     provider_reference=reference,
                 )
             return Move(DepositStatus.CONFIRMED, provider_reference=reference, post=credited)

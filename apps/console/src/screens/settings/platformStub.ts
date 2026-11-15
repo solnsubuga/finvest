@@ -27,6 +27,7 @@ export type PlatformSample = "sample" | "mine" | "empty";
 const SECTIONS: Record<SettingKey, Section> = {
   payment_channels: "channels",
   card_payments: "channels",
+  mobile_money_collector: "channels",
   public_holidays: "calendar",
   bank_payout_cutoff: "calendar",
   maturity_reminders: "calendar",
@@ -58,6 +59,8 @@ const DEFAULTS: Values = {
   payment_channels: { mtnPayIn: true, airtelPayIn: true, bankPayIn: true, cardPayIn: false, mtnPayout: true, airtelPayout: true, bankPayout: true },
   // The backend's default: 3.5% on top, UGX 5,000,000 a payment and UGX 10,000,000 in 30 days.
   card_payments: { chargeBasisPoints: 350, maxPaymentMinor: 5_000_000, max30DaysMinor: 10_000_000 },
+  // The backend's default: ioTec prompts the client's phone until staff choose Pesapal.
+  mobile_money_collector: { provider: "iotec" },
   public_holidays: HOLIDAYS,
   bank_payout_cutoff: "14:00",
   maturity_reminders: [7, 1],

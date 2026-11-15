@@ -71,12 +71,15 @@ class SandboxCards:
         scenario = _SCENARIOS.get(ending, "paid")
         opened = int(self._clock.now().timestamp())
         total = request.total
-        reference = f"csbx:{scenario}:{total.currency.value}:{total.minor}:{opened}"
+        # The payer's number rides in the reference, so a mobile money read can name it.
+        payer = request.phone.removeprefix("+")
+        reference = f"csbx:{scenario}:{total.currency.value}:{total.minor}:{opened}:{payer}"
         return OrderOpened(reference, f"{self._return_url}?payment={request.request_id}&sandbox=1")
 
     async def order_status(self, *, request_id: str, provider_reference: str) -> CardReading:
         try:
-            prefix, scenario, currency, minor, opened = provider_reference.split(":")
+            prefix, scenario, currency, minor, opened, *rest = provider_reference.split(":")
+            payer = f"+{rest[0]}" if rest else None
             total = Money(int(minor), Currency(currency))
             opened_at = datetime.fromtimestamp(int(opened), UTC)
         except ValueError:
@@ -95,6 +98,7 @@ class SandboxCards:
         return CardReading(
             Confirmed(provider_reference, paid),
             CardDetails("Visa", "1111", f"SBX{opened}"),
+            payer,
         )
 
     async def cancel_order(self, *, provider_reference: str) -> CancelResult:

@@ -34,6 +34,7 @@ from app.modules.payments.domain.bank_transfers import (
     ReceiptFile,
     check_receipt_bytes,
 )
+from app.modules.payments.domain.cards import HOSTED_PROVIDERS
 from app.modules.payments.domain.deposits import (
     DepositStatus,
     Method,
@@ -131,6 +132,11 @@ class PaymentView(Contract):
     card_page_url: str | None = None
     # A paid card payment: the card's brand and last four digits.
     card: CardView | None = None
+    # Paid on the provider's hosted page, card or mobile money, rather than by a phone prompt
+    # or a transfer. While it waits for the client, `page_url` is the page to pay on; it is
+    # None before the page is open, once the payment has ended, and when `on_page` is false.
+    on_page: bool = False
+    page_url: str | None = None
 
 
 class CardOffer(Contract):
@@ -212,9 +218,14 @@ def _view(
 ) -> PaymentView:
     final_failure = deposit.code if deposit.status is DepositStatus.FAILED else None
     card_fields: dict[str, object] = {}
-    if order is not None:
-        waiting = deposit.status is DepositStatus.AWAITING_APPROVAL
+    waiting = deposit.status is DepositStatus.AWAITING_APPROVAL
+    if order is not None and deposit.method is not Method.CARD:
+        # Mobile money on the provider's page: no charge, no card, only the page.
+        card_fields = {"on_page": True, "page_url": order.page_url if waiting else None}
+    elif order is not None:
         card_fields = {
+            "on_page": True,
+            "page_url": order.page_url if waiting else None,
             "card_charge": _money(order.charge),
             "card_total": _money(order.total),
             "card_page_url": order.page_url if waiting else None,
@@ -258,7 +269,7 @@ async def _payment_view(session: AsyncSession, deposit: Deposit) -> PaymentView:
     if deposit.method is Method.BANK_TRANSFER:
         # A transfer moved here from another client's payment has no receipt of its own.
         return _view(deposit, await bank.find_receipt(session, deposit.id))
-    if deposit.method is Method.CARD:
+    if deposit.method is Method.CARD or deposit.provider in HOSTED_PROVIDERS:
         return _view(deposit, order=await cards.find_order(session, deposit.id))
     return _view(deposit)
 
@@ -324,12 +335,13 @@ def create_client_router(
     async def card_return(
         payment_id: PushId, client: CurrentClient, database: Db, clock: Time
     ) -> PaymentView:
-        """The client is back from the card provider's page. Asks for the result to be read
-        now; it changes nothing by itself. Poll the payment for the outcome."""
+        """The client is back from the provider's hosted page, after a card or a mobile money
+        payment there. Asks for the result to be read now; it changes nothing by itself. Poll
+        the payment for the outcome."""
         async with database.actor_transaction(client.actor) as session:
             deposit = await service.get_deposit(session, payment_id)
             view = await _payment_view(session, deposit)
-        if deposit.method is not Method.CARD:
+        if deposit.provider not in HOSTED_PROVIDERS:
             raise ApplicationError("not_found")
         if deposit.status in (DepositStatus.AWAITING_APPROVAL, DepositStatus.UNCERTAIN):
             async with database.actor_transaction(client.actor) as session:
@@ -386,27 +398,47 @@ def create_client_router(
         database: Db,
         clock: Time,
     ) -> PaymentView:
-        """Ask for a mobile money prompt on the client's own number, for exactly the amount owed.
+        """Ask for a mobile money payment from the client's own number, for exactly the amount
+        owed.
 
+        Who collects it is chosen on Settings (`mobile_money_collector`). ioTec prompts the
+        client's phone. Pesapal opens an order on its page instead: poll
+        `GET /client/payments/{payment_id}` until `page_url` is set and send the client there,
+        as for a card. When the chosen collector is not running here, the other one is used.
         409 if the investment already has a payment under way or paid: fetch it from
         `GET /client/investments/{investment_id}/payment`.
         """
-        if collections is None:
+        hosted = card_provider if card_provider and card_provider.name in HOSTED_PROVIDERS else None
+        if collections is None and hosted is None:
             raise ApplicationError("unavailable")
         async with database.actor_transaction(client.actor) as session:
             payable = await holdings.payable_investment(
                 session, client_id=client.client_id, investment_id=investment_id, clock=clock
             )
+            request = DepositRequest(
+                purpose=Purpose.INVESTMENT,
+                purpose_id=payable.investment_id,
+                network=Network(body.network),
+                amount=payable.amount,
+                phone=client.phone,
+            )
+            chosen = await platform_settings.mobile_money_collector(session, clock.now())
+            if hosted is not None and (chosen.provider == "pesapal" or collections is None):
+                deposit = await cards.request_hosted_mobile_money(
+                    session,
+                    client.actor,
+                    request,
+                    idempotency_key=key,
+                    account_phone=client.phone,
+                    provider=hosted.name,
+                    clock=clock,
+                )
+                return _view(deposit, order=await cards.find_order(session, deposit.id))
+            assert collections is not None
             deposit = await service.request_deposit(
                 session,
                 client.actor,
-                DepositRequest(
-                    purpose=Purpose.INVESTMENT,
-                    purpose_id=payable.investment_id,
-                    network=Network(body.network),
-                    amount=payable.amount,
-                    phone=client.phone,
-                ),
+                request,
                 idempotency_key=key,
                 account_phone=client.phone,
                 provider=collections.name,

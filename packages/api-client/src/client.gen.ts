@@ -1099,6 +1099,8 @@ export const PaymentView = z.object({
   id: z.string(),
   investment_id: z.string(),
   method: z.enum(["mtn", "airtel", "bank_transfer", "card"]),
+  on_page: z.boolean().optional(),
+  page_url: z.string().nullable().optional(),
   payer: z.string().nullable(),
   receipt: ReceiptView.nullable(),
   status: z.enum(["created", "sending", "awaiting_approval", "uncertain", "in_review", "confirmed", "failed"]),

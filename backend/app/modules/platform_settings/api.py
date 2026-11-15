@@ -183,6 +183,13 @@ class ProposeOfficeNetworks(Contract):
     reason: Reason
 
 
+class MobileMoneyCollectorValue(Contract):
+    """Who collects a client's mobile money payment: `iotec` prompts the client's phone,
+    `pesapal` sends the client to Pesapal's page. Automatic payments always use ioTec."""
+
+    provider: Literal["iotec", "pesapal"]
+
+
 class ProposeStatementLayouts(Contract):
     key: Literal["statement_layouts"]
     value: Layouts
@@ -195,6 +202,12 @@ class ProposeCardPayments(Contract):
     reason: Reason
 
 
+class ProposeMobileMoneyCollector(Contract):
+    key: Literal["mobile_money_collector"]
+    value: MobileMoneyCollectorValue
+    reason: Reason
+
+
 ProposeSetting = Annotated[
     ProposePaymentChannels
     | ProposePublicHolidays
@@ -203,7 +216,8 @@ ProposeSetting = Annotated[
     | ProposeStaffIdleMinutes
     | ProposeOfficeNetworks
     | ProposeStatementLayouts
-    | ProposeCardPayments,
+    | ProposeCardPayments
+    | ProposeMobileMoneyCollector,
     Field(discriminator="key"),
 ]
 
@@ -314,6 +328,16 @@ class CardPaymentsSetting(_Setting):
     proposal: CardPaymentsProposal | None
 
 
+class MobileMoneyCollectorProposal(_Proposal):
+    value: MobileMoneyCollectorValue
+
+
+class MobileMoneyCollectorSetting(_Setting):
+    key: Literal["mobile_money_collector"]
+    value: MobileMoneyCollectorValue
+    proposal: MobileMoneyCollectorProposal | None
+
+
 SettingView = Annotated[
     PaymentChannelsSetting
     | PublicHolidaysSetting
@@ -322,7 +346,8 @@ SettingView = Annotated[
     | StaffIdleMinutesSetting
     | OfficeNetworksSetting
     | StatementLayoutsSetting
-    | CardPaymentsSetting,
+    | CardPaymentsSetting
+    | MobileMoneyCollectorSetting,
     Field(discriminator="key"),
 ]
 ProposalView = Annotated[
@@ -333,7 +358,8 @@ ProposalView = Annotated[
     | StaffIdleMinutesProposal
     | OfficeNetworksProposal
     | StatementLayoutsProposal
-    | CardPaymentsProposal,
+    | CardPaymentsProposal
+    | MobileMoneyCollectorProposal,
     Field(union_mode="left_to_right"),
 ]
 _SETTING = TypeAdapter[SettingView](SettingView)
@@ -346,6 +372,7 @@ _PROPOSALS: dict[Key, type[_Proposal]] = {
     "office_networks": OfficeNetworksProposal,
     "statement_layouts": StatementLayoutsProposal,
     "card_payments": CardPaymentsProposal,
+    "mobile_money_collector": MobileMoneyCollectorProposal,
 }
 
 

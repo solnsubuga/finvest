@@ -30,6 +30,7 @@ Key = Literal[
     "office_networks",
     "statement_layouts",
     "card_payments",
+    "mobile_money_collector",
 ]
 KEYS: tuple[Key, ...] = get_args(Key)
 
@@ -45,6 +46,7 @@ SECTIONS: dict[Key, Section] = {
     "office_networks": "staff_security",
     "statement_layouts": "statement_import",
     "card_payments": "channels",
+    "mobile_money_collector": "channels",
 }
 PERMISSIONS: dict[Section, Permission] = {
     "channels": "payment_channels.change",
@@ -578,6 +580,31 @@ def _dump_card_payments(value: CardPayments) -> dict[str, int]:
     }
 
 
+Collector = Literal["iotec", "pesapal"]
+COLLECTORS: tuple[Collector, ...] = get_args(Collector)
+
+
+@dataclass(frozen=True, slots=True)
+class MobileMoneyCollector:
+    """Who collects a client's mobile money payment: ioTec's prompt on the client's phone, or
+    Pesapal's hosted page. ioTec stays the fallback: automatic payments, and any process with
+    no Pesapal, always use it."""
+
+    provider: Collector
+
+
+def _collector(value: Any) -> MobileMoneyCollector:
+    if not isinstance(value, dict) or set(value) != {"provider"}:
+        raise _refuse(["value"], "collector_incomplete")
+    if value["provider"] not in COLLECTORS:
+        raise _refuse(["value", "provider"], "unknown_collector")
+    return MobileMoneyCollector(value["provider"])
+
+
+def _dump_collector(value: MobileMoneyCollector) -> dict[str, str]:
+    return {"provider": value.provider}
+
+
 Value = (
     PaymentChannels
     | PublicHolidays
@@ -587,6 +614,7 @@ Value = (
     | OfficeNetworks
     | StatementLayouts
     | CardPayments
+    | MobileMoneyCollector
 )
 
 
@@ -652,6 +680,13 @@ DEFINITIONS: dict[Key, Definition] = {
         _card_payments,
         _dump_card_payments,
         lambda _year: CardPayments(350, 5_000_000, 10_000_000),
+    ),
+    # ioTec until staff choose Pesapal (the owner's decision, 2026-11-15).
+    "mobile_money_collector": Definition(
+        "mobile_money_collector",
+        _collector,
+        _dump_collector,
+        lambda _year: MobileMoneyCollector("iotec"),
     ),
 }
 

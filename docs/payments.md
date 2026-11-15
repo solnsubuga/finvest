@@ -57,7 +57,7 @@ A sweep runs every minute and picks up deposits whose own job was lost:
 
 ## A card payment, step by step
 
-Visa and Mastercard are taken through Pesapal, on Pesapal's own hosted page. The card number, expiry and security code are typed only there and never reach Finvest, which keeps us in the smallest card security scope (PCI DSS SAQ A, to be confirmed with Pesapal). Mobile money stays on ioTec: Pesapal cannot prompt a client's phone, and on its page a payer could pay from any number. A card payment pays for one investment, as every deposit does. There is still no wallet.
+Visa and Mastercard are taken through Pesapal, on Pesapal's own hosted page. The card number, expiry and security code are typed only there and never reach Finvest, which keeps us in the smallest card security scope (PCI DSS SAQ A, to be confirmed with Pesapal). Mobile money can go through Pesapal's page too, when Settings say so (see [Mobile money on Pesapal's page](#mobile-money-on-pesapals-page)). A card payment pays for one investment, as every deposit does. There is still no wallet.
 
 1. **The client sees the cost.** `GET /client/investments/{id}/payments/card` gives the investment's amount, the card charge on top in shillings, the total and the per payment limit. `refused` says when the client may not pay by card now. The charge rate comes from the `card_payments` setting ([platform-settings.md](platform-settings.md)) and is never shown as a rate.
 2. **The client asks to pay by card.** `POST /client/investments/{id}/payments/card` with an `Idempotency-Key`. In the client's own transaction, payments saves the deposit as `created` (method `card`, provider `pesapal`, no payer number), its order in `payment_card_orders` (the charge and the total, fixed from now on) and a job to open it. Refused with `503` `channel_paused` while card payments are paused, and with `422` `above_card_payment_limit` or `above_card_30_day_limit` over a limit. The one live deposit per investment rule covers cards.
@@ -107,6 +107,18 @@ From `FINVEST_PESAPAL_*`:
 | `TIMEOUT_SECONDS` | 30 by default. |
 
 The scheduler needs only `FINVEST_CARDS_PROVIDER` and `FINVEST_PESAPAL_BASE_URL`, for the sandbox check and the card sweep.
+
+### Mobile money on Pesapal's page
+
+The owner decided on 2026-11-15 that Pesapal collects mobile money as well as cards, with ioTec kept as the fallback. The `mobile_money_collector` setting on Settings, changed by two people, chooses `iotec` (the default) or `pesapal` ([platform-settings.md](platform-settings.md)). Pesapal cannot prompt a phone by itself, so a mobile money payment through it is an order on its hosted page, as a card payment is:
+
+1. `POST /client/investments/{id}/payments/mobile-money` with the network, as before. With the collector set to `pesapal`, payments saves the deposit with that network as its method, provider `pesapal` and the client's own number as its payer, and an order in `payment_card_orders` with no charge: Finvest bears Pesapal's mobile money fee, as it does ioTec's. The same rules apply as for a phone prompt: the client's own number only, the network's pay in must be open (`503` `channel_paused`), one live payment per investment, and the same idempotency operation, so a key repeated after the collector changed returns the payment it made.
+2. The worker opens the order exactly as for a card. The payment's `page_url` appears on `GET /client/payments/{id}` while it waits, and the app sends the client there, where they pick MTN or Airtel and approve Pesapal's prompt.
+3. It is confirmed only from a status read, for exactly the amount, and only when Pesapal names the client's own number as the one that paid (`payment_account`). A payment from any other number, or one Pesapal does not name, is `uncertain` with `payer_differs`, nothing is credited, and staff settle it at reconciliation. Reading it again changes nothing. Its ledger entry is the card's without a charge: debit `pesapal.balance`, credit `client.awaiting_start`.
+
+ioTec is the fallback. A mobile money payment goes to ioTec when the setting says so, and also when Pesapal is not running in the API. It goes to Pesapal when ioTec is not running. Automatic investing and goal savings are asked for by the system with nobody to open a page, so they always use ioTec's prompt. Each provider's sweep and status reads only touch its own deposits.
+
+Not built yet for Pesapal mobile money: refunds (Pesapal refunds mobile money in full only), and a way to ask Pesapal to show only mobile money or only cards on its page. Its documents have no such field, so that is a setting on Pesapal's side.
 
 ### Paying a card payment back
 
