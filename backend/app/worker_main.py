@@ -47,6 +47,7 @@ from app.modules.organisations.jobs import OrganisationJobs
 from app.modules.payments.bank_transfers import BankTransferJobs
 from app.modules.payments.card_jobs import CardDepositJobs
 from app.modules.payments.jobs import DepositJobs
+from app.modules.payments.payer_name_jobs import PayerNameJobs
 from app.modules.payments.provider_refunds import ProviderRefundJobs
 from app.modules.payments.reversals import ReversalJobs
 from app.modules.payments.settings import CardSettings, PaymentsSettings
@@ -184,6 +185,8 @@ def handlers(
         kinds.update(NameLookupJobs(database, names, clock).handlers())
         # The same lookup, for the phone number of a client handing in their identity check.
         kinds.update(PhoneNameJobs(database, names, clock).handlers())
+        # And for a number other than the client's that paid a mobile money payment.
+        kinds.update(PayerNameJobs(database, names, clock).handlers())
     kinds.update(
         notification_jobs.handlers(
             database,

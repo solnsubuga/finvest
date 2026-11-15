@@ -501,4 +501,5 @@ async def apply_card_move(
         if move.post is not None
         else None,
         recovered_charge=order.charge if move.post is not None else None,
+        paid_from=None if card else paid_from,
     )
