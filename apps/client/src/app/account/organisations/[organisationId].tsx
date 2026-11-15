@@ -28,7 +28,7 @@ import {
 import { Pill, Tone } from "@/organisations/ui";
 import { formatDateTime, formatFileSize } from "@/payments/format";
 import { chooseReceiptFile } from "@/payments/pickReceipt";
-import { checkReceipt, receiptProblemCopy } from "@/payments/receipt";
+import { checkReceiptFile, receiptProblemCopy } from "@/payments/receipt";
 import { colors, fontSizes, radii } from "@/theme";
 
 type State =
@@ -48,7 +48,7 @@ const INVITE_WORDS: Readonly<Record<string, string | undefined>> = {
 };
 
 const DOCUMENT_WORDS: Readonly<Record<string, string | undefined>> = {
-  not_a_file_of_that_type: "That file is not what it says it is. Choose the PDF or photo itself.",
+  not_a_file_of_that_type: receiptProblemCopy.not_what_it_says,
   unsupported_content_type: receiptProblemCopy.wrong_type,
   too_large: receiptProblemCopy.too_large,
   empty: receiptProblemCopy.empty,
@@ -211,7 +211,7 @@ function OrganisationView({ organisationId }: { organisationId: string }) {
     setDocumentErrors((current) => ({ ...current, [kind]: undefined }));
     const picked = await chooseReceiptFile();
     if (!picked) return;
-    const checked = checkReceipt(picked);
+    const checked = await checkReceiptFile(picked);
     if (typeof checked === "string") {
       setDocumentErrors((current) => ({ ...current, [kind]: receiptProblemCopy[checked] }));
       return;

@@ -12,7 +12,7 @@ import { Eyebrow, Title, Txt } from "@/components/Txt";
 import { formatDateTime, formatFileSize } from "@/payments/format";
 import { Loading, Step, Timeline } from "@/payments/Parts";
 import { chooseReceiptFile, photographReceipt } from "@/payments/pickReceipt";
-import { checkReceipt, PickedFile, receiptProblemCopy } from "@/payments/receipt";
+import { checkReceiptFile, PickedFile, receiptProblemCopy } from "@/payments/receipt";
 import { ReceiptFile } from "@/payments/types";
 import { accountProvider, accountStatusPill, canProveAgain, isPayable, proofKindCopy, rejectionCopy } from "@/payouts/format";
 import { NAME_DECISION_READ_AGAIN_MS } from "@/payouts/timing";
@@ -369,9 +369,9 @@ function SendProof({ account, onChanged, again = false }: { account: PayoutAccou
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const take = (picked: PickedFile | null) => {
+  const take = async (picked: PickedFile | null) => {
     if (!picked) return;
-    const checked = checkReceipt(picked);
+    const checked = await checkReceiptFile(picked);
     if (typeof checked === "string") {
       setFile(null);
       setProblem(receiptProblemCopy[checked]);
@@ -387,7 +387,7 @@ function SendProof({ account, onChanged, again = false }: { account: PayoutAccou
       setProblem("Allow the camera in your phone's settings, or choose a file instead.");
       return;
     }
-    take(result);
+    await take(result);
   };
 
   const upload = async () => {
