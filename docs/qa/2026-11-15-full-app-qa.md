@@ -6,19 +6,21 @@ Design source of truth: the [Finvest 2.0 canvas](https://claude.ai/artifact/BkwR
 
 ## Summary
 
+Three passes were made. The first covered every journey, screen and control and gave F-001 to F-029. The second went back over limits, staff actions on a client, complaints, support chat, group and company accounts, product forms and ID check edge cases, and gave F-030 to F-033. The third covered statements, goals, automatic investing, rate changes, team changes and announcements with odd but harmless input and found nothing outside F-031.
+
 | Severity | Count | Findings |
 | --- | --- | --- |
 | Critical | 0 | |
 | High | 3 | F-001, F-002, F-003 |
-| Medium | 8 | F-004 to F-011 |
-| Low | 18 | F-012 to F-029 |
+| Medium | 9 | F-004 to F-011, F-030 |
+| Low | 21 | F-012 to F-029, F-031 to F-033 |
 
 What passed:
 
 - **Suites on main.** Backend unit and static checks 4,513 passed; integration 2,109 passed against real PostgreSQL; client journeys 10 passed; `pip-audit` clean. Console 968, client 858, website 54 and tokens 4 tests passed, with typecheck and lint clean. The browser suite passed 68 of 68.
 - **Screens.** 70 client screens on phone and wide, 23 console addresses for each of the five roles (and for Admin on a phone), and 14 website pages on phone and wide all loaded against the real API with no script error and no sideways scroll. The only failed requests were the two in F-015 and F-021.
 - **Money rules checked by hand.** Totals on Home, Portfolio and the statement recompute to the shilling; the same idempotency key creates one investment and one payment; a reused key with a different body is refused; a double tap on Confirm sends one request.
-- **Two-person rule.** The same person was refused, and a different person accepted, on payout account approval, rate changes and the trust bank account. Approvals ask for a fresh second step.
+- **Two-person rule.** The same person was refused, and a different person accepted, on payout account approval, rate changes, the trust bank account, complaint outcomes, unfreezing a client, PIN reset, a client's own limits, sending a statement, role changes and announcements. Approvals ask for a fresh second step.
 - **Access.** 2,547 calls across all 493 routes were refused exactly as declared (details in section 6).
 
 
@@ -303,6 +305,10 @@ Built emails are the committed renders in `docs/screenshots/emails/`. Client not
 | F-027 | Forms accept values that are refused later | UI | Low | Client |
 | F-028 | A password reset accepts the password already in use | Security | Low | Client |
 | F-029 | Tablet width uses the phone layout stretched | UI | Low | Client |
+| F-030 | Approving a second account on an ID number already in use fails with the wrong message | Logic | Medium | Operations, Compliance, Admin |
+| F-031 | No sensible upper limit on amounts and ages | Logic | Low | Client |
+| F-032 | Console client record shows internal IDs and a misleading label | UI | Low | All staff roles |
+| F-033 | Small gaps in checks on drafts and proposals | Logic | Low | Client, Admin, Finance |
 
 ### F-001 Sending an investment to another client always fails
 
@@ -623,6 +629,50 @@ Built emails are the committed renders in `docs/screenshots/emails/`. Client not
 - **Evidence:** Breakpoint run on 12 screens at five sizes.
 - **Suggested fix:** Start the wide layout near 768 px, or cap the phone layout's width.
 
+### F-030 Approving a second account on an ID number already in use fails with the wrong message
+
+- **Area:** Logic
+- **Severity:** Medium
+- **Affected roles:** Operations, Compliance, Admin
+- **Steps:** 1. Two people sign up and hand in ID checks with the same ID number. 2. Staff approve the first. 3. Staff open the second on Identity checks, give a reason and Approve.
+- **Expected:** The reviewer is told another approved client already holds this ID and to escalate, and the check is flagged so the next reviewer sees it.
+- **Actual:** The second approval is correctly refused (409), but the console says "Someone else has already acted on this check. It has been reloaded." The check stays in the queue as Needs review with Approve still offered and no duplicate flag, so every reviewer who opens it meets the same wrong message.
+- **Evidence:** [screenshot](screenshots/second-pass/01-console-duplicate-id-wrong-message.jpg). `_approve` in `backend/app/modules/kyc/service.py` returns False when the document is taken and the route answers a plain `conflict`. The `duplicate_document` flag is only set on the automatic path, and the console's own `duplicate_document` message (identity-checks/api.ts) is never reached.
+- **Suggested fix:** Answer `conflict` with a `duplicate_document` field code and set the `duplicate_document` review flag on the check when a staff approval meets it; map the code in the console's `toKycError`. Consider flagging it when the check is handed in, so the reviewer knows before deciding.
+
+### F-031 No sensible upper limit on amounts and ages
+
+- **Area:** Logic
+- **Severity:** Low
+- **Affected roles:** Client
+- **Steps:** 1. `POST /client/investments` with `amount_minor` 10,000,000,000,000 (UGX 10 trillion). 2. `POST /client/goals` with a target of UGX 1 quadrillion. 3. ID details with a birth date of 1 January 1890.
+- **Expected:** Each is refused, or held for a person, above a figure the business sets.
+- **Actual:** All three are accepted. The API's only ceiling on money is 10^15, there for integer safety. The app's amount field accepts up to UGX 999,999,999,999. An unpaid booking of that size counts in the console's Awaiting payment and breaks the Portfolio row layout. Nothing moves until it is paid, so no money is at risk.
+- **Evidence:** [screenshot](screenshots/second-pass/02-portfolio-ten-trillion-unpaid.jpg). Checks J2-INV-absurdly-large-amount, J3-GOAL-a-quadrillion-target and J2-KYC-a-birth-date-136-years-ago in section 6.
+- **Suggested fix:** Add a largest single investment (per product or in Settings, changed by two people like the other limits), use it for goal targets too, and refuse a birth date more than about 120 years back.
+
+### F-032 Console client record shows internal IDs and a misleading label
+
+- **Area:** UI
+- **Severity:** Low
+- **Affected roles:** All staff roles
+- **Steps:** 1. Console, Clients, find a client with running investments. 2. Find a client who signed in with a code, reset a password or was unfrozen in the last day.
+- **Expected:** Holdings are named by product; the 24 hour rule is described as a limit on withdrawals to new accounts.
+- **Actual:** "What Finvest holds for them" lists each holding as "Invested" followed by a raw investment ID, with no product or maturity date. The 24 hour withdrawal restriction is labelled "Sign-in held back until", though the client can sign in normally.
+- **Evidence:** [holdings](screenshots/second-pass/04-console-client-record-holdings.jpg), [label](screenshots/second-pass/03-console-client-record-labels.jpg). `apps/console/src/screens/clients/Parts.tsx:94`.
+- **Suggested fix:** Show the product name and maturity date for each holding, and reword the label to "Withdrawals limited to known accounts until".
+
+### F-033 Small gaps in checks on drafts and proposals
+
+- **Area:** Logic
+- **Severity:** Low
+- **Affected roles:** Client, Admin, Finance
+- **Steps:** 1. `PATCH /client/organisations/{id}` on a draft company with `approvals_needed` 5 and two signatories. 2. Two staff each propose a new product with the same code.
+- **Expected:** Both are refused when made.
+- **Actual:** The draft keeps 5; the app then shows neither withdrawal rule selected, with a warning. Sending for review is refused, so no account opens that way. Both product proposals sit as Waiting for approval; only one can be approved.
+- **Evidence:** [screenshot](screenshots/second-pass/05-company-draft-no-rule-selected.jpg). Checks J2-ORG-APPROVALS and the product proposals in the second pass.
+- **Suggested fix:** Refuse `approvals_needed` above the joined signatories on the draft, and refuse a new-product proposal while another open proposal holds the code.
+
 ## 4. What could not be tested, and why
 
 | Area | Why |
@@ -688,7 +738,6 @@ No exploit payloads, no load, no production. Each check confirms a control exist
 | S-CORS1 | Security | CORS preflight from a foreign origin | Pass |
 | S-CORS2 | Security | CORS preflight from the client app origin | Pass |
 | S-COOKIE | Security | Client session cookie flags (local: Secure off by config) | Pass |
-| S-TOKENBODY | Security | Web login does not also return a bearer token in the body | Pass |
 | S-LOGOUT | Security | Signing out ends the session on the server | Pass |
 | S-2FA-WRONG | Security | Wrong authenticator code is refused | Pass |
 | S-ENUM-LOGIN | Security | Unknown number and wrong password answer the same | Pass |
@@ -726,6 +775,88 @@ No exploit payloads, no load, no production. Each check confirms a control exist
 | J-STMT-BAD-in-the-future | Logic | Statement request in the future is refused | Pass |
 | J-CLOSE-BLOCKED | Logic | Closing an account with running investments is refused, with what is in the way | Pass |
 | J-LOOKUP-THROTTLE | Security | Looking up many numbers on Send is slowed down (stops guessing who is a client) | Pass |
+| J2-INV-paused-dollar-product | Logic | Invest with paused dollar product is refused | Pass |
+| J2-INV-absurdly-large-amount | Logic | Invest UGX 10 trillion is refused (F-031) | Fail |
+| J2-INV-fraction-of-a-shilling | Logic | Invest with fraction of a shilling is refused | Pass |
+| J2-INV-amount-as-text | Logic | Invest with amount as text is refused | Pass |
+| J2-INV-wrong-currency-for-the-product | Logic | Invest with wrong currency for the product is refused | Pass |
+| J2-INV-interest-to-a-goal-with-no-goal-named | Logic | Invest with interest to a goal with no goal named is refused | Pass |
+| J2-INV-unknown-field | Logic | Invest with unknown field is refused | Pass |
+| J2-INV-UNPAID-CAP | Logic | A client cannot pile up unlimited unpaid investments | Pass |
+| J2-MAT-IDOR | Security | Another client cannot change someone's maturity choice | Pass |
+| J2-MAT-BAD | Logic | Unknown maturity choice is refused | Pass |
+| J2-FREEZE | Logic | After Freeze my account the client is locked out at once | Pass |
+| J2-FREEZE-LOGIN | Logic | A frozen client cannot log in again until staff unfreeze | Pass |
+| J2-CMP-IDOR | Security | Another client cannot read someone's complaint | Pass |
+| J2-CMP-SELF | Security | The person who proposed a complaint outcome cannot confirm it | Pass |
+| J2-CMP-CONFIRM | Logic | A second person confirms the complaint outcome | Pass |
+| J2-CMP-CLIENT-SEES | Logic | The client sees the outcome of their complaint | Pass |
+| J2-SUP-REPLY | Logic | The client sees the reply staff wrote | Pass |
+| J2-SUP-ISOLATION | Security | A client's chat holds only their own messages | Pass |
+| J2-SUP-ROLE | Security | Finance cannot read support chats | Pass |
+| J2-UNFREEZE-SELF | Security | Staff cannot approve their own unfreeze | Pass |
+| J2-UNFREEZE | Logic | A second person unfreezes the account | Pass |
+| J2-UNFREEZE-LOGIN | Logic | The client can log in again after the unfreeze | Pass |
+| J2-ACT-pin_reset | Logic | Staff action pin_reset: own approval refused, second person approves | Pass |
+| J2-ACT-statement | Logic | Staff action statement: own approval refused, second person approves | Pass |
+| J2-ACT-withdrawal_limits | Logic | Staff action withdrawal_limits: own approval refused, second person approves | Pass |
+| J2-PROD-a-code-already-in-use | Logic | New product with a code already in use | Pass |
+| J2-PROD-a-zero-day-term | Logic | New product with a zero day term | Pass |
+| J2-PROD-a-100%-rate | Logic | New product with a 100% rate | Pass |
+| J2-PROD-a-zero-minimum | Logic | New product with a zero minimum | Pass |
+| J2-PROD-a-dollar-product-while-dollars-are-paused | Logic | New product with a dollar product while dollars are paused | Pass |
+| J2-CSV-FORMULA | Security | Every spreadsheet download writes text that starts like a formula as plain text | Pass |
+| J2-PIN-RESET-SESSIONS | Security | A staff PIN reset signs the client out everywhere | Pass |
+| J2-NOTIF-SECURITY | Logic | Security notices cannot be switched off completely | Pass |
+| J2-GRP-NONMEMBER | Security | A non-member cannot read a group goal | Pass |
+| J2-GRP-MEMBER-EDIT | Security | An ordinary member cannot rename the group | Pass |
+| J2-GRP-MEMBER-CLOSE | Security | An ordinary member cannot close the group | Pass |
+| J2-ORG-NONMEMBER | Security | A non-member cannot read a company account | Pass |
+| J2-ORG-SUBMIT-EMPTY | Logic | A company cannot be sent for checking without its documents and signatories | Pass |
+| J2-ORG-APPROVALS | Logic | A company cannot be sent for checking while it needs more approvals than it has signatories | Pass |
+| J2-ORG-APPROVE-DRAFT | Logic | Staff cannot approve a company that was never submitted | Pass |
+| J2-SELF-SERVICE-SELFIE | Security | Changing the password or phone number from Profile first asks for a live selfie (or passkey/authenticator confirmation) | Pass |
+| J2-EMAIL-BAD | Logic | A malformed email is refused | Pass |
+| J2-CSV-FORMULA | Security | Every spreadsheet download writes text that starts like a formula as plain text | Pass |
+| J2-PIN-RESET-SESSIONS | Security | A staff PIN reset signs the client out everywhere | Pass |
+| J2-KYC-someone-under-18 | Logic | ID details with someone under 18 | Pass |
+| J2-KYC-a-birth-date-in-the-future | Logic | ID details with a birth date in the future | Pass |
+| J2-KYC-an-ID-that-has-expired | Logic | ID details with an ID that has expired | Pass |
+| J2-KYC-markup-in-a-name | Logic | ID details with markup in a name | Pass |
+| J2-KYC-a-birth-date-136-years-ago | Logic | ID details with a birth date 136 years ago are refused (F-031) | Fail |
+| J2-KYC-NOT-IMAGE | Security | A file that is not really an image is refused as an ID photo | Pass |
+| J2-KYC-SVG | Security | An SVG is refused as an ID photo | Pass |
+| J3-STMT-an-end-before-the-start | Logic | A statement for an end before the start is refused | Pass |
+| J3-STMT-a-period-in-the-future | Logic | A statement for a period in the future is refused | Pass |
+| J3-STMT-a-126-year-period | Logic | A statement for a 126 year period is refused | Pass |
+| J3-GOAL-a-zero-target | Logic | A goal with a zero target is refused | Pass |
+| J3-GOAL-a-negative-target | Logic | A goal with a negative target is refused | Pass |
+| J3-GOAL-a-date-in-the-past | Logic | A goal with a date in the past is refused | Pass |
+| J3-GOAL-a-blank-name | Logic | A goal with a blank name is refused | Pass |
+| J3-GOAL-a-quadrillion-target | Logic | A goal with a UGX 1 quadrillion target is refused (F-031) | Fail |
+| J3-SAVE-one-shilling | Logic | Saving one shilling into a goal is refused | Pass |
+| J3-SAVE-a-negative-amount | Logic | Saving a negative amount into a goal is refused | Pass |
+| J3-SAVE-zero | Logic | Saving zero into a goal is refused | Pass |
+| J3-PAYDAY-0 | Logic | Payday 0 is refused | Pass |
+| J3-PAYDAY-32 | Logic | Payday 32 is refused | Pass |
+| J3-PAYDAY--1 | Logic | Payday -1 is refused | Pass |
+| J3-AUTO-an-amount-under-the-product-minimum | Logic | Automatic investing plan with an amount under the product minimum | Pass |
+| J3-AUTO-weekday-9 | Logic | Automatic investing plan with weekday 9 | Pass |
+| J3-AUTO-the-paused-dollar-product | Logic | Automatic investing plan with the paused dollar product | Pass |
+| J3-AUTO-a-foreign-number | Logic | Automatic investing plan with a foreign number | Pass |
+| J3-AUTO-day-31 | Logic | Automatic investing plan with day 31 (valid, months are shorter) | Pass |
+| J3-NOK | Logic | Six next of kin with bad numbers are refused | Pass |
+| J3-RATE-a-start-date-in-the-past | Logic | A rate change with a start date in the past is refused | Pass |
+| J3-RATE-a-negative-rate | Logic | A rate change with a negative rate is refused | Pass |
+| J3-RATE-a-200%-rate | Logic | A rate change with a 200% rate is refused | Pass |
+| J3-RATE-tax-over-100% | Logic | A rate change with tax over 100% is refused | Pass |
+| J3-RATE-an-unknown-product | Logic | A rate change with an unknown product is refused | Pass |
+| J3-TEAM-BAD-EMAIL | Logic | Inviting staff with a malformed email is refused | Pass |
+| J3-TEAM-DUP | Logic | Inviting an email that is already on the team is refused | Pass |
+| J3-TEAM-SELF | Security | A role change cannot be approved by the person who proposed it | Pass |
+| J3-TEAM-SUBJECT | Security | The person being promoted cannot approve their own promotion | Pass |
+| J3-ANN-SELF | Security | An announcement cannot be approved by its author | Pass |
+| J2-KYC-DUPLICATE-ID | Logic | A second account cannot be approved on an ID number another approved client holds | Pass |
 
 ## 7. How this was run
 
