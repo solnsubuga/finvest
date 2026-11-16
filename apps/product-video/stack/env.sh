@@ -7,11 +7,14 @@ DB=finvest_video
 FAKETIME_LIB=/usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1
 mkdir -p "$WORK/logs"
 
-# The story's clock: a whole number of days added to the real date, kept in $WORK/offset.
-# Every process (PostgreSQL, API, worker, scheduler) runs under libfaketime with it, and the
-# browser is moved to the same time, so "three months later" really is three months later.
+# The story's clock. $WORK/offset holds the story day: whole days after day 0, the day Esther
+# signs up ($PV_DAY0, 15 Nov 2026). Every process (PostgreSQL, API, worker, scheduler) runs
+# under libfaketime at that day, and the browser is moved to the same time, so "three months
+# later" really is three months later, whatever the real date of the recording.
+DAY0=${PV_DAY0:-2026-11-15}
 offset() { cat "$WORK/offset" 2>/dev/null || echo 0; }
-faketime_spec() { o=$(offset); case "$o" in -*) echo "${o}d" ;; *) echo "+${o}d" ;; esac; }
+real_shift() { echo $(( ( $(date -ud "$DAY0" +%s) - $(date -ud "$(date -u +%F)" +%s) ) / 86400 )); }
+faketime_spec() { o=$(( $(offset) + $(real_shift) )); case "$o" in -*) echo "${o}d" ;; *) echo "+${o}d" ;; esac; }
 
 if [ ! -f "$WORK/keys.env" ]; then
   key() { python3 -c "import secrets; print(secrets.token_urlsafe(32))"; }

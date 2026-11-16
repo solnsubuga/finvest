@@ -5,7 +5,7 @@ const tid = (page, id) => page.getByTestId(id).locator("visible=true");
 const side = (page, name) => page.locator("[data-testid^=sidebar-group]").getByText(name, { exact: true });
 
 export default {
-  id: "11",
+  id: "13",
   title: "The same account on a laptop",
   subtitle: "Everything from the phone, on a bigger screen.",
   steps: [

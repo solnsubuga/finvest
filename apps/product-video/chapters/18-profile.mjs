@@ -1,3 +1,4 @@
+import { BOND } from "./06-bond.mjs";
 import { ensureClientSignedIn } from "../lib/client.mjs";
 
 const tid = (page, id) => page.getByTestId(id).locator("visible=true");
@@ -12,7 +13,7 @@ async function toProfile(t, page) {
 }
 
 export default {
-  id: "16",
+  id: "18",
   title: "Making it hers",
   subtitle: "Her answers, her people, her alerts and her data.",
   steps: [
@@ -20,6 +21,7 @@ export default {
     { caption: "She names her brother as next of kin", does: "Next of kin, Add a person, Moses, Brother or sister, his number and ID" },
     { caption: "A copy of everything Finvest holds is one tap away", does: "Language and data, Download a copy of my data" },
     { caption: "She picks her Airtel number for the school fees money", does: "Portfolio, the bill, Change what happens, Pay out, Airtel, Save" },
+    { caption: "Her bond's coupons go to the same number", does: "Portfolio, the bond, Coupons are paid to: Airtel" },
     { caption: "She chooses which alerts also come by SMS", does: "Notifications, Settings, Investments by SMS" },
     { caption: "Devices shows everywhere she is signed in", does: "Sign in and security, Devices" },
     { caption: "If her phone is lost, she can freeze the account", does: "Freeze my account, read, Not now; Close my account, read, back" },
@@ -82,6 +84,18 @@ export default {
     await t.click(tid(page, "maturity-save"));
     await tid(page, "term-progress").waitFor();
     await t.read(1800);
+
+    await t.step("Her bond's coupons go to the same number", { hold: 300 });
+    await t.cut(() => page.goto("https://app.finvestug.com/portfolio"));
+    await page.getByText(BOND.name).first().waitFor();
+    await t.scroll(400, { ms: 800 });
+    await t.click(page.getByText(BOND.name).first());
+    await tid(page, "coupon-destination").waitFor();
+    await tid(page, "coupon-destination").scrollIntoViewIfNeeded();
+    await t.read(1000);
+    await t.click(tid(page, "coupon-destination").locator("[data-testid^=account-]").first());
+    await page.getByText("Each coupon is sent here on its date.").waitFor();
+    await t.zoom(tid(page, "coupon-destination"), { hold: 2400 });
 
     await t.step("She chooses which alerts also come by SMS", { hold: 300 });
     await toProfile(t, page);

@@ -23,9 +23,9 @@ function invitationLink(email) {
 }
 
 export default {
-  id: "12",
+  id: "14",
   title: "Growing the team",
-  subtitle: "Two admins approve every change to who can do what.",
+  subtitle: "Two admins approve every change to the team and to the rules.",
   steps: [
     { caption: "Each role opens only what that job needs", does: "Ruth: Team and permissions, scroll the roles table" },
     { caption: "Ruth invites Grace Atim to operations", does: "Invite someone: Grace Atim, Operations, a reason, Send for approval" },
@@ -33,12 +33,16 @@ export default {
     { caption: "Grace gets a one-time link by email", does: "test inbox: Set up your Finvest staff account (the link printed in it is hidden)" },
     { caption: "She signs in with her password and authenticator code", does: "Grace sets up off camera (her app's key is never shown), then signs in" },
     { caption: "Her menu shows only operations work", does: "read the menu" },
+    { caption: "Ruth asks for Pesapal to collect mobile money", does: "Ruth: Settings, Mobile money collected by, Change: Pesapal, a reason, Send for approval" },
+    { caption: "Sarah approves, and any number can now pay", does: "Sarah: Approve, a reason, Approve the change; it reads Pesapal (zoom)" },
   ],
   takes: [
     { name: "invite", who: "ruth", layout: "wide" },
     { name: "approve", who: "sarah", layout: "wide" },
     { name: "email", who: "inbox", layout: "mail" },
     { name: "grace", who: "grace", layout: "wide" },
+    { name: "collector", who: "ruth", layout: "wide" },
+    { name: "collectorOk", who: "sarah", layout: "wide" },
   ],
   // Sarah Namatovu joins off camera, as the company's second admin.
   async before() {
@@ -103,6 +107,43 @@ export default {
     await t.step("Her menu shows only operations work", { hold: 400 });
     await t.zoom(page.locator("nav").first(), { hold: 2600, scale: 1.2 });
     await t.read(1200);
+    await t.stop();
+  },
+  async collector(t, page) {
+    await ensureSignedIn(page, "ruth", "/settings");
+    const row = page.getByText("Mobile money collected by", { exact: true }).first();
+    await row.waitFor();
+    await row.scrollIntoViewIfNeeded();
+    await t.start();
+    await t.step("Ruth asks for Pesapal to collect mobile money", { hold: 800 });
+    await t.click(page.getByRole("button", { name: "Change mobile money collected by" }));
+    await page.getByText("Who collects mobile money").waitFor();
+    await t.read(2400);
+    await t.click(page.getByLabel(/^Pesapal/));
+    await t.type(page.getByText("Who collects mobile money").locator("xpath=ancestor::*[.//textarea][1]").locator("textarea").first(),
+      "Pesapal takes mobile money from any number and counts it at once.", { delay: 20 });
+    await t.click(page.getByRole("button", { name: "Send for approval" }));
+    await confirmIfAsked(t, page, "ruth");
+    await page.getByText("Someone else must approve or reject your change.").waitFor();
+    await t.read(2000);
+    await t.stop();
+  },
+  async collectorOk(t, page) {
+    await ensureSignedIn(page, "sarah", "/settings");
+    const row = page.getByText("Mobile money collected by", { exact: true }).first();
+    await row.waitFor();
+    await row.scrollIntoViewIfNeeded();
+    const box = row.locator("xpath=../..");
+    await t.start();
+    await t.step("Sarah approves, and any number can now pay", { hold: 1000 });
+    await t.click(box.getByRole("button", { name: "Approve", exact: true }));
+    await t.type(box.locator("textarea").first(), "Checked against our agreement with Pesapal.", { delay: 25 });
+    await t.click(page.getByRole("button", { name: "Approve the change" }));
+    await confirmIfAsked(t, page, "sarah");
+    const approved = page.getByText(/^Approved \d/).first();
+    await approved.waitFor();
+    await approved.scrollIntoViewIfNeeded();
+    await t.zoom(approved.locator("xpath=.."), { hold: 2400 });
     await t.stop();
   },
 };

@@ -12,7 +12,7 @@ async function openAccount(page, who) {
 }
 
 export default {
-  id: "13",
+  id: "15",
   title: "Getting paid",
   subtitle: "Money only goes to an account in her own name.",
   steps: [
@@ -47,6 +47,9 @@ export default {
     await t.scroll(350, { ms: 1000 });
     await t.read(1800);
     await t.step("To be paid, she adds her own Airtel number", { hold: 400 });
+    // Pay out asks for a payout account first.
+    await t.click(tid(page, "maturity-pay_out"));
+    await t.read(1000);
     await t.click(tid(page, "add-payout-account"));
     await tid(page, "payout-account-save").waitFor();
     await t.read(1800);
