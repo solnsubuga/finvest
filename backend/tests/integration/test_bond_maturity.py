@@ -7,6 +7,7 @@ entries are dated ahead of today, as the coupon tests' are.
 """
 
 import asyncio
+import secrets
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -93,7 +94,7 @@ async def status_of(worker: Database, holding_id: str) -> HoldingStatus:
 
 async def run_repay_job(worker: Database, day: date) -> tuple[str, str | None]:
     """Queue the run the scheduler fires at 01:15 in Kampala on `day`, and run it on that day."""
-    queue = "maturity" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"maturity_{secrets.token_hex(8)}"
     fired = datetime(day.year, day.month, day.day, 1, 15, tzinfo=UTC) - timedelta(hours=3)
     clock = on(day)
     async with worker.actor_transaction(SYSTEM) as session:

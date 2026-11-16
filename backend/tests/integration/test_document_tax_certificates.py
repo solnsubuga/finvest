@@ -1,6 +1,7 @@
 """The yearly tax certificate as a document, against real PostgreSQL: asked for with the June
 statements, built from the tax module's figures, stored, listed and emailed without a figure."""
 
+import secrets
 from collections.abc import Iterator
 from datetime import date
 
@@ -55,7 +56,7 @@ def issued() -> FakeClock:
 
 @pytest.fixture(autouse=True)
 def own_queue(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
-    queue = "tax" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"tax_{secrets.token_hex(8)}"
     monkeypatch.setattr(service, "QUEUE", queue)
     yield queue
 

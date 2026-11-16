@@ -5,6 +5,7 @@ says so.
 """
 
 import asyncio
+import secrets
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -41,7 +42,6 @@ from app.infrastructure.jobs import (
 )
 from app.infrastructure.jobs import queue as job_queue
 from app.infrastructure.jobs.scheduler import instance_key
-from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
 from tests.support.database import TestDatabase
 
@@ -67,7 +67,7 @@ class Names:
 
 @pytest.fixture
 def names() -> Names:
-    return Names("".join(c for c in push_id().lower() if c.isalnum())[-12:])
+    return Names(secrets.token_hex(6))
 
 
 @pytest.fixture

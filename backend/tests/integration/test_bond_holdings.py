@@ -5,6 +5,7 @@ its own code and ISIN, and pauses it again before it ends.
 """
 
 import asyncio
+import secrets
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -172,7 +173,7 @@ async def run_start_job(
     worker: Database, data: dict[str, object], clock: Clock
 ) -> tuple[str, str | None]:
     """Queue the consumer job as the outbox would, run it, and return how it ended."""
-    queue = "bond" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"bond_{secrets.token_hex(8)}"
     async with worker.actor_transaction(SYSTEM) as session:
         job_id = await enqueue(
             session,
