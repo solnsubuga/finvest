@@ -66,6 +66,9 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}
           SHARDS: 4
+          # A new random order on every run, so a test that passes only after another one
+          # fails. The seed is printed at the top of the output: set it locally to repeat.
+          FINVEST_TEST_ORDER_SEED: ${{ github.run_id }}${{ github.run_attempt }}
         run: |
           mapfile -t files < <(find tests/integration -name 'test_*.py' | LC_ALL=C sort \
             | awk -v shard="$SHARD" -v shards="$SHARDS" 'NR % shards == shard % shards')
@@ -74,6 +77,7 @@ jobs:
             exit 1
           fi
           printf 'Shard %s runs %s files\n' "$SHARD" "${#files[@]}"
+          printf 'Random test order: FINVEST_TEST_ORDER_SEED=%s\n' "$FINVEST_TEST_ORDER_SEED"
           uv run --locked pytest -m integration "${files[@]}"
 
   integration-result:
