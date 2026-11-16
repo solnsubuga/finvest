@@ -20,9 +20,16 @@ export function offsetDays() {
   }
 }
 
-/** The story's "now" in milliseconds: the real time moved by the story clock. */
+/** Whole days from the real date (UTC) to day 0 of the story, as stack/env.sh counts them. */
+function realShiftDays() {
+  const day0 = Date.parse(`${process.env.PV_DAY0 ?? "2026-11-15"}T00:00:00Z`);
+  const today = Date.parse(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
+  return Math.round((day0 - today) / 86_400_000);
+}
+
+/** The story's "now" in milliseconds: the real time moved to the story day. */
 export function storyNow() {
-  return Date.now() + offsetDays() * 86_400_000;
+  return Date.now() + (offsetDays() + realShiftDays()) * 86_400_000;
 }
 
 let browser;
@@ -51,7 +58,7 @@ export async function openContext(who, layout) {
     storageState: fs.existsSync(stateFile) ? stateFile : undefined,
   });
   await Take.prepare(context);
-  if (offsetDays() !== 0) await context.clock.install({ time: storyNow() });
+  if (offsetDays() + realShiftDays() !== 0) await context.clock.install({ time: storyNow() });
   const page = await context.newPage();
   const passkeys = await virtualAuthenticator(page, who);
   return {

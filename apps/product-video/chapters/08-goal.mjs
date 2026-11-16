@@ -1,7 +1,7 @@
 const tid = (page, id) => page.getByTestId(id).locator("visible=true");
 
 export default {
-  id: "07",
+  id: "08",
   title: "Saving for school fees",
   subtitle: "A goal with a target, a date and a payday.",
   steps: [
@@ -44,8 +44,7 @@ export default {
     await t.read(1800);
     await t.click(tid(page, "receipt-done"));
     await t.step("A payday reminder on the 25th keeps her on track", { hold: 400 });
-    await t.click(page.locator("[aria-label=Goals]").last());
-    await t.click(page.getByText("Daniel's school fees").locator("visible=true").first());
+    // Done after the first saving goes back to the goal.
     await tid(page, "goal-payday").waitFor();
     await t.read(1600);
     await t.click(tid(page, "goal-payday"));

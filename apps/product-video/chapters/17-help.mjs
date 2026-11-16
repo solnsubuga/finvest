@@ -6,7 +6,7 @@ const button = (page, text) => page.locator("button", { hasText: text }).locator
 const COMPLAINT = /My bank transfer took a day/;
 
 export default {
-  id: "15",
+  id: "17",
   title: "Help when she needs it",
   subtitle: "Quick answers, a chat with the team, and complaints handled properly.",
   steps: [
@@ -51,7 +51,7 @@ export default {
     await ensureSignedIn(page, "grace", "/overview");
     await t.start();
     await t.step("Grace answers with Esther's account beside her", { hold: 800 });
-    await t.click(page.getByRole("link", { name: /^Support(,|$)/ }));
+    await t.click(page.getByRole("link", { name: /^Support\b/ }));
     await page.getByText("About this client").waitFor();
     await t.read(2400);
     await t.zoom(page.getByText("About this client").locator("xpath=.."), { hold: 2200 });

@@ -7,7 +7,7 @@ const INVESTMENT = /worth UGX 1,00/;
 let joinLink = null;
 
 export default {
-  id: "14",
+  id: "16",
   title: "Sending and saving together",
   subtitle: "Part of an investment can go to family, and a goal can be shared.",
   steps: [
@@ -17,12 +17,15 @@ export default {
     { caption: "A group goal saves for something together", does: "Goals, Save together, name, target, twelve months, her part" },
     { caption: "Moses sees the investment he was sent", does: "Moses: Portfolio, the received 91 day bill" },
     { caption: "He joins the group with his own part", does: "Moses opens the invite, types his part, Join the group" },
+    { caption: "Moses helps with Daniel's fees from his own phone", does: "Esther: Invest, 91 day bill, UGX 200,000, Confirm and pay, Pay from another number: Moses's" },
+    { caption: "He pays on Pesapal's page, and it counts as hers", does: "Pay, Open the secure page; the sandbox completes; the receipt names his number, masked (zoom)" },
   ],
   takes: [
     { name: "send", who: "esther-phone", layout: "phone", clock: "+1" },
     { name: "group", who: "esther-phone", layout: "phone" },
     { name: "moses", who: "moses-phone", layout: "phone" },
     { name: "join", who: "moses-phone", layout: "phone" },
+    { name: "uncle", who: "esther-phone", layout: "phone" },
   ],
   async send(t, page) {
     await ensureClientSignedIn(page, "esther", "/portfolio");
@@ -69,6 +72,9 @@ export default {
     // Off camera: make the invite link and keep it for Moses's take.
     await tid(page, "group-make-link").click();
     await tid(page, "group-link").waitFor();
+    // The code is hidden until asked for.
+    await tid(page, "group-link-show").click();
+    await page.waitForTimeout(500);
     joinLink = (await tid(page, "group-link").innerText()).trim().match(/https:\/\/\S+/)?.[0];
     if (!joinLink) throw new Error("No invite link on the group goal");
   },
@@ -93,6 +99,32 @@ export default {
     await t.click(tid(page, "group-join"));
     await t.cut(() => page.getByText("A new roof for Grandma's house").first().waitFor({ timeout: 30000 }));
     await t.read(2800);
+    await t.stop();
+  },
+  async uncle(t, page) {
+    await ensureClientSignedIn(page, "esther", "/invest");
+    await page.getByText("91 Day Treasury Bill").first().waitFor();
+    await t.start();
+    await t.step("Moses helps with Daniel's fees from his own phone", { hold: 800 });
+    await t.click(page.getByText("91 Day Treasury Bill").first());
+    await t.type(tid(page, "amount"), "200000");
+    await t.click(tid(page, "review"));
+    await tid(page, "confirm").waitFor();
+    await t.read(1000);
+    await t.click(tid(page, "confirm"));
+    await tid(page, "method-mobile-money").waitFor();
+    await t.click(tid(page, "network-airtel"));
+    await t.click(tid(page, "pay-number-toggle"));
+    await t.type(tid(page, "pay-other-number"), "700000736", { delay: 90 });
+    await t.read(1800);
+    await t.step("He pays on Pesapal's page, and it counts as hers", { hold: 300 });
+    await t.click(tid(page, "pay-submit"));
+    await tid(page, "deposit-open-page").waitFor({ timeout: 30000 });
+    await t.read(2800);
+    await t.click(tid(page, "deposit-open-page"));
+    await t.cut(() => page.getByText("Completed").first().waitFor({ timeout: 90000 }));
+    await t.read(1200);
+    await t.zoom(page.getByText("Paid from").first().locator("xpath=../.."), { hold: 2800 });
     await t.stop();
   },
 };

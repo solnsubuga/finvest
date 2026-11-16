@@ -1,7 +1,7 @@
 const tid = (page, id) => page.getByTestId(id).locator("visible=true");
 
 export default {
-  id: "08",
+  id: "09",
   title: "Investing on autopilot",
   subtitle: "The same amount, every payday, without lifting a finger.",
   steps: [

@@ -43,9 +43,9 @@ export const CLIENT = PEOPLE[process.env.PV_PERSON ?? "esther"];
 export const STAFF = {
   ruth: { name: "Ruth Achieng", email: "ruth.achieng@finvest-demo.test", role: "admin" },
   joel: { name: "Joel Mugisha", email: "joel.mugisha@finvest-demo.test", role: "finance" },
-  // Joins off camera in chapter 12, as the second admin every team change needs.
+  // Joins off camera in chapter 14, as the second admin every team change needs.
   sarah: { name: "Sarah Namatovu", email: "sarah.namatovu@finvest-demo.test", role: "admin" },
-  // Invited on camera in chapter 12.
+  // Invited on camera in chapter 14.
   grace: { name: "Grace Atim", email: "grace.atim@finvest-demo.test", role: "operations" },
 };
 

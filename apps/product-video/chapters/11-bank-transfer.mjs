@@ -23,7 +23,7 @@ async function bankSection(page) {
 }
 
 export default {
-  id: "09",
+  id: "11",
   title: "Paying by bank transfer",
   subtitle: "Every shilling matched to the bank statement, by two people.",
   steps: [

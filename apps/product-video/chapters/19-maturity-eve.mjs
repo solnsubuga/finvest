@@ -10,7 +10,7 @@ const formWith = (page, text) => button(page, text).locator("xpath=ancestor::for
 const potTransfer = (page) => page.getByRole("article", { name: /Transfer of UGX 5,000,000/ });
 
 export default {
-  id: "17",
+  id: "19",
   title: "Three months later",
   subtitle: "The day before her bill matures, the team gets the money ready.",
   steps: [
@@ -22,6 +22,7 @@ export default {
     { caption: "Ruth checks both against the bank and approves them", does: "Ruth: Dealing Desk approve and post; Reconciliation approve" },
     { caption: "Reports come out for any period, as a file", does: "Joel: Reports and Audit, Maturity ladder, Download CSV" },
     { caption: "Every action is kept: who did it, when and why", does: "Ruth: Reports and Audit, the audit trail" },
+    { caption: "What clients are owed is checked against what is held", does: "Reconciliation: the client money check, waiting for the first closed day" },
     { caption: "Settings hold the rules, and changes need two people", does: "Settings: limits, payment channels with Pesapal cards" },
     { caption: "Paper clients are checked before anyone moves across", does: "Migration: trial import of the paper register, the problems and differences" },
   ],
@@ -167,6 +168,11 @@ export default {
     await t.read(3000);
     await t.scroll(500, { ms: 1200 });
     await t.read(2600);
+    await t.step("What clients are owed is checked against what is held", { hold: 400 });
+    await t.click(menu(page, "Reconciliation"));
+    await page.getByText("Client money check").first().waitFor();
+    await t.read(1200);
+    await t.zoom(page.getByText("Client money check").first().locator("xpath=.."), { hold: 2600 });
     await t.step("Settings hold the rules, and changes need two people", { hold: 400 });
     await t.click(menu(page, "Settings"));
     await page.getByText("Limits in force").waitFor();
