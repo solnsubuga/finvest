@@ -19,10 +19,13 @@ function loadStub(): StubModule | null {
 
 /** Chooses what the bond screens talk to: the demo when it is switched on, otherwise the API. */
 export function resolveBondsClient(stub: StubModule | null = loadStub()): BondsClient {
-  return stub ? stub.createStubBondsClient({ failList: demoSearch().includes("bonds=fail") }) : createApiBondsClient();
+  return stub ? stub.createStubBondsClient({
+        failList: demoSearch().includes("bonds=fail"),
+        sample: demoSearch().includes("sample=empty") ? "empty" : "default",
+      }) : createApiBondsClient();
 }
 
-/** On the web, `?bonds=fail` fails the bond list on Invest, to show that state. */
+/** On the web, `?bonds=fail` fails the bond list on Invest and the bonds in Portfolio, to show that state. */
 function demoSearch(): string {
   return typeof window !== "undefined" ? (window.location?.search ?? "") : "";
 }

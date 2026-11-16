@@ -1,6 +1,6 @@
 import { formatDay } from "@/investing/format";
 
-import { Bond, BondHolding, HoldingStatus } from "./types";
+import { Bond, BondHolding, HoldingStatus, SaleStatus } from "./types";
 
 /**
  * "98.50" for 985000: a price per 100 of face value, held to four decimal places as an integer.
@@ -57,4 +57,21 @@ export function holdingLine(holding: BondHolding): string {
   if (holding.status === "unpaid") return "Pay to buy it";
   if (holding.status === "active" && holding.nextCouponDate) return `Next coupon ${formatDay(holding.nextCouponDate)}`;
   return `${holding.status === "active" ? "Matures" : "Matured"} ${formatDay(holding.maturityDate)}`;
+}
+
+/** Where a sale stands, as the client hears it. */
+export const saleStatusLabel: Record<SaleStatus, string> = {
+  requested: "Asked to sell. Finvest's dealing desk is finding a buyer.",
+  priced: "A buyer is found. Finvest is checking the price before it settles.",
+  approved: "Sold. The money is being paid to you.",
+  sold: "Sold",
+  cancelled: "You cancelled this ask to sell",
+  closed: "The bond matured before it was sold, so it was repaid instead",
+};
+
+/** Why money waits for an account, in words a client can act on. */
+export function heldLabel(heldBecause: string | null): string {
+  if (heldBecause === "no_destination") return "Waiting for you to choose an account";
+  if (heldBecause === "destination_in_safety_wait") return "Waiting for a new account's first day to pass";
+  return "Waiting for an account that can be paid";
 }

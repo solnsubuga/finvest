@@ -1,4 +1,5 @@
 import { act, fireEvent, screen, within } from "@testing-library/react-native";
+import { router } from "expo-router";
 import { renderRouter } from "expo-router/testing-library";
 
 import { DEMO_PASSWORD } from "@/auth/stubAuthClient";
@@ -8,6 +9,8 @@ import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 const mockClock = { ms: Date.parse("2026-11-16T09:00:00Z") };
 const mockBuy = jest.fn();
 const mockFailBond: { value: boolean } = { value: false };
+const mockBondSample: { value: "default" | "empty" } = { value: "empty" };
+const mockSell = jest.fn();
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -36,7 +39,7 @@ jest.mock("@/bonds/stubBondsClient", () => {
   return {
     ...actual,
     createStubBondsClient: () => {
-      const client = actual.createStubBondsClient({ delayMs: 0, now: () => mockClock.ms });
+      const client = actual.createStubBondsClient({ delayMs: 0, now: () => mockClock.ms, sample: mockBondSample.value });
       return {
         ...client,
         listBonds: async () => {
@@ -49,6 +52,10 @@ jest.mock("@/bonds/stubBondsClient", () => {
         buy: async (request: unknown) => {
           mockBuy(request);
           return client.buy(request);
+        },
+        sell: async (request: unknown) => {
+          mockSell(request);
+          return client.sell(request);
         },
       };
     },
@@ -93,6 +100,8 @@ beforeAll(warmRouter, WARM_ROUTER_MS);
 beforeEach(() => {
   mockBuy.mockClear();
   mockFailBond.value = false;
+  mockBondSample.value = "empty";
+  mockSell.mockClear();
   mockClock.ms = Date.parse("2026-11-16T09:00:00Z");
 });
 
@@ -168,5 +177,65 @@ describe("bonds", () => {
     });
     await screen.findByText("Completed");
     expect(screen.getByText(/coupons are paid every six months/)).toBeTruthy();
+  });
+});
+
+describe("bond holdings", () => {
+  async function openPortfolio() {
+    mockBondSample.value = "default";
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    return screen.findByTestId("bond-holdings");
+  }
+
+  it("lists the client's bonds in Portfolio with what waits on them", async () => {
+    const section = await openPortfolio();
+    expect(within(section).getByText("2 Year Treasury Bond 2028")).toBeTruthy();
+    expect(within(section).getByText("A coupon of UGX 56,000 is waiting for an account")).toBeTruthy();
+    expect(within(section).getByText("5 Year Treasury Bond 2031")).toBeTruthy();
+    expect(within(section).getByText("Next coupon 22 Feb 2027")).toBeTruthy();
+  });
+
+  it("shows no bonds section to a client with none", async () => {
+    await signIn();
+    await act(async () => {
+      router.push("/portfolio");
+    });
+    await screen.findByTestId("go-invest");
+    expect(screen.queryByTestId("bond-holdings")).toBeNull();
+  });
+
+  it("sends a waiting coupon on, and chooses where the next ones go", async () => {
+    await openPortfolio();
+    await fireEvent.press(screen.getByLabelText(/^2 Year Treasury Bond 2028/));
+    const coupons = await screen.findByTestId("bond-coupons");
+    expect(within(coupons).getByText("Waiting for you to choose an account")).toBeTruthy();
+    await fireEvent.press(within(coupons).getByText("Send it"));
+    expect(await screen.findByTestId("bond-pay-out-amount")).toHaveTextContent("UGX 56,000");
+    await fireEvent.press(screen.getByTestId("confirm-bond-pay-out"));
+    const after = await screen.findByTestId("bond-coupons");
+    expect(await within(after).findByText("Paid to your account")).toBeTruthy();
+
+    await fireEvent.press(within(screen.getByTestId("coupon-destination")).getByTestId("account-demo-account-mtn"));
+    expect(await screen.findByText(/Each coupon is sent here on its date/)).toBeTruthy();
+  });
+
+  it("asks to sell a holding with the account named, and cancels it", async () => {
+    await openPortfolio();
+    await fireEvent.press(screen.getByLabelText(/^5 Year Treasury Bond 2031/));
+    await fireEvent.press(await screen.findByTestId("bond-sell"));
+    expect(await screen.findByText("Sold at the market price")).toBeTruthy();
+    await fireEvent.press(screen.getByTestId("confirm-sell"));
+    const sale = await screen.findByTestId("bond-sale");
+    expect(within(sale).getByText(/Finvest's dealing desk is finding a buyer/)).toBeTruthy();
+    expect(mockSell).toHaveBeenCalledTimes(1);
+    expect(mockSell.mock.calls[0][0]).toMatchObject({ destinationId: "demo-account-mtn" });
+    expect(screen.queryByTestId("bond-sell")).toBeNull();
+
+    await fireEvent.press(screen.getByTestId("bond-sale-cancel"));
+    expect(await screen.findByTestId("bond-sell")).toBeTruthy();
+    expect(screen.queryByTestId("bond-sale")).toBeNull();
   });
 });

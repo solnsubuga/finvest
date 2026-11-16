@@ -1,8 +1,26 @@
-import type { BondHoldingOut, BondOut, BondQuoteOut } from "@finvest/api-client/client";
+import type {
+  BondCouponOut,
+  BondHoldingOut,
+  BondOut,
+  BondQuoteOut,
+  BondRepaymentOut,
+  BondSaleOut,
+} from "@finvest/api-client/client";
 
 import { api, ApiError, isAccountClosing } from "@/api/http";
 
-import { Bond, BondHolding, BondQuote, BondsClient, BondsError, BondsErrorCode } from "./types";
+import {
+  Bond,
+  BondCoupon,
+  BondHolding,
+  BondQuote,
+  BondRepayment,
+  BondSale,
+  BondsClient,
+  BondsError,
+  BondsErrorCode,
+  MoneyStatus,
+} from "./types";
 
 /**
  * The bond screens' contract, answered by the real API (backend/app/modules/bonds/api.py).
@@ -70,6 +88,56 @@ export function toHolding(view: BondHoldingOut): BondHolding {
   };
 }
 
+const moneyStatus = (status: string | null): MoneyStatus | null =>
+  status === "paid_out" || status === "held" ? status : null;
+
+export function toCoupon(view: BondCouponOut): BondCoupon {
+  return {
+    id: view.id,
+    holdingId: view.holding_id,
+    name: view.name,
+    couponDate: view.coupon_date,
+    amount: { currency: view.currency, minor: view.amount_minor },
+    status: moneyStatus(view.status) ?? "held",
+    payoutId: view.payout_id,
+    heldBecause: view.held_because,
+  };
+}
+
+export function toRepayment(view: BondRepaymentOut): BondRepayment {
+  const money = (minor: number) => ({ currency: view.currency, minor });
+  return {
+    id: view.id,
+    holdingId: view.holding_id,
+    name: view.name,
+    repaidOn: view.repaid_on,
+    face: money(view.face_minor),
+    coupon: money(view.coupon_minor),
+    amount: money(view.amount_minor),
+    status: moneyStatus(view.status) ?? "held",
+    payoutId: view.payout_id,
+    heldBecause: view.held_because,
+  };
+}
+
+export function toSale(view: BondSaleOut): BondSale {
+  return {
+    id: view.id,
+    holdingId: view.holding_id,
+    name: view.name,
+    face: { currency: view.currency, minor: view.face_minor },
+    requestedAt: view.requested_at,
+    status: view.status,
+    destinationId: view.destination_id,
+    price: view.price,
+    soldOn: view.sold_on,
+    amount: view.amount_minor === null ? null : { currency: view.currency, minor: view.amount_minor },
+    payoutStatus: moneyStatus(view.payout_status),
+    payoutId: view.payout_id,
+    heldBecause: view.held_because,
+  };
+}
+
 /** The quote's and the purchase's refusals, by the code the API puts on the field. */
 const REFUSALS: Record<string, BondsErrorCode> = {
   below_minimum: "below_minimum",
@@ -80,15 +148,43 @@ const REFUSALS: Record<string, BondsErrorCode> = {
   currency_not_supported: "not_open",
   too_close_to_maturity: "too_close_to_maturity",
   no_price: "no_price",
+  // Selling, by the code on `holding_id`.
+  holding_not_active: "cannot_sell",
+  matured: "cannot_sell",
+  sale_already_asked: "cannot_sell",
+  // Paying out, by the code on `destination_id`.
+  not_usable: "account_not_ready",
+  destination_in_safety_wait: "account_not_ready",
+  destination_not_approved: "account_not_ready",
+  destination_not_known_yet: "account_not_ready",
+  over_mobile_money_limit: "over_limit",
+  over_daily_limit: "over_limit",
+  over_bank_limit: "over_limit",
+};
+
+/** What a 409 means, by the call that got it. */
+type Call = "buy" | "sell" | "cancel" | "pay_out" | "other";
+const CONFLICT: Record<Call, BondsErrorCode> = {
+  // Five purchases waiting for payment already.
+  buy: "too_many_unpaid",
+  // An ask already waits for the holding.
+  sell: "cannot_sell",
+  // The desk priced it.
+  cancel: "cannot_cancel",
+  // Not waiting any more.
+  pay_out: "already_sent",
+  other: "invalid",
 };
 
 /** Turns what the API or the network said into a reason a bond screen can show. */
-export function toBondsError(error: unknown): BondsError {
+export function toBondsError(error: unknown, call: Call = "buy"): BondsError {
   if (error instanceof BondsError) return error;
   if (!(error instanceof ApiError) || error.uncertain) return new BondsError("unavailable");
   switch (error.code) {
     case "not_found":
       return new BondsError("not_found");
+    case "pin_required":
+      return new BondsError("pin_required");
     case "idempotency_key_reused":
       return new BondsError("key_reused");
     case "forbidden":
@@ -96,8 +192,7 @@ export function toBondsError(error: unknown): BondsError {
       return new BondsError("not_verified");
     case "conflict":
       if (isAccountClosing(error)) return new BondsError("account_closing");
-      // Buying: five purchases waiting for payment already.
-      return new BondsError("too_many_unpaid");
+      return new BondsError(CONFLICT[call]);
     case "validation_failed": {
       const found = error.fields.map((field) => REFUSALS[field.code]).find((code) => code !== undefined);
       // Still a definite refusal: nothing was saved, so the next try may take a new key.
@@ -108,13 +203,16 @@ export function toBondsError(error: unknown): BondsError {
   }
 }
 
-async function wrap<T>(call: () => Promise<T>): Promise<T> {
+async function wrap<T>(run: () => Promise<T>, call: Call = "buy"): Promise<T> {
   try {
-    return await call();
+    return await run();
   } catch (error) {
-    throw toBondsError(error);
+    throw toBondsError(error, call);
   }
 }
+
+const pinOf = (request: { pinConfirmation?: string | null }) =>
+  request.pinConfirmation ? { pin_confirmation: request.pinConfirmation } : {};
 
 export function createApiBondsClient(): BondsClient {
   return {
@@ -149,5 +247,51 @@ export function createApiBondsClient(): BondsClient {
       wrap(async () =>
         toHolding(await api("GET /client/bond-holdings/{holding_id}", { params: { holding_id: holdingId } })),
       ),
+
+    chooseCouponDestination: (holdingId, destinationId) =>
+      wrap(
+        async () =>
+          toHolding(
+            await api("PUT /client/bond-holdings/{holding_id}/coupon-destination", {
+              params: { holding_id: holdingId },
+              body: { destination_id: destinationId },
+            }),
+          ),
+        "other",
+      ),
+
+    listCoupons: () => wrap(async () => (await api("GET /client/bond-coupons", {})).map(toCoupon), "other"),
+
+    listRepayments: () => wrap(async () => (await api("GET /client/bond-repayments", {})).map(toRepayment), "other"),
+
+    sell: (request) =>
+      wrap(
+        async () =>
+          toSale(
+            await api("POST /client/bond-holdings/{holding_id}/sale", {
+              params: { holding_id: request.holdingId },
+              body: { destination_id: request.destinationId, ...pinOf(request) },
+              idempotencyKey: request.idempotencyKey,
+            }),
+          ),
+        "sell",
+      ),
+
+    listSales: () => wrap(async () => (await api("GET /client/bond-sales", {})).map(toSale), "other"),
+
+    cancelSale: (saleId) =>
+      wrap(async () => toSale(await api("POST /client/bond-sales/{sale_id}/cancel", { params: { sale_id: saleId } })), "cancel"),
+
+    payOutHeld: (request) =>
+      wrap(async () => {
+        const body = { destination_id: request.destinationId, ...pinOf(request) };
+        if (request.kind === "coupon") {
+          await api("POST /client/bond-coupons/{coupon_id}/pay-out", { params: { coupon_id: request.id }, body });
+        } else if (request.kind === "repayment") {
+          await api("POST /client/bond-repayments/{repayment_id}/pay-out", { params: { repayment_id: request.id }, body });
+        } else {
+          await api("POST /client/bond-sales/{sale_id}/pay-out", { params: { sale_id: request.id }, body });
+        }
+      }, "pay_out"),
   };
 }

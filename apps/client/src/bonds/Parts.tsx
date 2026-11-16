@@ -7,13 +7,22 @@ import { Button } from "@/components/Button";
 import { Icon } from "@/components/Icon";
 import { Txt } from "@/components/Txt";
 import { formatAmount, formatDay } from "@/investing/format";
-import { useLoaded } from "@/investing/useLoaded";
+import { useFocusLoaded, useLoaded } from "@/investing/useLoaded";
 import { DetailList, Loading } from "@/payments/Parts";
 import { colors, fontSizes, radii } from "@/theme";
 
 import { useBonds } from "./BondsProvider";
 import { formatPrice, holdingLine, holdingStatusLabel, maturesLabel, notBuyableLabel, priceLabel } from "./format";
-import { Bond, BondHolding, describeBondsError } from "./types";
+import {
+  Bond,
+  BondCoupon,
+  BondHolding,
+  BondRepayment,
+  BondSale,
+  bondPayableId,
+  describeBondsError,
+  HeldKind,
+} from "./types";
 import { BondCalc } from "./useBondQuote";
 
 /** One issue in the list: its name, the coupon after tax, when it matures and today's price. */
@@ -98,13 +107,13 @@ export function BondsSection({ columns = 1 }: { columns?: number }) {
   );
 }
 
-/** One of the client's bond holdings in Portfolio. */
-export function HoldingCard({ holding, onPress }: { holding: BondHolding; onPress: () => void }) {
+/** One of the client's bond holdings in Portfolio. `note` says what waits on it, if anything. */
+export function HoldingCard({ holding, note, onPress }: { holding: BondHolding; note?: string | null; onPress: () => void }) {
   const waiting = holding.status === "unpaid";
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${holding.name}, ${holdingStatusLabel[holding.status]}, face value ${formatAmount(holding.face)}, ${holdingLine(holding)}`}
+      accessibilityLabel={`${holding.name}, ${holdingStatusLabel[holding.status]}, face value ${formatAmount(holding.face)}, ${holdingLine(holding)}${note ? `, ${note}` : ""}`}
       onPress={onPress}
       testID={`holding-${holding.id}`}
       style={({ pressed }) => [styles.card, { alignItems: "flex-start" }, pressed && { opacity: 0.85 }]}
@@ -119,6 +128,11 @@ export function HoldingCard({ holding, onPress }: { holding: BondHolding; onPres
         <Txt size={fontSizes.sm} color={colors.muted}>
           {waiting ? `Pay ${formatAmount(holding.cost)} to buy it` : holdingLine(holding)}
         </Txt>
+        {note ? (
+          <Txt size={fontSizes.xs} weight="bold" color={colors.warningText}>
+            {note}
+          </Txt>
+        ) : null}
       </View>
       <View style={{ alignItems: "flex-end", gap: 2 }}>
         <Txt size={fontSizes.lg} weight="extrabold">
@@ -128,6 +142,151 @@ export function HoldingCard({ holding, onPress }: { holding: BondHolding; onPres
           face value
         </Txt>
       </View>
+    </Pressable>
+  );
+}
+
+type Holdings = { holdings: BondHolding[]; coupons: BondCoupon[]; repayments: BondRepayment[]; sales: BondSale[] };
+
+/** The sale of a holding that is still going on, if any. */
+export function openSaleOf(sales: BondSale[], holdingId: string): BondSale | undefined {
+  return sales.find((sale) => sale.holdingId === holdingId && ["requested", "priced", "approved"].includes(sale.status));
+}
+
+/** The pay-out screen for money that waits for an account. */
+export function payOutHref(kind: HeldKind, id: string): string {
+  return `/investment/bond/pay-out?kind=${kind}&id=${encodeURIComponent(id)}`;
+}
+
+/**
+ * The client's bonds in Portfolio: each holding, and money from a bond that waits for an
+ * account. It loads on its own, so the investments above stay usable if it fails, and shows
+ * nothing at all for a client with no bonds.
+ */
+export function BondHoldingsSection({ columns = 1 }: { columns?: number }) {
+  const router = useRouter();
+  const client = useBonds();
+  const [loaded, retry] = useFocusLoaded(
+    useCallback(async (): Promise<Holdings> => {
+      const [holdings, coupons, repayments, sales] = await Promise.all([
+        client.listHoldings(),
+        client.listCoupons(),
+        client.listRepayments(),
+        client.listSales(),
+      ]);
+      return { holdings, coupons, repayments, sales };
+    }, [client]),
+    describeBondsError,
+  );
+  if (loaded.state === "loading") return null;
+  if (loaded.state === "failed") {
+    return (
+      <View style={{ gap: 12 }} testID="bond-holdings">
+        <Txt size={fontSizes.lg} weight="extrabold" accessibilityRole="header">
+          Bonds
+        </Txt>
+        <Notice tone="danger">{loaded.message}</Notice>
+        <Button label="Try again" onPress={retry} height={48} testID="bond-holdings-retry" />
+      </View>
+    );
+  }
+  const { holdings, coupons, repayments, sales } = loaded.value;
+  const heldRepayments = repayments.filter((item) => item.status === "held");
+  const heldSales = sales.filter((sale) => sale.status === "sold" && sale.payoutStatus === "held");
+  if (holdings.length === 0 && heldRepayments.length === 0 && heldSales.length === 0) return null;
+  const noteFor = (holding: BondHolding): string | null => {
+    const held = coupons.filter((coupon) => coupon.holdingId === holding.id && coupon.status === "held");
+    if (held.length) {
+      return held.length === 1
+        ? `A coupon of ${formatAmount(held[0]!.amount)} is waiting for an account`
+        : `${held.length} coupons are waiting for an account`;
+    }
+    const sale = openSaleOf(sales, holding.id);
+    if (sale) return sale.status === "approved" ? "Sold, being paid to you" : "You asked to sell it";
+    if (holding.status === "active" && !holding.couponDestinationId) return "Choose where its coupons are paid";
+    return null;
+  };
+  const cell = columns > 1 ? { flexBasis: `${100 / columns - 2}%` as const, flexGrow: 1 } : undefined;
+  return (
+    <View style={{ gap: 12 }} testID="bond-holdings">
+      <Txt size={fontSizes.lg} weight="extrabold" accessibilityRole="header">
+        Bonds
+      </Txt>
+      <View style={columns > 1 ? styles.grid : { gap: 12 }}>
+        {holdings.map((holding) => (
+          <View key={holding.id} style={cell}>
+            <HoldingCard
+              holding={holding}
+              note={noteFor(holding)}
+              onPress={() =>
+                router.push(holding.status === "unpaid" ? `/pay/${bondPayableId(holding.id)}` : `/investment/bond/${holding.id}`)
+              }
+            />
+          </View>
+        ))}
+        {heldRepayments.map((item) => (
+          <View key={item.id} style={cell}>
+            <WaitingCard
+              title={item.name}
+              line={`Repaid ${formatDay(item.repaidOn)}`}
+              amount={item.amount}
+              onPress={() => router.push(payOutHref("repayment", item.id))}
+              testID={`repayment-${item.id}`}
+            />
+          </View>
+        ))}
+        {heldSales.map((sale) => (
+          <View key={sale.id} style={cell}>
+            <WaitingCard
+              title={sale.name}
+              line={sale.soldOn ? `Sold ${formatDay(sale.soldOn)}` : "Sold"}
+              amount={sale.amount!}
+              onPress={() => router.push(payOutHref("sale", sale.id))}
+              testID={`sale-${sale.id}`}
+            />
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Money from a bond that is no longer held, waiting for the client to name an account. */
+function WaitingCard({
+  title,
+  line,
+  amount,
+  onPress,
+  testID,
+}: {
+  title: string;
+  line: string;
+  amount: BondCoupon["amount"];
+  onPress: () => void;
+  testID: string;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${title}, ${line}, ${formatAmount(amount)} waiting for an account`}
+      onPress={onPress}
+      testID={testID}
+      style={({ pressed }) => [styles.card, { alignItems: "flex-start" }, pressed && { opacity: 0.85 }]}
+    >
+      <View style={{ flex: 1, gap: 4 }}>
+        <Txt size={fontSizes.xs} weight="bold" color={colors.warningText}>
+          Waiting for an account
+        </Txt>
+        <Txt size={fontSizes.lg} weight="bold">
+          {title}
+        </Txt>
+        <Txt size={fontSizes.sm} color={colors.muted}>
+          {line}
+        </Txt>
+      </View>
+      <Txt size={fontSizes.lg} weight="extrabold">
+        {formatAmount(amount)}
+      </Txt>
     </Pressable>
   );
 }

@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
+import { BondHoldingsSection } from "@/bonds/Parts";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
@@ -107,6 +108,7 @@ export default function Portfolio() {
             </View>
           </>
         ) : null}
+        <BondHoldingsSection columns={2} />
       </AppPage>
     );
   }
@@ -141,6 +143,7 @@ export default function Portfolio() {
           />
         </View>
       ) : null}
+      <BondHoldingsSection />
     </AppPage>
   );
 }
