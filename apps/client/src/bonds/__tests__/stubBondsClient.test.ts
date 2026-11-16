@@ -1,5 +1,4 @@
-import { demoPaidAt, markDemoPaid } from "@/demo/payables";
-import { demoPayable } from "@/demo/payables";
+import { demoPaidAt, demoPayable, markDemoPaid } from "@/demo/payables";
 
 import { createStubBondsClient } from "../stubBondsClient";
 import { bondPayableId, BondsError, holdingIdOf } from "../types";
@@ -85,6 +84,58 @@ describe("the demo bonds", () => {
     ).rejects.toEqual(new BondsError("too_many_unpaid"));
     clock.ms += 25 * 60 * 60 * 1000;
     await expect(bonds.listHoldings()).resolves.toEqual([]);
+  });
+});
+
+describe("the demo holdings", () => {
+  const sampled = () => createStubBondsClient({ delayMs: 0, now: () => ON_16_NOV, sample: "default" });
+
+  it("start with a coupon waiting for an account and one paid to MTN's holding", async () => {
+    const bonds = sampled();
+    const holdings = await bonds.listHoldings();
+    expect(holdings.map((holding) => [holding.code, holding.status, holding.couponDestinationId])).toEqual([
+      ["BOND-5Y-2031", "active", "demo-account-mtn"],
+      ["BOND-2Y-2028", "active", null],
+    ]);
+    const coupons = await bonds.listCoupons();
+    expect(coupons).toHaveLength(1);
+    expect(coupons[0]).toMatchObject({ couponDate: "2026-09-09", amount: ugx(56_000), status: "held", heldBecause: "no_destination" });
+  });
+
+  it("send a waiting coupon on to an account that can be paid, once", async () => {
+    const bonds = sampled();
+    const [coupon] = await bonds.listCoupons();
+    await expect(bonds.payOutHeld({ kind: "coupon", id: coupon!.id, destinationId: "demo-account-bank" })).rejects.toEqual(
+      new BondsError("account_not_ready"),
+    );
+    await bonds.payOutHeld({ kind: "coupon", id: coupon!.id, destinationId: "demo-account-mtn" });
+    await expect(bonds.listCoupons()).resolves.toMatchObject([{ status: "paid_out" }]);
+    await expect(bonds.payOutHeld({ kind: "coupon", id: coupon!.id, destinationId: "demo-account-mtn" })).rejects.toEqual(
+      new BondsError("already_sent"),
+    );
+  });
+
+  it("take one ask to sell per holding, once per key, cancelled until priced", async () => {
+    const bonds = sampled();
+    const [holding] = await bonds.listHoldings();
+    const request = { holdingId: holding!.id, destinationId: "demo-account-mtn", idempotencyKey: "sell-1" };
+    const sale = await bonds.sell(request);
+    expect(sale).toMatchObject({ status: "requested", face: ugx(2_000_000), amount: null });
+    await expect(bonds.sell(request)).resolves.toEqual(sale);
+    await expect(bonds.sell({ ...request, idempotencyKey: "sell-2" })).rejects.toEqual(new BondsError("cannot_sell"));
+    await expect(bonds.cancelSale(sale.id)).resolves.toMatchObject({ status: "cancelled" });
+    await expect(bonds.cancelSale(sale.id)).rejects.toEqual(new BondsError("cannot_cancel"));
+  });
+
+  it("change where coupons go from the next one", async () => {
+    const bonds = sampled();
+    const holdings = await bonds.listHoldings();
+    const waiting = holdings.find((holding) => holding.couponDestinationId === null)!;
+    await expect(bonds.chooseCouponDestination(waiting.id, "demo-account-mtn")).resolves.toMatchObject({
+      couponDestinationId: "demo-account-mtn",
+    });
+    // The coupon already paid keeps waiting to be sent on.
+    await expect(bonds.listCoupons()).resolves.toMatchObject([{ status: "held" }]);
   });
 });
 

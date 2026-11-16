@@ -1,7 +1,17 @@
 import { addDemoPayable, demoPaidAt } from "@/demo/payables";
 import { isAboveLargest } from "@/investing/limits";
 
-import { Amount, Bond, BondHolding, BondQuote, BondsClient, BondsError, bondPayableId } from "./types";
+import {
+  Amount,
+  Bond,
+  BondCoupon,
+  BondHolding,
+  BondQuote,
+  BondSale,
+  BondsClient,
+  BondsError,
+  bondPayableId,
+} from "./types";
 
 /**
  * An in-memory stand-in for the bond routes, so the screens can be built and tried without the
@@ -146,7 +156,16 @@ type Stored = {
   accrued: number;
   cost: number;
   createdAtMs: number;
+  /** A sample holding's start; a bought one starts on the day its payment is confirmed. */
+  startDate: string | null;
+  destinationId: string | null;
+  /** Coupons dated on or after this day go straight to the destination. */
+  destinationFrom: string | null;
 };
+
+/** The demo payout accounts (src/investing/stubInvestingClient.ts): only the MTN one can be paid now. */
+const READY_ACCOUNT = "demo-account-mtn";
+const KNOWN_ACCOUNTS = new Set([READY_ACCOUNT, "demo-account-bank"]);
 
 /** Shared by every demo client, because the demo payments remember payables by ID across them. */
 let nextId = 0;
@@ -154,8 +173,13 @@ let nextId = 0;
 export type StubBondsOptions = {
   delayMs?: number;
   now?: () => number;
-  /** The bond list fails, as when the network drops, to show that state. */
+  /** The bond list and the holdings fail, as when the network drops, to show that state. */
   failList?: boolean;
+  /**
+   * `default` starts with two holdings: one with a coupon waiting for an account, and one
+   * paying its coupons to MTN. `empty`, the default here, starts with none.
+   */
+  sample?: "default" | "empty";
 };
 
 export function createStubBondsClient(options: StubBondsOptions = {}): BondsClient {
@@ -163,6 +187,10 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
   const now = options.now ?? (() => Date.now());
   const stored = new Map<string, Stored>();
   const byKey = new Map<string, { id: string; request: string }>();
+  const sales = new Map<string, BondSale>();
+  const saleKeys = new Map<string, { id: string; request: string }>();
+  /** Coupons sent on by the client, by coupon ID. */
+  const sentOn = new Set<string>();
 
   // No timer at all without a delay, so a test's press that waits for the answer is not left
   // waiting on a timer nothing advances.
@@ -208,10 +236,42 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
     };
   }
 
-  function view(entry: Stored): BondHolding {
+  function startOf(entry: Stored): string | null {
     const paidAt = demoPaidAt(bondPayableId(entry.id));
+    return entry.startDate ?? (paidAt ? kampalaDay(Date.parse(paidAt)) : null);
+  }
+
+  /** Coupons dated after the start, up to today, before maturity. */
+  function couponsOf(entry: Stored): BondCoupon[] {
+    const start = startOf(entry);
+    if (!start) return [];
+    const on = today();
+    const amount = UGX(netCoupon(entry.issue, entry.face));
+    return couponDates(entry.issue)
+      .filter((date) => date > start && date <= on && date < entry.issue.maturityDate)
+      .map((date) => {
+        const id = `${entry.id}-coupon-${date}`;
+        const paid =
+          sentOn.has(id) ||
+          (entry.destinationId === READY_ACCOUNT && entry.destinationFrom !== null && date >= entry.destinationFrom);
+        return {
+          id,
+          holdingId: entry.id,
+          name: entry.issue.name,
+          couponDate: date,
+          amount,
+          status: paid ? "paid_out" : "held",
+          payoutId: paid ? `${id}-payout` : null,
+          heldBecause: paid ? null : entry.destinationId ? "destination_in_safety_wait" : "no_destination",
+        } satisfies BondCoupon;
+      })
+      .reverse();
+  }
+
+  function view(entry: Stored): BondHolding {
+    const start = startOf(entry);
     const payByMs = entry.createdAtMs + PAY_WINDOW_MS;
-    const status = paidAt ? "active" : now() > payByMs ? "cancelled" : "unpaid";
+    const status = start ? "active" : now() > payByMs ? "cancelled" : "unpaid";
     const period = periodOn(entry.issue, today());
     const coupon = netCoupon(entry.issue, entry.face);
     return {
@@ -225,14 +285,47 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
       status,
       createdAt: new Date(entry.createdAtMs).toISOString(),
       payBy: status === "unpaid" ? new Date(payByMs).toISOString() : null,
-      startDate: paidAt ? kampalaDay(Date.parse(paidAt)) : null,
+      startDate: start,
       maturityDate: entry.issue.maturityDate,
       coupon: UGX(coupon),
       couponsLeft: period.left,
       nextCouponDate: period.next,
       stillToCome: UGX(entry.face + coupon * period.left),
-      couponDestinationId: null,
+      couponDestinationId: entry.destinationId,
     };
+  }
+
+  function holding(holdingId: string): Stored {
+    const entry = stored.get(holdingId);
+    if (!entry) throw new BondsError("not_found");
+    return entry;
+  }
+
+  function checkAccount(destinationId: string) {
+    if (!KNOWN_ACCOUNTS.has(destinationId)) throw new BondsError("invalid");
+    if (destinationId !== READY_ACCOUNT) throw new BondsError("account_not_ready");
+  }
+
+  if ((options.sample ?? "empty") === "default") {
+    const sample = (code: string, face: number, startDate: string, destinationId: string | null) => {
+      const issue = ISSUES.find((item) => item.code === code)!;
+      nextId += 1;
+      const entry: Stored = {
+        id: `demo-holding-${nextId}`,
+        issue,
+        face,
+        price: issue.price ?? PAR,
+        accrued: 0,
+        cost: Math.ceil((face * (issue.price ?? PAR)) / PAR),
+        createdAtMs: Date.parse(`${startDate}T06:00:00Z`),
+        startDate,
+        destinationId,
+        destinationFrom: destinationId ? startDate : null,
+      };
+      stored.set(entry.id, entry);
+    };
+    sample("BOND-2Y-2028", 1_000_000, "2026-04-01", null);
+    sample("BOND-5Y-2031", 2_000_000, "2026-09-01", READY_ACCOUNT);
   }
 
   return {
@@ -275,6 +368,9 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
         accrued: quote.accrued.minor,
         cost: quote.cost.minor,
         createdAtMs: now(),
+        startDate: null,
+        destinationId: null,
+        destinationFrom: null,
       };
       stored.set(entry.id, entry);
       byKey.set(request.idempotencyKey, { id: entry.id, request: details });
@@ -284,6 +380,7 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
 
     async listHoldings() {
       await pause();
+      if (options.failList) throw new BondsError("unavailable");
       return [...stored.values()]
         .map(view)
         .filter((holding) => holding.status !== "cancelled")
@@ -292,9 +389,89 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
 
     async getHolding(holdingId) {
       await pause();
-      const entry = stored.get(holdingId);
-      if (!entry) throw new BondsError("not_found");
+      return view(holding(holdingId));
+    },
+
+    async chooseCouponDestination(holdingId, destinationId) {
+      await pause();
+      const entry = holding(holdingId);
+      if (destinationId !== null && !KNOWN_ACCOUNTS.has(destinationId)) throw new BondsError("invalid");
+      entry.destinationId = destinationId;
+      // Coupons already paid keep waiting; the next one goes to the new account.
+      const tomorrow = kampalaDay(now() + DAY_MS);
+      entry.destinationFrom = destinationId ? tomorrow : null;
       return view(entry);
+    },
+
+    async listCoupons() {
+      await pause();
+      return [...stored.values()].flatMap(couponsOf).sort((a, b) => b.couponDate.localeCompare(a.couponDate));
+    },
+
+    async listRepayments() {
+      await pause();
+      return [];
+    },
+
+    async sell(request) {
+      await pause();
+      const details = JSON.stringify([request.holdingId, request.destinationId]);
+      const known = saleKeys.get(request.idempotencyKey);
+      if (known) {
+        if (known.request !== details) throw new BondsError("key_reused");
+        return sales.get(known.id)!;
+      }
+      const entry = holding(request.holdingId);
+      if (view(entry).status !== "active") throw new BondsError("cannot_sell");
+      const open = [...sales.values()].some(
+        (sale) => sale.holdingId === entry.id && ["requested", "priced", "approved"].includes(sale.status),
+      );
+      if (open) throw new BondsError("cannot_sell");
+      checkAccount(request.destinationId);
+      nextId += 1;
+      const sale: BondSale = {
+        id: `demo-sale-${nextId}`,
+        holdingId: entry.id,
+        name: entry.issue.name,
+        face: UGX(entry.face),
+        requestedAt: new Date(now()).toISOString(),
+        status: "requested",
+        destinationId: request.destinationId,
+        price: null,
+        soldOn: null,
+        amount: null,
+        payoutStatus: null,
+        payoutId: null,
+        heldBecause: null,
+      };
+      sales.set(sale.id, sale);
+      saleKeys.set(request.idempotencyKey, { id: sale.id, request: details });
+      return sale;
+    },
+
+    async listSales() {
+      await pause();
+      return [...sales.values()].reverse();
+    },
+
+    async cancelSale(saleId) {
+      await pause();
+      const sale = sales.get(saleId);
+      if (!sale) throw new BondsError("not_found");
+      if (sale.status !== "requested") throw new BondsError("cannot_cancel");
+      const cancelled: BondSale = { ...sale, status: "cancelled" };
+      sales.set(saleId, cancelled);
+      return cancelled;
+    },
+
+    async payOutHeld(request) {
+      await pause();
+      if (request.kind !== "coupon") throw new BondsError("already_sent");
+      const coupon = [...stored.values()].flatMap(couponsOf).find((item) => item.id === request.id);
+      if (!coupon) throw new BondsError("not_found");
+      if (coupon.status !== "held") throw new BondsError("already_sent");
+      checkAccount(request.destinationId);
+      sentOn.add(coupon.id);
     },
   };
 }

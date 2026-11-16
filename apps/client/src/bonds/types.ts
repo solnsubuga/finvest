@@ -101,6 +101,83 @@ export type NewBondHolding = {
   idempotencyKey: string;
 };
 
+/** `paid_out` once a payout carries it, `held` while it waits for an account the client names. */
+export type MoneyStatus = "paid_out" | "held";
+
+/** A coupon paid to one of the client's holdings, after tax. */
+export type BondCoupon = {
+  id: string;
+  holdingId: string;
+  name: string;
+  couponDate: string;
+  amount: Amount;
+  status: MoneyStatus;
+  payoutId: string | null;
+  /** Why it waits: `no_destination`, or the payout's refusal. */
+  heldBecause: string | null;
+};
+
+/** A holding repaid at maturity: the face value and the last coupon, after tax. */
+export type BondRepayment = {
+  id: string;
+  holdingId: string;
+  name: string;
+  repaidOn: string;
+  face: Amount;
+  coupon: Amount;
+  /** What the client is paid: the face value and the last coupon. */
+  amount: Amount;
+  status: MoneyStatus;
+  payoutId: string | null;
+  heldBecause: string | null;
+};
+
+/**
+ * `requested`, `priced` and `approved` while Finvest's dealing desk sells it, then `sold`.
+ * `cancelled` by the client, or `closed` when the bond matured first and was repaid instead.
+ */
+export type SaleStatus = "requested" | "priced" | "approved" | "sold" | "cancelled" | "closed";
+
+/** A client's ask to sell a whole holding early, and what it paid, after tax. */
+export type BondSale = {
+  id: string;
+  holdingId: string;
+  name: string;
+  face: Amount;
+  /** ISO 8601, UTC. */
+  requestedAt: string;
+  status: SaleStatus;
+  destinationId: string;
+  /** Once sold: the price per 100, the day it settled, and what the client is paid. */
+  price: number | null;
+  soldOn: string | null;
+  amount: Amount | null;
+  payoutStatus: MoneyStatus | null;
+  payoutId: string | null;
+  heldBecause: string | null;
+};
+
+/** Money that waits for an account: a coupon, a repayment at maturity, or a sale's proceeds. */
+export type HeldKind = "coupon" | "repayment" | "sale";
+
+export type HeldPayOut = {
+  kind: HeldKind;
+  id: string;
+  /** One of the client's approved accounts past its first day. */
+  destinationId: string;
+  /** From confirming with the PIN, on a phone with one. A browser sends none. */
+  pinConfirmation?: string | null;
+};
+
+export type SaleRequest = {
+  holdingId: string;
+  /** The approved account the proceeds go to. */
+  destinationId: string;
+  /** Made for this request and sent with every try, so a double tap asks once. */
+  idempotencyKey: string;
+  pinConfirmation?: string | null;
+};
+
 export interface BondsClient {
   /** Live and paused issues that have not matured. */
   listBonds(): Promise<Bond[]>;
@@ -111,6 +188,19 @@ export interface BondsClient {
   /** Unpaid and active ones, newest first. */
   listHoldings(): Promise<BondHolding[]>;
   getHolding(holdingId: string): Promise<BondHolding>;
+  /** Where the holding's coupons are paid, or null to clear it so they wait. */
+  chooseCouponDestination(holdingId: string, destinationId: string | null): Promise<BondHolding>;
+  /** Every coupon paid to the client's holdings, newest first. */
+  listCoupons(): Promise<BondCoupon[]>;
+  listRepayments(): Promise<BondRepayment[]>;
+  /** Ask Finvest to sell the whole holding early. Nothing moves until the desk sells it. */
+  sell(request: SaleRequest): Promise<BondSale>;
+  /** The client's asks to sell, newest first. */
+  listSales(): Promise<BondSale[]>;
+  /** Allowed until the desk has priced it. */
+  cancelSale(saleId: string): Promise<BondSale>;
+  /** Send on money that waits for an account. */
+  payOutHeld(request: HeldPayOut): Promise<void>;
 }
 
 /**
@@ -138,6 +228,15 @@ export type BondsErrorCode =
   | "not_verified"
   | "too_many_unpaid"
   | "account_closing"
+  /** Selling: the holding is not running, has matured, or already has an ask waiting. */
+  | "cannot_sell"
+  /** The ask was priced since, so it can no longer be cancelled. */
+  | "cannot_cancel"
+  /** The money is no longer waiting: it was sent on already. */
+  | "already_sent"
+  | "account_not_ready"
+  | "over_limit"
+  | "pin_required"
   | "not_found"
   | "key_reused"
   | "invalid"
@@ -163,6 +262,12 @@ const messages: Record<BondsErrorCode, string> = {
   not_verified: "You can buy bonds once your ID check is approved.",
   too_many_unpaid: "You have five bond purchases waiting to be paid for. Pay for one of those, or let it lapse, before buying another.",
   account_closing: "Your request to close your account is being checked, so nothing new can start. To carry on, go to Profile, then Close account, and choose Keep my account open.",
+  cannot_sell: "This bond cannot be sold now. It may have matured, or you have already asked to sell it.",
+  cannot_cancel: "This can no longer be cancelled. Finvest has already priced the sale.",
+  already_sent: "This money is already on its way to you. Open your payouts to follow it.",
+  account_not_ready: "That account cannot be paid yet. A new account can be paid one day after it is approved.",
+  over_limit: "That is more than this account can take today. Choose a bank account, or try again tomorrow.",
+  pin_required: "Your PIN confirmation ran out or was already used. Try again and enter your PIN.",
   not_found: "We could not find that bond.",
   key_reused: "Something changed since you last tried. Go back and review your purchase again.",
   invalid: "We could not accept that. Go back, check the details and try again.",

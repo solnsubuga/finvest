@@ -174,7 +174,54 @@ describe("the bonds client for the real API", () => {
   it("uses the demo only when it is loaded", () => {
     const demo = { createStubBondsClient: jest.fn(() => ({ demo: true })) };
     expect(resolveBondsClient(demo as never)).toEqual({ demo: true });
-    expect(demo.createStubBondsClient).toHaveBeenCalledWith({ failList: false });
+    expect(demo.createStubBondsClient).toHaveBeenCalledWith({ failList: false, sample: "default" });
     expect(resolveBondsClient(null)).not.toEqual({ demo: true });
+  });
+
+  it("asks to sell with the key and the PIN, and words its refusals", async () => {
+    const sale = {
+      id: "S".repeat(20), holding_id: HOLDING, code: "BOND-10Y-2037", name: "10 Year Treasury Bond 2037", currency: "UGX",
+      face_minor: 1_000_000, requested_at: "2026-11-20T09:00:00Z", status: "requested", destination_id: "D".repeat(20),
+      price: null, sold_on: null, amount_minor: null, sold_at: null, payout_status: null, payout_id: null, held_because: null,
+    };
+    const path = `POST /client/bond-holdings/${HOLDING}/sale`;
+    const seen = serve({ [path]: json(sale, 201) });
+    const request = { holdingId: HOLDING, destinationId: "D".repeat(20), idempotencyKey: "sell-1", pinConfirmation: "pin-ok" };
+    await expect(createApiBondsClient().sell(request)).resolves.toMatchObject({ status: "requested", amount: null });
+    expect(JSON.parse(String(seen[0]!.body))).toEqual({ destination_id: "D".repeat(20), pin_confirmation: "pin-ok" });
+    expect(seen[0]!.headers["Idempotency-Key"]).toBe("sell-1");
+
+    serve({ [path]: refused("conflict", 409, [{ field_path: ["holding_id"], code: "sale_already_asked" }]) });
+    await expect(createApiBondsClient().sell(request)).rejects.toEqual(new BondsError("cannot_sell"));
+    serve({ [path]: refused("validation_failed", 422, [{ field_path: ["destination_id"], code: "destination_in_safety_wait" }]) });
+    await expect(createApiBondsClient().sell(request)).rejects.toEqual(new BondsError("account_not_ready"));
+    serve({ [path]: refused("pin_required", 428) });
+    await expect(createApiBondsClient().sell(request)).rejects.toEqual(new BondsError("pin_required"));
+  });
+
+  it("sends on held money through the route for its kind", async () => {
+    const coupon = {
+      id: "C".repeat(20), holding_id: HOLDING, code: "BOND-10Y-2037", name: "10 Year Treasury Bond 2037",
+      coupon_date: "2027-05-14", currency: "UGX", amount_minor: 72_000, status: "paid_out", payout_id: "P".repeat(20), held_because: null,
+    };
+    const seen = serve({ [`POST /client/bond-coupons/${"C".repeat(20)}/pay-out`]: json(coupon) });
+    await createApiBondsClient().payOutHeld({ kind: "coupon", id: "C".repeat(20), destinationId: "D".repeat(20) });
+    expect(JSON.parse(String(seen[0]!.body))).toEqual({ destination_id: "D".repeat(20) });
+    serve({ [`POST /client/bond-coupons/${"C".repeat(20)}/pay-out`]: refused("conflict", 409) });
+    await expect(
+      createApiBondsClient().payOutHeld({ kind: "coupon", id: "C".repeat(20), destinationId: "D".repeat(20) }),
+    ).rejects.toEqual(new BondsError("already_sent"));
+  });
+
+  it("chooses where coupons go, and cancels an ask that was priced since as refused", async () => {
+    const seen = serve({
+      [`PUT /client/bond-holdings/${HOLDING}/coupon-destination`]: json({ ...holding, status: "active", pay_by: null, payout_destination_id: "D".repeat(20) }),
+      [`POST /client/bond-sales/${"S".repeat(20)}/cancel`]: refused("conflict", 409),
+    });
+    await expect(createApiBondsClient().chooseCouponDestination(HOLDING, "D".repeat(20))).resolves.toMatchObject({
+      couponDestinationId: "D".repeat(20),
+    });
+    expect(JSON.parse(String(seen[0]!.body))).toEqual({ destination_id: "D".repeat(20) });
+    await expect(createApiBondsClient().cancelSale("S".repeat(20))).rejects.toEqual(new BondsError("cannot_cancel"));
   });
 });
