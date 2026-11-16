@@ -1,6 +1,6 @@
 # Bond holdings screenshots
 
-From the demo build (`EXPO_PUBLIC_DEMO_AUTH=1`), one image per screen and layout. Phone is 390 wide, wide is 1440.
+From the demo build (`EXPO_PUBLIC_DEMO_AUTH=1`), one image per screen and layout.
 
 ## Portfolio with bonds (phone)
 
