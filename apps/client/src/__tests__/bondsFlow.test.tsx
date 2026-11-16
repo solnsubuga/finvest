@@ -11,6 +11,7 @@ const mockBuy = jest.fn();
 const mockFailBond: { value: boolean } = { value: false };
 const mockBondSample: { value: "default" | "empty" } = { value: "empty" };
 const mockSell = jest.fn();
+const mockInvestSample: { value: "default" | "empty" } = { value: "empty" };
 
 jest.mock("@/auth/stubAuthClient", () => {
   const actual = jest.requireActual("@/auth/stubAuthClient");
@@ -30,7 +31,7 @@ jest.mock("@/investing/stubInvestingClient", () => {
   const actual = jest.requireActual("@/investing/stubInvestingClient");
   return {
     ...actual,
-    createStubInvestingClient: () => actual.createStubInvestingClient({ delayMs: 0, now: () => mockClock.ms, sample: "empty" }),
+    createStubInvestingClient: () => actual.createStubInvestingClient({ delayMs: 0, now: () => mockClock.ms, sample: mockInvestSample.value }),
   };
 });
 
@@ -102,6 +103,7 @@ beforeEach(() => {
   mockFailBond.value = false;
   mockBondSample.value = "empty";
   mockSell.mockClear();
+  mockInvestSample.value = "empty";
   mockClock.ms = Date.parse("2026-11-16T09:00:00Z");
 });
 
@@ -198,6 +200,23 @@ describe("bond holdings", () => {
     expect(within(section).getByText("Next coupon 22 Feb 2027")).toBeTruthy();
   });
 
+  it("says the totals leave bonds out, and treats a client with only bonds as not new", async () => {
+    await openPortfolio();
+    expect(screen.getByText("Your bonds are below. You have no other investments yet.")).toBeTruthy();
+    await act(async () => {
+      router.push("/");
+    });
+    expect(await screen.findByTestId("bonds-left-out")).toHaveTextContent(/leave out your bonds/);
+    expect(screen.queryByText(/Nothing here yet/)).toBeNull();
+  });
+
+  it("labels the investment totals beside bonds", async () => {
+    mockInvestSample.value = "default";
+    await openPortfolio();
+    expect(await screen.findByTestId("portfolio-totals")).toBeTruthy();
+    expect(await screen.findByText(/Each bond has its own figures under Bonds below/)).toBeTruthy();
+  });
+
   it("shows no bonds section to a client with none", async () => {
     await signIn();
     await act(async () => {
@@ -205,6 +224,8 @@ describe("bond holdings", () => {
     });
     await screen.findByTestId("go-invest");
     expect(screen.queryByTestId("bond-holdings")).toBeNull();
+    expect(screen.getByText(/You have no investments yet/)).toBeTruthy();
+    expect(screen.queryByTestId("bonds-left-out")).toBeNull();
   });
 
   it("sends a waiting coupon on, and chooses where the next ones go", async () => {

@@ -163,6 +163,27 @@ export function payOutHref(kind: HeldKind, id: string): string {
  * account. It loads on its own, so the investments above stay usable if it fails, and shows
  * nothing at all for a client with no bonds.
  */
+/**
+ * Whether the client holds a bond, waiting for payment or running. The investment totals leave
+ * bonds out, so a screen that shows them says so. Null until known, or when bonds cannot be read.
+ */
+export function useHoldsBonds(): boolean | null {
+  const client = useBonds();
+  const [loaded] = useFocusLoaded(useCallback(() => client.listHoldings(), [client]), describeBondsError);
+  return loaded.state === "ready" ? loaded.value.length > 0 : null;
+}
+
+/** Said beside totals that leave the client's bonds out. */
+export function BondsLeftOut({ below = false }: { below?: boolean }) {
+  return (
+    <Txt size={fontSizes.xs} color={colors.muted} testID="bonds-left-out">
+      {below
+        ? "These totals leave out your bonds. Each bond has its own figures under Bonds below."
+        : "These totals leave out your bonds. Each bond has its own figures in Portfolio."}
+    </Txt>
+  );
+}
+
 export function BondHoldingsSection({ columns = 1 }: { columns?: number }) {
   const router = useRouter();
   const client = useBonds();
