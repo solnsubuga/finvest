@@ -26,6 +26,7 @@ from app.shared.errors import ApplicationError
 from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier, FakeClock
+from tests.support.ids import just_before
 from tests.support.investments import PRESENT, approved_client, at, pay, request, started, today
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
@@ -353,14 +354,16 @@ async def test_a_run_of_failures_in_a_row_stops_the_run_and_pays_nothing_of_the_
             )
     with pytest.raises(accrual.RunFailing):
         async with worker_database.actor_transaction(SYSTEM) as session:
-            await accrual.accrue_batch(session, day(2), at(day(2)), after=fine.id[:-1])
+            await accrual.accrue_batch(session, day(2), at(day(2)), after=just_before(fine.id))
     # The whole batch rolled back, so the good one is still due too.
     assert (await reload(worker_database, fine.id)).accrued_through is None
     assert await entries_for(worker_database, fine.id) == 0
 
     # A failure carried in from the batch before counts towards the run.
     async with worker_database.actor_transaction(SYSTEM) as session:
-        first = await accrual.accrue_batch(session, day(2), at(day(2)), after=fine.id[:-1], limit=2)
+        first = await accrual.accrue_batch(
+            session, day(2), at(day(2)), after=just_before(fine.id), limit=2
+        )
     assert (first.posted, first.failed, first.failing) == (1, 1, 1)
     with pytest.raises(accrual.RunFailing):
         async with worker_database.actor_transaction(SYSTEM) as session:
@@ -587,7 +590,7 @@ async def test_the_run_tells_each_client_once_what_the_day_earned_after_tax(
     client = await approved_client(app_database, NOW)
     assert client.id is not None
     # Just this client: every test shares the database.
-    just_them = client.id[:-1]
+    just_them = just_before(client.id)
     for _ in range(2):
         investment = await request(app_database, client, NOW)
         await pay(worker_database, investment, investment.amount, NOW)

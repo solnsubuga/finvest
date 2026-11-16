@@ -26,6 +26,7 @@ from app.shared.errors import ApplicationError
 from app.shared.money import Currency, Money
 from app.shared.push_ids import push_id
 from tests.support.clock import AsyncBarrier
+from tests.support.ids import just_before
 from tests.support.investments import PRESENT, approved_client, at, pay, today
 from tests.support.jobs import run_due
 from tests.support.ledger import key, ugx
@@ -891,7 +892,9 @@ async def test_the_reminder_run_goes_a_page_at_a_time(
         await enqueue(
             session,
             JobRequest(
-                kind=SEND_REMINDERS_KIND, idempotency_key=first_key, payload={"after": first[:-1]}
+                kind=SEND_REMINDERS_KIND,
+                idempotency_key=first_key,
+                payload={"after": just_before(first)},
             ),
             now=at(today(), hour=5).now(),
         )
