@@ -57,8 +57,8 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       },
       {
         path: "support",
-        label: "Support and Messages",
-        title: "Support and messages",
+        label: "Support",
+        title: "Support",
         summary: "Conversations with clients.",
         permission: "support.view",
         phase: 1,

@@ -34,7 +34,7 @@ describe("console menu", () => {
     expect(nav.map((group) => group.title)).toEqual(["Daily work", "Clients and money"]);
     expect(labels(sessionFor("support"))).toEqual([
       "Overview",
-      "Support and Messages",
+      "Support",
       "Complaints",
       "Clients",
     ]);

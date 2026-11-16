@@ -164,7 +164,7 @@ describe("console shell", () => {
       .getAllByRole("link")
       .map((link) => link.textContent);
     // Every role also has its own devices, under the name at the foot of the menu.
-    expect(links).toEqual(["Overview", "Support and Messages", "Complaints", "Clients", "Your devices"]);
+    expect(links).toEqual(["Overview", "Support", "Complaints", "Clients", "Your devices"]);
     expect(within(nav).queryByText("Control")).not.toBeInTheDocument();
   });
 
@@ -190,7 +190,7 @@ describe("console shell", () => {
     await signIn(user, "support@finvest.test");
 
     const nav = (await screen.findAllByRole("navigation", { name: "Console" }))[0]!;
-    expect(await within(nav).findByRole("link", { name: "Support and Messages, 4 waiting" })).toBeInTheDocument();
+    expect(await within(nav).findByRole("link", { name: "Support, 4 waiting" })).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "Complaints, 5 waiting" })).toBeInTheDocument();
     // Overview carries no count, and support cannot open the money screens at all.
     expect(within(nav).getByRole("link", { name: "Overview" })).toBeInTheDocument();

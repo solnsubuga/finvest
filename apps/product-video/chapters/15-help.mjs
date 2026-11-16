@@ -12,7 +12,7 @@ export default {
   steps: [
     { caption: "Help starts with short answers to common questions", does: "Profile, Help, How interest works" },
     { caption: "Still unsure, Esther writes to the team", does: "Write to us, type the question, Send" },
-    { caption: "Grace answers with Esther's account beside her", does: "console: Support and Messages, read the chat and the client panel" },
+    { caption: "Grace answers with Esther's account beside her", does: "console: Support, read the chat and the client panel" },
     { caption: "A saved reply keeps answers the same for everyone", does: "Saved replies, save one, use it, add her name, Send, Mark as solved" },
     { caption: "The answer arrives in the app", does: "Esther: Help, Grace's reply" },
     { caption: "Moses makes a formal complaint and gets a reference", does: "Moses: Complaints, Make a complaint, A payment, details, Send" },
@@ -51,7 +51,7 @@ export default {
     await ensureSignedIn(page, "grace", "/overview");
     await t.start();
     await t.step("Grace answers with Esther's account beside her", { hold: 800 });
-    await t.click(page.getByRole("link", { name: /Support and Messages/ }));
+    await t.click(page.getByRole("link", { name: /^Support(,|$)/ }));
     await page.getByText("About this client").waitFor();
     await t.read(2400);
     await t.zoom(page.getByText("About this client").locator("xpath=.."), { hold: 2200 });

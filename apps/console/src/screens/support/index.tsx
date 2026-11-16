@@ -287,7 +287,7 @@ export function SupportScreen({
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <PageHeader title="Support and messages" summary={SUMMARY} />
+        <PageHeader title="Support" summary={SUMMARY} />
         <div role="tablist" aria-label="Support" className="flex flex-wrap gap-2">
           {tabs.map(({ id, label }) => (
             <button
