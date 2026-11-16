@@ -48,7 +48,8 @@ function demoWithdrawal(): {
 /** On the web, opening the demo at `/?sample=empty` starts as a new client with no investments. */
 function demoSample(): "default" | "empty" {
   const search = typeof window !== "undefined" ? window.location?.search : undefined;
-  return search?.includes("sample=empty") ? "empty" : "default";
+  // `?investments=none` empties the investments only, so the demo bonds show on their own.
+  return search?.includes("sample=empty") || search?.includes("investments=none") ? "empty" : "default";
 }
 
 function demoSearch(): string {

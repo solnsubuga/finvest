@@ -31,7 +31,8 @@ export default function Receipt() {
   // from the day after, so a weekend payment does not earn tomorrow.
   const investing = useInvesting();
   const [startDate, setStartDate] = useState<string | null>(null);
-  const investmentId = deposit?.status === "confirmed" ? deposit.payable.id : null;
+  // A bond holding starts the same way, but has no interest earning from a start date to show.
+  const investmentId = deposit?.status === "confirmed" && deposit.payable.kind !== "bond" ? deposit.payable.id : null;
   useEffect(() => {
     if (!investmentId) return;
     let live = true;
@@ -145,7 +146,9 @@ export default function Receipt() {
         <Notice tone="neutral">
           {goal
             ? `Your money is in. It is invested in ${product} and ${earning}. You can follow it on ${goal.goalName}.`
-            : `Your money is in. It is invested in ${deposit.payable.title} and ${earning}. You can follow it in Portfolio.`}
+            : deposit.payable.kind === "bond"
+              ? `Your money is in. Your part of the ${deposit.payable.title} is bought, and its coupons are paid every six months. You can follow it in Portfolio.`
+              : `Your money is in. It is invested in ${deposit.payable.title} and ${earning}. You can follow it in Portfolio.`}
         </Notice>
       </View>
       <View style={{ marginTop: 24 }}>

@@ -118,6 +118,9 @@ export default function Pay() {
     }
   };
 
+  // Bank transfers are not offered for bonds yet: a bond's price holds for a day, not three.
+  const bank = payable?.kind !== "bond";
+  const what = payable?.kind === "bond" ? "bond" : "investment";
   const cardShown = cardOffer !== null && cardOffer.refused !== "cards_unavailable";
   const cardOpen = cardShown && cardOffer.refused === null;
   const paying = cardOpen && method === "card" ? "card" : "mobile_money";
@@ -181,10 +184,10 @@ export default function Pay() {
         ) : null
       }
     >
-      <Stack.Screen options={{ title: "Pay for your investment" }} />
+      <Stack.Screen options={{ title: `Pay for your ${what}` }} />
       <BackButton fallback="/invest" />
       <View style={{ marginTop: 20 }}>
-        <Title>Pay for your investment</Title>
+        <Title>{`Pay for your ${what}`}</Title>
       </View>
 
       {loadError ? (
@@ -198,7 +201,7 @@ export default function Pay() {
           <AmountCard
             title={payable.title}
             amount={payable.amount}
-            note="Your investment starts as soon as the payment is confirmed."
+            note={`Your ${what} starts as soon as the payment is confirmed.`}
           />
           {error ? <Notice tone="danger">{error}</Notice> : null}
           {locked ? (
@@ -206,7 +209,7 @@ export default function Pay() {
               {`Your first request may already be with ${networkName[network]}, so the network and number are fixed. Pressing Pay again repeats that same request. It does not ask for the money twice.`}
             </Notice>
           ) : null}
-          {cardShown && cardOffer.refused ? <CardRefusedNotice offer={cardOffer} /> : null}
+          {cardShown && cardOffer.refused ? <CardRefusedNotice offer={cardOffer} bank={bank} what={what} /> : null}
           {cardShown ? (
             <View style={{ gap: 8 }} accessibilityRole="radiogroup">
               <Eyebrow>Pay with</Eyebrow>
@@ -223,7 +226,9 @@ export default function Pay() {
                 label="Card"
                 hint={
                   cardOffer.refused === "channel_paused"
-                    ? "Paused for now. Try mobile money or a bank transfer."
+                    ? bank
+                      ? "Paused for now. Try mobile money or a bank transfer."
+                      : "Paused for now. Try mobile money."
                     : cardOffer.refused
                       ? `Up to ${formatMoney(cardOffer.maxPayment)} a payment, charge included`
                       : "Visa or Mastercard, debit or credit"
@@ -239,7 +244,7 @@ export default function Pay() {
           {paying === "card" && cardOffer ? (
             <View style={{ gap: 12 }} testID="card-charge">
               <View style={styles.breakdown}>
-                <BreakdownRow label="Investment" value={formatMoney(cardOffer.amount)} />
+                <BreakdownRow label={what === "bond" ? "Bond" : "Investment"} value={formatMoney(cardOffer.amount)} />
                 <BreakdownRow label="Card charge" value={formatMoney(cardOffer.charge)} />
                 <BreakdownRow label="You pay" value={formatMoney(cardOffer.total)} strong />
               </View>
@@ -319,7 +324,7 @@ export default function Pay() {
                   // Guess the network again from the typed number. The client can still change it.
                   if (nationalDigits(text).length >= 2) setNetwork(likelyNetwork(nationalDigits(text)));
                 }}
-                hint={`${networkName[network]} sends the prompt to this number, and whoever has the phone approves it with their mobile money PIN. The payment counts for your investment.`}
+                hint={`${networkName[network]} sends the prompt to this number, and whoever has the phone approves it with their mobile money PIN. The payment counts for your ${what}.`}
                 error={numberError}
                 testID="pay-other-number"
               />
@@ -342,7 +347,7 @@ export default function Pay() {
             )}
             </>
           )}
-          {locked ? null : (
+          {locked || !bank ? null : (
             <Pressable
               accessibilityRole="link"
               onPress={() => router.push(`/pay/bank/${payable.id}`)}
@@ -369,24 +374,29 @@ export default function Pay() {
   );
 }
 
-function CardRefusedNotice({ offer }: { offer: CardOffer }) {
+/** Why cards cannot take this payment, and the other ways it can be paid. Bonds have no bank transfer yet. */
+function CardRefusedNotice({ offer, bank, what }: { offer: CardOffer; bank: boolean; what: "bond" | "investment" }) {
   if (offer.refused === "channel_paused") {
     return (
       <Notice tone="warning" title="Card payments are paused">
-        Card payments are not working right now. Mobile money and bank transfer work as usual.
+        {bank
+          ? "Card payments are not working right now. Mobile money and bank transfer work as usual."
+          : "Card payments are not working right now. Mobile money works as usual."}
       </Notice>
     );
   }
   if (offer.refused === "above_card_payment_limit") {
     return (
       <Notice tone="warning" title={`Cards take up to ${formatMoney(offer.maxPayment)} a payment`}>
-        With the card charge, this payment is above that. Pay it by mobile money or bank transfer, or invest a smaller amount by card.
+        {bank
+          ? "With the card charge, this payment is above that. Pay it by mobile money or bank transfer, or invest a smaller amount by card."
+          : `With the card charge, this payment is above that. Pay it by mobile money, or buy a smaller ${what} by card.`}
       </Notice>
     );
   }
   return (
     <Notice tone="warning" title="You have paid as much by card as 30 days allow">
-      Pay this one by mobile money or bank transfer.
+      {bank ? "Pay this one by mobile money or bank transfer." : "Pay this one by mobile money."}
     </Notice>
   );
 }

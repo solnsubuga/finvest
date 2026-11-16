@@ -1,6 +1,7 @@
 import { Platform } from "react-native";
 import type {
   BankTransferDetails,
+  BondHoldingOut,
   CardOffer as CardOfferView,
   ClientInvestmentOut,
   PaymentView,
@@ -8,6 +9,7 @@ import type {
 } from "@finvest/api-client/client";
 
 import { api, ApiError, isAccountClosing } from "@/api/http";
+import { bondPayableId, holdingIdOf } from "@/bonds/types";
 
 import { shortReference } from "./reference";
 import {
@@ -65,6 +67,16 @@ export function toPayable(view: ClientInvestmentOut): Payable {
     kind: "investment",
     title: view.product_name,
     amount: { minor: view.amount_minor, currency: view.currency },
+  };
+}
+
+/** A bond purchase, paid for like an investment under its own ID. Its amount is the cost. */
+export function toBondPayable(view: BondHoldingOut): Payable {
+  return {
+    id: bondPayableId(view.id),
+    kind: "bond",
+    title: view.name,
+    amount: { minor: view.cost_minor, currency: view.currency },
   };
 }
 
@@ -223,24 +235,47 @@ export function createApiPaymentsClient(): PaymentsClient {
   // every status check of its payment.
   const payables = new Map<string, Payable>();
 
-  async function payableFor(investmentId: string): Promise<Payable> {
-    const known = payables.get(investmentId);
+  /** An investment's payable, or a bond purchase's when the ID names one ("bond~<holding>"). */
+  async function readPayable(payableId: string): Promise<{ payable: Payable; payableNow: boolean }> {
+    const holdingId = holdingIdOf(payableId);
+    if (holdingId !== null) {
+      const view = await api("GET /client/bond-holdings/{holding_id}", { params: { holding_id: holdingId } });
+      return { payable: toBondPayable(view), payableNow: view.status === "unpaid" };
+    }
+    const view = await api("GET /client/investments/{investment_id}", { params: { investment_id: payableId } });
+    return { payable: toPayable(view), payableNow: view.status === "awaiting_payment" };
+  }
+
+  async function payableFor(payableId: string): Promise<Payable> {
+    const known = payables.get(payableId);
     if (known) return known;
-    const payable = toPayable(await api("GET /client/investments/{investment_id}", { params: { investment_id: investmentId } }));
-    payables.set(investmentId, payable);
+    const { payable } = await readPayable(payableId);
+    payables.set(payableId, payable);
     return payable;
   }
 
+  /** What a payment pays for, from the payment itself: an investment, or a bond purchase. */
+  function payableIdOf(view: PaymentView): string {
+    return view.purpose === "bond" ? bondPayableId(view.investment_id) : view.investment_id;
+  }
+
+  function livePayment(payableId: string): Promise<PaymentView> {
+    const holdingId = holdingIdOf(payableId);
+    return holdingId !== null
+      ? api("GET /client/bond-holdings/{holding_id}/payment", { params: { holding_id: holdingId } })
+      : api("GET /client/investments/{investment_id}/payment", { params: { investment_id: payableId } });
+  }
+
   /**
-   * A 409 means the investment is already paid for, or has a payment under way, or can no
-   * longer be paid. The investment's live payment tells which.
+   * A 409 means the investment or bond purchase is already paid for, or has a payment under
+   * way, or can no longer be paid. Its live payment tells which.
    */
-  async function whyRefused(investmentId: string, error: unknown): Promise<PaymentError> {
+  async function whyRefused(payableId: string, error: unknown): Promise<PaymentError> {
     if (!(error instanceof ApiError) || error.code !== "conflict" || isAccountClosing(error)) {
       return toPaymentError(error, "pay");
     }
     try {
-      const live = await api("GET /client/investments/{investment_id}/payment", { params: { investment_id: investmentId } });
+      const live = await livePayment(payableId);
       if (live.status === "confirmed") return new PaymentError("not_payable");
       return new PaymentError("already_paying", {
         id: live.id,
@@ -253,15 +288,14 @@ export function createApiPaymentsClient(): PaymentsClient {
 
   async function readPayment(paymentId: string): Promise<{ view: PaymentView; payable: Payable }> {
     const view = await api("GET /client/payments/{payment_id}", { params: { payment_id: paymentId } });
-    return { view, payable: await payableFor(view.investment_id) };
+    return { view, payable: await payableFor(payableIdOf(view)) };
   }
 
   return {
     async getPayable(payableId) {
       try {
-        const view = await api("GET /client/investments/{investment_id}", { params: { investment_id: payableId } });
-        if (view.status !== "awaiting_payment") throw new PaymentError("not_payable");
-        const payable = toPayable(view);
+        const { payable, payableNow } = await readPayable(payableId);
+        if (!payableNow) throw new PaymentError("not_payable");
         payables.set(payable.id, payable);
         return payable;
       } catch (error) {
@@ -271,17 +305,26 @@ export function createApiPaymentsClient(): PaymentsClient {
 
     async payWithMobileMoney(request) {
       let view: PaymentView;
+      const holdingId = holdingIdOf(request.payableId);
+      const body = { network: request.network, phone: request.payer };
       try {
-        view = await api("POST /client/investments/{investment_id}/payments/mobile-money", {
-          params: { investment_id: request.payableId },
-          body: { network: request.network, phone: request.payer },
-          idempotencyKey: request.idempotencyKey,
-        });
+        view =
+          holdingId !== null
+            ? await api("POST /client/bond-holdings/{holding_id}/payments/mobile-money", {
+                params: { holding_id: holdingId },
+                body,
+                idempotencyKey: request.idempotencyKey,
+              })
+            : await api("POST /client/investments/{investment_id}/payments/mobile-money", {
+                params: { investment_id: request.payableId },
+                body,
+                idempotencyKey: request.idempotencyKey,
+              });
       } catch (error) {
         throw await whyRefused(request.payableId, error);
       }
       try {
-        return toDeposit(view, await payableFor(view.investment_id));
+        return toDeposit(view, await payableFor(payableIdOf(view)));
       } catch (error) {
         throw toPaymentError(error);
       }
@@ -289,10 +332,11 @@ export function createApiPaymentsClient(): PaymentsClient {
 
     async getCardOffer(payableId) {
       try {
+        const holdingId = holdingIdOf(payableId);
         return toCardOffer(
-          await api("GET /client/investments/{investment_id}/payments/card", {
-            params: { investment_id: payableId },
-          }),
+          holdingId !== null
+            ? await api("GET /client/bond-holdings/{holding_id}/payments/card", { params: { holding_id: holdingId } })
+            : await api("GET /client/investments/{investment_id}/payments/card", { params: { investment_id: payableId } }),
         );
       } catch (error) {
         throw toPaymentError(error, "pay");
@@ -301,11 +345,18 @@ export function createApiPaymentsClient(): PaymentsClient {
 
     async payWithCard(request) {
       let view: PaymentView;
+      const holdingId = holdingIdOf(request.payableId);
       try {
-        view = await api("POST /client/investments/{investment_id}/payments/card", {
-          params: { investment_id: request.payableId },
-          idempotencyKey: request.idempotencyKey,
-        });
+        view =
+          holdingId !== null
+            ? await api("POST /client/bond-holdings/{holding_id}/payments/card", {
+                params: { holding_id: holdingId },
+                idempotencyKey: request.idempotencyKey,
+              })
+            : await api("POST /client/investments/{investment_id}/payments/card", {
+                params: { investment_id: request.payableId },
+                idempotencyKey: request.idempotencyKey,
+              });
       } catch (error) {
         // Paused or over a limit since the offer was read: the pay screen reads it again.
         if (error instanceof ApiError && (error.status === 503 || error.code === "validation_failed")) {
@@ -314,7 +365,7 @@ export function createApiPaymentsClient(): PaymentsClient {
         throw await whyRefused(request.payableId, error);
       }
       try {
-        return toCardPayment(view, await payableFor(view.investment_id));
+        return toCardPayment(view, await payableFor(payableIdOf(view)));
       } catch (error) {
         throw toPaymentError(error);
       }
@@ -350,6 +401,8 @@ export function createApiPaymentsClient(): PaymentsClient {
     },
 
     async getBankInstructions(payableId) {
+      // Bank transfers are not offered for bonds yet (docs/bonds.md).
+      if (holdingIdOf(payableId) !== null) throw new PaymentError("not_payable");
       let details: BankTransferDetails;
       try {
         details = await api("GET /client/investments/{investment_id}/bank-transfer-details", {
@@ -379,6 +432,7 @@ export function createApiPaymentsClient(): PaymentsClient {
     },
 
     async submitBankReceipt(submission) {
+      if (holdingIdOf(submission.payableId) !== null) throw new PaymentError("not_payable");
       let view: PaymentView;
       try {
         view = await api("POST /client/investments/{investment_id}/payments/bank-transfer", {
@@ -396,7 +450,7 @@ export function createApiPaymentsClient(): PaymentsClient {
         throw await whyRefused(submission.payableId, error);
       }
       try {
-        return toBankTransfer(view, await payableFor(view.investment_id));
+        return toBankTransfer(view, await payableFor(payableIdOf(view)));
       } catch (error) {
         throw toPaymentError(error);
       }

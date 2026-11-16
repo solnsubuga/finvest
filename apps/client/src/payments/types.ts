@@ -16,7 +16,7 @@ export type Network = "mtn" | "airtel";
 /** What the client is paying for. The amount is fixed by the investment, not typed on the pay screen. */
 export type Payable = {
   id: string;
-  kind: "investment" | "goal";
+  kind: "investment" | "goal" | "bond";
   /** "91 Day Treasury Bill" */
   title: string;
   amount: Money;

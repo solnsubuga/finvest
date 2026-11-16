@@ -300,4 +300,78 @@ describe("the payments client for the real API", () => {
     await expect(client.getBankInstructions(INVESTMENT)).rejects.toEqual(new PaymentError("unavailable"));
   });
 
+  describe("for a bond purchase", () => {
+    const HOLDING = "H".repeat(20);
+    const BOND = `bond~${HOLDING}`;
+    const holding = (status = "unpaid") => ({
+      id: HOLDING, code: "BOND-10Y-2037", name: "10 Year Treasury Bond 2037", currency: "UGX",
+      face_minor: 1_000_000, price: 985_000, accrued_minor: 883, cost_minor: 985_883, status,
+      created_at: "2026-11-16T09:00:00Z", pay_by: "2026-11-17T09:00:00Z", start_date: null,
+      maturity_date: "2037-05-14", coupon_minor: 72_000, coupons_left: 21, next_coupon_date: "2027-05-14",
+      still_to_come_minor: 2_512_000, payout_destination_id: null,
+    });
+    const bondPayment = (overrides: Record<string, unknown> = {}) =>
+      payment({ investment_id: HOLDING, purpose: "bond", amount: { minor: 985_883, currency: "UGX" }, ...overrides });
+
+    it("reads what is owed from the holding: its cost", async () => {
+      serve({ [`GET /client/bond-holdings/${HOLDING}`]: json(holding()) });
+      await expect(createApiPaymentsClient().getPayable(BOND)).resolves.toEqual({
+        id: BOND,
+        kind: "bond",
+        title: "10 Year Treasury Bond 2037",
+        amount: { minor: 985_883, currency: "UGX" },
+      });
+      serve({ [`GET /client/bond-holdings/${HOLDING}`]: json(holding("active")) });
+      await expect(createApiPaymentsClient().getPayable(BOND)).rejects.toEqual(new PaymentError("not_payable"));
+    });
+
+    it("pays by mobile money and card through the holding's routes", async () => {
+      const seen = serve({
+        [`POST /client/bond-holdings/${HOLDING}/payments/mobile-money`]: json(bondPayment(), 201),
+        [`GET /client/bond-holdings/${HOLDING}`]: json(holding()),
+        [`GET /client/bond-holdings/${HOLDING}/payments/card`]: json({
+          amount: { minor: 985_883, currency: "UGX" },
+          charge: { minor: 34_506, currency: "UGX" },
+          total: { minor: 1_020_389, currency: "UGX" },
+          max_payment: { minor: 5_000_000, currency: "UGX" },
+          refused: null,
+        }),
+      });
+      const client = createApiPaymentsClient();
+      const deposit = await client.payWithMobileMoney({ ...request, payableId: BOND });
+      expect(seen[0]!.headers["Idempotency-Key"]).toBe("key-1");
+      expect(deposit.payable).toMatchObject({ id: BOND, kind: "bond", title: "10 Year Treasury Bond 2037" });
+      await expect(client.getCardOffer!(BOND)).resolves.toMatchObject({ total: { minor: 1_020_389, currency: "UGX" } });
+      expect(seen.some((call) => call.url.startsWith("/client/investments"))).toBe(false);
+    });
+
+    it("reads a bond payment's payable from the holding, by the payment's purpose", async () => {
+      const seen = serve({
+        [`GET /client/payments/${PAYMENT}`]: json(bondPayment({ status: "confirmed", confirmed_at: "2026-11-16T09:05:00Z" })),
+        [`GET /client/bond-holdings/${HOLDING}`]: json(holding("active")),
+      });
+      await expect(createApiPaymentsClient().getDeposit(PAYMENT)).resolves.toMatchObject({
+        status: "confirmed",
+        payable: { id: BOND, kind: "bond" },
+      });
+      expect(seen.map((call) => call.url)).toEqual([`/client/payments/${PAYMENT}`, `/client/bond-holdings/${HOLDING}`]);
+    });
+
+    it("opens the holding's payment under way when the API says conflict", async () => {
+      serve({
+        [`POST /client/bond-holdings/${HOLDING}/payments/mobile-money`]: refused("conflict", 409),
+        [`GET /client/bond-holdings/${HOLDING}/payment`]: json(bondPayment({ status: "awaiting_approval" })),
+      });
+      const underWay = await createApiPaymentsClient()
+        .payWithMobileMoney({ ...request, payableId: BOND })
+        .catch((error: unknown) => error);
+      expect(openPaymentHref(underWay)).toBe(`/pay/deposit/${PAYMENT}`);
+    });
+
+    it("offers no bank transfer for a bond", async () => {
+      serve({});
+      const client = createApiPaymentsClient();
+      await expect(client.getBankInstructions(BOND)).rejects.toEqual(new PaymentError("not_payable"));
+    });
+  });
 });
