@@ -105,6 +105,7 @@ async def test_each_kind_of_stopped_work_is_counted(
         "schedules_late": 0,
         "payouts_waiting_on_wallet": 0,
         "interest_behind": 0,
+        "bond_sales_unsettled": 0,
     }
 
 

@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.infrastructure.database import Database
+from app.infrastructure.operations import operations_signals
 from app.modules.bonds import coupons, holdings, maturity, sales
 from app.modules.bonds.domain.coupons import HoldReason
 from app.modules.bonds.domain.holdings import HoldingStatus
@@ -220,6 +221,31 @@ async def test_a_holding_sold_by_two_people_is_paid_the_price_and_interest_after
                     session, client, holding.id, destination_id=None, clock=clock
                 )
         assert closed.value.code == "conflict"
+
+
+async def test_a_sale_left_approved_raises_the_alert_until_it_is_paid(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = now()
+    client = await approved_client(app_database, clock)
+    destination_id = await approved_destination(app_database, client, clock)
+    soon, later = clock.now() + timedelta(minutes=50), clock.now() + timedelta(hours=2)
+
+    async def unsettled() -> tuple[int, int]:
+        signals = [await operations_signals(app_database, at) for at in (soon, later)]
+        return signals[0]["bond_sales_unsettled"], signals[1]["bond_sales_unsettled"]
+
+    async with live_issue(app_database, clock, **dates_for(maturity_day())) as code:
+        holding = await active(app_database, worker_database, client, code, clock)
+        asked = await ask(app_database, client, holding.id, destination_id, clock)
+        await price(app_database, new_staff(), asked.id, clock)
+        before_soon, before_later = await unsettled()
+        await approve(app_database, new_staff(), asked.id, clock)
+        # Not within the hour the worker has to pay it, and once that hour has passed.
+        assert await unsettled() == (before_soon, before_later + 1)
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            assert await sales.settle(session, asked.id, past_safety_wait(clock)) is not None
+        assert await unsettled() == (before_soon, before_later)
 
 
 async def test_two_people_price_and_decide_and_the_client_cancels_before_a_price(

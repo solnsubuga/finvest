@@ -17,6 +17,7 @@ SIGNALS = (
     "schedules_late",
     "payouts_waiting_on_wallet",
     "interest_behind",
+    "bond_sales_unsettled",
 )
 
 
