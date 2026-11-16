@@ -40,7 +40,7 @@ The console menu shows how much work waits beside the screens that have some, as
 | Review Queue | `review_queue.view` | Every item this reader's review queue lists |
 | Identity Checks | `identity_checks.view` | Identity checks a person must decide |
 | Maturities | `maturities.view` | Terms past their maturity date the run has not closed, plus matured money held for the client |
-| Support and Messages | `support.view` | Open chats whose last message is the client's |
+| Support | `support.view` | Open chats whose last message is the client's |
 | Complaints | `complaints.view` | Open complaints |
 | Reconciliation | `reconciliation.view` | Bank transfers still to find on the statement or to approve |
 | Rates | `rates.view` | Rate changes proposed and not yet decided |
