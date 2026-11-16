@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { BondHoldingsSection } from "@/bonds/Parts";
+import { BondHoldingsSection, BondsLeftOut, useHoldsBonds } from "@/bonds/Parts";
 import { AppPage } from "@/components/AppPage";
 import { Notice } from "@/components/Blocks";
 import { Button } from "@/components/Button";
@@ -35,6 +35,8 @@ export default function Portfolio() {
   const [totals, retryTotals] = useFocusLoaded(useCallback(() => client.getPortfolio("UGX"), [client]));
   const [investments, retry] = useFocusLoaded(useCallback(() => client.listInvestments(), [client]));
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // The totals leave bonds out: they are listed, with their own figures, under Bonds.
+  const holdsBonds = useHoldsBonds();
 
   const open = (investment: Investment) => router.push(`/investment/${investment.id}`);
   // Opened from Home's Withdraw or Send: go straight to that step when the investment allows it.
@@ -56,7 +58,11 @@ export default function Portfolio() {
     <Failed message={failed.message} onRetry={retryAll} />
   ) : investments.state === "ready" && investments.value.length === 0 ? (
     <View style={{ gap: 12 }}>
-      <Notice tone="neutral">You have no investments yet. Pick a product to make your first one.</Notice>
+      <Notice tone="neutral">
+        {holdsBonds
+          ? "Your bonds are below. You have no other investments yet."
+          : "You have no investments yet. Pick a product to make your first one."}
+      </Notice>
       <Button label="See what you can invest in" onPress={() => router.navigate("/invest")} testID="go-invest" />
     </View>
   ) : null;
@@ -83,6 +89,7 @@ export default function Portfolio() {
         {!content && totals.state === "ready" ? (
           <>
             <WideTiles totals={totals.value} />
+            {holdsBonds ? <BondsLeftOut below /> : null}
             {totals.value.products.length ? (
               <View style={styles.splitCard}>
                 <Txt size={13} color={colors.muted}>
@@ -120,6 +127,7 @@ export default function Portfolio() {
       {!content && totals.state === "ready" && investments.state === "ready" ? (
         <View style={{ gap: 12 }}>
           <TotalsCard totals={totals.value} />
+          {holdsBonds ? <BondsLeftOut below /> : null}
           <Txt size={12} weight="bold" color={colors.muted} style={styles.eyebrow} accessibilityRole="header">
             Your investments
           </Txt>

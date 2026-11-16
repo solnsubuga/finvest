@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useActivity } from "@/activity/ActivityProvider";
 import { shortDay as activityDay } from "@/activity/build";
 import { useAuth } from "@/auth/AuthProvider";
+import { BondsLeftOut, useHoldsBonds } from "@/bonds/Parts";
 import { EmailProofBanner } from "@/auth/EmailProofBanner";
 import { useSecondSteps } from "@/auth/useSecondSteps";
 import { AppPage } from "@/components/AppPage";
@@ -160,7 +161,9 @@ export default function Home() {
   const [recent] = useFocusLoaded(useCallback(() => (wide ? activity.list() : Promise.resolve({ items: [], since: null })), [activity, wide]));
 
   const ready = portfolio.state === "ready" ? portfolio.value : null;
-  const empty = ready !== null && ready.activeCount === 0 && ready.awaitingPaymentCount === 0;
+  // The totals leave bonds out. A client who holds only bonds is not new here.
+  const holdsBonds = useHoldsBonds();
+  const empty = ready !== null && ready.activeCount === 0 && ready.awaitingPaymentCount === 0 && holdsBonds !== true;
   const example = useFirstExample(empty);
   const setUp = useSetUpSteps(ready ? ready.openGoals : null, moving !== null);
 
@@ -267,6 +270,7 @@ export default function Home() {
                     />
                   </View>
                 </View>
+                {holdsBonds ? <BondsLeftOut /> : null}
                 <View style={[styles.wideRow, { alignItems: "flex-start" }]}>
                   <View style={{ flex: 3, minWidth: 480, gap: 16 }}>
                     {running.length ? (
@@ -365,6 +369,7 @@ export default function Home() {
         ) : (
           <>
             <TotalCard portfolio={ready} />
+            {holdsBonds ? <BondsLeftOut /> : null}
             <QuickActions actions={actions} />
             <HoldingRows
               portfolio={ready}
