@@ -1,5 +1,6 @@
 /**
- * Draws the link preview pictures in public/share/ from src/data/share.ts.
+ * Draws the link preview pictures in public/share/ from src/data/share.ts, and the logo
+ * (public/share/logo.png) and the home screen icon (public/apple-touch-icon.png).
  *
  *   pnpm share-images
  *
@@ -124,6 +125,19 @@ try {
     const png = await tab.screenshot({ type: "png" });
     writeFileSync(new URL(`${image.name}.png`, out), png);
     console.log(`public/share/${image.name}.png ${Math.round(png.length / 1024)} KB`);
+  }
+  // The mark alone, for search results (the logo in src/lib/structured-data.ts) and for a phone's
+  // home screen (apple-touch-icon.png).
+  for (const [file, size] of [
+    [new URL("logo.png", out), 512],
+    [new URL("../apple-touch-icon.png", out), 180],
+  ] as const) {
+    await tab.setViewportSize({ width: size, height: size });
+    await tab.setContent(
+      `<!doctype html><html><body style="margin:0;background:${colors.black}">${mark(size, colors.black)}</body></html>`,
+    );
+    writeFileSync(file, await tab.screenshot({ type: "png" }));
+    console.log(`${file.pathname.split("/public/")[1]} ${size}x${size}`);
   }
 } finally {
   await browser.close();

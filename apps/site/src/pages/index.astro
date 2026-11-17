@@ -4,6 +4,7 @@ import Categories from "../components/Categories.astro";
 import Cta from "../components/Cta.astro";
 import Faq from "../components/Faq.astro";
 import Icon from "../components/Icon.astro";
+import IconCard from "../components/IconCard.astro";
 import LiveBonds from "../components/LiveBonds.astro";
 import LiveRates from "../components/LiveRates.astro";
 import PhoneMock from "../components/PhoneMock.astro";
@@ -11,8 +12,11 @@ import ProductCard from "../components/ProductCard.astro";
 import { signupUrl } from "../config.ts";
 import { fallback } from "../data/fallback.ts";
 import { minimumLabel } from "../lib/format.ts";
+import { faqPage, organisation, webSite } from "../lib/structured-data.ts";
 import { company } from "../data/company.ts";
 import Base from "../layouts/Base.astro";
+
+const site = Astro.site ?? new URL("https://finvestug.com");
 
 // The product the hero talks about: the shortest bill open to new investments.
 const lead = fallback.products
@@ -26,7 +30,7 @@ const steps = [
   },
   {
     title: "Choose and pay",
-    text: "Pick a treasury bill or a goal, review it, then pay by MTN, Airtel or bank transfer. It starts when the payment is confirmed.",
+    text: "Pick a Treasury bill, a Treasury bond or a goal, review it, then pay by MTN Mobile Money, Airtel Money or bank transfer. It starts when the payment is confirmed.",
   },
   {
     title: "Watch it grow",
@@ -37,8 +41,8 @@ const steps = [
 const safety = [
   {
     icon: "bank",
-    title: "Your bills, your name",
-    text: `Treasury bills are issued by the Government of Uganda and recorded against your own account${company.custodian ? ` at ${company.custodian}` : ""}.`,
+    title: "Your investments, your name",
+    text: `Treasury bills and bonds are issued by the Government of Uganda and recorded against your own account${company.custodian ? ` at ${company.custodian}` : ""}.`,
   },
   {
     icon: "key",
@@ -52,11 +56,50 @@ const safety = [
   },
 ] as const;
 
+// The things Finvest does beyond buying an investment, all in the client app today.
+const features = [
+  {
+    icon: "target",
+    title: "Goals",
+    text: "Save for school fees, land, a wedding or a rainy day. Set a target and a date, and Finvest works out what to put in each month.",
+  },
+  {
+    icon: "clock",
+    title: "Automatic investing",
+    text: "Invest the same amount every week or month. Finvest sends the mobile money prompt on the day and you approve it with your PIN.",
+  },
+  {
+    icon: "document",
+    title: "Bonds that pay twice a year",
+    text: "Treasury bonds pay interest every six months. Need the money sooner? Ask in the app and Finvest sells your bond for you.",
+  },
+  {
+    icon: "sun",
+    title: "Roll over or get paid",
+    text: "When a bill matures, roll it over, have it paid to your MoMo or bank account, or save the interest into a goal.",
+  },
+  {
+    icon: "people",
+    title: "Send to family and friends",
+    text: "Send part or all of an investment to another Finvest client with their account number, with a note to say what it is for.",
+  },
+  {
+    icon: "eye",
+    title: "Statements anyone can check",
+    text: "Download a statement for your bank, embassy or school. Each one carries a code they can check on this website.",
+  },
+] as const;
+
 const questions = [
+  {
+    question: "What can I invest in with Finvest?",
+    answer:
+      "Government of Uganda Treasury bills and Treasury bonds, bought from your phone. Fixed income deposits, unit trusts and equity portfolios are being added, and each shows in the app when it opens.",
+  },
   {
     question: "Is my money safe?",
     answer:
-      "Your money buys Uganda government treasury bills, which are recorded against your account. Finvest does not lend your money out or hold a spendable balance for you.",
+      "Your money buys Uganda government Treasury bills and bonds, which are recorded against your account. Finvest does not lend your money out or hold a spendable balance for you.",
   },
   {
     question: "Can I take my money out early?",
@@ -66,7 +109,7 @@ const questions = [
   {
     question: "How do I pay, and how am I paid?",
     answer:
-      "You pay by MTN or Airtel mobile money, or by bank transfer with your reference. At maturity you roll over, or you are paid straight to a mobile money number or bank account in your own name.",
+      "You pay by MTN Mobile Money or Airtel Money, or by bank transfer with your reference. At maturity you roll over, or you are paid straight to a mobile money number or bank account in your own name.",
   },
   {
     question: "What does it cost?",
@@ -83,7 +126,8 @@ const questions = [
 
 <Base
   title="Finvest"
-  description="Invest in Uganda government treasury bills from your phone, paid by mobile money, with bonds, unit trusts, fixed deposits and equity portfolios on the way."
+  description="Invest in Uganda government Treasury bills and bonds from your phone. Pay with MTN MoMo, Airtel Money or bank, save for goals and invest automatically."
+  structuredData={[organisation(site), webSite(site), faqPage(questions)]}
 >
   <section class="band--black hero">
     <div class="wrap hero__grid">
@@ -100,8 +144,9 @@ const questions = [
         }
         <h1>Your money, working <span>every day.</span></h1>
         <p class="hero__lead">
-          Invest in Uganda government treasury bills from your phone. Pay with mobile money, see
-          your interest grow daily, and get paid straight back to MoMo or your bank.
+          Invest in Uganda government Treasury bills and bonds from your phone. Save for your
+          goals, invest automatically, pay with mobile money, and get paid straight back to MoMo
+          or your bank.
         </p>
         <div class="hero__actions">
           <a class="button button--lime button--large" href={signupUrl}>Open an account</a>
@@ -135,7 +180,7 @@ const questions = [
             </span>
           ) : (
             <span>
-              <strong>Government bills</strong>
+              <strong>Government bills and bonds</strong>
               <small>Issued by the Government of Uganda</small>
             </span>
           )
@@ -144,7 +189,7 @@ const questions = [
       <li>
         <span class="tile"><Icon name="bank" /></span>
         <span><strong>Held in your name</strong><small>
-            {company.custodian ? `Bills kept at ${company.custodian}` : "Recorded against your own account"}
+            {company.custodian ? `Kept at ${company.custodian}` : "Recorded against your own account"}
           </small></span>
       </li>
       <li>
@@ -182,11 +227,11 @@ const questions = [
     <div class="wrap">
       <div class="section-head">
         <div>
-          <p class="eyebrow">More than bills</p>
+          <p class="eyebrow">What you can invest in</p>
           <h2 class="h2">One app for the investments Uganda trusts.</h2>
           <p class="lead">
-            Treasury bills are open today. Bonds, unit trusts, fixed deposits and equity
-            portfolios follow, each shown the same plain way.
+            Treasury bills and Treasury bonds are open today. Fixed income deposits, unit trusts
+            and equity portfolios follow, each shown the same plain way.
           </p>
         </div>
         <a class="button button--outline" href="/products#auctions">
@@ -194,6 +239,16 @@ const questions = [
         </a>
       </div>
       <Categories openHref="/products#rates" bondsHref="/products#bonds" />
+    </div>
+  </section>
+
+  <section class="band" id="features">
+    <div class="wrap">
+      <p class="eyebrow">Everything in one app</p>
+      <h2 class="h2">More ways to make your money work.</h2>
+      <div class="grid grid--3">
+        {features.map((feature) => <IconCard icon={feature.icon} title={feature.title} text={feature.text} />)}
+      </div>
     </div>
   </section>
 
@@ -265,7 +320,7 @@ const questions = [
         <h2 class="h2">Save for something, and earn while you wait.</h2>
         <p class="lead">
           Set a target and a date. Finvest works out the monthly amount, reminds you, and puts
-          every payment into treasury bills. Save alone, or with your family, group or SACCO with
+          every payment into the investment you choose. Save alone, or with your family, group or SACCO with
           two people approving each withdrawal.
         </p>
       </div>

@@ -162,4 +162,37 @@ describe("the built site", () => {
     }
     expect(robots).toMatch(/User-agent: \*\nDisallow: \/\n$/);
   });
+
+  it("tells search engines the site is for Uganda, in English", () => {
+    for (const path of pages) {
+      expect(read(path), name(path)).toContain('<html lang="en-UG"');
+    }
+  });
+
+  it("lists every page in the sitemap, and only pages that exist", () => {
+    const site = (process.env["PUBLIC_SITE_URL"] ?? "https://finvestug.com").replace(/\/+$/, "");
+    const listed = [...read(join(dist, "sitemap.xml")).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1] ?? "");
+    const expected = pages
+      .map((path) => `/${name(path)}`.replace(/index\.html$/, ""))
+      .filter((path) => path !== "/404.html")
+      .map((path) => `${site}${path}`)
+      .sort();
+    expect([...listed].sort()).toEqual(expected);
+  });
+
+  it("gives search engines structured data that parses and says only what the page says", () => {
+    const blocks = (html: string) =>
+      [...html.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map(
+        (m) => JSON.parse(m[1] ?? "") as Record<string, unknown>,
+      );
+    const home = blocks(read(join(dist, "index.html")));
+    expect(home.map((data) => data["@type"])).toEqual(["FinancialService", "WebSite", "FAQPage"]);
+    const help = read(join(dist, "help", "index.html"));
+    const faq = blocks(help)[0] as { mainEntity: { name: string; acceptedAnswer: { text: string } }[] };
+    expect(faq.mainEntity.length).toBeGreaterThan(5);
+    for (const item of faq.mainEntity) {
+      // Each answer is on the page, word for word (quotes and ampersands are escaped in the HTML).
+      expect(help.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&"), item.name).toContain(item.acceptedAnswer.text);
+    }
+  });
 });

@@ -27,7 +27,7 @@ export const shareImages = {
     eyebrow: null,
     headline: "Your money, working",
     highlight: "every day.",
-    alt: "Finvest: your money, working every day. Invest in Uganda government treasury bills from your phone.",
+    alt: "Finvest: your money, working every day. Invest in Uganda government Treasury bills and bonds from your phone.",
   },
   products: {
     name: "products",
@@ -53,9 +53,9 @@ export const shareImages = {
   about: {
     name: "about",
     eyebrow: "About",
-    headline: "Government bills used to be for banks and big investors.",
+    headline: "Treasury bills and bonds used to be for banks and big investors.",
     highlight: "Not any more.",
-    alt: "About Finvest: government bills used to be for banks and big investors. Not any more.",
+    alt: "About Finvest: Treasury bills and bonds used to be for banks and big investors. Not any more.",
   },
   help: {
     name: "help",
@@ -75,8 +75,8 @@ export const shareImages = {
 
 export type ShareImageKey = keyof typeof shareImages;
 
-/** The line under every heading. The home page's own opening words. */
-export const shareTagline = "Invest in Uganda government treasury bills from your phone.";
+/** The line under every heading: what Finvest offers, in the home page's words. */
+export const shareTagline = "Uganda Treasury bills and bonds, goals and automatic investing.";
 
 export const shareImageWidth = 1200;
 export const shareImageHeight = 630;

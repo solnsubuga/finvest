@@ -447,11 +447,10 @@ async function openToSend(page: Page) {
 }
 
 test("a screen opened for the first time while offline says so, and opens once back online", async ({ page, context }) => {
-  // Without the background fetch of every screen, the Invest screen's code is not in the
-  // browser yet when the connection goes.
-  await page.route("**/_expo/static/js/web/**", (route) => {
-    const purpose = route.request().headers()["sec-purpose"] ?? "";
-    return purpose.includes("prefetch") ? route.abort() : route.continue();
+  // The browser asks to save data, so the app does not load every screen's code in the
+  // background, and the Invest screen's code is not in the page yet when the connection goes.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "connection", { configurable: true, value: { saveData: true } });
   });
   await logIn(page);
   await id(page, "use-passkey").click();
