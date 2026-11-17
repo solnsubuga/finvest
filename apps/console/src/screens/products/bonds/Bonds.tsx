@@ -19,6 +19,7 @@ import {
   type BondStatus,
   type NewBondDraft,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const STATUS_LABELS: Record<BondStatus, string> = { draft: "Draft", live: "Live", paused: "Paused" };
 const STATUS_STYLES: Record<BondStatus, string> = {
@@ -499,10 +500,10 @@ export function NewBondForm({ busy, error, onSubmit }: NewBondFormProps) {
       </Field>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-4">
         <Field id="bond-issued" label="Issue date" hint="YYYY-MM-DD" problem={shown("dates")}>
-          <Input id="bond-issued" type="date" value={values.issueDate} onChange={set("issueDate")} aria-invalid={shown("dates") !== null} />
+          <DateInput id="bond-issued" value={values.issueDate} onChange={set("issueDate")} aria-invalid={shown("dates") !== null} />
         </Field>
         <Field id="bond-matures" label="Maturity date" hint="Coupons fall every six months back from it." problem={null}>
-          <Input id="bond-matures" type="date" value={values.maturityDate} onChange={set("maturityDate")} aria-invalid={shown("dates") !== null} />
+          <DateInput id="bond-matures" value={values.maturityDate} onChange={set("maturityDate")} aria-invalid={shown("dates") !== null} />
         </Field>
         <Field id="bond-coupon" label="Coupon, % a year before tax" problem={shown("coupon")}>
           <Input id="bond-coupon" inputMode="decimal" value={values.coupon} onChange={set("coupon")} aria-invalid={shown("coupon") !== null} />

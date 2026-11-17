@@ -111,7 +111,7 @@ describe("closing the day", { timeout: 15_000 }, () => {
     const getDay = vi.spyOn(api, "getDay");
     render(<DayClose api={api} canAct now={() => new Date("2026-11-15T09:00:00Z")} />);
     await screen.findByRole("heading", { name: "Not ready to prepare" }, WAIT);
-    expect(screen.getByLabelText("Business day")).toHaveValue("2026-11-12");
+    expect(screen.getByLabelText("Business day")).toHaveValue("12/11/2026");
     expect(getDay.mock.calls.map((call) => call[0])).toEqual(["2026-11-14", "2026-11-12"]);
   });
 

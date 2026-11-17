@@ -12,6 +12,7 @@ import {
 } from "./bondSales.ts";
 import { formatDay, formatExact, formatWhen } from "./format.ts";
 import { FIELD, Field, FormButtons } from "./Orders.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; sales: BondSale[] };
 
@@ -335,7 +336,7 @@ function PriceForm(props: {
         </Field>
         <Field id="sale-day" label="Day it settled" error={problems.soldOn}>
           {(control) => (
-            <Input {...control} className={FIELD} type="date" max={props.today} value={soldOn} onChange={(e) => setSoldOn(e.target.value)} />
+            <DateInput {...control} className={FIELD} max={props.today} value={soldOn} onChange={(e) => setSoldOn(e.target.value)} />
           )}
         </Field>
       </div>

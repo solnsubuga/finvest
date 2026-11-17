@@ -16,6 +16,7 @@ import {
   type PotTransfersApi,
   type TransferRecord,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 interface PotTransfersProps {
   api: PotTransfersApi;
@@ -313,7 +314,7 @@ function RecordTransfer({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-day`}>Day the money moved</Label>
-          <Input id={`${id}-day`} type="date" max={today} value={valueDate} onChange={(event) => setValueDate(event.target.value)} />
+          <DateInput id={`${id}-day`} max={today} value={valueDate} onChange={(event) => setValueDate(event.target.value)} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-reference`}>Provider or bank reference</Label>

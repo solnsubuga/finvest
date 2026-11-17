@@ -22,6 +22,7 @@ import { Reach } from "../products/Reach.tsx";
 import { createStubCatalogueApi, sampleFrom } from "../products/stub.ts";
 import { billAuction, type Auction, type AuctionedBill } from "@finvest/market";
 import { connectedLastBuys, latestBuy, stubLastBuys, type LastBuy, type LastBuysReader } from "./lastBuys.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const SUMMARY = "Every rate change is proposed by one person, approved by another, and starts on a set date.";
 
@@ -434,7 +435,7 @@ function ProposeForm({ products, today, busy, error, onSubmit, reach }: ProposeF
         </Problem>
       </div>
       <Problem id="propose-from" label="Starts on" problem={checked ? dateProblem : null}>
-        <Input id="propose-from" type="date" min={today} value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} aria-invalid={checked && !!dateProblem} />
+        <DateInput id="propose-from" min={today} value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} aria-invalid={checked && !!dateProblem} />
       </Problem>
       <Problem id="propose-reason" label="Reason, for the audit trail" problem={checked ? reasonProblem : null}>
         <textarea

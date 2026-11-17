@@ -1,10 +1,10 @@
 import { useId, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui/button.tsx";
-import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { MAX_SHEET_BYTES, type Problem, type Severity, type Trial, type TrialInput } from "./api.ts";
 import { Pill } from "./Checks.tsx";
 import { formatDay, formatMegabytes, formatMoment, problemLabel, SHEET_LABELS } from "./labels.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 interface TrialFormProps {
   busy: boolean;
@@ -84,7 +84,7 @@ export function TrialForm({ busy, error, today, onRun, onCancel }: TrialFormProp
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${id}-asOf`}>Figures are as of</Label>
-          <Input type="date" max={today} value={asOf} onChange={(event) => setAsOf(event.target.value)} {...field("asOf")} />
+          <DateInput max={today} value={asOf} onChange={(event) => setAsOf(event.target.value)} {...field("asOf")} />
           {message("asOf")}
         </div>
       </div>
