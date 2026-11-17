@@ -14,17 +14,20 @@ if [ "$1" = "--fresh" ]; then
 fi
 
 # Certificates: a local CA the browser and the backend trust, and one server certificate for
-# every host the front door plays.
-if ! grep -qs verify.local.test "$WORK/certs/ext.cnf"; then
+# every host the front door plays. They are dated from 1 Jan 2026, because the story clock runs
+# behind the real one: a certificate made today is not yet valid on the story's day 0.
+old() { faketime '2026-01-01 00:00:00' "$@"; }
+if ! grep -qs "notBefore=Jan  1" "$WORK/certs/dated" || ! grep -qs verify.local.test "$WORK/certs/ext.cnf"; then
   rm -rf "$WORK/certs"
   mkdir -p "$WORK/certs" && cd "$WORK/certs"
-  openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -keyout ca.key -out ca.crt \
+  old openssl req -x509 -newkey rsa:2048 -nodes -days 3650 -keyout ca.key -out ca.crt \
     -subj "/CN=Finvest product video local CA" \
     -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
     -addext "subjectKeyIdentifier=hash" 2>/dev/null
   openssl req -newkey rsa:2048 -nodes -keyout server.key -out server.csr -subj "/CN=finvestug.com" 2>/dev/null
   printf 'subjectAltName=DNS:finvestug.com,DNS:www.finvestug.com,DNS:app.finvestug.com,DNS:admin.finvestug.com,DNS:api.finvestug.com,DNS:storage.local.test,DNS:resend.local.test,DNS:mail.local.test,DNS:verify.local.test\nextendedKeyUsage=serverAuth\nkeyUsage=critical,digitalSignature,keyEncipherment\nbasicConstraints=critical,CA:FALSE\nauthorityKeyIdentifier=keyid\nsubjectKeyIdentifier=hash\n' > ext.cnf
-  openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 3650 -extfile ext.cnf -out server.crt 2>/dev/null
+  old openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -days 3650 -extfile ext.cnf -out server.crt 2>/dev/null
+  openssl x509 -in server.crt -noout -startdate > dated
   openssl x509 -in ca.crt -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 > spki.txt
   openssl x509 -in server.crt -pubkey -noout | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | base64 >> spki.txt
   cd "$REPO/backend"
