@@ -42,7 +42,7 @@ export default {
     await t.read(1200);
     await t.step("Joel proposes a new 364 day bill", { hold: 500 });
     await t.click(menu(page, "Products"));
-    await t.click(page.getByRole("link", { name: "New product" }));
+    await t.click(page.getByRole("link", { name: "New product", exact: true }).first());
     const type = page.getByLabel("Type", { exact: true });
     await t.hover(type);
     await type.selectOption({ label: "Treasury bill" });

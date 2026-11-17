@@ -5,10 +5,11 @@ export default {
   id: "01",
   kicker: "Introducing",
   title: "Finvest",
-  subtitle: "Grow your money with Treasury bills, from your phone.",
+  subtitle: "Treasury bills and bonds, from your phone.",
   steps: [
-    { caption: "Finvest puts Uganda's Treasury bills on your phone", does: "finvestug.com home page, cursor rests on the rate pill (zoom)" },
-    { caption: "Every rate is the latest auction yield, after tax", does: "scroll to Today's rates, zoom on the 91 day card" },
+    { caption: "Finvest puts Uganda's investments on your phone", does: "finvestug.com home page, cursor rests on the rate pill (zoom)" },
+    { caption: "Every product shows its latest rate, after tax", does: "scroll to the rates, zoom on the product cards" },
+    { caption: "Bills and bonds are open, with more on the way", does: "scroll to One app for the investments Uganda trusts (zoom)" },
     { caption: "Work out what you could earn before you pay", does: "scroll to the calculator, type 1,000,000" },
     { caption: "Esther, a Kampala teacher, signs up on her phone", does: "app.finvestug.com welcome screen on the phone, tap Create an account" },
     { caption: "Her mobile money number becomes her login", does: `type ${CLIENT.phoneShown} and ${CLIENT.email}` },
@@ -25,13 +26,17 @@ export default {
     await page.goto("https://finvestug.com/");
     await page.waitForLoadState("networkidle");
     await t.start();
-    await t.step("Finvest puts Uganda's Treasury bills on your phone", { hold: 1200 });
+    await t.step("Finvest puts Uganda's investments on your phone", { hold: 1200 });
     await t.hover(page.locator("main").getByText(/91 day treasury bills at/).first());
     await t.zoom(page.locator("main").getByText(/91 day treasury bills at/).first(), { hold: 1600 });
-    await t.step("Every rate is the latest auction yield, after tax", { hold: 600 });
+    await t.step("Every product shows its latest rate, after tax", { hold: 600 });
     await t.scroll(780, { ms: 1400 });
     await t.read(1200);
-    await t.zoom(page.locator("#rates h3", { hasText: "91 Day Treasury Bill" }).locator("xpath=ancestor::*[self::li or self::article or self::div][1]"), { hold: 2000 });
+    await t.zoom(page.locator("#rates [data-product-grid]"), { hold: 2400, scale: 1.1 });
+    await t.step("Bills and bonds are open, with more on the way", { hold: 400 });
+    await page.locator("#range").scrollIntoViewIfNeeded();
+    await t.read(1600);
+    await t.zoom(page.locator("#range"), { hold: 2400, scale: 1.05 });
     await t.step("Work out what you could earn before you pay", { hold: 500 });
     await page.locator("#calculator").scrollIntoViewIfNeeded();
     await t.wait(900);

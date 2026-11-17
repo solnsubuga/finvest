@@ -8,7 +8,7 @@ export default {
   title: "A bond, paid by card",
   subtitle: "Part of a Treasury bond, paid on Pesapal's secure page.",
   steps: [
-    { caption: "For the years after, Esther looks at the bond", does: "Invest tab, Treasury bonds, 2 Year Treasury Bond 2028" },
+    { caption: "For the years after, Esther looks at the bond", does: "Invest tab, Treasury bonds, 5 Year Treasury Bond 2031" },
     { caption: "Its coupon, dates and price are all on one screen", does: "the bond's facts (zoom)" },
     { caption: "She picks a face value and sees what it costs today", does: "face value 1,000,000: price, interest since the last coupon, what she pays (zoom)" },
     { caption: "This time she pays by card, and sees the charge first", does: "Review, Confirm and pay, Card: the card charge (zoom)" },

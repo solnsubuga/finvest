@@ -1,8 +1,8 @@
 #!/bin/sh
 # Off camera: build the starting point of the story from nothing, then save it as "start".
 #   setup/seed.sh
-# A week before the story: a fresh stack, the two staff, the specimen documents and the
-# 21 Oct auction rates. Then the clock moves to day 0, the day Esther signs up.
+# A week before the story: a fresh stack, the two staff, the specimen documents, the
+# 21 Oct auction rates and the 5 year bond. Then the clock moves to day 0, the day Esther signs up.
 set -e
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 . "$HERE/stack/env.sh"
@@ -23,5 +23,6 @@ node setup/enrol-staff.mjs ruth.achieng@finvest-demo.test "$(grep ruth.achieng "
 node setup/enrol-staff.mjs joel.mugisha@finvest-demo.test "$(grep joel.mugisha "$WORK/enrol-links.txt" | tail -1 | cut -d' ' -f2)"
 node setup/make-documents.mjs
 node setup/seed-rates.mjs
+node setup/seed-bond.mjs
 "$HERE/stack/clock.sh" +7
 "$HERE/stack/backup.sh" start

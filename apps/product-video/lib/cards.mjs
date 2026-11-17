@@ -116,7 +116,7 @@ function outro(site) {
       <div style="width:120px; height:120px; border-radius:30px; box-shadow:0 0 0 2px #2a2a2a">${LOGO}</div>
       <div style="font-size:96px; font-weight:800; letter-spacing:-.03em">finvest</div>
     </div>
-    <div style="margin-top:44px; font-size:36px; color:#c9c9c4; position:relative">Treasury bills on your phone, from UGX 100,000.</div>
+    <div style="margin-top:44px; font-size:36px; color:#c9c9c4; position:relative">Treasury bills and bonds, on your phone.</div>
     <div style="margin-top:60px; font-size:44px; font-weight:700; color:var(--fv-color-lime); position:relative">${escape(site)}</div>
   </div>`;
 }
