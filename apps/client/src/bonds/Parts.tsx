@@ -330,7 +330,7 @@ export function QuoteFigures({ calc }: { calc: Extract<BondCalc, { state: "ready
         ]}
       />
       <Txt size={fontSizes.xs} color={colors.muted}>
-        If you paid today. You pay the interest earned since the last coupon on top of the price. The next coupon pays it back, less tax, with the rest of the six months' interest.
+        {"If you paid today. You pay the interest earned since the last coupon on top of the price. The next coupon pays it back, less tax, with the rest of the six months' interest."}
       </Txt>
     </View>
   );
