@@ -1,5 +1,6 @@
 """Maturity against real PostgreSQL: rolling over, paying out, holding, and the fences."""
 
+import secrets
 from datetime import date, timedelta
 
 import pytest
@@ -412,7 +413,7 @@ async def test_the_scheduled_job_closes_everything_that_is_due(
 ) -> None:
     due = await started(app_database, worker_database, NOW)
     clock = at(day(91), 12)
-    queue = "inv" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"inv_{secrets.token_hex(8)}"
     async with worker_database.actor_transaction(SYSTEM) as session:
         job_id = await enqueue(
             session,

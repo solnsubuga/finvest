@@ -131,7 +131,7 @@ async def a_client(
     assert client.id is not None
     rig.book.known[client.id] = Contact(
         "+256772123456" if phone else None,
-        f"{client.id.lower()[-6:]}@example.com" if email else None,
+        f"client.{secrets.token_hex(8)}@example.com" if email else None,
     )
     device = None
     if token:

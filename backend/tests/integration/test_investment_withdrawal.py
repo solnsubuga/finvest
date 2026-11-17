@@ -2,6 +2,7 @@
 the dealing desk has funded it, and the fences."""
 
 import asyncio
+import secrets
 from datetime import date, timedelta
 
 import pytest
@@ -383,7 +384,7 @@ async def run_job(
     worker_database: Database, kind: str, payload: dict[str, object]
 ) -> tuple[str, str | None]:
     """Queue one job as the request or the outbox would, run it, and return how it ended."""
-    queue = "wd" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"wd_{secrets.token_hex(8)}"
     async with worker_database.actor_transaction(SYSTEM) as session:
         job_id = await enqueue(
             session,

@@ -6,6 +6,7 @@ Tests therefore check their own investments, and totals only as "at least".
 """
 
 import asyncio
+import secrets
 from datetime import date, timedelta
 
 import pytest
@@ -415,7 +416,7 @@ async def run_job(
     kind: str = ACCRUE_KIND,
     payload: dict[str, object] | None = None,
 ) -> str:
-    queue = "inv" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"inv_{secrets.token_hex(8)}"
     async with worker_database.actor_transaction(SYSTEM) as session:
         job_id = await enqueue(
             session,

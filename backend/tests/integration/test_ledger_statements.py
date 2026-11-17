@@ -1,5 +1,6 @@
 """Reading an account's history for reconciliation."""
 
+import secrets
 from dataclasses import replace
 from datetime import date, timedelta
 
@@ -153,7 +154,7 @@ async def test_a_client_reads_only_their_own_account(
 
 def fresh_code() -> str:
     """A code no other test uses, since the test database keeps every account."""
-    return "test.total_" + push_id().lower().replace("-", "x").replace("_", "y")
+    return f"test.total_{secrets.token_hex(8)}"
 
 
 async def test_the_total_balance_adds_every_account_with_the_code(

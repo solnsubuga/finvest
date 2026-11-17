@@ -2,6 +2,7 @@
 investment starts, built from the client's own view of it, stored, listed and emailed locked
 and without a figure."""
 
+import secrets
 from collections.abc import Iterator
 from datetime import timedelta
 from io import BytesIO
@@ -35,7 +36,7 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture(autouse=True)
 def own_queue(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
-    queue = "notes" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"notes_{secrets.token_hex(8)}"
     monkeypatch.setattr(service, "QUEUE", queue)
     yield queue
 
