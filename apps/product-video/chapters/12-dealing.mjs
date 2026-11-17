@@ -20,7 +20,7 @@ async function desk(page, who) {
 
 export default {
   id: "12",
-  title: "Buying the bills",
+  title: "Buying the bills and bonds",
   subtitle: "Client money becomes real Treasury bills, checked by two people.",
   steps: [
     { caption: "The dealing desk shows client money still to place", does: "Joel: Dealing desk, read the position by product" },

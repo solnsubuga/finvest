@@ -42,7 +42,7 @@ export async function proposeBond(t, page, bond) {
   await page.getByText("Treasury bonds", { exact: true }).waitFor();
   await t.start();
   await t.step("A new bond is added like any other product", { hold: 600 });
-  await t.click(page.getByRole("link", { name: "New product" }));
+  await t.click(page.getByRole("link", { name: "New product", exact: true }).first());
   const type = page.getByLabel("Type", { exact: true });
   await t.hover(type);
   await type.selectOption({ label: "Treasury bond" });
@@ -82,6 +82,11 @@ export async function checkBond(t, page, bond) {
   await t.zoom(page.getByText("Bond changes waiting for approval").locator("xpath=.."), { hold: 2400 });
   await t.click(approveButton(page));
   await confirmIfAsked(t, page, "ruth");
+  // With another bond already listed, pick the new draft so its panel shows.
+  const row = page.getByRole("button", { name: bond.name, exact: true });
+  await row.waitFor();
+  await row.scrollIntoViewIfNeeded();
+  await t.click(row);
   await page.getByRole("button", { name: "Propose opening to clients" }).waitFor();
   await t.read(1600);
   await t.step("Opening it to clients is a change of its own", { hold: 400 });

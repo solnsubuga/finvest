@@ -121,7 +121,7 @@ export default {
     await t.read(1000);
     await t.click(coupon.getByRole("button", { name: "Send for approval" }));
     await confirmIfAsked(t, page, "joel");
-    await page.getByText("You recorded this, so someone else has to approve it.").first().waitFor();
+    await page.getByRole("list", { name: "Coupons recorded" }).getByRole("listitem").filter({ hasText: "KDB2702150052" }).first().waitFor();
     await t.read(2000);
     await t.stop();
   },
