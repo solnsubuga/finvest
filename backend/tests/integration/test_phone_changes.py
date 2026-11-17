@@ -20,6 +20,7 @@ from app.modules.identity.service import IdentityService
 from app.shared.actors import Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -59,7 +60,7 @@ async def api(
 
 
 def a_phone() -> str:
-    return f"+256{next(_numbers)}"
+    return unique_phone()
 
 
 async def a_staff_member(api: Api, role: str = "operations") -> dict[str, str]:
@@ -204,8 +205,8 @@ async def test_the_database_refuses_one_person_twice_and_a_change_without_approv
     with pytest.raises(DBAPIError, match="permission denied"):
         async with api.database.transaction() as session:
             await session.execute(
-                text("UPDATE identity_clients SET phone = '+256700000001' WHERE id = :id"),
-                {"id": client_id},
+                text("UPDATE identity_clients SET phone = :phone WHERE id = :id"),
+                {"phone": unique_phone(), "id": client_id},
             )
 
 

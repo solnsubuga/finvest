@@ -19,6 +19,7 @@ from app.modules.identity.service import IdentityService
 from app.shared.actors import Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -64,7 +65,7 @@ async def api(
 
 
 def a_phone() -> str:
-    return f"+256{next(_numbers)}"
+    return unique_phone()
 
 
 async def a_staff_member(api: Api, role: str = "operations") -> dict[str, str]:
@@ -267,8 +268,8 @@ async def test_only_a_new_ask_changes_an_open_request(api: Api) -> None:
         async with api.database.actor_transaction(Actor("staff", staff["X-Staff-Id"])) as session:
             await session.execute(
                 text(
-                    "UPDATE identity_recovery_requests SET contact_phone = '+256700000001', "
+                    "UPDATE identity_recovery_requests SET contact_phone = :phone, "
                     "asks = asks + 1 WHERE client_id = :id"
                 ),
-                {"id": client_id},
+                {"phone": unique_phone(), "id": client_id},
             )

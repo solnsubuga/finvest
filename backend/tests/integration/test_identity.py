@@ -29,6 +29,7 @@ from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -40,7 +41,7 @@ _numbers = itertools.count(700_000_000)
 
 
 def a_phone() -> str:
-    return f"+256{next(_numbers)}"
+    return unique_phone()
 
 
 def an_email() -> str:

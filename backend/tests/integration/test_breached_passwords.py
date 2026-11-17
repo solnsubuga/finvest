@@ -17,6 +17,7 @@ from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -69,7 +70,7 @@ async def api(
 
 
 def a_phone() -> str:
-    return f"+256{next(_numbers)}"
+    return unique_phone()
 
 
 async def texted(api: Api, recipient: str) -> list[str]:
