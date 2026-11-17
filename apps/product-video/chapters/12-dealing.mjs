@@ -39,8 +39,8 @@ export default {
     await dateForm.scrollIntoViewIfNeeded();
     await t.read(900);
     await dateForm.locator("select").selectOption({ label: "91 Day Treasury Bill" });
-    await t.click(dateForm.locator("input[type=date]"));
-    await dateForm.locator("input[type=date]").fill(AUCTION.day);
+    await t.click(dateForm.locator('input[placeholder="dd/mm/yyyy"]'));
+    await dateForm.locator('input[placeholder="dd/mm/yyyy"]').fill(AUCTION.day);
     await t.read(600);
     await t.click(page.getByRole("button", { name: "Propose the date" }));
     await confirmIfAsked(t, page, "joel");

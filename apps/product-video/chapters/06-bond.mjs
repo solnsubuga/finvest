@@ -13,6 +13,15 @@ export const BOND = {
   price: "101.25",
 };
 
+// An invented product type, proposed and approved on camera.
+const TYPE = {
+  earns: "Term and rate, paid at maturity or monthly",
+  code: "FIXED-DEPOSIT",
+  name: "Bank fixed deposit",
+  tax: "15",
+  description: "A fixed deposit at a Ugandan bank, held for clients.",
+};
+
 const approveButton = (page) => page.getByRole("button", { name: "Approve as second person" }).first();
 
 export default {
@@ -27,12 +36,15 @@ export default {
     { caption: "Opening it to clients is a change of its own", does: "Ruth: a reason, Propose opening to clients" },
     { caption: "Joel approves, and the bond is live", does: "Joel: Approve as second person; the bond row shows Live (zoom)" },
     { caption: "Every product is built from a type staff can add to", does: "the Product types table (zoom)" },
+    { caption: "Joel adds a type for bank fixed deposits", does: "New product type: term and rate, code, name, 15% usual tax, a reason, Send for approval" },
+    { caption: "Ruth approves it, and staff can now choose it", does: "Ruth: Approve as second person; the new type row (zoom)" },
     { caption: "Esther can buy part of the bond at once", does: "Esther's Invest tab: Treasury bonds, the 2 year bond" },
   ],
   takes: [
     { name: "propose", who: "joel", layout: "wide" },
     { name: "check", who: "ruth", layout: "wide" },
     { name: "live", who: "joel", layout: "wide" },
+    { name: "typeOk", who: "ruth", layout: "wide" },
     { name: "client", who: "esther-phone", layout: "phone" },
   ],
   async propose(t, page) {
@@ -105,6 +117,41 @@ export default {
     await types.scrollIntoViewIfNeeded();
     await t.read(800);
     await t.zoom(types, { hold: 2600, scale: 1.15 });
+    await t.step("Joel adds a type for bank fixed deposits", { hold: 400 });
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+    await t.click(page.getByRole("link", { name: "New product type" }));
+    const form = page.locator("form[aria-labelledby=new-type]");
+    await form.waitFor();
+    await t.read(1200);
+    await t.click(form.getByLabel(TYPE.earns));
+    await t.type(form.getByLabel("Code", { exact: true }), TYPE.code);
+    await t.type(form.getByLabel("Name", { exact: true }), TYPE.name);
+    await t.type(form.getByLabel("Usual tax, %"), TYPE.tax);
+    await t.type(form.getByLabel("Description"), TYPE.description, { delay: 20 });
+    await t.type(form.getByLabel("Reason, for the audit trail"), "Clients ask for bank fixed deposits next to bills and bonds.", { delay: 20 });
+    await t.read(800);
+    await t.click(form.getByRole("button", { name: "Send for approval" }));
+    await confirmIfAsked(t, page, "joel");
+    await page.getByText("Type changes waiting for approval").waitFor();
+    await page.getByText("Type changes waiting for approval").scrollIntoViewIfNeeded();
+    await t.read(2200);
+    await t.stop();
+  },
+  async typeOk(t, page) {
+    await ensureSignedIn(page, "ruth", "/products");
+    const waiting = page.getByText("Type changes waiting for approval");
+    await waiting.waitFor();
+    await waiting.scrollIntoViewIfNeeded();
+    await t.start();
+    await t.step("Ruth approves it, and staff can now choose it", { hold: 800 });
+    await t.zoom(waiting.locator("xpath=.."), { hold: 2200 });
+    await t.click(waiting.locator("xpath=..").getByRole("button", { name: "Approve as second person" }).first());
+    await confirmIfAsked(t, page, "ruth");
+    const row = page.getByRole("region", { name: "Product types" }).getByRole("row").filter({ hasText: TYPE.code });
+    await row.waitFor();
+    await row.scrollIntoViewIfNeeded();
+    await t.read(800);
+    await t.zoom(row, { hold: 2600 });
     await t.stop();
   },
   async client(t, page) {

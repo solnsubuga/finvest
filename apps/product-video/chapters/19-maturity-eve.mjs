@@ -49,7 +49,7 @@ export default {
     await t.read(2200);
     await t.click(button(page, "Run again for a date"));
     const form = formWith(page, "Send for approval");
-    await form.locator("input[type=date]").fill("2027-02-14");
+    await form.locator('input[placeholder="dd/mm/yyyy"]').fill("2027-02-14");
     await t.type(form.locator("textarea"), "Today's run overlapped with the catch up runs and left investments behind.", { delay: 22 });
     await t.click(button(form, "Send for approval"));
     await confirmIfAsked(t, page, "ruth");
@@ -83,7 +83,7 @@ export default {
     const buffer = formWith(page, "Record for approval");
     await t.type(buffer.getByLabel("Amount (UGX)"), "150000000");
     await t.type(buffer.getByLabel("Bank reference"), "KDB2702140031");
-    await buffer.locator("input[type=date]").fill("2027-02-14");
+    await buffer.locator('input[placeholder="dd/mm/yyyy"]').fill("2027-02-14");
     await t.type(buffer.getByLabel("Reason"), "Finvest's own money for the liquidity buffer, to its target.", { delay: 22 });
     await t.click(button(buffer, "Record for approval"));
     await confirmIfAsked(t, page, "joel");
@@ -96,9 +96,9 @@ export default {
     await pots.waitFor();
     await pots.scrollIntoViewIfNeeded();
     await t.read(1600);
-    await pots.getByLabel("From").selectOption({ label: "Trust bank account" });
+    await pots.getByLabel("From", { exact: true }).selectOption({ label: "Trust bank account" });
     await t.wait(500);
-    await pots.getByLabel("To").selectOption({ label: "ioTec wallet, Airtel" });
+    await pots.getByLabel("To", { exact: true }).selectOption({ label: "ioTec wallet, Airtel" });
     await t.wait(500);
     await t.type(pots.getByLabel("Sent (UGX)"), "5000000");
     await t.type(pots.getByLabel("Arrived (UGX)"), "5000000");
@@ -186,7 +186,7 @@ export default {
     await t.wait(600);
     await files.nth(1).setInputFiles(path.join(REGISTER, "investments.csv"));
     await t.wait(600);
-    await page.locator("main input[type=date]").fill("2027-02-14");
+    await page.locator('main input[placeholder="dd/mm/yyyy"]').fill("2027-02-14");
     await t.read(1200);
     await t.click(button(page, "Run the trial"));
     await page.getByText("Problems in the latest trial").waitFor();

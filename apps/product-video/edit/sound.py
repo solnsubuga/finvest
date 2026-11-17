@@ -6,7 +6,7 @@ Reads clicks.json and titles.json (seconds) from the out dir. Writes sound-click
 only) and sound-music.wav (clicks plus music). The music is written by edit/music.py and
 played with FluidSynth. It sits at about -40 dB on average under the chapters, so a voice-over
 can sit well above it, rises 6 dB under each title card, fades in over 2 seconds and out
-over 4. Without FluidSynth it falls back to a slow sine-tone pad made here.
+over 4. Without FluidSynth or its sound font it falls back to a slow sine-tone pad made here.
 """
 
 import json
@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 RATE = 48000
+SOUNDFONT = "/usr/share/sounds/sf2/FluidR3_GM.sf2"  # the same font edit/music.py plays
 
 
 def click(volume_db=-30.0):
@@ -81,7 +82,7 @@ def pad(seconds):
 
 def played(seconds):
     """The FluidSynth piece from music.py, as mono samples, or None without FluidSynth."""
-    if not shutil.which("fluidsynth"):
+    if not shutil.which("fluidsynth") or not Path(SOUNDFONT).exists():
         return None
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "music.wav"
