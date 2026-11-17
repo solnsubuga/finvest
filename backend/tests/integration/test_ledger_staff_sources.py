@@ -30,6 +30,7 @@ from tests.support.ledger import (
 pytestmark = pytest.mark.integration
 
 PRODUCTION_LIST = [
+    "dealing.bond_coupon",
     "dealing.buffer_capital",
     "dealing.order",
     "ledger.correction",
