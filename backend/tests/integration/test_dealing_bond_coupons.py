@@ -7,6 +7,7 @@ date, so the desk holds them on the record date. The time is the real time, so t
 date has come.
 """
 
+import asyncio
 from datetime import date, timedelta
 
 import pytest
@@ -29,6 +30,7 @@ from app.shared.money import Currency
 from app.shared.push_ids import push_id
 from tests.integration.test_bond_holdings import live_issue, now
 from tests.integration.test_dealing_settlement import fund_bank, refused
+from tests.support.clock import AsyncBarrier
 from tests.support.ledger import staff as new_staff
 from tests.support.ledger import ugx
 
@@ -299,3 +301,81 @@ async def test_the_database_refuses_an_approval_without_its_entry_or_a_changed_c
                     text("UPDATE dealing_bond_coupons SET amount_minor = 1 WHERE id = :id"),
                     {"id": recorded.id},
                 )
+
+
+# At once ----------------------------------------------------------------------------------------
+
+
+async def test_two_people_approving_one_coupon_at_once_post_it_once(
+    app_database: Database,
+) -> None:
+    clock = now()
+    async with live_issue(app_database, clock) as code:
+        coupon = await last_coupon(app_database, code, clock)
+        await held_before(app_database, code, coupon, 1 * M, clock)
+        recorded = await record(app_database, new_staff(), code, coupon, PER_MILLION, clock)
+        barrier = AsyncBarrier(2)
+
+        async def approve() -> str:
+            staff = new_staff()
+            try:
+                async with app_database.actor_transaction(staff) as session:
+                    await barrier.wait()
+                    await bond_coupons.approve(session, staff, recorded.id, clock)
+            except ApplicationError as error:
+                return error.code
+            return "approved"
+
+        outcomes = await asyncio.gather(approve(), approve())
+        async with app_database.actor_transaction(new_staff()) as session:
+            entries = (
+                await session.execute(
+                    text(
+                        "SELECT count(*) FROM ledger_journal_entries "
+                        "WHERE source_type = 'dealing.bond_coupon' AND source_id = :id"
+                    ),
+                    {"id": recorded.id},
+                )
+            ).scalar_one()
+            final = await bond_coupons.get_coupon(session, recorded.id)
+    assert sorted(outcomes) == ["approved", "conflict"]
+    assert entries == 1
+    assert final.status is CouponStatus.APPROVED
+
+
+async def test_two_people_recording_one_coupon_at_once_keep_one(app_database: Database) -> None:
+    clock = now()
+    async with live_issue(app_database, clock) as code:
+        coupon = await last_coupon(app_database, code, clock)
+        await held_before(app_database, code, coupon, 1 * M, clock)
+        barrier = AsyncBarrier(2)
+
+        async def record_at_once() -> str:
+            staff = new_staff()
+            try:
+                async with app_database.actor_transaction(staff) as session:
+                    await barrier.wait()
+                    await bond_coupons.record(
+                        session,
+                        staff,
+                        issue_code=code,
+                        coupon_date=coupon,
+                        amount=ugx(PER_MILLION),
+                        value_date=coupon,
+                        bank_reference=f"FT{push_id()[-10:]}",
+                        note=None,
+                        clock=clock,
+                    )
+            except ApplicationError as error:
+                return f"{error.code}:{error.fields[0].field_path[0]}:{error.fields[0].code}"
+            return "recorded"
+
+        outcomes = await asyncio.gather(record_at_once(), record_at_once())
+        async with app_database.actor_transaction(new_staff()) as session:
+            kept = [c for c in await bond_coupons.coupons(session, Currency.UGX) if
+                    c.issue_code == code]  # fmt: skip
+    assert sorted(outcomes) == [
+        "recorded",
+        "validation_failed:coupon_date:already_recorded",
+    ]
+    assert len(kept) == 1
