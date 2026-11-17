@@ -147,16 +147,19 @@ async function final() {
   const joined = path.join(OUT, "joined.mp4");
   ffmpeg(["-f", "concat", "-safe", "0", "-i", list, "-c", "copy", joined]);
 
-  // The sound: a quiet click on every click, and an original calm loop under everything.
+  // The sound: a quiet click on every click, and original music under everything (edit/music.py).
   let at = 0;
   const clicks = [];
+  const titles = [];
   for (const id of built) {
     const meta = JSON.parse(fs.readFileSync(path.join(OUT, `chapter-${id}.json`), "utf8"));
+    titles.push(at);
     for (const c of meta.clicks) clicks.push(at + c);
     at += meta.duration;
   }
   const total = at + 5;
   fs.writeFileSync(path.join(OUT, "clicks.json"), JSON.stringify(clicks));
+  fs.writeFileSync(path.join(OUT, "titles.json"), JSON.stringify(titles));
   execFileSync("python3", ["-I", path.join(here, "edit/sound.py"), OUT, String(total)], { stdio: "inherit" });
   const withMusic = path.join(OUT, "introducing-finvest.mp4");
   const noMusic = path.join(OUT, "introducing-finvest-no-music.mp4");

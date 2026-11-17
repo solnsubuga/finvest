@@ -1,15 +1,19 @@
-"""The video's sound: a quiet click under every click, and an original calm music loop.
+"""The video's sound: a quiet click under every click, and original music.
 
     python3 -I edit/sound.py <out dir> <seconds>
 
-Reads clicks.json (seconds) from the out dir. Writes sound-clicks.wav (clicks only) and
-sound-music.wav (clicks plus music). The music is made here from sine tones: a slow
-four-chord pad with a soft pulse, mixed to about -40 dB on average, fading in over 2 seconds
-and out over 4, so a voice-over can sit well above it.
+Reads clicks.json and titles.json (seconds) from the out dir. Writes sound-clicks.wav (clicks
+only) and sound-music.wav (clicks plus music). The music is written by edit/music.py and
+played with FluidSynth. It sits at about -40 dB on average under the chapters, so a voice-over
+can sit well above it, rises 6 dB under each title card, fades in over 2 seconds and out
+over 4. Without FluidSynth it falls back to a slow sine-tone pad made here.
 """
 
 import json
+import shutil
+import subprocess
 import sys
+import tempfile
 import wave
 from pathlib import Path
 
@@ -75,6 +79,35 @@ def pad(seconds):
     return smoothed
 
 
+def played(seconds):
+    """The FluidSynth piece from music.py, as mono samples, or None without FluidSynth."""
+    if not shutil.which("fluidsynth"):
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "music.wav"
+        script = Path(__file__).with_name("music.py")
+        subprocess.run([sys.executable, "-I", str(script), str(path), str(seconds)], check=True)
+        with wave.open(str(path), "rb") as w:
+            raw = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float64) / 32768
+            channels, rate = w.getnchannels(), w.getframerate()
+    if rate != RATE:
+        raise SystemExit(f"music.py played at {rate} Hz, expected {RATE}")
+    mono = raw.reshape(-1, channels).mean(axis=1)
+    n = int(seconds * RATE)
+    return np.pad(mono, (0, max(0, n - len(mono))))[:n]
+
+
+def lift(n, titles, seconds=3.2, db=6.0, ramp=0.8):
+    """A gain curve that rises `db` under each title card and eases back as the chapter starts."""
+    gain = np.zeros(n)
+    t = np.arange(n) / RATE
+    for start in titles:
+        up = np.clip((t - start + ramp) / ramp, 0, 1)
+        down = np.clip((start + seconds + ramp - t) / ramp, 0, 1)
+        gain = np.maximum(gain, np.minimum(up, down))
+    return 10 ** (gain * db / 20)
+
+
 def rms_db(x):
     return 20 * np.log10(np.sqrt(np.mean(x**2)) + 1e-12)
 
@@ -100,8 +133,13 @@ def main():
         i = int(s * RATE)
         if i + len(c) < n:
             clicks[i : i + len(c)] += c
-    music = pad(seconds)
+    music = played(seconds)
+    if music is None:
+        music = pad(seconds)
     music *= 10 ** ((-40 - rms_db(music)) / 20)
+    titles = out / "titles.json"
+    if titles.exists():
+        music *= lift(n, json.loads(titles.read_text()))
     fade_in = np.minimum(1, np.arange(n) / (2 * RATE))
     fade_out = np.clip((n - np.arange(n)) / (4 * RATE), 0, 1)
     music *= fade_in * fade_out
