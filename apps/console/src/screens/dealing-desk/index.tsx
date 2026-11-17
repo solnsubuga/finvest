@@ -24,6 +24,10 @@ import { notConnectedBondSalesApi, type BondSalesApi } from "./bondSales.ts";
 import { createHttpBondSalesApi } from "./bondSalesHttp.ts";
 import { createStubBondSalesApi } from "./bondSalesStub.ts";
 import { BufferSection } from "./Buffer.tsx";
+import { CouponsSection } from "./Coupons.tsx";
+import { notConnectedCouponsApi, type CouponsApi } from "./coupons.ts";
+import { createHttpCouponsApi } from "./couponsHttp.ts";
+import { COUPON_COLLEAGUES, createStubCouponsApi } from "./couponsStub.ts";
 import { notConnectedBufferApi, type BufferApi } from "./buffer.ts";
 import { createHttpBufferApi } from "./bufferHttp.ts";
 import { BUFFER_COLLEAGUE, createStubBufferApi } from "./bufferStub.ts";
@@ -300,6 +304,25 @@ export default function DealingDeskPage() {
     const http = createHttp(base);
     return createHttpBondSalesApi(http, createHttpDirectory(http));
   });
+  // Coupons on the desk's bonds, with the same samples under the stub.
+  const [coupons] = useState<{ api: CouponsApi; directory: Directory }>(() => {
+    if (isStubAuth() && session) {
+      const sample = new URLSearchParams(window.location.search).get("sample");
+      const directory = createStubDirectory({ id: session.staffId, name: session.name });
+      const colleagues = Object.values(COUPON_COLLEAGUES);
+      const names: Directory = {
+        ...directory,
+        staffName: async (id) => colleagues.find((c) => c.id === id)?.name ?? directory.staffName(id),
+      };
+      if (sample === "offline") return { api: notConnectedCouponsApi, directory: names };
+      const mayChange = can(session, "dealing_orders.change");
+      return { api: createStubCouponsApi({ id: session.staffId }, { sample: sample === "empty" ? "empty" : "sample", mayChange, today: kampalaToday }), directory: names };
+    }
+    const base = apiBaseUrl();
+    if (!base) return { api: notConnectedCouponsApi, directory: emptyDirectory };
+    const http = createHttp(base);
+    return { api: createHttpCouponsApi(http), directory: createHttpDirectory(http) };
+  });
   return (
     <>
       <DealingDeskScreen api={api} auctions={auctions} />
@@ -313,6 +336,7 @@ export default function DealingDeskPage() {
         />
       ) : null}
       {session ? <BondSalesSection api={bondSales} today={kampalaToday} /> : null}
+      {session ? <CouponsSection api={coupons.api} directory={coupons.directory} me={session.staffId} today={kampalaToday} /> : null}
       {session ? <AllocationSection api={allocations} /> : null}
     </>
   );
