@@ -127,4 +127,39 @@ describe("the built site", () => {
       expect(sources.filter((src) => !/^https:\/\/(staging\.)?finvestug\.com/.test(src)), name(path)).toEqual([]);
     }
   });
+
+  it("gives every page a link preview that apps can read without running a script", () => {
+    const site = (process.env["PUBLIC_SITE_URL"] ?? "https://finvestug.com").replace(/\/+$/, "");
+    const meta = (html: string, key: string) =>
+      html.match(new RegExp(`<meta (?:property|name)="${key}" content="([^"]*)"`))?.[1];
+    for (const path of pages) {
+      const html = read(path);
+      for (const key of ["og:title", "og:description", "og:url", "og:image:alt", "twitter:title", "twitter:description"]) {
+        expect(meta(html, key), `${name(path)} ${key}`).toBeTruthy();
+      }
+      expect(meta(html, "twitter:card"), name(path)).toBe("summary_large_image");
+      const image = meta(html, "og:image") ?? "";
+      expect(image, name(path)).toMatch(new RegExp(`^${site.replace(/[.]/g, "\\.")}/share/[a-z-]+\\.png$`));
+      expect(meta(html, "twitter:image"), name(path)).toBe(image);
+      expect(meta(html, "og:image:width"), name(path)).toBe("1200");
+      expect(meta(html, "og:image:height"), name(path)).toBe("630");
+      // The picture is in the build, 1200 by 630 as the tags say, and small enough for WhatsApp,
+      // which leaves out a picture over about 300 KB.
+      const file = join(dist, new URL(image).pathname);
+      expect(existsSync(file), `${name(path)} shares ${image}`).toBe(true);
+      const png = readFileSync(file);
+      expect(png.subarray(1, 4).toString("ascii"), image).toBe("PNG");
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)], image).toEqual([1200, 630]);
+      expect(png.length, image).toBeLessThan(300 * 1024);
+    }
+  });
+
+  it("lets the apps that draw link previews read the pages before launch", () => {
+    if (process.env["PUBLIC_INDEXABLE"] === "true") return;
+    const robots = read(join(dist, "robots.txt"));
+    for (const agent of ["facebookexternalhit", "WhatsApp", "Twitterbot", "LinkedInBot", "Slackbot-LinkExpanding"]) {
+      expect(robots, agent).toMatch(new RegExp(`User-agent: ${agent}\\nAllow: /\\n`));
+    }
+    expect(robots).toMatch(/User-agent: \*\nDisallow: \/\n$/);
+  });
 });

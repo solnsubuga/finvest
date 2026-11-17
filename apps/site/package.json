@@ -10,7 +10,8 @@
     "typecheck": "astro check",
     "test": "vitest run",
     "test:build": "vitest run --config vitest.build.config.ts",
-    "placeholders": "node scripts/placeholders.ts"
+    "placeholders": "node scripts/placeholders.ts",
+    "share-images": "node scripts/share-images.ts"
   },
   "dependencies": {
     "@finvest/market": "workspace:*",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@playwright/test": "1.63.0",
     "@types/node": "^22.10.0",
     "jsdom": "^27.0.0",
     "typescript": "^5.9.0",

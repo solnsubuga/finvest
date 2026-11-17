@@ -286,6 +286,9 @@ importers:
       '@astrojs/check':
         specifier: ^0.9.12
         version: 0.9.12(prettier@3.10.1)(typescript@5.9.3)
+      '@playwright/test':
+        specifier: 1.63.0
+        version: 1.63.0
       '@types/node':
         specifier: ^22.10.0
         version: 22.20.5
