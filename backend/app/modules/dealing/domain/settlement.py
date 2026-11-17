@@ -65,7 +65,7 @@ def accounts(currency: Currency) -> dict[str, AccountSpec]:
     """The system accounts a settlement can touch, by code. Opening one twice is safe."""
     return {
         BANK_TRUST: AccountSpec(BANK_TRUST, AccountKind.ASSET, currency, "Trust bank account"),
-        BILLS: AccountSpec(BILLS, AccountKind.ASSET, currency, "Bills and bonds held, at cost"),
+        BILLS: AccountSpec(BILLS, AccountKind.ASSET, currency, "Treasury bills held, at cost"),
         BONDS: AccountSpec(BONDS, AccountKind.ASSET, currency, "Treasury bonds held, at cost"),
         SALE_GAINS: AccountSpec(SALE_GAINS, AccountKind.INCOME, currency, "Gains on bills sold"),
         SALE_LOSSES: AccountSpec(

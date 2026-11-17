@@ -170,7 +170,7 @@ export type Approval = z.infer<typeof Approval>;
 export const ApprovalItemOut = z.object({
   can_decide: z.boolean(),
   id: z.string(),
-  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "auction_date", "rate_change", "product_change", "bond_change", "bond_sale", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "card_refund", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
+  kind: z.enum(["wording_change", "ledger_correction", "pot_transfer", "bank_transfer_match", "day_close", "dealing_order", "dealing_result", "buffer_rules", "buffer_capital", "bond_coupon", "auction_date", "rate_change", "product_change", "bond_change", "bond_sale", "migration_totals", "migration_sign_off", "phone_change", "team_change", "client_lock", "suppression_lift", "complaint_outcome", "announcement", "payout_account", "investment_correction", "investment_run", "note_reissue", "investment_booking", "payout_resolution", "tax_remittance", "deposit_reassignment", "payout_release", "investment_transfer", "organisation", "account_closure", "compliance_case", "bank_account_change", "account_code_map", "deposit_reversal", "deposit_receivable", "card_refund", "client_pin_reset", "client_limits", "client_statement", "client_withdrawal", "payment_channels_change", "calendar_change", "staff_security_change", "statement_layout_change", "withdrawal_limits_change", "report_schedule", "month_close"]),
   proposed_at: z.string(),
   proposed_by: z.string(),
   proposed_by_name: z.string().nullable(),
@@ -1446,6 +1446,60 @@ export const CorrectionOut = z.object({
   status: CorrectionStatus,
 });
 export type CorrectionOut = z.infer<typeof CorrectionOut>;
+
+export const CouponDueOut = z.object({
+  coupon_date: z.string(),
+  expected: AmountOut,
+  face: AmountOut,
+  issue_code: z.string(),
+  name: z.string(),
+});
+export type CouponDueOut = z.infer<typeof CouponDueOut>;
+
+export const CouponIn = z.object({
+  amount_minor: z.number().int(),
+  bank_reference: z.string(),
+  coupon_date: z.string(),
+  currency: Currency,
+  issue_code: z.string(),
+  note: z.string().nullable().optional(),
+  value_date: z.string(),
+});
+export type CouponIn = z.infer<typeof CouponIn>;
+
+export const CouponStatus = z.enum(["recorded", "approved", "declined"]);
+export type CouponStatus = z.infer<typeof CouponStatus>;
+
+export const DealingBondCouponsApiStep = z.enum(["approve", "decline"]);
+export type DealingBondCouponsApiStep = z.infer<typeof DealingBondCouponsApiStep>;
+
+export const CouponOut = z.object({
+  allowed: z.array(DealingBondCouponsApiStep),
+  amount: AmountOut,
+  bank_reference: z.string(),
+  coupon_date: z.string(),
+  decided_at: z.string().nullable(),
+  decided_by: z.string().nullable(),
+  decision_reason: z.string().nullable(),
+  expected: AmountOut,
+  face: AmountOut,
+  id: z.string(),
+  issue_code: z.string(),
+  note: z.string().nullable(),
+  recorded_at: z.string(),
+  recorded_by: z.string(),
+  status: CouponStatus,
+  value_date: z.string(),
+});
+export type CouponOut = z.infer<typeof CouponOut>;
+
+export const CouponsOut = z.object({
+  coupons: z.array(CouponOut),
+  currency: Currency,
+  due: z.array(CouponDueOut),
+  may_change: z.boolean(),
+});
+export type CouponsOut = z.infer<typeof CouponsOut>;
 
 export const OverviewApiAmount = z.object({
   currency: z.enum(["UGX", "USD"]),
@@ -4489,6 +4543,11 @@ export const DealingAuctionsApiDeclineIn = z.object({
 });
 export type DealingAuctionsApiDeclineIn = z.infer<typeof DealingAuctionsApiDeclineIn>;
 
+export const DealingBondCouponsApiDeclineIn = z.object({
+  reason: z.string(),
+});
+export type DealingBondCouponsApiDeclineIn = z.infer<typeof DealingBondCouponsApiDeclineIn>;
+
 export const DealingBufferApiDeclineIn = z.object({
   reason: z.string(),
 });
@@ -5558,6 +5617,56 @@ export const operations = {
     idempotent: true,
     status: 200,
     response: CalendarOut,
+  },
+  "GET /staff/dealing/bond-coupons": {
+    method: "GET",
+    path: "/staff/dealing/bond-coupons",
+    params: z.object({}),
+    query: z.object({
+    currency: Currency.optional(),
+  }),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: CouponsOut,
+  },
+  "POST /staff/dealing/bond-coupons": {
+    method: "POST",
+    path: "/staff/dealing/bond-coupons",
+    params: z.object({}),
+    query: z.object({}),
+    body: CouponIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CouponsOut,
+  },
+  "POST /staff/dealing/bond-coupons/{coupon_id}/approve": {
+    method: "POST",
+    path: "/staff/dealing/bond-coupons/{coupon_id}/approve",
+    params: z.object({
+    coupon_id: z.string(),
+  }),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: true,
+    status: 200,
+    response: CouponsOut,
+  },
+  "POST /staff/dealing/bond-coupons/{coupon_id}/decline": {
+    method: "POST",
+    path: "/staff/dealing/bond-coupons/{coupon_id}/decline",
+    params: z.object({
+    coupon_id: z.string(),
+  }),
+    query: z.object({}),
+    body: DealingBondCouponsApiDeclineIn,
+    bodyKind: "json",
+    idempotent: true,
+    status: 200,
+    response: CouponsOut,
   },
   "GET /staff/dealing/buffer": {
     method: "GET",
