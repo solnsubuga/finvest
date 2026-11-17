@@ -1,0 +1,14 @@
+---
+import { bondsEndpoint } from "../config.ts";
+---
+
+<!-- Put this on any page that shows bonds or the Treasury bonds category. It reads today's
+     issues from the API: the site is built without them. -->
+<div data-live-bonds={bondsEndpoint} hidden></div>
+
+<script>
+  import { startLiveBonds } from "../scripts/bonds.ts";
+
+  const endpoint = document.querySelector<HTMLElement>("[data-live-bonds]")?.dataset["liveBonds"];
+  if (endpoint) void startLiveBonds(endpoint);
+</script>

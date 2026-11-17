@@ -12,6 +12,8 @@ export interface Category {
   text: string;
   /** The catalogue kind whose live products open this category. `null` until one exists. */
   kind: "treasury_bill" | "fixed_income" | null;
+  /** Opened in the browser from the API when it lists a bond that can be bought. */
+  live?: boolean;
 }
 
 export const categories: Category[] = [
@@ -28,6 +30,7 @@ export const categories: Category[] = [
     name: "Treasury bonds",
     text: "Government of Uganda bonds from 2 to 25 years. They pay interest every six months and the full amount back at the end.",
     kind: null,
+    live: true,
   },
   {
     id: "unit-trusts",
