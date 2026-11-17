@@ -45,7 +45,10 @@ resource "cloudflare_origin_ca_certificate" "this" {
   requested_validity = 5475
 }
 
-# Back office behind Cloudflare Access, on top of the console's own password and passkey sign in.
+# The back office is not behind Cloudflare Access (owner, 2026-11-17). The console's own sign-in
+# guards it: a password and then a passkey or authenticator code for every member of staff, with
+# wrong guesses throttled, and the office networks setting on every staff request. Access remains
+# only for the client app before launch, through the staff list and policy below.
 
 # Staff the console has invited. The worker adds an email when a team invite or reactivation is
 # approved and removes it on deactivation, so Terraform creates the list but never touches its
@@ -80,34 +83,7 @@ resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   include    = local.staff_include
 }
 
-# Office networks for the back office (ADMIN_OFFICE_NETWORKS). When set, Access lets a staff
-# email in only from these addresses. The console's own office networks check on staff routes
-# stays the real control: it also covers the staff API, which this does not.
-resource "cloudflare_zero_trust_list" "office_networks" {
-  count = length(var.admin_access_emails) > 0 && length(var.admin_office_networks) > 0 ? 1 : 0
-
-  account_id = data.cloudflare_zone.this.account.id
-  name       = "${local.name} office networks"
-  type       = "IP"
-  items      = [for n in var.admin_office_networks : { value = n }]
-}
-
-resource "cloudflare_zero_trust_access_policy" "admin_office" {
-  count = length(cloudflare_zero_trust_list.office_networks)
-
-  account_id = data.cloudflare_zone.this.account.id
-  name       = "${local.name} staff in the office"
-  decision   = "allow"
-
-  include = local.staff_include
-  require = [{
-    ip_list = {
-      id = cloudflare_zero_trust_list.office_networks[0].id
-    }
-  }]
-}
-
-# Until switch day the production client app is for staff only, like the back office. The API
+# Until switch day the production client app is for staff only. The API
 # stays public: provider callbacks, Resend webhooks and the phone apps call it directly. The
 # phone apps are held back from the stores until this is lifted (docs/launch.md).
 resource "cloudflare_zero_trust_access_application" "app" {
@@ -121,24 +97,6 @@ resource "cloudflare_zero_trust_access_application" "app" {
 
   policies = [{
     id         = cloudflare_zero_trust_access_policy.admin_staff[0].id
-    precedence = 1
-  }]
-}
-
-resource "cloudflare_zero_trust_access_application" "admin" {
-  count = length(var.admin_access_emails) > 0 ? 1 : 0
-
-  zone_id          = data.cloudflare_zone.this.id
-  name             = "${local.name} back office"
-  domain           = var.admin_domain
-  type             = "self_hosted"
-  session_duration = "12h"
-
-  policies = [{
-    id = (length(cloudflare_zero_trust_access_policy.admin_office) > 0
-      ? cloudflare_zero_trust_access_policy.admin_office[0].id
-      : cloudflare_zero_trust_access_policy.admin_staff[0].id
-    )
     precedence = 1
   }]
 }

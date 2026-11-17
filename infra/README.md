@@ -5,7 +5,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Path | Contents |
 | --- | --- |
 | `terraform/shared/` | The `finvest` project, the Cloudflare zone settings and the zone's one rate limiting rule, which every environment shares. Provision it first. |
-| `terraform/` | One environment: host, network, database, buckets, DNS, back office access, alerts, and the settings it writes into GitHub. |
+| `terraform/` | One environment: host, network, database, buckets, DNS, Access on the client app before launch, alerts, and the settings it writes into GitHub. |
 | `terraform/environments/*.tfvars` | What differs between `staging` and `production`. Each has its own state, so planning one never touches the other. |
 | `terraform/tests/` | `terraform test` with mock providers: the rules below that must not drift. |
 | `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console, client app and website images, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
@@ -21,7 +21,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery, rehearsed by the drill in [docs/backup-and-restore.md](../docs/backup-and-restore.md). Only the droplet may connect. |
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
-| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the back office, and on the client app until switch day | Full (strict) TLS from the edge to the host |
+| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the client app until switch day | Full (strict) TLS from the edge to the host |
 | GitHub settings | Written into the `dev` environment | Written into `prod` | See below |
 | Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready` and `/health/operations`, host CPU and disk, database CPU, memory and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
@@ -32,7 +32,7 @@ The droplet, database cluster, bucket and project have `prevent_destroy`: Terraf
 | --- | --- | --- |
 | Public website | finvestug.com, www.finvestug.com | staging.finvestug.com |
 | Client app | app.finvestug.com | app-staging.finvestug.com |
-| Back office | admin.finvestug.com, behind Cloudflare Access | admin-staging.finvestug.com |
+| Back office | admin.finvestug.com, behind the console's own sign-in (password, then passkey or authenticator) | admin-staging.finvestug.com |
 | API | api.finvestug.com | api-staging.finvestug.com |
 
 Staging names sit one level below the zone so Cloudflare's free certificate covers them. `api.finvestug.com` is still an open question for the owner in `docs/decisions.md`.
@@ -43,7 +43,7 @@ Terraform owns these names in the `dev` (staging) and `prod` (production) GitHub
 
 | Kind | Names |
 | --- | --- |
-| Variables | `SITE_DOMAINS`, `APP_DOMAIN`, `ADMIN_DOMAIN`, `API_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `FINVEST_OBJECT_STORAGE_BUCKET`, `FINVEST_OBJECT_STORAGE_ENDPOINT`, `FINVEST_OBJECT_STORAGE_REGION`, and where Access protects the back office `FINVEST_CLOUDFLARE_ACCOUNT_ID` and `FINVEST_CLOUDFLARE_STAFF_LIST_ID` |
+| Variables | `SITE_DOMAINS`, `APP_DOMAIN`, `ADMIN_DOMAIN`, `API_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `FINVEST_OBJECT_STORAGE_BUCKET`, `FINVEST_OBJECT_STORAGE_ENDPOINT`, `FINVEST_OBJECT_STORAGE_REGION`, and where the staff Access list exists `FINVEST_CLOUDFLARE_ACCOUNT_ID` and `FINVEST_CLOUDFLARE_STAFF_LIST_ID` |
 | Secrets | `DATABASE_CA_CERT`, `DATABASE_MIGRATOR_PASSWORD`, `DATABASE_APP_PASSWORD`, `DATABASE_WORKER_PASSWORD`, `FINVEST_OBJECT_STORAGE_ACCESS_KEY_ID`, `FINVEST_OBJECT_STORAGE_SECRET_ACCESS_KEY`, `ORIGIN_TLS_CERT`, `ORIGIN_TLS_KEY` |
 
 GitHub refuses to create a variable that already exists, so do not create these by hand.
@@ -101,7 +101,7 @@ Everything else is created by Terraform. These are made by hand, once:
 | --- | --- |
 | `TERRAFORM_DIGITALOCEAN_TOKEN` | API → Tokens, full access, or custom scopes with write on droplet, vpc, firewall, reserved_ip, database, project, ssh_key, monitoring, uptime, tag. Deploys also use it to open and close SSH. |
 | `SPACES_ACCESS_KEY_ID`, `SPACES_SECRET_ACCESS_KEY` | A Spaces key with full access. Terraform uses it to create buckets and keys and to keep state. |
-| `CLOUDFLARE_API_TOKEN` | One token with zone and account rows. Zone (finvestug.com): DNS Edit, Zone Settings Edit, Zone WAF Edit, SSL and Certificates Edit, Access: Apps and Policies Edit (the Access applications sit on the zone). Account: Access: Apps and Policies Edit (the shared policy), Zero Trust Edit (the staff and office lists). "Zone: Edit" is not Zone Settings Edit. Terraform finds the account from the zone, so there is no account ID to set. |
+| `CLOUDFLARE_API_TOKEN` | One token with zone and account rows. Zone (finvestug.com): DNS Edit, Zone Settings Edit, Zone WAF Edit, SSL and Certificates Edit, Access: Apps and Policies Edit (the Access applications sit on the zone). Account: Access: Apps and Policies Edit (the shared policy), Zero Trust Edit (the staff list). "Zone: Edit" is not Zone Settings Edit. Terraform finds the account from the zone, so there is no account ID to set. |
 | `TERRAFORM_GITHUB_TOKEN` | A fine-grained GitHub token for this repository, read and write on Environments, Secrets and Variables |
 
 3. **Cloudflare zone.** `finvestug.com` must already be a zone on the account.
@@ -123,10 +123,9 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | --- | --- |
 | `TERRAFORM_STATE_BUCKET` | The state bucket's name |
 | `SSH_SOURCE_ADDRESSES` | Optional. Your own addresses, comma separated, such as `203.0.113.10`. Unset, nobody can SSH to the host except a Provision or deploy run, which admits only its own address while it works. Set it and run Provision when you want to log in yourself. |
-| `ADMIN_ACCESS_EMAILS` | Break-glass staff emails that Cloudflare Access always lets into the back office, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production. Everyone else gets in through the console: inviting someone on the Team screen adds their email to a Cloudflare list that the worker keeps in step (`FINVEST_CLOUDFLARE_ACCESS_TOKEN` below), and deactivating them removes it. |
-| `ADMIN_OFFICE_NETWORKS` | Optional. Office addresses as CIDR ranges, comma separated, such as `203.0.113.10/32`. When set, Cloudflare Access lets staff into the back office only from these networks. It is a second fence: the console's own office networks setting (Settings, Staff security, two people) is the real check, and it also covers the staff API, which this does not. Keep this list the same as the Settings list or wider, or a change made in Settings is undone at the edge. Run Provision `production` after changing it. |
+| `ADMIN_ACCESS_EMAILS` | Break-glass staff emails that Cloudflare Access lets into the production client app while it is held back before launch, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production until `CLIENT_APP_PUBLIC` is `true`. The back office is not behind Access (owner, 2026-11-17). Invited staff are also kept on a Cloudflare list by the worker (`FINVEST_CLOUDFLARE_ACCESS_TOKEN` below). |
 | `ALERT_EMAILS` | Who gets alerts, comma separated like `ADMIN_ACCESS_EMAILS`. Optional, but set two people before launch. |
-| `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. The back office keeps it. |
+| `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. |
 
 ## Provision
 
@@ -244,7 +243,7 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 | Address | Serves |
 | --- | --- |
 | API | The backend |
-| Back office | The console, behind Cloudflare Access in production |
+| Back office | The console. It is not behind Cloudflare Access: the console's own sign-in, with a second step for every member of staff, guards it |
 | Public website | The website from `apps/site`, built for the environment's own addresses. Staging always serves it. Production answers "on its way" until `SITE_PUBLISHED` is `true`. |
 | Client app | The web version of `apps/client` (`app.Dockerfile`). Its policy (`app-csp.mjs`) lets the guided selfie run its WebAssembly face detector and Regula's liveness check, and the edge allows the camera for this address only. In production it stays behind Cloudflare Access until `CLIENT_APP_PUBLIC` is `true` and Provision has run. |
 
@@ -267,7 +266,7 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 
 ## Open before production
 
-- The firewall proves traffic came through Cloudflare, not through this zone. Turn on Authenticated Origin Pulls in Caddy, or have the console check the Access token, before production.
+- The firewall proves traffic came through Cloudflare, not through this zone. Turn on Authenticated Origin Pulls in Caddy before production.
 - Production runs one database node. A standby (`database_node_count = 2`) roughly doubles the database cost.
 
 ## Checks without credentials

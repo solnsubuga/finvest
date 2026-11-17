@@ -85,12 +85,24 @@ run "deploy_settings_reach_github" {
   }
 }
 
-run "production_requires_access" {
+run "production_requires_access_while_the_app_is_held_back" {
   command = plan
   variables {
     environment = "production"
   }
   expect_failures = [var.admin_access_emails]
+}
+
+run "production_without_access_once_the_app_is_public" {
+  command = plan
+  variables {
+    environment       = "production"
+    client_app_public = true
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_access_application.app) == 0 && length(cloudflare_zero_trust_list.staff_emails) == 0
+    error_message = "With the app public and no break-glass emails, nothing is behind Access."
+  }
 }
 
 run "production_with_access" {
@@ -100,8 +112,12 @@ run "production_with_access" {
     admin_access_emails = ["staff@example.com"]
   }
   assert {
-    condition     = length(cloudflare_zero_trust_access_application.admin) == 1
-    error_message = "Production puts the back office behind Cloudflare Access."
+    condition     = length(cloudflare_zero_trust_access_application.app) == 1
+    error_message = "Before launch the client app is behind Access for staff."
+  }
+  assert {
+    condition     = alltrue([for a in cloudflare_zero_trust_access_application.app : a.domain != var.admin_domain])
+    error_message = "The back office is never behind Access; the console's own sign-in guards it."
   }
   assert {
     condition     = length(cloudflare_zero_trust_list.staff_emails) == 1 && cloudflare_zero_trust_list.staff_emails[0].type == "EMAIL"
@@ -123,49 +139,6 @@ run "production_with_access" {
     condition     = alltrue([for s in github_actions_environment_secret.deploy : s.environment == "prod"])
     error_message = "Production settings go to the prod GitHub environment."
   }
-}
-
-run "back_office_open_from_anywhere_without_office_networks" {
-  command = plan
-  variables {
-    environment         = "production"
-    admin_access_emails = ["staff@example.com"]
-  }
-  assert {
-    condition     = length(cloudflare_zero_trust_list.office_networks) == 0 && length(cloudflare_zero_trust_access_policy.admin_office) == 0
-    error_message = "With no office networks the back office keeps the email-only policy."
-  }
-}
-
-run "back_office_only_from_office_networks" {
-  command = plan
-  variables {
-    environment           = "production"
-    admin_access_emails   = ["staff@example.com"]
-    admin_office_networks = ["203.0.113.0/24", "198.51.100.7/32"]
-  }
-  assert {
-    condition     = toset([for i in cloudflare_zero_trust_list.office_networks[0].items : i.value]) == toset(["203.0.113.0/24", "198.51.100.7/32"])
-    error_message = "The office list holds exactly the configured networks."
-  }
-  assert {
-    condition     = length(cloudflare_zero_trust_access_policy.admin_office[0].require) == 1
-    error_message = "The office policy requires the office list."
-  }
-  assert {
-    condition     = length(cloudflare_zero_trust_access_application.app) == 1
-    error_message = "The client app keeps the email-only staff policy before launch."
-  }
-}
-
-run "office_networks_must_be_cidr" {
-  command = plan
-  variables {
-    environment           = "production"
-    admin_access_emails   = ["staff@example.com"]
-    admin_office_networks = ["office"]
-  }
-  expect_failures = [var.admin_office_networks]
 }
 
 run "no_ssh_rule_without_ssh_addresses" {

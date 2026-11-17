@@ -114,18 +114,18 @@ variable "documents_bucket" {
 }
 
 variable "admin_access_emails" {
-  description = "Staff emails allowed through Cloudflare Access to the back office. Required in production."
+  description = "Break-glass staff emails that Cloudflare Access lets into the production client app before launch. Required in production until client_app_public is true. The back office is not behind Access."
   type        = list(string)
   default     = []
 
   validation {
-    condition     = var.environment != "production" || length(var.admin_access_emails) > 0
-    error_message = "Production needs at least one admin_access_emails entry, so the back office is never public."
+    condition     = var.environment != "production" || var.client_app_public || length(var.admin_access_emails) > 0
+    error_message = "Production needs at least one admin_access_emails entry while the client app is held back for staff."
   }
 }
 
 variable "client_app_public" {
-  description = "Production only. false keeps the client app host behind Cloudflare Access for staff (admin_access_emails) until switch day (docs/launch.md). The API host is never behind Access."
+  description = "Production only. false keeps the client app host behind Cloudflare Access for staff (admin_access_emails) until switch day (docs/launch.md). The API host and the back office are never behind Access."
   type        = bool
   default     = false
 }
@@ -144,15 +144,4 @@ variable "github_owner" {
 variable "github_repository" {
   description = "Name of the GitHub repository whose environment receives the deployment settings."
   type        = string
-}
-
-variable "admin_office_networks" {
-  description = "Office addresses (CIDR) allowed into the back office through Cloudflare Access. Empty: any address, with a staff email."
-  type        = list(string)
-  default     = []
-
-  validation {
-    condition     = alltrue([for n in var.admin_office_networks : can(cidrhost(n, 0))])
-    error_message = "admin_office_networks entries must be CIDR ranges, such as 203.0.113.10/32."
-  }
 }
