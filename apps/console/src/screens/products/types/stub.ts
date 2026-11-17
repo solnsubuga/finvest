@@ -32,7 +32,7 @@ export function builtInTypes(): ProductType[] {
       name: "Treasury bill",
       model: "treasury_bill",
       description: "A term in days and a rate before tax, paid at maturity. Bought at the Bank of Uganda auction.",
-      defaultTaxBps: 1500,
+      defaultTaxBps: 2000,
       status: "active",
       builtIn: true,
       inUse: 3,

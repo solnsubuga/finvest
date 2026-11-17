@@ -6,6 +6,11 @@ import { can } from "@/auth/types.ts";
 import { Button } from "@/components/ui/button.tsx";
 import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
+import { apiBaseUrl, createHttp } from "@/api/http.ts";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { createHttpDirectory } from "@/directory/http.ts";
+import { createStubDirectory } from "@/directory/stub.ts";
+import { useNames } from "@/screens/review-queue/names.ts";
 import { CatalogueError, catalogueErrorMessage, type CatalogueApi, type Product, type ProductChange, type ProductStatus } from "./api.ts";
 import { ChangeCard } from "./ChangeCard.tsx";
 import { formatBps, formatDay, formatExact, formatTerm, INTEREST_PAID_LABELS, KIND_LABELS, NEW_PRODUCT_TYPES, PRODUCT_STATUS_LABELS } from "./format.ts";
@@ -69,6 +74,8 @@ interface ProductsScreenProps {
   bondsApi?: BondsApi;
   /** Product types, shown last and listed on New product. See docs/product-types.md. */
   typesApi?: ProductTypesApi;
+  /** Turns the staff IDs on waiting changes into names. */
+  directory?: Directory;
 }
 
 /**
@@ -78,7 +85,7 @@ interface ProductsScreenProps {
  * `?new-bond` opens it on the first bond type. `?new-type` defines a new product type and
  * `?edit-type=CODE` changes one.
  */
-export function ProductsScreen({ api, me = "", canChange = false, bondsApi, typesApi }: ProductsScreenProps) {
+export function ProductsScreen({ api, me = "", canChange = false, bondsApi, typesApi, directory = emptyDirectory }: ProductsScreenProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -86,6 +93,7 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi, type
   const [round, setRound] = useState(0);
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const { staff } = useNames(directory, [], load.state === "ready" ? load.book.waiting.map((change) => change.proposedBy) : []);
 
   const fetchBook = useCallback(async (): Promise<Load> => {
     try {
@@ -129,7 +137,7 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi, type
   }
 
   if (canChange && typesApi && (params.has("new-type") || params.has("edit-type"))) {
-    return <TypePage api={typesApi} me={me} code={params.get("edit-type")} />;
+    return <TypePage api={typesApi} me={me} directory={directory} code={params.get("edit-type")} />;
   }
 
   if (load.state === "loading") {
@@ -165,6 +173,7 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi, type
       change={change}
       current={change.action === "create" ? null : (products.find((product) => product.code === change.productCode) ?? null)}
       mine={change.proposedBy === me}
+      proposerName={staff[change.proposedBy]}
       canDecide={canChange}
       busy={busy === change.id}
       error={failed?.on === change.id ? failed.message : null}
@@ -179,7 +188,13 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi, type
     const asked = params.has("new-bond") ? "treasury_bond" : params.get("type");
     const offered = typeChoices(load.book.types, bondsApi !== undefined);
     // A type's code, or for older links a return model, which picks the first type built on it.
-    const chosen = offered.find((t) => t.value === asked) ?? offered.find((t) => t.model === asked) ?? offered[0];
+    // With neither, a Treasury bill, which is what staff add most often.
+    const chosen =
+      offered.find((t) => t.value === asked) ??
+      offered.find((t) => t.model === asked) ??
+      offered.find((t) => t.value === "TREASURY-BILL") ??
+      offered.find((t) => t.model === "treasury_bill") ??
+      offered[0];
     return (
       <>
         <Back />
@@ -365,8 +380,8 @@ export function ProductsScreen({ api, me = "", canChange = false, bondsApi, type
           {shown ? <ClientView product={shown} canChange={canChange} /> : null}
         </div>
       )}
-      {bondsApi ? <BondsSection key={round} api={bondsApi} me={me} canChange={canChange} /> : null}
-      {typesApi ? <TypesSection key={`types:${round}`} api={typesApi} me={me} canChange={canChange} /> : null}
+      {bondsApi ? <BondsSection key={round} api={bondsApi} me={me} directory={directory} canChange={canChange} /> : null}
+      {typesApi ? <TypesSection key={`types:${round}`} api={typesApi} me={me} directory={directory} canChange={canChange} /> : null}
     </>
   );
 }
@@ -448,7 +463,12 @@ export default function ProductsPage() {
   const [typesApi] = useState<ProductTypesApi>(() =>
     isStubAuth() && session ? createStubProductTypesApi({ me: session.staffId, sample: sampleFrom(window.location.search) }) : connectedProductTypesApi(),
   );
+  const [directory] = useState<Directory>(() => {
+    if (isStubAuth() && session) return createStubDirectory({ id: session.staffId, name: session.name });
+    const base = apiBaseUrl();
+    return base ? createHttpDirectory(createHttp(base)) : emptyDirectory;
+  });
   return (
-    <ProductsScreen api={api} bondsApi={bondsApi} typesApi={typesApi} me={session?.staffId ?? ""} canChange={session ? can(session, "products.change") : false} />
+    <ProductsScreen api={api} bondsApi={bondsApi} typesApi={typesApi} directory={directory} me={session?.staffId ?? ""} canChange={session ? can(session, "products.change") : false} />
   );
 }

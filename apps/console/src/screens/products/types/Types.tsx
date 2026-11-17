@@ -7,6 +7,9 @@ import { cn } from "@/lib.ts";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { formatBps, formatStamp, parsePercent } from "../format.ts";
 import { Field } from "../ProductForm.tsx";
+import { proposedBy } from "../proposer.ts";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { useNames } from "@/screens/review-queue/names.ts";
 import {
   MODEL_LABELS,
   ProductTypesError,
@@ -86,12 +89,15 @@ function useTypeBook(api: ProductTypesApi) {
 interface TypesSectionProps {
   api: ProductTypesApi;
   me: string;
+  /** Names the colleague who proposed each change. */
+  directory?: Directory;
   canChange: boolean;
 }
 
 /** The product types on the Products screen, with changes waiting for a second person. */
-export function TypesSection({ api, me, canChange }: TypesSectionProps) {
+export function TypesSection({ api, me, directory = emptyDirectory, canChange }: TypesSectionProps) {
   const { load, busy, failed, round, run, retry } = useTypeBook(api);
+  const { staff } = useNames(directory, [], load.state === "ready" ? load.book.waiting.map((change) => change.proposedBy) : []);
 
   const heading = (
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -147,6 +153,7 @@ export function TypesSection({ api, me, canChange }: TypesSectionProps) {
                 change={change}
                 current={types.find((t) => t.code === change.code) ?? null}
                 mine={change.proposedBy === me}
+                proposerName={staff[change.proposedBy]}
                 canDecide={canChange}
                 busy={busy === change.id}
                 error={failed?.on === change.id ? failed.message : null}
@@ -208,6 +215,7 @@ interface TypeChangeCardProps {
   /** The type as it is now. Null for a new type. */
   current: ProductType | null;
   mine: boolean;
+  proposerName?: string | null | undefined;
   canDecide: boolean;
   busy: boolean;
   error: string | null;
@@ -241,7 +249,7 @@ function lines(change: ProductTypeChange, current: ProductType | null): Line[] {
 }
 
 /** A type change waiting for a second person, with what it changes. */
-export function TypeChangeCard({ change, current, mine, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: TypeChangeCardProps) {
+export function TypeChangeCard({ change, current, mine, proposerName, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: TypeChangeCardProps) {
   const [sendingBack, setSendingBack] = useState(false);
   const [note, setNote] = useState("");
   const noteId = `type-change-note-${change.id}`;
@@ -273,7 +281,7 @@ export function TypeChangeCard({ change, current, mine, canDecide, busy, error, 
         ) : null}
         <div className="flex justify-between gap-3 border-t border-divider pt-2.5 text-md">
           <dt className="text-muted">Proposed</dt>
-          <dd className="m-0 text-right font-bold tabular-nums">{`${mine ? "By you" : "By a colleague"}, ${formatStamp(change.proposedAt)}`}</dd>
+          <dd className="m-0 text-right font-bold tabular-nums">{`${proposedBy(mine, proposerName)}, ${formatStamp(change.proposedAt)}`}</dd>
         </div>
       </dl>
       <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-[1.45]">{change.reason}</p>
@@ -339,13 +347,15 @@ function Back() {
 interface TypePageProps {
   api: ProductTypesApi;
   me: string;
+  directory?: Directory;
   /** Null for a new type, otherwise the code of the type to change. */
   code: string | null;
 }
 
 /** `?new-type` defines a new product type; `?edit-type=CODE` changes, retires or restores one. */
-export function TypePage({ api, me, code }: TypePageProps) {
+export function TypePage({ api, me, directory = emptyDirectory, code }: TypePageProps) {
   const { load, busy, failed, round, run, retry } = useTypeBook(api);
+  const { staff } = useNames(directory, [], load.state === "ready" ? load.book.waiting.map((change) => change.proposedBy) : []);
   const navigate = useNavigate();
   const title = code === null ? "New product type" : "Change product type";
   const summary =
@@ -416,6 +426,7 @@ export function TypePage({ api, me, code }: TypePageProps) {
             change={open}
             current={type}
             mine={open.proposedBy === me}
+            proposerName={staff[open.proposedBy]}
             canDecide
             busy={busy === open.id}
             error={failed?.on === open.id ? failed.message : null}

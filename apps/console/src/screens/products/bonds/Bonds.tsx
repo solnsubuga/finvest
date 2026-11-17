@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label.tsx";
 import { cn } from "@/lib.ts";
 import { formatBps, formatDay, formatExact, formatStamp, parsePercent } from "../format.ts";
 import { Field } from "../ProductForm.tsx";
+import { proposedBy } from "../proposer.ts";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { useNames } from "@/screens/review-queue/names.ts";
 import {
   BondsError,
   bondsErrorMessage,
@@ -45,16 +48,19 @@ type Load = { state: "loading" } | { state: "failed"; message: string } | { stat
 interface BondsSectionProps {
   api: BondsApi;
   me: string;
+  /** Names the colleague who proposed each change. */
+  directory?: Directory;
   canChange: boolean;
 }
 
 /** Bond issues on the Products screen: each one's ISIN, coupon, tax, dates and price. */
-export function BondsSection({ api, me, canChange }: BondsSectionProps) {
+export function BondsSection({ api, me, directory = emptyDirectory, canChange }: BondsSectionProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(null);
   const [round, setRound] = useState(0);
+  const { staff } = useNames(directory, [], load.state === "ready" ? load.book.waiting.map((change) => change.proposedBy) : []);
 
   const fetchBook = useCallback(async (): Promise<Load> => {
     try {
@@ -145,6 +151,7 @@ export function BondsSection({ api, me, canChange }: BondsSectionProps) {
                 change={change}
                 current={bonds.find((b) => b.code === change.code) ?? null}
                 mine={change.proposedBy === me}
+                proposerName={staff[change.proposedBy]}
                 canDecide={canChange}
                 busy={busy === change.id}
                 error={failed?.on === change.id ? failed.message : null}
@@ -327,6 +334,7 @@ interface BondChangeCardProps {
   change: BondChange;
   current: Bond | null;
   mine: boolean;
+  proposerName?: string | null | undefined;
   canDecide: boolean;
   busy: boolean;
   error: string | null;
@@ -335,7 +343,7 @@ interface BondChangeCardProps {
   onWithdraw(): void;
 }
 
-function BondChangeCard({ change, current, mine, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: BondChangeCardProps) {
+function BondChangeCard({ change, current, mine, proposerName, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: BondChangeCardProps) {
   const [sendingBack, setSendingBack] = useState(false);
   const [note, setNote] = useState("");
   const noteId = useId();
@@ -372,7 +380,7 @@ function BondChangeCard({ change, current, mine, canDecide, busy, error, onAppro
         {rows.map(([name, value]) => (
           <Row key={name} name={name} value={value} />
         ))}
-        <Row name="Proposed" value={`${mine ? "By you" : "By a colleague"}, ${formatStamp(change.proposedAt)}`} />
+        <Row name="Proposed" value={`${proposedBy(mine, proposerName)}, ${formatStamp(change.proposedAt)}`} />
       </dl>
       <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-[1.45]">{change.reason}</p>
       {error ? (

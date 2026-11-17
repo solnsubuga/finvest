@@ -13,6 +13,7 @@ import {
   KIND_LABELS,
   PRODUCT_STATUS_LABELS,
 } from "./format.ts";
+import { proposedBy } from "./proposer.ts";
 import { Reach } from "./Reach.tsx";
 
 interface ChangeCardProps {
@@ -21,6 +22,8 @@ interface ChangeCardProps {
   /** The product as it is now. Null for a new product. */
   current: Product | null;
   mine: boolean;
+  /** The proposer's name, once the directory has it. */
+  proposerName?: string | null | undefined;
   /** Whether the person holds `products.change`. Without it the card only shows the change. */
   canDecide: boolean;
   busy: boolean;
@@ -73,7 +76,7 @@ function lines(change: ProductChange, current: Product | null): Line[] {
 }
 
 /** A product change waiting for a second person, with what it changes and who it reaches. */
-export function ChangeCard({ api, change, current, mine, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: ChangeCardProps) {
+export function ChangeCard({ api, change, current, mine, proposerName, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: ChangeCardProps) {
   const [sendingBack, setSendingBack] = useState(false);
   const [note, setNote] = useState("");
   const noteId = `change-note-${change.id}`;
@@ -98,7 +101,7 @@ export function ChangeCard({ api, change, current, mine, canDecide, busy, error,
         ))}
         <div className="flex justify-between gap-3 border-t border-divider pt-2.5 text-md">
           <dt className="text-muted">Proposed</dt>
-          <dd className="m-0 text-right font-bold tabular-nums">{`${mine ? "By you" : "By a colleague"}, ${formatStamp(change.proposedAt)}`}</dd>
+          <dd className="m-0 text-right font-bold tabular-nums">{`${proposedBy(mine, proposerName)}, ${formatStamp(change.proposedAt)}`}</dd>
         </div>
       </dl>
       <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-[1.45]">{change.reason}</p>
