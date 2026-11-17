@@ -55,7 +55,9 @@ describe("Activity", () => {
     expect(screen.getByText("Did not go through")).toBeTruthy();
     expect(screen.getByText("Interest on 91 Day Treasury Bill")).toBeTruthy();
     expect(screen.getByText("+UGX 15,400")).toBeTruthy();
-    expect(screen.getByText("Payout")).toBeTruthy();
+    expect(screen.getByText("Withdrawal")).toBeTruthy();
+    expect(screen.getByText("Bond coupon")).toBeTruthy();
+    expect(screen.getByText("+UGX 57,000")).toBeTruthy();
 
     expect(screen.getAllByText(/^\u2212UGX /).length).toBeGreaterThan(0);
 
@@ -67,10 +69,12 @@ describe("Activity", () => {
     await fireEvent.changeText(screen.getByTestId("activity-search"), "");
 
     await fireEvent.press(screen.getByTestId("filter-interest"));
-    expect(screen.queryByText("Payout")).toBeNull();
+    expect(screen.queryByText("Withdrawal")).toBeNull();
+    expect(screen.queryByText("Bond coupon")).toBeNull();
     expect(screen.getByText("Interest on 91 Day Treasury Bill")).toBeTruthy();
     await fireEvent.press(screen.getByTestId("filter-payout"));
-    expect(screen.getByText("Paid to you")).toBeTruthy();
+    expect(screen.getAllByText("Paid to you")).toHaveLength(2);
+    expect(screen.getByText("Bond coupon")).toBeTruthy();
     expect(screen.queryByText(/^Payment for/)).toBeNull();
     expect(screen.queryByTestId("activity-since")).toBeNull();
   });
