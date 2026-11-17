@@ -1,6 +1,6 @@
 import { cn } from "@/lib.ts";
 import type { Cover, Desk } from "./api.ts";
-import { bufferNote, COVER_LABELS, formatAuctionDay, formatShort } from "./format.ts";
+import { bufferNote, COVER_LABELS, formatAuctionDay, formatDay, formatShort } from "./format.ts";
 
 const COVER_STYLES: Record<Cover, string> = {
   covered: "bg-success-surface text-success",
@@ -9,7 +9,7 @@ const COVER_STYLES: Record<Cover, string> = {
   surplus: "bg-surface-sunken text-black",
 };
 
-/** The four figures at the top of the desk. */
+/** The figures at the top of the desk. */
 export function Figures({ desk }: { desk: Desk }) {
   const { buffer, earlyWithdrawals } = desk;
   const custodian =
@@ -20,8 +20,13 @@ export function Figures({ desk }: { desk: Desk }) {
         : "Does not match the custodian";
   return (
     <dl className="m-0 grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
-      <Figure name="Client money to place" value={formatShort(desk.moneyToPlace)} note="Paid in and not yet in bills" />
+      <Figure name="Client money to place" value={formatShort(desk.moneyToPlace)} note="Paid in and not yet in bills or bonds" />
       <Figure name="Bills held for clients" value={formatShort(desk.billsHeld)} note={custodian} warn={desk.matchesCustodian === false} />
+      <Figure
+        name="Bonds held for clients"
+        value={formatShort(desk.bondsHeld)}
+        note={desk.bonds.length === 1 ? "At cost, 1 issue" : `At cost, ${desk.bonds.length} issues`}
+      />
       <Figure
         name="Liquidity buffer"
         value={formatShort(buffer.balance)}
@@ -73,15 +78,82 @@ export function PositionTable({ desk }: { desk: Desk }) {
               <td className="px-3 py-3">{formatShort(position.toBuy, false)}</td>
               <td className="px-3 py-3">{position.nextAuction ? formatAuctionDay(position.nextAuction) : position.discountOnly ? "Not set" : "On demand"}</td>
               <td className="px-3 py-3">
-                <span className={cn("rounded-pill px-2.5 py-1 text-xs font-bold whitespace-nowrap", COVER_STYLES[position.cover])}>
-                  {COVER_LABELS[position.cover]}
-                </span>
+                <CoverTag cover={position.cover} />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+function CoverTag({ cover }: { cover: Cover }) {
+  return <span className={cn("rounded-pill px-2.5 py-1 text-xs font-bold whitespace-nowrap", COVER_STYLES[cover])}>{COVER_LABELS[cover]}</span>;
+}
+
+const BOND_HEADINGS = ["Bond issue", "Clients hold", "Desk holds", "To buy", "On order", "To sell", "Money to place", "Status"];
+
+/**
+ * The face value clients hold of each bond issue against the face value the desk holds. Every bond
+ * of an issue pays the same, so the desk buys face value, not money.
+ */
+export function BondPositionTable({ desk }: { desk: Desk }) {
+  return (
+    <section aria-labelledby="bond-position" className="flex flex-col gap-3 rounded-xl border border-border bg-surface p-5">
+      <div className="flex flex-col gap-1">
+        <h2 id="bond-position" className="m-0 text-[17px] font-extrabold">
+          Treasury bonds by issue
+        </h2>
+        <p className="m-0 text-sm leading-[1.45] text-muted">
+          Face value. A client's bond is covered once the desk holds the same face value of the same issue at the custodian.
+        </p>
+      </div>
+      {desk.bonds.length === 0 ? (
+        <p className="m-0 border-t border-divider pt-3 text-md leading-normal text-muted">
+          No bond issues are open. Add one under Products, and its position shows here once clients buy it.
+        </p>
+      ) : (
+        <div className="-mx-5 overflow-x-auto" tabIndex={0} role="region" aria-label="Position by bond issue">
+          <table className="w-full min-w-[820px] border-collapse text-md">
+            <caption className="sr-only">Position by bond issue</caption>
+            <thead>
+              <tr className="text-left text-xs text-muted">
+                {BOND_HEADINGS.map((heading) => (
+                  <th key={heading} scope="col" className="px-3 py-3 font-bold first:pl-5 last:pr-5">
+                    {heading}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {desk.bonds.map((bond) => (
+                <tr key={bond.code} className="border-t border-divider tabular-nums">
+                  <th scope="row" className="py-3 pr-3 pl-5 text-left align-top font-bold">
+                    {bond.name}
+                    <span className="block text-xs font-semibold text-muted">
+                      {bond.isin}, matures {formatDay(bond.maturityDate)}
+                    </span>
+                    <span className="block text-xs font-semibold text-muted">
+                      {bond.holders === 1 ? "1 client" : `${bond.holders} clients`}
+                    </span>
+                  </th>
+                  <td className="px-3 py-3 align-top">{formatShort(bond.clientsFace, false)}</td>
+                  <td className="px-3 py-3 align-top">{formatShort(bond.faceHeld, false)}</td>
+                  <td className="px-3 py-3 align-top">{formatShort(bond.toBuy, false)}</td>
+                  <td className="px-3 py-3 align-top">{formatShort(bond.onOrder, false)}</td>
+                  <td className="px-3 py-3 align-top">{formatShort(bond.toSell, false)}</td>
+                  <td className="px-3 py-3 align-top">{formatShort(bond.toPlace, false)}</td>
+                  <td className="py-3 pr-5 pl-3 align-top">
+                    <CoverTag cover={bond.cover} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

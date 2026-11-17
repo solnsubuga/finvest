@@ -2,8 +2,8 @@ import { useId, useState, type FormEvent, type ReactNode } from "react";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import type { Desk, Fill, NewOrder, Order, OrderKind, ProductPosition } from "./api.ts";
-import { formatDay, formatExact, formatShort, formatTime, KIND_LABELS, parseAmount, STATUS_LABELS } from "./format.ts";
+import type { BondPosition, Desk, Fill, Instrument, NewOrder, Order, OrderKind, ProductPosition } from "./api.ts";
+import { formatDay, formatExact, formatShort, formatTime, INSTRUMENT_LABELS, KIND_LABELS, parseAmount, STATUS_LABELS } from "./format.ts";
 import { Row } from "./Position.tsx";
 import { DateInput } from "@/components/ui/date-input.tsx";
 
@@ -17,7 +17,10 @@ export type OrderCommand =
 
 interface OrderCardProps {
   order: Order;
+  /** The product a bill order is for. */
   position: ProductPosition | undefined;
+  /** The issue a bond order is for. */
+  bond?: BondPosition | undefined;
   busy: boolean;
   /** Why the last action on this order did not go through. */
   error: string | null;
@@ -28,7 +31,7 @@ interface OrderCardProps {
 }
 
 /** One open order, what has happened to it, and what the signed-in person may do next. */
-export function OrderCard({ order, position, busy, error, today, onCommand, onCancel }: OrderCardProps) {
+export function OrderCard({ order, position, bond, busy, error, today, onCommand, onCancel }: OrderCardProps) {
   const [open, setOpen] = useState<"send_back" | "reject_result" | "record_result" | "confirm_result" | null>(null);
   const close = () => {
     setOpen(null);
@@ -36,6 +39,7 @@ export function OrderCard({ order, position, busy, error, today, onCommand, onCa
   };
   const can = (action: Order["allowed"][number]) => order.allowed.includes(action);
   const sells = order.kind === "secondary_sale";
+  const bonds = order.instrument === "bond";
   const waitsForOther =
     order.allowed.length === 0 || (order.status === "prepared" && !can("approve"))
       ? order.status === "prepared"
@@ -57,6 +61,7 @@ export function OrderCard({ order, position, busy, error, today, onCommand, onCa
         <p className="m-0 text-xs font-bold text-muted">{STATUS_LABELS[order.status]}</p>
       </div>
       <dl className="m-0 flex flex-col gap-2.5">
+        <Row name="Deals in" value={bonds ? `${INSTRUMENT_LABELS.bond}, ${order.productCode}` : INSTRUMENT_LABELS.bill} />
         <Row name="Face value" value={formatExact(order.face)} />
         <Row name="Prepared by" value={`${order.preparedBy}, ${formatTime(order.preparedAt)}`} />
         {order.result ? (
@@ -84,7 +89,8 @@ export function OrderCard({ order, position, busy, error, today, onCommand, onCa
       {open === "record_result" ? (
         <ResultForm
           order={order}
-          discountOnly={position?.discountOnly ?? false}
+          discountOnly={!bonds && (position?.discountOnly ?? false)}
+          maturityDate={bonds ? bond?.maturityDate : undefined}
           today={today}
           busy={busy}
           onCancel={close}
@@ -161,7 +167,11 @@ export function OrderCard({ order, position, busy, error, today, onCommand, onCa
       {can("confirm_result") ? (
         <p className="m-0 text-sm leading-[1.45] text-muted">
           Confirming posts the {sells ? "sale" : "purchase"} to the ledger
-          {sells ? "." : " and allocates the bills to client investments, oldest payment first."}
+          {sells
+            ? "."
+            : bonds
+              ? ". The bonds stand behind clients' holdings of this issue by face value."
+              : " and allocates the bills to client investments, oldest payment first."}
         </p>
       ) : null}
     </article>
@@ -203,6 +213,8 @@ type ResultErrors = Partial<Record<"face" | "amount" | "settledOn" | "maturesOn"
 interface ResultFormProps {
   order: Order;
   discountOnly: boolean;
+  /** A bond issue's maturity date. Every bond of the issue matures on it. */
+  maturityDate: string | undefined;
   today: string;
   busy: boolean;
   onCancel: () => void;
@@ -210,14 +222,14 @@ interface ResultFormProps {
 }
 
 /** What the custodian's note says was dealt. A second person confirms it before anything is posted. */
-function ResultForm({ order, discountOnly, today, busy, onCancel, onSubmit }: ResultFormProps) {
+function ResultForm({ order, discountOnly, maturityDate, today, busy, onCancel, onSubmit }: ResultFormProps) {
   const id = useId();
   const sells = order.kind === "secondary_sale";
   const [nothing, setNothing] = useState(false);
   const [face, setFace] = useState("");
   const [amount, setAmount] = useState("");
   const [settledOn, setSettledOn] = useState(today);
-  const [maturesOn, setMaturesOn] = useState("");
+  const [maturesOn, setMaturesOn] = useState(maturityDate ?? "");
   const [reference, setReference] = useState("");
   const [errors, setErrors] = useState<ResultErrors>({});
   const currency = order.face.currency;
@@ -236,6 +248,8 @@ function ResultForm({ order, discountOnly, today, busy, onCancel, onSubmit }: Re
     if (!settledOn) found.settledOn = "Enter the settlement date.";
     else if (settledOn > today) found.settledOn = "A result is recorded on or after its settlement date.";
     if (!maturesOn) found.maturesOn = "Enter the maturity date.";
+    else if (maturityDate && maturesOn !== maturityDate)
+      found.maturesOn = `Every bond of this issue matures on ${formatDay(maturityDate)}. A note with another date is for another bond.`;
     else if (settledOn && maturesOn <= settledOn) found.maturesOn = "The maturity date is after the settlement date.";
     if (!reference.trim()) found.reference = "Enter the reference on the custodian's note.";
     setErrors(found);
@@ -281,7 +295,12 @@ function ResultForm({ order, discountOnly, today, busy, onCancel, onSubmit }: Re
                 />
               )}
             </Field>
-            <Field id={`${id}-matures`} label="Matures on" error={errors.maturesOn}>
+            <Field
+              id={`${id}-matures`}
+              label="Matures on"
+              error={errors.maturesOn}
+              {...(maturityDate ? { hint: "The issue's maturity date." } : {})}
+            >
               {(control) => (
                 <DateInput
                   {...control}
@@ -324,25 +343,48 @@ interface PrepareFormProps {
 export function PrepareForm({ desk, busy, error, onCancel, onSubmit }: PrepareFormProps) {
   const id = useId();
   const [kind, setKind] = useState<OrderKind>("auction_bid");
+  const [instrument, setInstrument] = useState<Instrument>("bill");
   const [productCode, setProductCode] = useState(desk.positions[0]?.productCode ?? "");
+  const [issueCode, setIssueCode] = useState(desk.bonds[0]?.code ?? "");
   const [face, setFace] = useState("");
   const [faceError, setFaceError] = useState<string | null>(null);
   const position = desk.positions.find((candidate) => candidate.productCode === productCode);
+  const bond = desk.bonds.find((candidate) => candidate.code === issueCode);
+  const sells = kind === "secondary_sale";
+  const lotSize = instrument === "bond" ? bond?.lotSize : position?.lotSize;
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!position) return;
-    const amount = parseAmount(face, position.lotSize.currency);
+    if (!lotSize) return;
+    const amount = parseAmount(face, lotSize.currency);
     const problem = !amount
       ? "Enter the face value as a whole number."
-      : amount.minor % position.lotSize.minor !== 0
-        ? `Orders are in steps of ${formatExact(position.lotSize)}.`
-        : kind === "secondary_sale" && amount.minor > position.faceHeld.minor
+      : amount.minor % lotSize.minor !== 0
+        ? `Orders are in steps of ${formatExact(lotSize)}.`
+        : sells && instrument === "bill" && position && amount.minor > position.faceHeld.minor
           ? `The desk holds ${formatExact(position.faceHeld)} of face value in this product.`
-          : null;
+          : sells && instrument === "bond" && bond && amount.minor > bond.toSell.minor
+            ? `The desk holds ${formatExact(bond.toSell)} of this issue beyond what clients hold. Selling more would leave clients' bonds without cover.`
+            : null;
     setFaceError(problem);
-    if (!problem && amount) onSubmit({ kind, productCode, face: amount });
+    if (problem || !amount) return;
+    onSubmit({ kind, instrument, productCode: instrument === "bond" ? issueCode : productCode, face: amount });
   }
+
+  const hint =
+    instrument === "bond"
+      ? bond
+        ? sells
+          ? `To sell: ${formatExact(bond.toSell)}, held beyond what clients hold.`
+          : `To buy: ${formatShort(bond.toBuy)} of face value. Already on order: ${formatShort(bond.onOrder)}. A bond may cost more than its face value.`
+        : undefined
+      : position
+        ? sells
+          ? `Face value held: ${formatExact(position.faceHeld)}`
+          : `To buy: ${formatShort(position.toBuy)} of client money. Already on order: ${formatShort(position.onOrder)}.${
+              position.discountOnly ? " A bill costs less than its face value, so bid a face value above the money to buy, or some stays to buy." : ""
+            }`
+        : undefined;
 
   return (
     <form
@@ -365,34 +407,65 @@ export function PrepareForm({ desk, busy, error, onCancel, onSubmit }: PrepareFo
           </select>
         )}
       </Field>
-      <Field id={`${id}-product`} label="Product">
-        {(control) => (
-          <select {...control} className={FIELD} value={productCode} onChange={(event) => setProductCode(event.target.value)}>
-            {desk.positions.map((option) => (
-              <option key={option.productCode} value={option.productCode}>
-                {option.productName}
-              </option>
+      {desk.bonds.length > 0 ? (
+        <fieldset className="m-0 flex flex-col gap-1.5 border-0 p-0">
+          <legend className="mb-1.5 p-0 text-sm font-bold">Deals in</legend>
+          <div className="grid grid-cols-2 gap-2">
+            {(["bill", "bond"] as const).map((option) => (
+              <label
+                key={option}
+                className="flex h-12 cursor-pointer items-center gap-2.5 rounded-lg border border-border-strong px-3.5 text-md font-semibold has-checked:border-2 has-checked:border-black has-checked:px-[13px]"
+              >
+                <input
+                  type="radio"
+                  name={`${id}-instrument`}
+                  className="size-5"
+                  checked={instrument === option}
+                  onChange={() => {
+                    setInstrument(option);
+                    setFaceError(null);
+                  }}
+                />
+                {INSTRUMENT_LABELS[option]}
+              </label>
             ))}
-          </select>
-        )}
-      </Field>
-      {position ? (
-        <Field
-          id={`${id}-face`}
-          label={`Face value (${position.lotSize.currency})`}
-          error={faceError ?? undefined}
-          hint={
-            kind === "secondary_sale"
-              ? `Face value held: ${formatExact(position.faceHeld)}`
-              : `To buy: ${formatShort(position.toBuy)} of client money. Already on order: ${formatShort(position.onOrder)}.${
-                  position.discountOnly ? " A bill costs less than its face value, so bid a face value above the money to buy, or some stays to buy." : ""
-                }`
-          }
-        >
+          </div>
+        </fieldset>
+      ) : null}
+      {instrument === "bond" ? (
+        <Field id={`${id}-issue`} label="Bond issue">
+          {(control) => (
+            <select {...control} className={FIELD} value={issueCode} onChange={(event) => setIssueCode(event.target.value)}>
+              {desk.bonds.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.name}, {option.isin}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      ) : (
+        <Field id={`${id}-product`} label="Product">
+          {(control) => (
+            <select {...control} className={FIELD} value={productCode} onChange={(event) => setProductCode(event.target.value)}>
+              {desk.positions.map((option) => (
+                <option key={option.productCode} value={option.productCode}>
+                  {option.productName}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+      )}
+      {lotSize ? (
+        <Field id={`${id}-face`} label={`Face value (${lotSize.currency})`} error={faceError ?? undefined} {...(hint ? { hint } : {})}>
           {(control) => (
             <Input {...control} className={FIELD} inputMode="numeric" value={face} onChange={(event) => setFace(event.target.value)} />
           )}
         </Field>
+      ) : null}
+      {instrument === "bond" && bond ? (
+        <p className="m-0 text-sm leading-[1.45] text-muted">Every bond of this issue matures on {formatDay(bond.maturityDate)}.</p>
       ) : null}
       {error ? (
         <p role="alert" className="m-0 rounded-md bg-danger-surface px-3 py-2 text-sm font-bold text-danger">

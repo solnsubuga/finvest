@@ -179,7 +179,7 @@ Gains, losses and income at maturity share the bills' accounts. The settlement a
 | To sell | Face held beyond clients' face, less what is on sale: after a client sold or a holding was repaid |
 | To place | What clients paid for the face value with no bond behind it yet, in proportion and rounded up |
 
-To place counts in the buffer's money to place, so client money waiting for bonds is never lent out as buffer cash. Coupons and face value Bank of Uganda pays in for bonds, and the console's bond screens, arrive in the next pull requests; until then a bond lot is repaid by the hourly maturity run like a bill.
+To place counts in the buffer's money to place, so client money waiting for bonds is never lent out as buffer cash. The console's dealing desk shows this position under "Treasury bonds by issue", lets staff prepare a bond order by choosing Treasury bonds and the issue, and names what each open order deals in. A bond sale there is limited to the face value held beyond what clients hold (`to_sell`), and a bond result's maturity date is filled with the issue's. Coupons and face value Bank of Uganda pays in for bonds arrive in the next pull request; until then a bond lot is repaid by the hourly maturity run like a bill.
 
 ## The liquidity buffer
 
