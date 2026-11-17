@@ -1,10 +1,12 @@
 import {
   DealingError,
   type Amount,
+  type BondPosition,
   type Cover,
   type DealingApi,
   type Desk,
   type Fill,
+  type NewOrder,
   type Order,
   type OrderAction,
   type ProductPosition,
@@ -22,6 +24,7 @@ const ugx = (minor: number): Amount => ({ minor, currency: "UGX" });
 const usd = (cents: number): Amount => ({ minor: cents, currency: "USD" });
 
 type Holding = Omit<ProductPosition, "toBuy" | "onOrder" | "cover">;
+type BondHolding = Omit<BondPosition, "toBuy" | "onOrder" | "toSell" | "onSale" | "cover" | "toPlace">;
 type StoredOrder = Omit<Order, "allowed"> & { preparedById: string; recordedById: string | null };
 
 function sampleHoldings(): Holding[] {
@@ -59,10 +62,36 @@ function sampleHoldings(): Holding[] {
   ];
 }
 
+function sampleBonds(): BondHolding[] {
+  const issue = (code: string, isin: string, name: string, maturityDate: string, holders: number, figures: number[]): BondHolding => {
+    const [clientsFace = 0, clientsPaid = 0, faceHeld = 0, costHeld = 0] = figures;
+    return {
+      code,
+      isin,
+      name,
+      maturityDate,
+      holders,
+      clientsFace: ugx(clientsFace),
+      clientsPaid: ugx(clientsPaid),
+      faceHeld: ugx(faceHeld),
+      costHeld: ugx(costHeld),
+      lotSize: ugx(100_000),
+    };
+  };
+  return [
+    // Clients bought more this week than the desk holds, and one bid is waiting.
+    issue("BOND-2Y-2028", "UG0000001376", "2 Year Treasury Bond 2028", "2028-11-16", 14, [186 * M, 183_600_000, 150 * M, 148_100_000]),
+    issue("BOND-5Y-2032", "UG12J2005328", "5 Year Treasury Bond 2032", "2032-05-20", 9, [80 * M, 76_400_000, 80 * M, 76_350_000]),
+    // A client sold 1m early, so the desk holds more than clients do.
+    issue("BOND-10Y-2037", "UG12J0711371", "10 Year Treasury Bond 2037", "2037-02-11", 6, [54 * M, 53_200_000, 55 * M, 54_100_000]),
+  ];
+}
+
 function sampleOrders(): StoredOrder[] {
   const order = (id: string, productCode: string, productName: string, face: number): StoredOrder => ({
     id,
     kind: "auction_bid",
+    instrument: "bill",
     productCode,
     productName,
     face: ugx(face),
@@ -94,6 +123,11 @@ function sampleOrders(): StoredOrder[] {
       resultRecordedBy: "Grace",
       recordedById: "sample-grace",
     },
+    {
+      ...order("-OdSampleOrder00004A", "BOND-2Y-2028", "2 Year Treasury Bond 2028", 30 * M),
+      instrument: "bond",
+      preparedAt: "2026-11-13T09:40:00Z",
+    },
   ];
 }
 
@@ -104,11 +138,19 @@ export interface StubStaff {
   name: string;
 }
 
-export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () => new Date().toISOString().slice(0, 10)): DealingApi {
+export function createStubDealingApi(
+  me: StubStaff,
+  delayMs = 150,
+  today = () => new Date().toISOString().slice(0, 10),
+  /** "no_bonds" shows the desk before any bond issue is open. */
+  sample: "sample" | "no_bonds" = "sample",
+): DealingApi {
   const holdings = sampleHoldings();
-  const orders = sampleOrders();
+  const bonds = sample === "no_bonds" ? [] : sampleBonds();
+  const orders = sampleOrders().filter((order) => bonds.length > 0 || order.instrument === "bill");
   const replies = new Map<string, Desk>();
-  let cash = ugx(528 * M);
+  // The trust account holds the money waiting for bonds as well as the buffer.
+  let cash = ugx(528 * M + bondPositions(bonds, orders).reduce((total, bond) => total + bond.toPlace.minor, 0));
   let created = 0;
 
   function allowed(order: StoredOrder): OrderAction[] {
@@ -119,10 +161,11 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
   }
 
   function toOrder(stored: StoredOrder): Order {
-    const { id, kind, productCode, productName, face, status, preparedBy, preparedAt, note, result, resultRecordedBy } = stored;
+    const { id, kind, instrument, productCode, productName, face, status, preparedBy, preparedAt, note, result, resultRecordedBy } = stored;
     return {
       id,
       kind,
+      instrument,
       productCode,
       productName,
       face,
@@ -142,13 +185,15 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
       const zero = { minor: 0, currency: holding.clientsOwed.currency };
       const gap = holding.clientsOwed.minor - holding.billsHeld.minor;
       const onOrder = open
-        .filter((order) => order.productCode === holding.productCode && order.kind !== "secondary_sale")
+        .filter((order) => order.instrument === "bill" && order.productCode === holding.productCode && order.kind !== "secondary_sale")
         .reduce((total, order) => total + order.face.minor, 0);
       const cover: Cover = gap < 0 ? "surplus" : gap === 0 ? "covered" : onOrder >= gap ? "on_order" : "bid_needed";
       return { ...holding, toBuy: { ...zero, minor: Math.max(gap, 0) }, onOrder: { ...zero, minor: onOrder }, cover };
     });
     const shillings = positions.filter((position) => position.clientsOwed.currency === "UGX");
-    const toPlace = shillings.reduce((total, position) => total + position.toBuy.minor, 0);
+    const bondLines = bondPositions(bonds, orders);
+    const toPlace =
+      shillings.reduce((total, position) => total + position.toBuy.minor, 0) + bondLines.reduce((total, bond) => total + bond.toPlace.minor, 0);
     const balance = Math.max(cash.minor - toPlace, 0);
     const asked = 23_500_000;
     return {
@@ -166,6 +211,8 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
       },
       earlyWithdrawals: { asked: ugx(asked), clients: 4 },
       positions,
+      bondsHeld: ugx(bondLines.reduce((total, bond) => total + bond.costHeld.minor, 0)),
+      bonds: bondLines,
       orders: open.map(toOrder),
     };
   }
@@ -204,7 +251,21 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
     return holding;
   }
 
+  function prepareBill(input: NewOrder) {
+    const holding = holdingFor(input.productCode);
+    if (input.face.minor <= 0 || input.face.minor % holding.lotSize.minor !== 0) throw new DealingError("not_a_whole_lot");
+    if (input.kind === "secondary_sale" && input.face.minor > holding.faceHeld.minor) throw new DealingError("more_than_held");
+    return { productCode: holding.productCode, productName: holding.productName };
+  }
+
+  function bondFor(code: string): BondHolding {
+    const bond = bonds.find((candidate) => candidate.code === code);
+    if (!bond) throw new DealingError("not_found");
+    return bond;
+  }
+
   function settle(order: StoredOrder, fill: Fill) {
+    if (order.instrument === "bond") return settleBond(order, fill);
     const holding = holdingFor(order.productCode);
     const buys = order.kind !== "secondary_sale";
     if (buys) {
@@ -218,19 +279,34 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
     if (fill.amount.currency === "UGX") cash = ugx(cash.minor + (buys ? -fill.amount.minor : fill.amount.minor));
   }
 
+  function settleBond(order: StoredOrder, fill: Fill) {
+    const bond = bondFor(order.productCode);
+    const buys = order.kind !== "secondary_sale";
+    const released = buys ? 0 : Math.floor((bond.costHeld.minor * fill.face.minor) / bond.faceHeld.minor);
+    bond.faceHeld = ugx(bond.faceHeld.minor + (buys ? fill.face.minor : -fill.face.minor));
+    bond.costHeld = ugx(bond.costHeld.minor + (buys ? fill.amount.minor : -released));
+    cash = ugx(cash.minor + (buys ? -fill.amount.minor : fill.amount.minor));
+  }
+
+  function prepareBond(input: NewOrder) {
+    const bond = bondFor(input.productCode);
+    if (input.face.minor <= 0 || input.face.minor % bond.lotSize.minor !== 0) throw new DealingError("not_a_whole_lot");
+    const line = bondPositions([bond], orders)[0];
+    if (input.kind === "secondary_sale" && line && input.face.minor > bond.faceHeld.minor - line.onSale.minor) throw new DealingError("more_than_held");
+    return { productCode: bond.code, productName: bond.name };
+  }
+
   return {
     getDesk: () => new Promise((resolve) => setTimeout(() => resolve(desk()), delayMs)),
     prepareOrder: (key, input) =>
       command(key, () => {
-        const holding = holdingFor(input.productCode);
-        if (input.face.minor <= 0 || input.face.minor % holding.lotSize.minor !== 0) throw new DealingError("not_a_whole_lot");
-        if (input.kind === "secondary_sale" && input.face.minor > holding.faceHeld.minor) throw new DealingError("more_than_held");
+        const named = input.instrument === "bond" ? prepareBond(input) : prepareBill(input);
         created += 1;
         orders.push({
           id: `-OdSampleOrderNew${String(created).padStart(3, "0")}`,
           kind: input.kind,
-          productCode: holding.productCode,
-          productName: holding.productName,
+          instrument: input.instrument,
+          ...named,
           face: input.face,
           status: "prepared",
           preparedBy: me.name,
@@ -250,7 +326,9 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
         const order = find(orderId, "record_result");
         if (fill === null) return void (order.status = "unsuccessful");
         if (fill.face.minor > order.face.minor) throw new DealingError("over_the_order");
-        if (holdingFor(order.productCode).discountOnly && fill.amount.minor > fill.face.minor) throw new DealingError("above_face");
+        if (order.instrument === "bill" && holdingFor(order.productCode).discountOnly && fill.amount.minor > fill.face.minor)
+          throw new DealingError("above_face");
+        if (order.instrument === "bond" && fill.maturesOn !== bondFor(order.productCode).maturityDate) throw new DealingError("wrong_maturity");
         if (fill.settledOn > today()) throw new DealingError("settles_in_the_future");
         Object.assign(order, { status: "result_recorded", result: fill, resultRecordedBy: me.name, recordedById: me.id, note: null });
       }),
@@ -271,4 +349,31 @@ export function createStubDealingApi(me: StubStaff, delayMs = 150, today = () =>
         }),
       ),
   };
+}
+
+/** Each issue's position, as the backend's domain/bond_position.py works it out. */
+function bondPositions(bonds: readonly BondHolding[], orders: readonly StoredOrder[]): BondPosition[] {
+  return bonds.map((bond) => {
+    const open = orders.filter((order) => order.instrument === "bond" && order.productCode === bond.code && OPEN.includes(order.status));
+    const sum = (sells: boolean) =>
+      open.filter((order) => (order.kind === "secondary_sale") === sells).reduce((total, order) => total + order.face.minor, 0);
+    const onOrder = sum(false);
+    const onSale = sum(true);
+    const toBuy = Math.max(bond.clientsFace.minor - bond.faceHeld.minor, 0);
+    const surplus = Math.max(bond.faceHeld.minor - bond.clientsFace.minor, 0);
+    const cover: Cover = surplus > 0 ? "surplus" : toBuy === 0 ? "covered" : toBuy > onOrder ? "bid_needed" : "on_order";
+    // What clients paid for the face value with no bond behind it, rounded up.
+    const share = BigInt(bond.clientsPaid.minor) * BigInt(toBuy);
+    const face = BigInt(bond.clientsFace.minor);
+    const toPlace = toBuy === 0 ? 0n : (share + face - 1n) / face;
+    return {
+      ...bond,
+      toBuy: ugx(toBuy),
+      onOrder: ugx(onOrder),
+      toSell: ugx(Math.max(surplus - onSale, 0)),
+      onSale: ugx(onSale),
+      cover,
+      toPlace: ugx(Number(toPlace)),
+    };
+  });
 }

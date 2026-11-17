@@ -181,6 +181,8 @@ Gains, losses and income at maturity share the bills' accounts. The settlement a
 
 To place counts in the buffer's money to place, so client money waiting for bonds is never lent out as buffer cash. At maturity Bank of Uganda repays the face value, and the hourly maturity run posts it like a bill's, into `dealing.bonds`.
 
+The console's dealing desk shows this position under "Treasury bonds by issue", lets staff prepare a bond order by choosing Treasury bonds and the issue, and names what each open order deals in. A bond sale there is limited to the face value held beyond what clients hold (`to_sell`), and a bond result's maturity date is filled with the issue's.
+
 ### Coupons paid in
 
 Bank of Uganda pays every holder of an issue the same coupon on the issue's coupon dates, through the custodian into the trust bank account. The desk is paid on the face value it held the day before the coupon date (`dealing_bond_coupons`, migration 0533; rules in `domain/bond_coupons.py`). Clients' coupons are paid by the bonds module on the same dates from `interest.expense`, so the two meet in Finvest's earnings.

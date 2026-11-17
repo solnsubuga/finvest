@@ -65,9 +65,29 @@ export async function toDesk(json: DeskJson, directory: Directory): Promise<Desk
       // The earliest standing date in the auction calendar. A Treasury bill with none shows "Not set".
       nextAuction: p.next_auction,
     })),
+    bondsHeld: json.bonds_held,
+    bonds: json.bonds.map((b) => ({
+      code: b.code,
+      isin: b.isin,
+      name: b.name,
+      maturityDate: b.maturity_date,
+      holders: b.holders,
+      clientsFace: b.clients_face,
+      clientsPaid: b.clients_paid,
+      faceHeld: b.face_held,
+      costHeld: b.cost_held,
+      toBuy: b.to_buy,
+      onOrder: b.on_order,
+      toSell: b.to_sell,
+      onSale: b.on_sale,
+      cover: b.cover,
+      toPlace: b.to_place,
+      lotSize: b.lot_size,
+    })),
     orders: json.orders.map((o) => ({
       id: o.id,
       kind: o.kind,
+      instrument: o.instrument,
       productCode: o.product_code,
       productName: o.product_name,
       face: o.face,
@@ -89,6 +109,7 @@ const FIELD_CODES = new Set<DealingErrorCode>([
   "above_face",
   "settles_in_the_future",
   "longer_than_term",
+  "wrong_maturity",
   "not_enough_cash",
   "day_closed",
 ]);
@@ -137,6 +158,7 @@ export function createHttpDealingApi(http: Http, directory: Directory): DealingA
     prepareOrder: (key, given: NewOrder) =>
       call("/orders", key, {
         kind: given.kind,
+        instrument: given.instrument,
         product_code: given.productCode,
         currency: given.face.currency,
         face_minor: given.face.minor,

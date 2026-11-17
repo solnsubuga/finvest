@@ -11,6 +11,7 @@ const TODAY = "2026-11-13";
 const BID_91 = "Auction bid, 91 Day Treasury Bill";
 const BID_182 = "Auction bid, 182 Day Treasury Bill";
 const PURCHASE_182 = "Secondary market purchase, 182 Day Treasury Bill";
+const BID_BOND = "Auction bid, 2 Year Treasury Bond 2028";
 
 function renderDesk(api: DealingApi = createStubDealingApi(ME, 0, () => TODAY)) {
   let keys = 0;
@@ -21,8 +22,8 @@ function renderDesk(api: DealingApi = createStubDealingApi(ME, 0, () => TODAY)) 
 const order = (name: string) => screen.findByRole("article", { name });
 const figure = (name: string) => screen.getByText(name).parentElement as HTMLElement;
 
-function positionRow(product: string): string[] {
-  const row = within(screen.getByRole("table")).getByRole("rowheader", { name: product }).closest("tr") as HTMLElement;
+function positionRow(product: string | RegExp, table = "Position by product"): string[] {
+  const row = within(screen.getByRole("table", { name: table })).getByRole("rowheader", { name: product }).closest("tr") as HTMLElement;
   return within(row)
     .getAllByRole("cell")
     .map((cell) => cell.textContent ?? "");
@@ -36,10 +37,10 @@ async function openResultForm(user: ReturnType<typeof userEvent.setup>): Promise
 }
 
 describe("dealing desk screen", () => {
-  it("shows the position and the four figures from the canvas", async () => {
+  it("shows the position and the figures from the canvas", async () => {
     renderDesk();
     await order(BID_91);
-    expect(figure("Client money to place")).toHaveTextContent("UGX 386.0m");
+    expect(figure("Client money to place")).toHaveTextContent("UGX 421.5m");
     expect(figure("Bills held for clients")).toHaveTextContent("UGX 18,240.0m");
     expect(figure("Bills held for clients")).toHaveTextContent("Matches the custodian");
     expect(figure("Liquidity buffer")).toHaveTextContent("UGX 142.0m");
@@ -50,6 +51,110 @@ describe("dealing desk screen", () => {
     expect(positionRow("USD Fixed Income")).toEqual(["$362,000", "$362,000", "$0", "On demand", "Covered"]);
     expect(screen.getByText("Up to UGX 5.0m each")).toBeInTheDocument();
     expect(screen.getByText("UGX 118.5m")).toBeInTheDocument();
+  });
+
+  it("shows each bond issue's position by face value", async () => {
+    renderDesk();
+    await order(BID_91);
+    expect(figure("Bonds held for clients")).toHaveTextContent("UGX 278.6m");
+    expect(figure("Bonds held for clients")).toHaveTextContent("At cost, 3 issues");
+    const bonds = "Position by bond issue";
+    expect(positionRow(/^2 Year Treasury Bond 2028/, bonds)).toEqual([
+      "186.0m",
+      "150.0m",
+      "36.0m",
+      "30.0m",
+      "0.0m",
+      "35.5m",
+      "Bid needed",
+    ]);
+    expect(positionRow(/^5 Year Treasury Bond 2032/, bonds).at(-1)).toBe("Covered");
+    expect(positionRow(/^10 Year Treasury Bond 2037/, bonds)).toEqual([
+      "54.0m",
+      "55.0m",
+      "0.0m",
+      "0.0m",
+      "1.0m",
+      "0.0m",
+      "Surplus",
+    ]);
+  });
+
+  it("says when there are no bond issues", async () => {
+    const api = createStubDealingApi(ME, 0, () => TODAY);
+    const desk = await api.getDesk();
+    vi.spyOn(api, "getDesk").mockResolvedValue({ ...desk, bonds: [], orders: desk.orders.filter((o) => o.instrument === "bill") });
+    const { user } = renderDesk(api);
+    expect(await screen.findByText(/No bond issues are open/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Prepare an order" }));
+    expect(screen.queryByRole("group", { name: "Deals in" })).not.toBeInTheDocument();
+  });
+
+  it("shows what each open order deals in", async () => {
+    renderDesk();
+    expect(within(await order(BID_BOND)).getByText("Treasury bonds, BOND-2Y-2028")).toBeInTheDocument();
+    expect(within(await order(BID_91)).getByText("Treasury bills")).toBeInTheDocument();
+  });
+
+  it("prepares a bond order for an issue", async () => {
+    const { user, api } = renderDesk();
+    const prepare = vi.spyOn(api, "prepareOrder");
+    await order(BID_91);
+    await user.click(screen.getByRole("button", { name: "Prepare an order" }));
+    const form = screen.getByRole("form", { name: "Prepare an order" });
+    await user.click(within(form).getByRole("radio", { name: "Treasury bonds" }));
+    await user.selectOptions(within(form).getByLabelText("Bond issue"), "2 Year Treasury Bond 2028, UG0000001376");
+    expect(within(form).getByText(/To buy: UGX 36.0m of face value. Already on order: UGX 30.0m/)).toBeInTheDocument();
+    expect(within(form).getByText("Every bond of this issue matures on 16 Nov 2028.")).toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Face value (UGX)"), "6,000,000");
+    await user.click(within(form).getByRole("button", { name: "Send for approval" }));
+    expect(prepare).toHaveBeenCalledWith("key-1", {
+      kind: "auction_bid",
+      instrument: "bond",
+      productCode: "BOND-2Y-2028",
+      face: { minor: 6_000_000, currency: "UGX" },
+    });
+    const cards = await screen.findAllByRole("article", { name: BID_BOND });
+    expect(cards).toHaveLength(2);
+    expect(within(cards[1] as HTMLElement).getByText(/^Amina, /)).toBeInTheDocument();
+    expect(positionRow(/^2 Year Treasury Bond 2028/, "Position by bond issue")[3]).toBe("36.0m");
+  });
+
+  it("sells only the bonds held beyond what clients hold", async () => {
+    const { user, api } = renderDesk();
+    const prepare = vi.spyOn(api, "prepareOrder");
+    await order(BID_91);
+    await user.click(screen.getByRole("button", { name: "Prepare an order" }));
+    const form = screen.getByRole("form", { name: "Prepare an order" });
+    await user.selectOptions(within(form).getByLabelText("What is it?"), "Secondary market sale");
+    await user.click(within(form).getByRole("radio", { name: "Treasury bonds" }));
+    await user.selectOptions(within(form).getByLabelText("Bond issue"), "10 Year Treasury Bond 2037, UG12J0711371");
+    expect(within(form).getByText("To sell: UGX 1,000,000, held beyond what clients hold.")).toBeInTheDocument();
+    await user.type(within(form).getByLabelText("Face value (UGX)"), "1,100,000");
+    await user.click(within(form).getByRole("button", { name: "Send for approval" }));
+    expect(within(form).getByText(/Selling more would leave clients' bonds without cover/)).toBeInTheDocument();
+    expect(prepare).not.toHaveBeenCalled();
+  });
+
+  it("records a bond result on the issue's maturity date, and the bond position follows", async () => {
+    const { user } = renderDesk();
+    await user.click(within(await order(BID_BOND)).getByRole("button", { name: "Approve as second person" }));
+    await user.click(await within(await order(BID_BOND)).findByRole("button", { name: "Record the result" }));
+    const form = within(await order(BID_BOND)).getByRole("form", { name: "Record the result" });
+    const matures = within(form).getByLabelText("Matures on");
+    expect(matures).toHaveValue("16/11/2028");
+    await user.type(within(form).getByLabelText("Face value bought (UGX)"), "30,000,000");
+    await user.type(within(form).getByLabelText("Cash paid (UGX)"), "30,240,000");
+    await user.type(within(form).getByLabelText("Custodian reference"), "CSD-2026-0502");
+    await user.clear(matures);
+    await user.type(matures, "2028-11-17");
+    await user.click(within(form).getByRole("button", { name: "Record the result" }));
+    expect(within(form).getByText(/Every bond of this issue matures on 16 Nov 2028/)).toBeInTheDocument();
+    await user.clear(matures);
+    await user.type(matures, "2028-11-16");
+    await user.click(within(form).getByRole("button", { name: "Record the result" }));
+    // A bond may cost more than its face value, so the result goes through.
+    expect(await within(await order(BID_BOND)).findByText("Result waiting to be confirmed")).toBeInTheDocument();
   });
 
   it("lets a second person approve an order someone else prepared", async () => {
@@ -202,7 +307,7 @@ describe("dealing desk screen", () => {
     await order(BID_182);
     expect(screen.queryByRole("article", { name: PURCHASE_182 })).not.toBeInTheDocument();
     expect(positionRow("182 Day Treasury Bill").slice(1, 3)).toEqual(["9,762.9m", "107.1m"]);
-    expect(figure("Client money to place")).toHaveTextContent("UGX 339.1m");
+    expect(figure("Client money to place")).toHaveTextContent("UGX 374.6m");
     expect(figure("Liquidity buffer")).toHaveTextContent("UGX 142.0m");
   });
 
@@ -331,10 +436,10 @@ describe("dealing desk screen", () => {
 describe("the sample desk", () => {
   it("applies a command once however often its key is repeated", async () => {
     const api = createStubDealingApi(ME, 0, () => TODAY);
-    const order = { kind: "auction_bid", productCode: "TREA-91", face: { minor: 100_000, currency: "UGX" } } as const;
+    const order = { kind: "auction_bid", instrument: "bill", productCode: "TREA-91", face: { minor: 100_000, currency: "UGX" } } as const;
     await api.prepareOrder("same-key", order);
     const again = await api.prepareOrder("same-key", order);
-    expect(again.orders).toHaveLength(4);
+    expect(again.orders).toHaveLength(5);
   });
 
   it("refuses the person who prepared or recorded something as its second person", async () => {

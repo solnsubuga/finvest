@@ -38,10 +38,32 @@ const json: DeskJson = {
       next_auction: "2026-11-18",
     },
   ],
+  bonds_held: ugx(9_850_000),
+  bonds: [
+    {
+      code: "BOND-2Y-2028",
+      isin: "UG0000001376",
+      name: "2 Year Treasury Bond 2028",
+      maturity_date: "2028-11-16",
+      holders: 2,
+      clients_face: ugx(12_000_000),
+      clients_paid: ugx(11_820_000),
+      face_held: ugx(10_000_000),
+      cost_held: ugx(9_850_000),
+      to_buy: ugx(2_000_000),
+      on_order: ugx(0),
+      to_sell: ugx(0),
+      on_sale: ugx(0),
+      cover: "bid_needed",
+      to_place: ugx(1_970_000),
+      lot_size: ugx(100_000),
+    },
+  ],
   orders: [
     {
       id: "-Norder0000000000000",
       kind: "auction_bid",
+      instrument: "bond",
       product_code: "TREA-91",
       product_name: "91 Day Treasury Bill",
       face: ugx(5_000_000),
@@ -69,17 +91,38 @@ describe("the dealing desk over the API", () => {
     expect(answer.moneyToPlace).toEqual(ugx(5_000_000));
     expect(answer.buffer.fromBufferUpTo).toEqual(ugx(500_000));
     expect(answer.positions[0]).toMatchObject({ productCode: "TREA-91", toBuy: ugx(5_000_000), cover: "bid_needed", nextAuction: "2026-11-18" });
-    expect(answer.orders[0]).toMatchObject({ preparedBy: "Olga Ops", resultRecordedBy: "-Nstaffunknown000000", allowed: ["approve", "send_back"] });
+    expect(answer.bondsHeld).toEqual(ugx(9_850_000));
+    expect(answer.bonds[0]).toMatchObject({
+      code: "BOND-2Y-2028",
+      maturityDate: "2028-11-16",
+      clientsFace: ugx(12_000_000),
+      faceHeld: ugx(10_000_000),
+      toBuy: ugx(2_000_000),
+      toPlace: ugx(1_970_000),
+      cover: "bid_needed",
+    });
+    expect(answer.orders[0]).toMatchObject({ instrument: "bond", preparedBy: "Olga Ops", resultRecordedBy: "-Nstaffunknown000000", allowed: ["approve", "send_back"] });
   });
 
   it("sends an order with its key", async () => {
     const { request, api: desk } = api();
-    await desk.prepareOrder("k-1", { kind: "auction_bid", productCode: "TREA-91", face: ugx(5_000_000) });
+    await desk.prepareOrder("k-1", { kind: "auction_bid", instrument: "bill", productCode: "TREA-91", face: ugx(5_000_000) });
     expect(request).toHaveBeenCalledWith(
       "POST",
       "/staff/dealing/orders",
-      { kind: "auction_bid", product_code: "TREA-91", currency: "UGX", face_minor: 5_000_000 },
+      { kind: "auction_bid", instrument: "bill", product_code: "TREA-91", currency: "UGX", face_minor: 5_000_000 },
       { idempotencyKey: "k-1" },
+    );
+  });
+
+  it("sends a bond order naming the issue", async () => {
+    const { request, api: desk } = api();
+    await desk.prepareOrder("k-1b", { kind: "secondary_purchase", instrument: "bond", productCode: "BOND-2Y-2028", face: ugx(2_000_000) });
+    expect(request).toHaveBeenCalledWith(
+      "POST",
+      "/staff/dealing/orders",
+      { kind: "secondary_purchase", instrument: "bond", product_code: "BOND-2Y-2028", currency: "UGX", face_minor: 2_000_000 },
+      { idempotencyKey: "k-1b" },
     );
   });
 
@@ -123,6 +166,7 @@ describe("the dealing desk over the API", () => {
     expect(toDealingError(field("above_face")).code).toBe("above_face");
     expect(toDealingError(field("not_enough_cash")).code).toBe("not_enough_cash");
     expect(toDealingError(field("day_closed")).code).toBe("day_closed");
+    expect(toDealingError(field("wrong_maturity")).code).toBe("wrong_maturity");
     expect(toDealingError(field("note_required")).code).toBe("invalid");
     expect(toDealingError(new ApiError("conflict", 409)).code).toBe("conflict");
     expect(toDealingError(new ApiError("forbidden", 403)).code).toBe("forbidden");
