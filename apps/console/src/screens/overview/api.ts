@@ -22,6 +22,7 @@ export const KINDS = [
   "product_change",
   "bond_change",
   "bond_sale",
+  "bond_coupon",
   "migration_totals",
   "migration_sign_off",
   "phone_change",

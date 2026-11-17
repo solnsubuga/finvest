@@ -197,6 +197,8 @@ Bank of Uganda pays every holder of an issue the same coupon on the issue's coup
 
 The entry is dated the day the money arrived and points back at the coupon (`dealing.bond_coupon`). The day close expects it on that day's bank statement (`expected_bank_movements`). The database holds who records and decides, that nothing recorded changes, that an approval names exactly that entry, and that nothing is removed. Waiting coupons appear in the console's approvals inbox as `bond_coupon`, as "BOND-2037 coupon of 2026-11-14", without the amount.
 
+On the console, "Coupons on the desk's bonds" on the dealing desk lists the coupons due to record and those recorded. Recording fills in what the bonds earn, and asks for a note when what arrived differs; approving first asks whether the trust account statement shows that amount, day and reference.
+
 The desk's bonds bought between coupon dates cost the accrued interest too, which stays in their cost. The next coupon pays it back as income, and the bond's repayment at face value then books the same amount as a maturity loss, so over the bond's life the two cancel.
 
 ## The liquidity buffer
