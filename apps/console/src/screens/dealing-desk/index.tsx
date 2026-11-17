@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button.tsx";
 import { PageHeader } from "@/pages/PageHeader.tsx";
 import { DealingError, dealingErrorMessage, notConnectedDealingApi, type DealingApi, type Desk, type NewOrder } from "./api.ts";
 import { OrderCard, PrepareForm, type OrderCommand } from "./Orders.tsx";
-import { BufferRules, Figures, PositionTable } from "./Position.tsx";
+import { BondPositionTable, BufferRules, Figures, PositionTable } from "./Position.tsx";
 import { AllocationSection } from "./Allocations.tsx";
 import { AuctionSection } from "./Auctions.tsx";
 import { notConnectedAuctionsApi, type AuctionsApi } from "./auctions.ts";
@@ -30,7 +30,7 @@ import { BUFFER_COLLEAGUE, createStubBufferApi } from "./bufferStub.ts";
 import { createHttpDealingApi } from "./dealingHttp.ts";
 import { createStubDealingApi } from "./stub.ts";
 
-const SUMMARY = "Turn client payments into real bills, and keep enough cash to pay people out.";
+const SUMMARY = "Turn client payments into real bills and bonds, and keep enough cash to pay people out.";
 const NEW_ORDER = "new";
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; desk: Desk };
@@ -204,7 +204,8 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
             <OrderCard
               key={`${order.id}:${order.status}:${round}`}
               order={order}
-              position={desk.positions.find((position) => position.productCode === order.productCode)}
+              position={order.instrument === "bill" ? desk.positions.find((position) => position.productCode === order.productCode) : undefined}
+              bond={order.instrument === "bond" ? desk.bonds.find((bond) => bond.code === order.productCode) : undefined}
               busy={busy === order.id}
               error={failed?.on === order.id ? failed.message : null}
               today={today()}
@@ -214,6 +215,7 @@ export function DealingDeskScreen({ api, newKey = () => crypto.randomUUID(), tod
           ))}
         </aside>
       </div>
+      <BondPositionTable desk={desk} />
       {auctions ? (
         <AuctionSection
           api={auctions}
@@ -236,7 +238,11 @@ export default function DealingDeskPage() {
   const { session } = useAuth();
   // Sample figures under `pnpm dev` or a preview build, like sign-in. Otherwise the real API.
   const [api] = useState<DealingApi>(() => {
-    if (isStubAuth() && session) return createStubDealingApi({ id: session.staffId, name: session.name });
+    if (isStubAuth() && session) {
+      // `?sample=empty` shows the desk before any bond issue is open.
+      const sample = new URLSearchParams(window.location.search).get("sample") === "empty" ? "no_bonds" : "sample";
+      return createStubDealingApi({ id: session.staffId, name: session.name }, 150, undefined, sample);
+    }
     const base = apiBaseUrl();
     if (!base) return notConnectedDealingApi;
     const http = createHttp(base);
