@@ -1,4 +1,4 @@
-"""Orders to buy and sell bills, and the people who must agree to them. Pure: no I/O.
+"""Orders to buy and sell bills and bonds, and the people who must agree to them. Pure: no I/O.
 
 No bill is bought or sold on one person's word. An order is prepared by one member of staff and
 approved by another before it goes to the primary dealer. What the dealer did is then recorded
@@ -38,6 +38,16 @@ LOT_SIZES: dict[Currency, Money] = {
 
 class InvalidOrder(ValueError):
     """An order or a result that contradicts itself."""
+
+
+class Instrument(StrEnum):
+    """What an order deals. Fixed when it is prepared."""
+
+    # A Treasury bill behind one investment product, named by the product's code.
+    BILL = "bill"
+    # A Treasury bond of one issue in the bonds catalogue, named by the issue's code. Held
+    # apart from bills, in `dealing.bonds`, for the clients who hold that issue.
+    BOND = "bond"
 
 
 class OrderKind(StrEnum):
@@ -145,6 +155,8 @@ class Refusal(StrEnum):
     SETTLES_IN_THE_FUTURE = "settles_in_the_future"
     # A bill bought for a product runs no longer than the product's term.
     LONGER_THAN_TERM = "longer_than_term"
+    # A bond dealt matures on its issue's maturity date, or it is another bond.
+    WRONG_MATURITY = "wrong_maturity"
 
 
 def check_new_order(order: Order, lot_size: Money, face_held: Money) -> Refusal | None:
@@ -196,6 +208,7 @@ def check_result(
     discount_only: bool,
     term_days: int | None,
     face_held: Money,
+    maturity_date: date | None = None,
 ) -> Refusal | None:
     """Whether a result may be recorded against an approved order.
 
@@ -204,7 +217,8 @@ def check_result(
     face value. A bond may. `term_days` is the product's term, or `None` for an open term: a
     182 day bill must never stand behind 91 day investments. `face_held` is the face value held
     in the product now, which may have changed since the order was prepared. It matters only
-    for a sale.
+    for a sale. `maturity_date` is a bond issue's own maturity date: every bond of the issue
+    matures on it, so a result with another date is for another bond.
     """
     if order.status is not OrderStatus.APPROVED:
         return Refusal.WRONG_STATUS
@@ -222,6 +236,8 @@ def check_result(
         return Refusal.ABOVE_FACE
     if fill.settled_on > today:
         return Refusal.SETTLES_IN_THE_FUTURE
+    if maturity_date is not None and fill.matures_on != maturity_date:
+        return Refusal.WRONG_MATURITY
     if (
         order.kind.buys
         and term_days is not None

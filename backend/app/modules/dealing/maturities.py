@@ -1,4 +1,4 @@
-"""Bills the issuer pays at maturity. Runs in the worker, as Finvest itself.
+"""Bills and bonds the issuer pays at maturity. Runs in the worker, as Finvest itself.
 
 On or after a lot's maturity date the face value it still holds is posted into the trust bank
 account, dated on the maturity date, and the maturity is recorded. Migration 0082 checks the
@@ -60,7 +60,9 @@ async def record_maturities(session: AsyncSession, clock: Clock, *, limit: int =
         try:
             async with session.begin_nested():
                 entry = await ledger.post_entry(
-                    session, maturity_entry(lot_id, held.lot, today, account_ids), clock
+                    session,
+                    maturity_entry(lot_id, held.lot, today, account_ids, held.instrument),
+                    clock,
                 )
                 await session.execute(
                     _INSERT,

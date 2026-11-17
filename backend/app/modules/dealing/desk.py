@@ -1,5 +1,6 @@
-"""The dealing desk screen in one read: the position of each product, the buffer, the early
-withdrawals waiting, and the open orders with what the reader may do to each. For staff.
+"""The dealing desk screen in one read: the position of each product and each bond issue, the
+buffer, the early withdrawals waiting, and the open orders with what the reader may do to each.
+For staff.
 
 Every figure comes from the module's own reads. The console shows them and works out nothing.
 """
@@ -10,8 +11,15 @@ from datetime import date
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.dealing import auctions, holdings, orders, withdrawals
-from app.modules.dealing.domain.orders import LOT_SIZES, Action, OrderKind, allowed_actions
+from app.modules.dealing import auctions, bond_book, holdings, orders, withdrawals
+from app.modules.dealing.bond_book import BondLine
+from app.modules.dealing.domain.orders import (
+    LOT_SIZES,
+    Action,
+    Instrument,
+    OrderKind,
+    allowed_actions,
+)
 from app.modules.dealing.domain.position import Cover, ProductPosition
 from app.modules.dealing.domain.withdrawals import Source
 from app.modules.investments import service as investments
@@ -58,6 +66,9 @@ class DeskView:
     waiting_amount: Money
     positions: tuple[PositionView, ...]
     orders: tuple[OrderLine, ...]
+    # Bonds: what is held at cost, and the position in each issue.
+    bonds_held: Money
+    bonds: tuple[BondLine, ...]
 
 
 async def desk(
@@ -88,14 +99,18 @@ async def desk(
     cost: defaultdict[str, int] = defaultdict(int)
     face: defaultdict[str, int] = defaultdict(int)
     for holding in await holdings.holdings_on(session, on):
-        if holding.currency is currency:
+        if holding.currency is currency and holding.instrument is Instrument.BILL:
             cost[holding.product_code] += holding.cost_minor
             face[holding.product_code] += holding.face_minor
     on_order = await orders.on_order(session)
     open_orders = await orders.open_orders(session)
     selling: defaultdict[str, int] = defaultdict(int)
     for order in open_orders:
-        if order.kind is OrderKind.SECONDARY_SALE and order.face.currency is currency:
+        if (
+            order.kind is OrderKind.SECONDARY_SALE
+            and order.face.currency is currency
+            and order.instrument is Instrument.BILL
+        ):
             selling[order.product_code] += order.face.minor
     next_auction = await auctions.next_by_product(session, on)
     positions = []
@@ -130,11 +145,13 @@ async def desk(
         *await withdrawals.waiting(session, currency, Source.BUFFER),
         *await withdrawals.waiting(session, currency, Source.SALE),
     ]
+    bonds = await bond_book.bond_positions(session, currency, on, open_orders=open_orders)
+    names |= {f"bond:{line.code}": line.name for line in bonds}
     staff_id = staff.id
     lines = tuple(
         OrderLine(
             order=order,
-            product_name=names.get(order.product_code, order.product_code),
+            product_name=names.get(_name_key(order), order.product_code),
             allowed=allowed_actions(order.order, staff_id) if may_change else (),
         )
         for order in open_orders
@@ -149,4 +166,13 @@ async def desk(
         waiting_amount=sum((funding.amount for funding in waiting), zero),
         positions=tuple(positions),
         orders=lines,
+        bonds_held=sum((line.position.cost_held for line in bonds), zero),
+        bonds=tuple(bonds),
+    )
+
+
+def _name_key(order: orders.OrderView) -> str:
+    """Bonds and products are named apart, so a bond issue never borrows a product's name."""
+    return (
+        f"bond:{order.product_code}" if order.instrument is Instrument.BOND else order.product_code
     )

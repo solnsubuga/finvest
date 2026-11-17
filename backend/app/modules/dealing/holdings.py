@@ -1,4 +1,6 @@
-"""The bills the dealing desk holds, and what reconciliation expects to see. Queries only.
+"""The bills and bonds the dealing desk holds, and what reconciliation expects to see. Queries
+only. A bill's lots are named by its product's code, a bond's by its issue's code, and each lot
+says which it is, from the order that bought it.
 
 Every function works inside the caller's transaction. Staff transactions in the API and the
 worker can both read these. Lots and sale lines are written only by `orders.confirm_result`,
@@ -13,6 +15,7 @@ from sqlalchemy import Row, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.dealing.domain.holdings import Lot
+from app.modules.dealing.domain.orders import Instrument
 from app.shared.money import Currency, Money
 
 
@@ -24,11 +27,13 @@ class HeldLot:
     custodian_reference: str
     # What is still held of it: face value and the cost that goes with it.
     lot: Lot
+    instrument: Instrument = Instrument.BILL
 
 
 @dataclass(frozen=True, slots=True)
 class Holding:
-    """One instrument at the custodian: a product and a maturity date. Amounts in minor units."""
+    """One instrument at the custodian: a product's bills of one maturity date, or one bond
+    issue. Amounts in minor units."""
 
     product_code: str
     currency: Currency
@@ -36,6 +41,7 @@ class Holding:
     face_minor: int
     cost_minor: int
     custodian_references: tuple[str, ...]
+    instrument: Instrument = Instrument.BILL
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +59,7 @@ class BankMovement:
 # What is left of each lot once sales settled on or before :on are taken away.
 _LEFT = """
 SELECT lot.id, lot.product_code, lot.currency, lot.settled_on, lot.matures_on,
-    lot.custodian_reference,
+    lot.custodian_reference, bought.instrument,
     (lot.face_minor - coalesce(sum(sale.face_minor), 0))::bigint AS face_left,
     (lot.cost_minor - coalesce(sum(sale.cost_minor), 0))::bigint AS cost_left
 FROM dealing_lots AS lot
@@ -67,15 +73,20 @@ LEFT JOIN (
     WHERE sale.result_settled_on <= :on
 ) AS sale ON sale.lot_id = lot.id
 WHERE lot.settled_on <= :on AND lot.matures_on > :on {where}
-GROUP BY lot.id
+GROUP BY lot.id, bought.instrument
 HAVING lot.face_minor - coalesce(sum(sale.face_minor), 0) > 0
 ORDER BY lot.product_code, lot.matures_on, lot.settled_on, lot.id
 """
 _ALL_LEFT = text(_LEFT.format(where=""))
 _INSTRUMENT_LEFT = text(
-    _LEFT.format(where="AND lot.product_code = :product_code AND lot.matures_on = :matures_on")
+    _LEFT.format(
+        where="AND bought.instrument = :instrument AND lot.product_code = :product_code "
+        "AND lot.matures_on = :matures_on"
+    )
 )
-_PRODUCT_LEFT = text(_LEFT.format(where="AND lot.product_code = :product_code"))
+_PRODUCT_LEFT = text(
+    _LEFT.format(where="AND bought.instrument = :instrument AND lot.product_code = :product_code")
+)
 _MOVEMENTS = text(
     "SELECT entry_id, currency, amount_minor, value_date, reference FROM ("
     "SELECT settlement_entry_id AS entry_id, currency, result_settled_on AS value_date, "
@@ -107,29 +118,32 @@ _DUE = text(
 # What is left of one lot after every sale, and whether it has matured.
 _LEFT_OF_LOT = text(
     "SELECT lot.id, lot.product_code, lot.currency, lot.settled_on, lot.matures_on, "
-    "lot.custodian_reference, "
+    "lot.custodian_reference, bought.instrument, "
     "(lot.face_minor - coalesce(sum(sale.face_minor), 0))::bigint AS face_left, "
     "(lot.cost_minor - coalesce(sum(sale.cost_minor), 0))::bigint AS cost_left, "
     "EXISTS (SELECT FROM dealing_lot_maturities AS matured WHERE matured.lot_id = lot.id) "
     "AS matured FROM dealing_lots AS lot "
+    "JOIN dealing_orders AS bought ON bought.id = lot.order_id "
     "LEFT JOIN dealing_lot_sales AS sale ON sale.lot_id = lot.id "
-    "WHERE lot.id = :id GROUP BY lot.id"
+    "WHERE lot.id = :id GROUP BY lot.id, bought.instrument"
 )
 # What each lot of a product still holds after every sale, for allocation: lots of settled
-# purchases that have not matured, oldest purchase first. The allocations trigger counts the
-# same way.
+# purchases of bills that have not matured, oldest purchase first. The allocations trigger counts
+# the same way. Bonds stand behind bond holdings, never behind investments.
 _ALLOCATABLE = text(
     "SELECT lot.id, lot.product_code, lot.currency, lot.settled_on, lot.matures_on, "
-    "lot.custodian_reference, "
+    "lot.custodian_reference, bought.instrument, "
     "(lot.face_minor - coalesce(sum(sale.face_minor), 0))::bigint AS face_left, "
     "(lot.cost_minor - coalesce(sum(sale.cost_minor), 0))::bigint AS cost_left "
     "FROM dealing_lots AS lot JOIN dealing_orders AS bought ON bought.id = lot.order_id "
     "LEFT JOIN dealing_lot_sales AS sale ON sale.lot_id = lot.id "
     "WHERE lot.product_code = :product_code AND bought.status = 'settled' "
+    "AND bought.instrument = 'bill' "
     "AND NOT EXISTS (SELECT FROM dealing_lot_maturities AS matured WHERE matured.lot_id = lot.id) "
     # A lot past its maturity date has been paid, even if the run has not posted it yet.
     "AND lot.matures_on > :on "
-    "GROUP BY lot.id HAVING lot.face_minor - coalesce(sum(sale.face_minor), 0) > 0 "
+    "GROUP BY lot.id, bought.instrument "
+    "HAVING lot.face_minor - coalesce(sum(sale.face_minor), 0) > 0 "
     "ORDER BY lot.settled_on, lot.id"
 )
 
@@ -143,11 +157,22 @@ async def allocatable_lots(session: AsyncSession, product_code: str, *, on: date
 
 
 async def lots_of(
-    session: AsyncSession, product_code: str, matures_on: date, *, on: date
+    session: AsyncSession,
+    product_code: str,
+    matures_on: date,
+    *,
+    on: date,
+    instrument: Instrument = Instrument.BILL,
 ) -> list[HeldLot]:
     """The lots of one instrument still held on `on`, oldest purchase first."""
     rows = await session.execute(
-        _INSTRUMENT_LEFT, {"product_code": product_code, "matures_on": matures_on, "on": on}
+        _INSTRUMENT_LEFT,
+        {
+            "product_code": product_code,
+            "matures_on": matures_on,
+            "on": on,
+            "instrument": instrument.value,
+        },
     )
     return [_held(row) for row in rows.all()]
 
@@ -159,15 +184,19 @@ async def face_held(
     *,
     on: date,
     matures_on: date | None = None,
+    instrument: Instrument = Instrument.BILL,
 ) -> Money:
-    """Face value held in a product on `on`, or in one maturity of it."""
+    """Face value held in a product or a bond issue on `on`, or in one maturity of it."""
     if matures_on is None:
         rows = (
-            await session.execute(_PRODUCT_LEFT, {"product_code": product_code, "on": on})
+            await session.execute(
+                _PRODUCT_LEFT,
+                {"product_code": product_code, "on": on, "instrument": instrument.value},
+            )
         ).all()
         lots = [_held(row) for row in rows]
     else:
-        lots = await lots_of(session, product_code, matures_on, on=on)
+        lots = await lots_of(session, product_code, matures_on, on=on, instrument=instrument)
     return sum((held.lot.face for held in lots), Money.zero(currency))
 
 
@@ -177,14 +206,17 @@ async def holdings_on(session: AsyncSession, on: date) -> list[Holding]:
     A lot counts from its settlement date until the day before it matures. Sales count from
     their settlement date.
     """
-    grouped: dict[tuple[str, date], list[HeldLot]] = {}
+    grouped: dict[tuple[Instrument, str, date], list[HeldLot]] = {}
     for row in (await session.execute(_ALL_LEFT, {"on": on})).all():
         held = _held(row)
-        grouped.setdefault((held.product_code, held.lot.matures_on), []).append(held)
+        grouped.setdefault((held.instrument, held.product_code, held.lot.matures_on), []).append(
+            held
+        )
     holdings = []
-    for (product_code, matures_on), lots in grouped.items():
+    for (instrument, product_code, matures_on), lots in grouped.items():
         holdings.append(
             Holding(
+                instrument=instrument,
                 product_code=product_code,
                 currency=lots[0].lot.face.currency,
                 matures_on=matures_on,
@@ -234,6 +266,7 @@ def _held(row: Row[Any]) -> HeldLot:
         product_code=row.product_code,
         settled_on=row.settled_on,
         custodian_reference=row.custodian_reference,
+        instrument=Instrument(row.instrument),
         lot=Lot(
             face=Money(row.face_left, currency),
             cost=Money(row.cost_left, currency),

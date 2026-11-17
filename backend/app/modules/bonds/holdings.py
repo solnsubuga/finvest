@@ -116,6 +116,17 @@ class ClientHolding:
 
 
 @dataclass(frozen=True, slots=True)
+class IssueOwed:
+    """What clients hold of one issue, for the dealing desk's position."""
+
+    code: str
+    face: Money
+    # What they paid for it: the clean amount and the accrued interest.
+    paid: Money
+    holders: int
+
+
+@dataclass(frozen=True, slots=True)
 class PayableHolding:
     holding_id: str
     client_id: str
@@ -167,6 +178,14 @@ _OVERDUE = text(
     "ORDER BY h.pay_by LIMIT :limit FOR UPDATE OF h SKIP LOCKED"
 )
 _ADVISORY = text("SELECT pg_advisory_xact_lock(hashtextextended(:lock, 0))")
+# What clients hold of each issue: face value and what they paid. Only active holdings, so a
+# holding sold or repaid no longer needs a bond behind it.
+_OWED_BY_ISSUE = text(
+    "SELECT b.code, h.currency, sum(h.face_minor)::bigint AS face, "
+    "sum(h.cost_minor)::bigint AS paid, count(*) AS holders "
+    "FROM bond_holdings h JOIN bond_issues b ON b.id = h.issue_id "
+    "WHERE h.status = 'active' GROUP BY b.code, h.currency ORDER BY b.code"
+)
 
 
 def _holding_lock(holding_id: str) -> dict[str, str]:
@@ -448,6 +467,22 @@ async def client_holding(
     if holding.client_id != client_id:
         raise ApplicationError("not_found")
     return client_view(holding, business_date(clock.now()))
+
+
+async def owed_by_issue(session: AsyncSession) -> list[IssueOwed]:
+    """Face value and what was paid, by issue, across every active holding. For the dealing
+    desk, which must hold that face value of each issue at the custodian. Staff and the worker
+    read every holding."""
+    rows = await session.execute(_OWED_BY_ISSUE)
+    return [
+        IssueOwed(
+            code=row.code,
+            face=Money(row.face, Currency(row.currency)),
+            paid=Money(row.paid, Currency(row.currency)),
+            holders=row.holders,
+        )
+        for row in rows.all()
+    ]
 
 
 async def staff_holdings(

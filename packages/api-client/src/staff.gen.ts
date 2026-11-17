@@ -534,6 +534,29 @@ export const BondChangeOut = z.object({
 });
 export type BondChangeOut = z.infer<typeof BondChangeOut>;
 
+export const Cover = z.enum(["covered", "bid_needed", "on_order", "surplus"]);
+export type Cover = z.infer<typeof Cover>;
+
+export const BondPositionOut = z.object({
+  clients_face: AmountOut,
+  clients_paid: AmountOut,
+  code: z.string(),
+  cost_held: AmountOut,
+  cover: Cover,
+  face_held: AmountOut,
+  holders: z.number().int(),
+  isin: z.string(),
+  lot_size: AmountOut,
+  maturity_date: z.string(),
+  name: z.string(),
+  on_order: AmountOut,
+  on_sale: AmountOut,
+  to_buy: AmountOut,
+  to_place: AmountOut,
+  to_sell: AmountOut,
+});
+export type BondPositionOut = z.infer<typeof BondPositionOut>;
+
 export const BondPriceIn = z.object({
   code: z.string(),
   price: z.number().int(),
@@ -1424,9 +1447,6 @@ export const CorrectionOut = z.object({
 });
 export type CorrectionOut = z.infer<typeof CorrectionOut>;
 
-export const Cover = z.enum(["covered", "bid_needed", "on_order", "surplus"]);
-export type Cover = z.infer<typeof Cover>;
-
 export const OverviewApiAmount = z.object({
   currency: z.enum(["UGX", "USD"]),
   minor: z.number().int(),
@@ -1596,6 +1616,9 @@ export const FillOut = z.object({
 });
 export type FillOut = z.infer<typeof FillOut>;
 
+export const Instrument = z.enum(["bill", "bond"]);
+export type Instrument = z.infer<typeof Instrument>;
+
 export const OrderKind = z.enum(["auction_bid", "secondary_purchase", "secondary_sale"]);
 export type OrderKind = z.infer<typeof OrderKind>;
 
@@ -1606,6 +1629,7 @@ export const OrderOut = z.object({
   allowed: z.array(Action),
   face: AmountOut,
   id: z.string(),
+  instrument: Instrument,
   kind: OrderKind,
   note: z.string().nullable(),
   prepared_at: z.string(),
@@ -1641,6 +1665,8 @@ export type DealingApiPositionOut = z.infer<typeof DealingApiPositionOut>;
 
 export const DeskOut = z.object({
   bills_held: AmountOut,
+  bonds: z.array(BondPositionOut),
+  bonds_held: AmountOut,
   buffer: BufferOut,
   early_withdrawals: WithdrawalsOut,
   matches_custodian: z.boolean().nullable(),
@@ -2417,6 +2443,7 @@ export type NewCheck = z.infer<typeof NewCheck>;
 export const NewOrderIn = z.object({
   currency: Currency,
   face_minor: z.number().int(),
+  instrument: Instrument.optional(),
   kind: OrderKind,
   product_code: z.string(),
 });

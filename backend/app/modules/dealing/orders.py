@@ -9,6 +9,10 @@ calls in.
 
 Confirming a result settles the order: it posts the ledger entry and records the bills bought
 or the lots a sale took, and migration 0081 checks all three agree with the recorded result.
+
+An order deals bills of an investment product or bonds of one issue in the bonds catalogue
+(migration 0532). Both take the same steps. A bond is held in its own asset, may cost more than
+its face value, and always matures on its issue's maturity date.
 """
 
 from dataclasses import dataclass
@@ -21,11 +25,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.infrastructure.jobs import JobRequest, enqueue
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditCategory, AuditEvent
+from app.modules.bonds import catalogue as bonds
 from app.modules.dealing import holdings
 from app.modules.dealing.domain.holdings import InvalidLot, draw
 from app.modules.dealing.domain.orders import (
     LOT_SIZES,
     Fill,
+    Instrument,
     InvalidOrder,
     Order,
     OrderKind,
@@ -46,7 +52,7 @@ from app.modules.dealing.domain.settlement import (
 )
 from app.modules.dealing.events import FUND_FROM_SALE_KIND
 from app.modules.investments import service as investments
-from app.modules.investments.domain.products import Product, ProductKind
+from app.modules.investments.domain.products import ProductKind
 from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.errors import DayClosed, InsufficientFunds
 from app.shared.actors import Actor
@@ -58,6 +64,21 @@ from app.shared.push_ids import push_id
 
 ORDER_RESOURCE = "dealing_order"
 MAX_ORDERS = 200
+
+
+@dataclass(frozen=True, slots=True)
+class Target:
+    """What an order deals, as the rules for its result need it."""
+
+    instrument: Instrument
+    code: str
+    currency: Currency
+    # Treasury bills never trade above their face value. Bonds may.
+    discount_only: bool
+    # A bill's product term, or None for an open term or a bond.
+    term_days: int | None
+    # A bond issue's maturity date, or None for bills.
+    maturity_date: date | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +100,7 @@ class OrderView:
     settled_by: str | None
     settled_at: datetime | None
     settlement_entry_id: str | None
+    instrument: Instrument = Instrument.BILL
 
     @property
     def order(self) -> Order:
@@ -98,7 +120,7 @@ _COLUMNS = (
     "id, kind, product_code, currency, face_minor, status, prepared_by, prepared_at, decided_by, "
     "decided_at, decision_note, result_face_minor, result_amount_minor, result_settled_on, "
     "result_matures_on, custodian_reference, result_recorded_by, result_recorded_at, "
-    "result_rejection_note, settled_by, settled_at, settlement_entry_id"
+    "result_rejection_note, settled_by, settled_at, settlement_entry_id, instrument"
 )
 _BY_ID = text(f"SELECT {_COLUMNS} FROM dealing_orders WHERE id = :id")  # noqa: S608
 _LOCKED = text(f"SELECT {_COLUMNS} FROM dealing_orders WHERE id = :id FOR UPDATE")  # noqa: S608
@@ -108,8 +130,9 @@ _OPEN = text(
     "ORDER BY prepared_at, id LIMIT :limit"
 )
 _INSERT = text(
-    "INSERT INTO dealing_orders (id, kind, product_code, currency, face_minor, prepared_by, "
-    "prepared_at) VALUES (:id, :kind, :product_code, :currency, :face_minor, :prepared_by, :now)"
+    "INSERT INTO dealing_orders (id, kind, instrument, product_code, currency, face_minor, "
+    "prepared_by, prepared_at) VALUES (:id, :kind, :instrument, :product_code, :currency, "
+    ":face_minor, :prepared_by, :now)"
 )
 _DECIDE = text(
     "UPDATE dealing_orders SET status = :status, decided_by = :by, decided_at = :now, "
@@ -163,15 +186,17 @@ async def open_orders(session: AsyncSession, *, limit: int = MAX_ORDERS) -> list
     return [_view(row) for row in rows.all()]
 
 
-async def on_order(session: AsyncSession) -> dict[str, Money]:
-    """Face value of the open orders to buy, by product code, for the position.
+async def on_order(
+    session: AsyncSession, instrument: Instrument = Instrument.BILL
+) -> dict[str, Money]:
+    """Face value of the open orders to buy, by product or issue code, for the position.
 
     Counted at face value because the cost is not known until the result is. For a Treasury
     bill that is never less than the cost.
     """
     totals: dict[str, Money] = {}
     for view in await open_orders(session):
-        if view.kind.buys:
+        if view.kind.buys and view.instrument is instrument:
             totals[view.product_code] = (
                 totals.get(view.product_code, Money.zero(view.face.currency)) + view.face
             )
@@ -189,18 +214,21 @@ async def prepare_order(
     product_code: str,
     face: Money,
     clock: Clock,
+    instrument: Instrument = Instrument.BILL,
 ) -> OrderView:
-    """Save an order for a second member of staff to approve. Nothing is bought or sold."""
+    """Save an order for a second member of staff to approve. Nothing is bought or sold.
+
+    `product_code` names an investment product for bills, or a bond issue for bonds."""
     _staff_only(staff)
-    product = await _product(session, product_code, clock)
+    target = await _target(session, instrument, product_code, clock)
     try:
-        order = Order(kind, product.code, face, _id(staff))
+        order = Order(kind, target.code, face, _id(staff))
     except InvalidOrder as error:
         raise _invalid("face", "not_positive") from error
-    if face.currency is not product.currency:
+    if face.currency is not target.currency:
         raise _invalid("face", Refusal.CURRENCY_MISMATCH.value)
-    held = await _face_held(session, product, clock)
-    refusal = check_new_order(order, LOT_SIZES[product.currency], held)
+    held = await _face_held(session, target, clock)
+    refusal = check_new_order(order, LOT_SIZES[target.currency], held)
     if refusal is not None:
         raise _refused(refusal)
     order_id = push_id()
@@ -209,14 +237,24 @@ async def prepare_order(
         {
             "id": order_id,
             "kind": kind.value,
-            "product_code": product.code,
+            "instrument": instrument.value,
+            "product_code": target.code,
             "currency": face.currency.value,
             "face_minor": face.minor,
             "prepared_by": staff.id,
             "now": clock.now(),
         },
     )
-    await _audit(session, staff, "change", "dealing.order.prepared", order_id, clock, order=order)
+    await _audit(
+        session,
+        staff,
+        "change",
+        "dealing.order.prepared",
+        order_id,
+        clock,
+        order=order,
+        instrument=instrument,
+    )
     return await get_order(session, order_id)
 
 
@@ -269,17 +307,18 @@ async def record_result(
     Nothing is posted to the ledger. A second person confirms the result first.
     """
     view = await _locked(session, staff, order_id)
-    product = await _product(session, view.product_code, clock)
+    target = await _target(session, view.instrument, view.product_code, clock)
     _allow(
         check_result(
             view.order,
             fill,
             business_date(clock.now()),
-            discount_only=product.kind is ProductKind.TREASURY_BILL,
-            term_days=product.term_days,
+            discount_only=target.discount_only,
+            term_days=target.term_days,
             face_held=await _face_held(
-                session, product, clock, matures_on=fill.matures_on if fill else None
+                session, target, clock, matures_on=fill.matures_on if fill else None
             ),
+            maturity_date=target.maturity_date,
         )
     )
     status = OrderStatus.UNSUCCESSFUL if fill is None else OrderStatus.RESULT_RECORDED
@@ -326,7 +365,9 @@ async def confirm_result(
     This settles the order in the caller's transaction: the journal entry on the trust bank
     account, dated on the settlement date, and the lot bought or the parts of lots sold. A sale
     takes bills of the maturity it recorded, oldest purchase first. Refused when the bank
-    account holds too little for a purchase or the settlement date is in a closed day.
+    account holds too little for a purchase or the settlement date is in a closed day. A bond
+    is posted to `dealing.bonds`, and a bond sale pays no early withdrawals: what it raises
+    pays the client who sold, through the bonds module.
     """
     view = await _locked(session, staff, order_id)
     _allow(check_confirmation(view.order, _id(staff)))
@@ -342,10 +383,18 @@ async def confirm_result(
         cost = fill.amount
     else:
         await session.execute(
-            _LOCK_INSTRUMENT, {"instrument": f"{view.product_code}:{fill.matures_on.isoformat()}"}
+            _LOCK_INSTRUMENT,
+            {
+                "instrument": f"{view.instrument.value}:{view.product_code}:"
+                f"{fill.matures_on.isoformat()}"
+            },
         )
         lots = await holdings.lots_of(
-            session, view.product_code, fill.matures_on, on=fill.settled_on
+            session,
+            view.product_code,
+            fill.matures_on,
+            on=fill.settled_on,
+            instrument=view.instrument,
         )
         try:
             draws = draw([held.lot for held in lots], fill.face)
@@ -353,7 +402,9 @@ async def confirm_result(
             raise _refused(Refusal.MORE_THAN_HELD) from None
         parts = [(lots[part.lot].id, part.face, part.cost_released) for part in draws]
         cost = sum((released for _, _, released in parts), Money.zero(currency))
-    draft = settlement_entry(Settlement(view.id, view.kind, fill, cost), account_ids)
+    draft = settlement_entry(
+        Settlement(view.id, view.kind, fill, cost, view.instrument), account_ids
+    )
     try:
         entry = await ledger.post_entry(session, draft, clock)
     except InsufficientFunds:
@@ -392,7 +443,7 @@ async def confirm_result(
         clock,
         reason="Confirmed against the custodian's note as the second person",
     )
-    if not view.kind.buys:
+    if not view.kind.buys and view.instrument is Instrument.BILL:
         # Withdrawals waiting for a sale are paid from what it raised, by the worker, at once.
         await enqueue(
             session,
@@ -420,20 +471,41 @@ def _id(actor: Actor) -> str:
 
 
 async def _face_held(
-    session: AsyncSession, product: Product, clock: Clock, *, matures_on: date | None = None
+    session: AsyncSession, target: Target, clock: Clock, *, matures_on: date | None = None
 ) -> Money:
-    """Face value held today in the product, or in one maturity of it, that a sale could take."""
+    """Face value held today in the product or issue, or in one maturity of it, that a sale
+    could take."""
     return await holdings.face_held(
         session,
-        product.code,
-        product.currency,
+        target.code,
+        target.currency,
         on=business_date(clock.now()),
         matures_on=matures_on,
+        instrument=target.instrument,
     )
 
 
-async def _product(session: AsyncSession, code: str, clock: Clock) -> Product:
-    return (await investments.get_product(session, code, clock)).product
+async def _target(session: AsyncSession, instrument: Instrument, code: str, clock: Clock) -> Target:
+    """The product or bond issue `code` names. 404 when there is none."""
+    if instrument is Instrument.BOND:
+        issue = (await bonds.issue_view(session, code)).issue
+        return Target(
+            instrument=instrument,
+            code=issue.code,
+            currency=issue.currency,
+            discount_only=False,
+            term_days=None,
+            maturity_date=issue.maturity_date,
+        )
+    product = (await investments.get_product(session, code, clock)).product
+    return Target(
+        instrument=instrument,
+        code=product.code,
+        currency=product.currency,
+        discount_only=product.kind is ProductKind.TREASURY_BILL,
+        term_days=product.term_days,
+        maturity_date=None,
+    )
 
 
 async def _locked(session: AsyncSession, staff: Actor, order_id: str) -> OrderView:
@@ -490,6 +562,7 @@ def _view(row: Row[Any]) -> OrderView:
         settled_by=row.settled_by,
         settled_at=row.settled_at,
         settlement_entry_id=row.settlement_entry_id,
+        instrument=Instrument(row.instrument),
     )
 
 
@@ -502,6 +575,7 @@ _FIELDS = {
     Refusal.ABOVE_FACE: "amount",
     Refusal.SETTLES_IN_THE_FUTURE: "settled_on",
     Refusal.LONGER_THAN_TERM: "matures_on",
+    Refusal.WRONG_MATURITY: "matures_on",
     Refusal.NOTE_REQUIRED: "note",
 }
 
@@ -536,11 +610,14 @@ async def _audit(
     reason: str | None = None,
     order: Order | None = None,
     fill: Fill | None = None,
+    instrument: Instrument | None = None,
 ) -> None:
     # "product", not "product_code": the audit trail redacts any key with the word "code".
     details: dict[str, object] = (
         {} if order is None else {"kind": order.kind.value, "product": order.product_code}
     )
+    if instrument is Instrument.BOND:
+        details["instrument"] = instrument.value
     if fill is not None:
         # The result as recorded, so a result later rejected can still be read.
         details |= {

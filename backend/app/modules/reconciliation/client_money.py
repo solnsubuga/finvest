@@ -12,6 +12,7 @@ from datetime import date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.dealing import holdings as dealing
+from app.modules.dealing.domain.orders import Instrument
 from app.modules.ledger import statements as ledger_statements
 from app.modules.reconciliation import custodian, day_close
 from app.modules.reconciliation.domain.client_money import Balance, ClientMoneyCheck, PotHeld, check
@@ -36,7 +37,8 @@ class ClientMoneyView:
     check: ClientMoneyCheck
     custodian: CustodianEvidence | None
     # Face value less cost of the bills held at the end of the day: what they will pay above
-    # what was paid for them, if held to maturity. This is what pays the interest owed.
+    # what was paid for them, if held to maturity. This is what pays the interest owed. Bonds
+    # are left out: their coupons pay their clients' coupons.
     discount_to_come: Money
 
 
@@ -88,5 +90,12 @@ async def client_money(
     return ClientMoneyView(
         check=check(day, currency, balances, pots),
         custodian=evidence,
-        discount_to_come=Money(sum(each.face_minor - each.cost_minor for each in held), currency),
+        discount_to_come=Money(
+            sum(
+                each.face_minor - each.cost_minor
+                for each in held
+                if each.instrument is Instrument.BILL
+            ),
+            currency,
+        ),
     )

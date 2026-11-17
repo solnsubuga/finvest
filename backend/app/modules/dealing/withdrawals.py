@@ -20,8 +20,10 @@ from app.infrastructure.jobs import Consumer
 from app.infrastructure.jobs.outbox import publish
 from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
-from app.modules.dealing import buffer, holdings
+from app.modules.dealing import bond_book, buffer, holdings
+from app.modules.dealing.domain.bond_position import bonds_to_place
 from app.modules.dealing.domain.liquidity import BufferLevel, BufferRules, buffer_level, to_raise
+from app.modules.dealing.domain.orders import Instrument
 from app.modules.dealing.domain.position import ProductPosition, money_to_place
 from app.modules.dealing.domain.withdrawals import (
     CASH_CODES,
@@ -287,7 +289,7 @@ async def fund_from_sale(session: AsyncSession, order_id: str, clock: Clock) -> 
 async def _to_place(session: AsyncSession, currency: Currency, on: date) -> Money:
     held: defaultdict[str, int] = defaultdict(int)
     for holding in await holdings.holdings_on(session, on):
-        if holding.currency is currency:
+        if holding.currency is currency and holding.instrument is Instrument.BILL:
             held[holding.product_code] += holding.cost_minor
     zero = Money.zero(currency)
     positions = [
@@ -300,7 +302,9 @@ async def _to_place(session: AsyncSession, currency: Currency, on: date) -> Mone
         for owed in await investments.owed_by_product(session, on)
         if owed.currency is currency
     ]
-    return money_to_place(positions, currency)
+    # Client money for bonds not yet bought is not the buffer's either.
+    bonds = [line.position for line in await bond_book.bond_positions(session, currency, on)]
+    return money_to_place(positions, currency) + bonds_to_place(bonds, currency)
 
 
 async def _waiting(session: AsyncSession, currency: Currency, source: Source) -> list[FundingView]:

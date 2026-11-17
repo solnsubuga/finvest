@@ -212,6 +212,12 @@ async def staff_issues(session: AsyncSession, staff: Actor) -> list[IssueView]:
     return await _issues(session, (BondStatus.DRAFT, BondStatus.LIVE, BondStatus.PAUSED))
 
 
+async def every_issue(session: AsyncSession) -> list[IssueView]:
+    """Every issue in the catalogue, whatever its status, for the dealing desk's position. The
+    caller has already checked who is reading."""
+    return await _issues(session, (BondStatus.DRAFT, BondStatus.LIVE, BondStatus.PAUSED))
+
+
 async def staff_issue(session: AsyncSession, staff: Actor, code: str) -> IssueView:
     _staff_only(staff)
     return await issue_view(session, code)

@@ -159,3 +159,17 @@ def test_money_in_another_currency_is_refused() -> None:
 def test_an_unknown_account_kind_is_refused() -> None:
     with pytest.raises(ValueError):
         check(DAY, Currency.UGX, [balance("odd", "memo", 1)], [])
+
+
+def test_bonds_at_the_custodian_are_held_on_the_same_line_as_bills() -> None:
+    # 200,000 of the trust account went on bonds instead of staying in the bank.
+    books = [
+        balance("bank.trust", "asset", 970_000 - 600_000 + 50_000 - 200_000),
+        balance("dealing.bonds", "asset", 200_000),
+        *BOOKS[1:],
+    ]
+    pots = [pot("trust", "bank.trust", 220_000), POTS[1]]
+    found = check(DAY, Currency.UGX, books, pots)
+    assert found.bills == ugx(800_000)
+    assert found.held == found.owed
+    assert found.not_on_statement == ()
