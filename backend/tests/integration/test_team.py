@@ -1,6 +1,7 @@
 """Changing the team: each invite, role change, deactivation and set-up link takes two admins."""
 
 import asyncio
+import secrets
 from collections.abc import AsyncIterator
 
 import httpx
@@ -59,7 +60,7 @@ async def links_sent(migrator: Database, email: str) -> list[str]:
 
 
 def an_email() -> str:
-    return f"new.{push_id().lower().replace('_', 'a').replace('-', 'b')}@finvestug.com"
+    return f"new.{secrets.token_hex(8)}@finvestug.com"
 
 
 async def test_an_invite_takes_effect_only_when_a_second_admin_approves(

@@ -3,6 +3,7 @@ approves, the worker emails each stored note again with its own record, and the 
 everyone to their part."""
 
 import asyncio
+import secrets
 from collections.abc import Iterator
 from datetime import timedelta
 
@@ -32,7 +33,7 @@ REASON = "The client lost the email and asked for it again"
 
 @pytest.fixture(autouse=True)
 def own_queue(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
-    queue = "reissue" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"reissue_{secrets.token_hex(8)}"
     monkeypatch.setattr(service, "QUEUE", queue)
     yield queue
 
