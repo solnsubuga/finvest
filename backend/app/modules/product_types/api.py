@@ -52,6 +52,9 @@ Description = Annotated[str, Field(min_length=1, max_length=MAX_DESCRIPTION)]
 Bps = Annotated[int, Field(ge=0, le=9999)]
 Reason = Annotated[str, Field(min_length=1, max_length=500)]
 Note = Annotated[str, Field(min_length=1, max_length=500)]
+# Sent as its value, such as "fixed_income". The strict `Contract` would otherwise take only an
+# enum instance, which JSON can never carry.
+ModelIn = Annotated[ReturnModel, Field(strict=False)]
 
 
 class ReturnModelOut(Contract):
@@ -96,7 +99,7 @@ class ProductTypeChangeOut(Contract):
 
 class NewTypeIn(Contract):
     code: Code
-    model: ReturnModel
+    model: ModelIn
     name: Name
     description: Description
     default_tax_bps: Bps
