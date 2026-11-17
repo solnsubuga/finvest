@@ -1,7 +1,7 @@
 /**
  * Sample bond sales for `pnpm dev` and tests. Follows the backend's rules closely enough to try
  * the screen: a sale is priced by one person and decided by another, and the figures of a sold
- * one are the backend's worked example in docs/bonds.md, dated around today.
+ * one, and of a priced one, are the backend's worked example in docs/bonds.md, dated around today.
  */
 
 import { BondSaleError, type BondSale, type BondSalesApi, type SaleStep } from "./bondSales.ts";
@@ -59,6 +59,10 @@ function samples(me: { id: string; name: string }, today: string): BondSale[] {
       reason: "Desk trade 4471 with Stanbic",
       pricedBy: SALES_COLLEAGUE.name,
       pricedAt: `${today}T09:05:00Z`,
+      clean: UGX(972_500),
+      accrued: UGX(40_662),
+      tax: UGX(4_066),
+      amount: UGX(1_009_096),
     },
     {
       ...base("-SalePricedByMe00001", "Joan Achieng", `${before(today, 2)}T15:20:00Z`),
@@ -70,6 +74,10 @@ function samples(me: { id: string; name: string }, today: string): BondSale[] {
       reason: "Desk trade 4472 with Absa",
       pricedBy: me.name,
       pricedAt: `${today}T09:30:00Z`,
+      clean: UGX(500_625),
+      accrued: UGX(20_331),
+      tax: UGX(2_033),
+      amount: UGX(518_923),
     },
     {
       ...base("-SaleSold00000000001", "Peter Mugisha", `${before(today, 4)}T08:00:00Z`),
@@ -90,6 +98,20 @@ function samples(me: { id: string; name: string }, today: string): BondSale[] {
     },
   ];
 }
+
+/** A sale sent back or withdrawn loses its price, and with it the figures worked out from it. */
+const unpriced = {
+  status: "requested",
+  price: null,
+  soldOn: null,
+  reason: null,
+  pricedBy: null,
+  pricedAt: null,
+  clean: null,
+  accrued: null,
+  tax: null,
+  amount: null,
+} as const;
 
 function steps(sale: BondSale, me: string): readonly SaleStep[] {
   if (sale.status === "requested") return ["price"];
@@ -134,13 +156,13 @@ export function createStubBondSalesApi(
       update(id, (sale) => {
         if (sale.status !== "priced") throw new BondSaleError("conflict");
         if (sale.pricedBy === me.name) throw new BondSaleError("forbidden");
-        return { ...sale, status: "requested", price: null, soldOn: null, reason: null, pricedBy: null, pricedAt: null, note };
+        return { ...sale, ...unpriced, note };
       }),
     withdraw: (id) =>
       update(id, (sale) => {
         if (sale.status !== "priced") throw new BondSaleError("conflict");
         if (sale.pricedBy !== me.name) throw new BondSaleError("forbidden");
-        return { ...sale, status: "requested", price: null, soldOn: null, reason: null, pricedBy: null, pricedAt: null };
+        return { ...sale, ...unpriced };
       }),
   };
 }

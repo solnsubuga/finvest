@@ -53,6 +53,20 @@ describe("bonds clients are selling", () => {
     expect(within(priced).getByText("You recorded this price. A different person approves it.")).toBeInTheDocument();
   });
 
+  it("shows the approver what the client will be paid at that price", async () => {
+    const user = renderSales();
+    const colleague = await card("Brian Okello");
+    const gets = within(colleague).getByLabelText("What the client gets");
+    expect(within(gets).getByText("Client will be paid")).toBeInTheDocument();
+    expect(within(gets).getByText(/1,009,096/)).toBeInTheDocument();
+    expect(within(gets).getByText(/4,066/)).toBeInTheDocument();
+    await user.click(within(colleague).getByRole("button", { name: /^Approve/ }));
+    const approved = await card("Brian Okello");
+    expect(await within(approved).findByText("Approved, being paid")).toBeInTheDocument();
+    expect(within(within(approved).getByLabelText("What the client gets")).getByText(/1,009,096/)).toBeInTheDocument();
+    expect(within(await card("Sarah Nakato")).queryByLabelText("What the client gets")).toBeNull();
+  });
+
   it("approves a colleague's price", async () => {
     const user = renderSales();
     const colleague = await card("Brian Okello");
