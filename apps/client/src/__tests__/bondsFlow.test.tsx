@@ -9,7 +9,7 @@ import { WARM_ROUTER_MS, warmRouter } from "@/testing/warmRouter";
 const mockClock = { ms: Date.parse("2026-11-16T09:00:00Z") };
 const mockBuy = jest.fn();
 const mockFailBond: { value: boolean } = { value: false };
-const mockBondSample: { value: "default" | "empty" } = { value: "empty" };
+const mockBondSample: { value: "default" | "empty" | "sold" } = { value: "empty" };
 const mockSell = jest.fn();
 const mockInvestSample: { value: "default" | "empty" } = { value: "empty" };
 
@@ -183,8 +183,8 @@ describe("bonds", () => {
 });
 
 describe("bond holdings", () => {
-  async function openPortfolio() {
-    mockBondSample.value = "default";
+  async function openPortfolio(sample: "default" | "sold" = "default") {
+    mockBondSample.value = sample;
     await signIn();
     await act(async () => {
       router.push("/portfolio");
@@ -258,5 +258,15 @@ describe("bond holdings", () => {
     await fireEvent.press(screen.getByTestId("bond-sale-cancel"));
     expect(await screen.findByTestId("bond-sell")).toBeTruthy();
     expect(screen.queryByTestId("bond-sale")).toBeNull();
+  });
+
+  it("shows a sold holding as sold, with no coupons left to come", async () => {
+    await openPortfolio("sold");
+    await fireEvent.press(screen.getByLabelText(/^2 Year Treasury Bond 2028/));
+    expect(await screen.findByText("Sold for UGX 1,018,340")).toBeTruthy();
+    expect(screen.getByText("Sold on 10 Nov 2026")).toBeTruthy();
+    expect(screen.queryByText("Coupons left")).toBeNull();
+    expect(screen.queryByText("Still to come")).toBeNull();
+    expect(screen.queryByTestId("bond-sell")).toBeNull();
   });
 });

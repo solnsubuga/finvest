@@ -21,7 +21,7 @@ function loadStub(): StubModule | null {
 export function resolveBondsClient(stub: StubModule | null = loadStub()): BondsClient {
   return stub ? stub.createStubBondsClient({
         failList: demoSearch().includes("bonds=fail"),
-        sample: demoSearch().includes("sample=empty") ? "empty" : "default",
+        sample: demoSearch().includes("sample=empty") ? "empty" : demoSearch().includes("sample=sold") ? "sold" : "default",
       }) : createApiBondsClient();
 }
 
