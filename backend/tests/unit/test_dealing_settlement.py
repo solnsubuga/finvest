@@ -3,11 +3,12 @@ from datetime import date
 import pytest
 
 from app.modules.dealing.domain.holdings import InvalidLot, Lot
-from app.modules.dealing.domain.orders import Fill, OrderKind
+from app.modules.dealing.domain.orders import Fill, Instrument, OrderKind
 from app.modules.dealing.domain.settlement import (
     BANK_TRUST,
     BILL_INCOME,
     BILLS,
+    BONDS,
     MATURITY_LOSSES,
     SALE_GAINS,
     SALE_LOSSES,
@@ -24,6 +25,7 @@ from app.shared.money import Currency, Money
 IDS = {
     BANK_TRUST: "acct-bank",
     BILLS: "acct-bills",
+    BONDS: "acct-bonds",
     SALE_GAINS: "acct-gain",
     SALE_LOSSES: "acct-loss",
     BILL_INCOME: "acct-income",
@@ -92,6 +94,7 @@ def test_the_accounts_are_the_desks_own_in_one_currency() -> None:
     assert {code: spec.kind for code, spec in specs.items()} == {
         BANK_TRUST: AccountKind.ASSET,
         BILLS: AccountKind.ASSET,
+        BONDS: AccountKind.ASSET,
         SALE_GAINS: AccountKind.INCOME,
         SALE_LOSSES: AccountKind.EXPENSE,
         BILL_INCOME: AccountKind.INCOME,
@@ -131,3 +134,21 @@ def test_a_late_maturity_is_still_dated_on_the_maturity_date() -> None:
 def test_a_lot_is_not_paid_before_it_matures() -> None:
     with pytest.raises(InvalidLot):
         maturity_entry("-OdLot", Lot(ugx(100), ugx(97), MATURES), date(2027, 2, 17), IDS)
+
+
+def test_bonds_are_bought_sold_and_repaid_through_their_own_asset() -> None:
+    bought = Settlement(
+        "-OdBond", OrderKind.SECONDARY_PURCHASE, fill(240, 245), ugx(245), Instrument.BOND
+    )
+    assert lines(bought) == {"acct-bonds": 245, "acct-bank": -245}
+    sold = Settlement(
+        "-OdBondSale", OrderKind.SECONDARY_SALE, fill(100, 103), ugx(102), Instrument.BOND
+    )
+    assert lines(sold) == {"acct-bank": 103, "acct-bonds": -102, "acct-gain": -1}
+    lot = Lot(face=ugx(100), cost=ugx(102), matures_on=date(2027, 2, 18))
+    repaid = maturity_entry("-OdLot", lot, date(2027, 2, 18), IDS, Instrument.BOND)
+    assert {line.account_id: line.amount.minor for line in repaid.lines} == {
+        "acct-bank": 100,
+        "acct-bonds": -102,
+        "acct-maturity-loss": 2,
+    }

@@ -320,3 +320,46 @@ def test_each_person_is_offered_only_the_steps_they_may_take(
         "recorder" if status is OrderStatus.RESULT_RECORDED else None,
     )
     assert allowed_actions(order, by) == expected
+
+
+def test_a_bond_matures_on_its_issues_date_and_may_cost_more_than_its_face() -> None:
+    above_face = replace(FILL, amount=FILL.face + ugx(1))
+    issue_matures = FILL.matures_on
+    assert (
+        check_result(
+            APPROVED,
+            above_face,
+            TODAY,
+            discount_only=False,
+            term_days=None,
+            face_held=HELD,
+            maturity_date=issue_matures,
+        )
+        is None
+    )
+    other_bond = replace(above_face, matures_on=issue_matures.replace(year=issue_matures.year + 1))
+    assert (
+        check_result(
+            APPROVED,
+            other_bond,
+            TODAY,
+            discount_only=False,
+            term_days=None,
+            face_held=HELD,
+            maturity_date=issue_matures,
+        )
+        is Refusal.WRONG_MATURITY
+    )
+    # Nothing dealt has no maturity to check.
+    assert (
+        check_result(
+            APPROVED,
+            None,
+            TODAY,
+            discount_only=False,
+            term_days=None,
+            face_held=HELD,
+            maturity_date=issue_matures,
+        )
+        is None
+    )

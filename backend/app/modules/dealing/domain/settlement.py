@@ -21,6 +21,9 @@ When a lot matures the issuer pays its face value into the trust bank account:
 |          | `dealing.maturity_losses`, any shortfall | `dealing.bill_income`, face above cost  |
 
 It is dated on the maturity date and points back at the lot (source type `dealing.lot`).
+
+Bonds are posted the same way, to `dealing.bonds` in place of `dealing.bills`, so the books show
+bonds held apart from bills. Gains, losses and income share the accounts above.
 """
 
 from __future__ import annotations
@@ -29,7 +32,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from app.modules.dealing.domain.holdings import Lot, income_at_maturity
-from app.modules.dealing.domain.orders import Fill, OrderKind
+from app.modules.dealing.domain.orders import Fill, Instrument, OrderKind
 from app.modules.ledger.domain.entries import (
     AccountKind,
     AccountSpec,
@@ -42,6 +45,7 @@ from app.shared.money import Currency, Money
 
 BANK_TRUST = "bank.trust"
 BILLS = "dealing.bills"
+BONDS = "dealing.bonds"
 SALE_GAINS = "dealing.sale_gains"
 SALE_LOSSES = "dealing.sale_losses"
 BILL_INCOME = "dealing.bill_income"
@@ -62,6 +66,7 @@ def accounts(currency: Currency) -> dict[str, AccountSpec]:
     return {
         BANK_TRUST: AccountSpec(BANK_TRUST, AccountKind.ASSET, currency, "Trust bank account"),
         BILLS: AccountSpec(BILLS, AccountKind.ASSET, currency, "Bills and bonds held, at cost"),
+        BONDS: AccountSpec(BONDS, AccountKind.ASSET, currency, "Treasury bonds held, at cost"),
         SALE_GAINS: AccountSpec(SALE_GAINS, AccountKind.INCOME, currency, "Gains on bills sold"),
         SALE_LOSSES: AccountSpec(
             SALE_LOSSES, AccountKind.EXPENSE, currency, "Losses on bills sold"
@@ -82,6 +87,7 @@ class Settlement:
     fill: Fill
     # The cost that leaves the books. For a purchase it is what was paid.
     cost: Money
+    instrument: Instrument = Instrument.BILL
 
     def __post_init__(self) -> None:
         if self.cost.currency is not self.fill.amount.currency:
@@ -101,21 +107,27 @@ class Settlement:
         return f"dealing-order:{self.order_id}:settle"
 
 
+def held_account(instrument: Instrument) -> str:
+    """The asset an instrument is carried in, at cost."""
+    return BONDS if instrument is Instrument.BOND else BILLS
+
+
 def settlement_entry(settlement: Settlement, account_ids: dict[str, str]) -> EntryDraft:
     """The journal entry for `settlement`. `account_ids` maps each code above to its account."""
     fill = settlement.fill
+    held = account_ids[held_account(settlement.instrument)]
     lines: list[Line]
     if settlement.kind.buys:
         entry_type = PURCHASE_ENTRY
         lines = [
-            debit(account_ids[BILLS], fill.amount),
+            debit(held, fill.amount),
             credit(account_ids[BANK_TRUST], fill.amount),
         ]
     else:
         entry_type = SALE_ENTRY
         lines = [debit(account_ids[BANK_TRUST], fill.amount)]
         if settlement.cost.is_positive:
-            lines.append(credit(account_ids[BILLS], settlement.cost))
+            lines.append(credit(held, settlement.cost))
         result = settlement.result
         if result.is_positive:
             lines.append(credit(account_ids[SALE_GAINS], result))
@@ -131,13 +143,22 @@ def settlement_entry(settlement: Settlement, account_ids: dict[str, str]) -> Ent
     )
 
 
-def maturity_entry(lot_id: str, lot: Lot, on: date, account_ids: dict[str, str]) -> EntryDraft:
+def maturity_entry(
+    lot_id: str,
+    lot: Lot,
+    on: date,
+    account_ids: dict[str, str],
+    instrument: Instrument = Instrument.BILL,
+) -> EntryDraft:
     """The journal entry for what is left of a lot when the issuer pays it on `on`.
 
     `lot` is the face value and cost still held. Refused before the maturity date.
     """
     income = income_at_maturity(lot, on)
-    lines = [debit(account_ids[BANK_TRUST], lot.face), credit(account_ids[BILLS], lot.cost)]
+    lines = [
+        debit(account_ids[BANK_TRUST], lot.face),
+        credit(account_ids[held_account(instrument)], lot.cost),
+    ]
     if income.is_positive:
         lines.append(credit(account_ids[BILL_INCOME], income))
     elif income.is_negative:

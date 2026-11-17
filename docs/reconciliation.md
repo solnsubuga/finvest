@@ -191,7 +191,7 @@ What is held cannot also come from the ledger, or the check would be circular: t
 | Held | From |
 | --- | --- |
 | Each cash pot | Its statement's closing balance for the day, as the day close saved it when two people signed |
-| Bills and bonds | The dealing desk's `dealing.bills` at cost, with the latest custodian statement check signed off on or before the day. The screen says when that check is for an earlier day or had differences, and when none is signed off |
+| Bills and bonds | The dealing desk's `dealing.bills` and `dealing.bonds` at cost, with the latest custodian statement check signed off on or before the day. The screen says when that check is for an earlier day or had differences, and when none is signed off |
 | Less what is not client money | Every other liability and equity account on the ledger (such as tax withheld for URA and Finvest's own money in the buffer), each on its own line, and Finvest's earnings so far (income less costs) on one line. The earnings are below zero while interest accrued waits for the bills to mature, and so add to what is held |
 
 Held less owed is the difference. Because the ledger balances, it is accounted for by two things, each listed under "Why it does not tie": the differences still open on the day's statements, and assets on the books that no statement shows (balances carried over from the paper register and not yet in a pot, or a client owing Finvest for a payment credited by mistake). What neither accounts for is `unexplained`, which should always be zero; anything else means a figure was read wrongly. Only shillings are checked: every pot is in UGX.

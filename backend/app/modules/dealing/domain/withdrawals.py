@@ -28,7 +28,8 @@ from app.shared.money import Currency, Money
 CASH_CODES = ("bank.trust", "iotec.wallet")
 # Client and tax money held in that cash that no bill stands behind: paid in and not started,
 # handed to payouts and not yet left, and tax withheld and not yet paid to URA. Running
-# investments are counted separately, against the bills held for each product.
+# investments are counted separately, against the bills held for each product, and bond
+# holdings against the bonds held of each issue.
 CLAIM_CODES = (
     "client.awaiting_start",
     "client.payout_pending",

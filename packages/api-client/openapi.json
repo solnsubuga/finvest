@@ -2800,6 +2800,86 @@
         "title": "BondOut",
         "type": "object"
       },
+      "BondPositionOut": {
+        "additionalProperties": false,
+        "description": "One bond issue: the face value clients hold against the face value held.",
+        "properties": {
+          "clients_face": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "clients_paid": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "cost_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/Cover"
+          },
+          "face_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "holders": {
+            "title": "Holders",
+            "type": "integer"
+          },
+          "isin": {
+            "title": "Isin",
+            "type": "string"
+          },
+          "lot_size": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "maturity_date": {
+            "format": "date",
+            "title": "Maturity Date",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "on_order": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "on_sale": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "to_buy": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "to_place": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "to_sell": {
+            "$ref": "#/components/schemas/AmountOut"
+          }
+        },
+        "required": [
+          "code",
+          "isin",
+          "name",
+          "maturity_date",
+          "holders",
+          "clients_face",
+          "clients_paid",
+          "face_held",
+          "cost_held",
+          "to_buy",
+          "on_order",
+          "to_sell",
+          "on_sale",
+          "cover",
+          "to_place",
+          "lot_size"
+        ],
+        "title": "BondPositionOut",
+        "type": "object"
+      },
       "BondPriceIn": {
         "additionalProperties": false,
         "properties": {
@@ -8787,6 +8867,16 @@
           "bills_held": {
             "$ref": "#/components/schemas/AmountOut"
           },
+          "bonds": {
+            "items": {
+              "$ref": "#/components/schemas/BondPositionOut"
+            },
+            "title": "Bonds",
+            "type": "array"
+          },
+          "bonds_held": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
           "buffer": {
             "$ref": "#/components/schemas/BufferOut"
           },
@@ -8829,7 +8919,9 @@
           "buffer",
           "early_withdrawals",
           "positions",
-          "orders"
+          "orders",
+          "bonds_held",
+          "bonds"
         ],
         "title": "DeskOut",
         "type": "object"
@@ -11445,6 +11537,15 @@
         ],
         "title": "InsightsView",
         "type": "object"
+      },
+      "Instrument": {
+        "description": "What an order deals. Fixed when it is prepared.",
+        "enum": [
+          "bill",
+          "bond"
+        ],
+        "title": "Instrument",
+        "type": "string"
       },
       "InterestComingView": {
         "additionalProperties": false,
@@ -14932,6 +15033,10 @@
             "title": "Face Minor",
             "type": "integer"
           },
+          "instrument": {
+            "$ref": "#/components/schemas/Instrument",
+            "default": "bill"
+          },
           "kind": {
             "$ref": "#/components/schemas/OrderKind"
           },
@@ -15827,6 +15932,9 @@
             "title": "Id",
             "type": "string"
           },
+          "instrument": {
+            "$ref": "#/components/schemas/Instrument"
+          },
           "kind": {
             "$ref": "#/components/schemas/OrderKind"
           },
@@ -15886,6 +15994,7 @@
         "required": [
           "id",
           "kind",
+          "instrument",
           "product_code",
           "product_name",
           "face",
@@ -58410,7 +58519,7 @@
     },
     "/staff/dealing/orders": {
       "post": {
-        "description": "Prepare an order for a second member of staff to approve.",
+        "description": "Prepare an order for a second member of staff to approve. 404 when no product, or for a\nbond no issue, has the code.",
         "operationId": "prepare_order_staff_dealing_orders_post",
         "parameters": [
           {

@@ -34,6 +34,9 @@ from app.modules.reconciliation.domain.statements import StatementSource
 from app.shared.money import Currency, Money
 
 BILLS_CODE = "dealing.bills"
+BONDS_CODE = "dealing.bonds"
+# The dealing desk's assets at the custodian, at cost: counted as held, on one line.
+CUSTODIAN_CODES = (BILLS_CODE, BONDS_CODE)
 INTEREST_CODE = "client.interest_accrued"
 EARNINGS = "earnings"
 
@@ -170,7 +173,7 @@ def check(
             earnings += found.amount
         elif found.kind == "expense":
             earnings -= found.amount
-        elif found.kind == "asset" and found.code == BILLS_CODE and not found.for_clients:
+        elif found.kind == "asset" and found.code in CUSTODIAN_CODES and not found.for_clients:
             bills += found.amount
         elif found.kind == "asset":
             name, so_far = assets.get(found.code, (found.name, zero))

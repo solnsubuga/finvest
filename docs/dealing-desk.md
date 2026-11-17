@@ -151,6 +151,36 @@ The database holds that only the worker records a maturity, that it is exactly w
 
 `dealing.holdings` answers what is held: `lots_of` for one instrument, `face_held`, `holdings_on(session, on)` for each instrument at the end of a day, and `expected_bank_movements(session, date_from=, date_to=)` for the day close, which covers purchases, sales and maturities. A lot counts from its settlement date until the day before it matures. The worker can read all of these.
 
+## Bonds
+
+The desk buys and holds Treasury bonds for the clients who hold them, the same way it holds bills (migration 0532, the owner's decision in [decisions.md](decisions.md)). A dealing order says what it deals in `instrument`: `bill`, as before, names an investment product's code, and `bond` names an issue's code in the bonds catalogue ([bonds.md](bonds.md)). What an order deals is fixed when it is prepared. Bond orders take the same two people, steps, lots and maturity run as bills, with these differences:
+
+| | Bills | Bonds |
+| --- | --- | --- |
+| Named by | The investment product | The bond issue |
+| Carried at cost in | `dealing.bills` | `dealing.bonds` ("Treasury bonds held, at cost") |
+| Price | Never above face value | May be above face value |
+| Maturity on the result | No later than the product's term | Exactly the issue's maturity date (`wrong_maturity` otherwise) |
+| Stands behind | Investments, through allocation | The issue's bond holdings, by face value. Bond lots are never allocated to investments. |
+| A sale pays | Early withdrawals waiting for a sale | Nothing: the client who sold is paid by the bonds module |
+
+Gains, losses and income at maturity share the bills' accounts. The settlement and maturity checks in the database (0081, 0082) read `dealing.bonds` for a bond order and its lots, so a bond settled into bills, or bills into bonds, is refused. A bond and a bill of the same code are separate instruments: one never takes from the other.
+
+### The bond position
+
+`dealing.bond_book.bond_positions` gives, for each issue in the catalogue that has not matured, or that clients or the desk still hold, the position in face value (rules in `domain/bond_position.py`). Every bond of an issue pays the same coupons and face value whatever it cost, so a holding is covered exactly when the desk holds its face value.
+
+| Figure | Meaning |
+| --- | --- |
+| Clients' face, clients paid | The face value of every active bond holding of the issue, and what those clients paid for it |
+| Face held, cost held | What the desk holds of the issue at the custodian, and what it paid |
+| To buy | Clients' face minus face held, never below zero. Its status is worked out as the bills' is. |
+| On order, on sale | The face value of open orders to buy, and to sell |
+| To sell | Face held beyond clients' face, less what is on sale: after a client sold or a holding was repaid |
+| To place | What clients paid for the face value with no bond behind it yet, in proportion and rounded up |
+
+To place counts in the buffer's money to place, so client money waiting for bonds is never lent out as buffer cash. Coupons and face value Bank of Uganda pays in for bonds, and the console's bond screens, arrive in the next pull requests; until then a bond lot is repaid by the hourly maturity run like a bill.
+
 ## The liquidity buffer
 
 Bills cannot be turned into cash the same day, so the desk keeps a buffer of cash.
@@ -243,8 +273,8 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 
 | Route | What it does |
 | --- | --- |
-| `GET /staff/dealing/desk?currency=UGX` | The position of each product, the buffer, the early withdrawals waiting, and the open orders with the steps the reader may take on each (`allowed`) |
-| `POST /staff/dealing/orders` | Prepare an order |
+| `GET /staff/dealing/desk?currency=UGX` | The position of each product, the position of each bond issue (`bonds`) and what bonds are held at cost (`bonds_held`), the buffer, the early withdrawals waiting, and the open orders with what each deals (`instrument`) and the steps the reader may take on each (`allowed`) |
+| `POST /staff/dealing/orders` | Prepare an order. `instrument` is `bill` (the default, `product_code` names a product) or `bond` (`product_code` names an issue). 404 when there is none. |
 | `POST /staff/dealing/orders/{id}/approve` | Approve, as the second person |
 | `POST /staff/dealing/orders/{id}/send-back` | Send back with a note |
 | `POST /staff/dealing/orders/{id}/withdraw` | Withdraw, by whoever prepared it |

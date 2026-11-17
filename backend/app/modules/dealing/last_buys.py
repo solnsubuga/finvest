@@ -18,7 +18,8 @@ from app.shared.money import Currency, Money
 _LATEST = text(
     "SELECT DISTINCT ON (product_code) product_code, kind, currency, result_face_minor, "
     "result_amount_minor, result_settled_on, result_matures_on FROM dealing_orders "
-    "WHERE status = 'settled' AND kind IN ('auction_bid', 'secondary_purchase') "
+    "WHERE status = 'settled' AND instrument = 'bill' "
+    "AND kind IN ('auction_bid', 'secondary_purchase') "
     "ORDER BY product_code, result_settled_on DESC, settled_at DESC, id DESC"
 )
 

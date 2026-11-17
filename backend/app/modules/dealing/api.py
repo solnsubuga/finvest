@@ -1,9 +1,10 @@
 """The dealing desk over HTTP, for staff with `dealing_desk.view`.
 
-`GET /staff/dealing/desk` is the whole screen. Every command takes an `Idempotency-Key`: a
-repeat of the same request is answered from its saved outcome, so a retry from a weak
-connection never prepares, approves or settles twice. Every command answers with the desk as
-it now stands. Each request is one transaction for the member of staff.
+`GET /staff/dealing/desk` is the whole screen: bills by product, and bonds by issue. Every
+command takes an `Idempotency-Key`: a repeat of the same request is answered from its saved
+outcome, so a retry from a weak connection never prepares, approves or settles twice. Every
+command answers with the desk as it now stands. Each request is one transaction for the
+member of staff.
 """
 
 from collections.abc import Awaitable, Callable
@@ -19,7 +20,15 @@ from app.infrastructure.idempotency import Receipt, run_once
 from app.modules.dealing import desk as desk_view
 from app.modules.dealing import last_buys, orders
 from app.modules.dealing.domain.liquidity import BufferLevel
-from app.modules.dealing.domain.orders import Action, Fill, InvalidOrder, OrderKind, OrderStatus
+from app.modules.dealing.domain.orders import (
+    LOT_SIZES,
+    Action,
+    Fill,
+    Instrument,
+    InvalidOrder,
+    OrderKind,
+    OrderStatus,
+)
 from app.modules.dealing.domain.position import Cover
 from app.modules.identity.api import require_confirmed, require_permission
 from app.modules.identity.service import StaffSession
@@ -36,6 +45,7 @@ _REFUSALS: dict[int | str, dict[str, object]] = {
 AmountMinor = Annotated[int, Field(ge=1, le=MAX_AMOUNT_MINOR)]
 CurrencyIn = Annotated[Currency, Field(strict=False)]
 KindIn = Annotated[OrderKind, Field(strict=False)]
+InstrumentIn = Annotated[Instrument, Field(strict=False)]
 DateIn = Annotated[date, Field(strict=False)]
 ProductCode = Annotated[str, Field(min_length=1, max_length=32, pattern=r"^[A-Z0-9-]+$")]
 Note = Annotated[str, Field(min_length=1, max_length=500)]
@@ -67,6 +77,32 @@ class PositionOut(Contract):
     next_auction: date | None
 
 
+class BondPositionOut(Contract):
+    """One bond issue: the face value clients hold against the face value held."""
+
+    code: str
+    isin: str
+    name: str
+    maturity_date: date
+    # Active client holdings of the issue, the face value they hold and what they paid.
+    holders: int
+    clients_face: AmountOut
+    clients_paid: AmountOut
+    face_held: AmountOut
+    # What the desk paid for the bonds it holds.
+    cost_held: AmountOut
+    # Face value clients hold with no bond behind it, and what of it no open order covers.
+    to_buy: AmountOut
+    on_order: AmountOut
+    # Face value held beyond what clients hold, not already in an open sale.
+    to_sell: AmountOut
+    on_sale: AmountOut
+    cover: Cover
+    # Client money for this issue with no bond behind it yet.
+    to_place: AmountOut
+    lot_size: AmountOut
+
+
 class FillOut(Contract):
     face: AmountOut
     amount: AmountOut
@@ -78,6 +114,8 @@ class FillOut(Contract):
 class OrderOut(Contract):
     id: str
     kind: OrderKind
+    # A bill names an investment product's code, a bond its issue's code.
+    instrument: Instrument
     product_code: str
     product_name: str
     face: AmountOut
@@ -119,10 +157,15 @@ class DeskOut(Contract):
     early_withdrawals: WithdrawalsOut
     positions: list[PositionOut]
     orders: list[OrderOut]
+    bonds_held: AmountOut
+    bonds: list[BondPositionOut]
 
 
 class NewOrderIn(Contract):
     kind: KindIn
+    # Bills of an investment product, or bonds of an issue in the bonds catalogue.
+    instrument: InstrumentIn = Instrument.BILL
+    # The product's code for bills, the issue's code for bonds.
     product_code: ProductCode
     face_minor: AmountMinor
     currency: CurrencyIn
@@ -206,6 +249,28 @@ def _desk_out(view: desk_view.DeskView) -> DeskOut:
             for p in view.positions
         ],
         orders=[_order_out(line) for line in view.orders],
+        bonds_held=_amount(view.bonds_held),
+        bonds=[
+            BondPositionOut(
+                code=line.code,
+                isin=line.isin,
+                name=line.name,
+                maturity_date=line.maturity_date,
+                holders=line.holders,
+                clients_face=_amount(line.position.clients_face),
+                clients_paid=_amount(line.position.clients_paid),
+                face_held=_amount(line.position.face_held),
+                cost_held=_amount(line.position.cost_held),
+                to_buy=_amount(line.position.to_buy),
+                on_order=_amount(line.position.on_order),
+                to_sell=_amount(line.position.to_sell),
+                on_sale=_amount(line.position.on_sale),
+                cover=line.position.cover,
+                to_place=_amount(line.position.to_place),
+                lot_size=_amount(LOT_SIZES[view.currency]),
+            )
+            for line in view.bonds
+        ],
     )
 
 
@@ -215,6 +280,7 @@ def _order_out(line: desk_view.OrderLine) -> OrderOut:
     return OrderOut(
         id=order.id,
         kind=order.kind,
+        instrument=order.instrument,
         product_code=order.product_code,
         product_name=line.product_name,
         face=_amount(order.face),
@@ -347,7 +413,8 @@ async def get_desk(
 async def prepare_order(
     request: Request, staff: OrderChanger, clock: AppClock, key: IdempotencyKey, body: NewOrderIn
 ) -> DeskOut:
-    """Prepare an order for a second member of staff to approve."""
+    """Prepare an order for a second member of staff to approve. 404 when no product, or for a
+    bond no issue, has the code."""
     face = Money(body.face_minor, body.currency)
     return await _command(
         request,
@@ -357,6 +424,7 @@ async def prepare_order(
         key=key,
         body={
             "kind": body.kind.value,
+            "instrument": body.instrument.value,
             "product_code": body.product_code,
             "face_minor": body.face_minor,
             "currency": body.currency.value,
@@ -369,6 +437,7 @@ async def prepare_order(
             product_code=body.product_code,
             face=face,
             clock=clock,
+            instrument=body.instrument,
         ),
     )
 
