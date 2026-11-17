@@ -41,6 +41,7 @@ from app.modules.notifications import contract as notifications
 from app.modules.payments.domain.deposits import Network
 from app.modules.payments.domain.outcomes import SendResult, Uncertain, UncertainReason
 from app.modules.payouts import destinations, payouts
+from app.modules.payouts.domain import telling
 from app.modules.payouts.domain.destinations import DestinationKind
 from app.modules.payouts.domain.payouts import (
     PayoutEvent,
@@ -411,7 +412,7 @@ class PayoutJobs:
 
 async def tell_client(session: AsyncSession, payout: PayoutView, now: datetime) -> None:
     """Tell the client where their payout has got to, once per step."""
-    event = _CLIENT_EVENTS.get(payout.status)
+    event = telling.step_event(payout.purpose, payout.status)
     if event is None:
         return
     destination = await destinations.get_destination(session, payout.destination_id)
@@ -429,16 +430,6 @@ async def tell_client(session: AsyncSession, payout: PayoutView, now: datetime) 
         link=notifications.Link("payout", payout.id),
         now=now,
     )
-
-
-# What the client is told at each step. A payout that is being read is "being processed",
-# whether the provider has it or we are still finding out.
-_CLIENT_EVENTS = {
-    PayoutStatus.SENT: "payout_processing",
-    PayoutStatus.UNCERTAIN: "payout_processing",
-    PayoutStatus.PAID: "payout_sent",
-    PayoutStatus.FAILED: "payout_failed",
-}
 
 
 async def start_attempt(session: AsyncSession, payout_id: str, provider: str, now: datetime) -> int:

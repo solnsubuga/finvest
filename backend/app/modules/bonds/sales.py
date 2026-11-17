@@ -55,6 +55,7 @@ from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.payouts import payouts
 from app.modules.payouts.domain import posting as payout_posting
+from app.modules.payouts.domain.payouts import PayoutPurpose
 from app.modules.tax.domain.withholding import INTEREST_EXPENSE, TAX_PAYABLE
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
@@ -294,6 +295,7 @@ async def pay_out_held(
         source_reference=view.id,
         request_key=f"bond-sold:{view.id}:{destination_id}",
         clock=clock,
+        purpose=PayoutPurpose.BOND_SALE,
     )
     await session.execute(_SEND_ON, {"id": view.id, "payout_id": payout.id, "now": clock.now()})
     return await get_sale(session, view.id)

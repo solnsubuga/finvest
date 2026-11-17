@@ -51,6 +51,12 @@ Nothing personal goes into a job payload or a log. The words live in the `notifi
 | `payout_sent` | Payouts | `amount`, `destination` | Money |
 | `payout_failed` | Payouts | `amount`, `destination` | Money |
 | `payout_declined` | Payouts | `amount`, `destination` | Money |
+| `bond_coupon_paid` | Payouts | `amount`, `destination` | Money |
+| `bond_sale_paid` | Payouts | `amount`, `destination` | Money |
+| `bond_repayment_paid` | Payouts | `amount`, `destination` | Money |
+| `bond_payment_failed` | Payouts | `amount`, `destination` | Money |
+| `bond_payment_declined` | Payouts | `amount`, `destination` | Money |
+| `bond_payment_returned` | Payouts | `destination` | Money |
 | `investment_started` | Investments | `amount`, `product` | Investments |
 | `investment_booked` | Investments | `product` | Investments |
 | `investment_maturing` | Investments | `product`, `date` | Investments |

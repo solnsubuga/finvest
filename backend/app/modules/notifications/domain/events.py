@@ -60,6 +60,14 @@ _SPECS = (
     _event("payout_declined", Category.MONEY, "payouts", "amount", "destination"),
     # A paid withdrawal came back from the bank or network. Never the amount.
     _event("payout_returned", Category.MONEY, "payouts", "destination"),
+    # Money from a Treasury bond reached the client: a coupon, the sale or the repayment.
+    _event("bond_coupon_paid", Category.MONEY, "payouts", "amount", "destination"),
+    _event("bond_sale_paid", Category.MONEY, "payouts", "amount", "destination"),
+    _event("bond_repayment_paid", Category.MONEY, "payouts", "amount", "destination"),
+    _event("bond_payment_failed", Category.MONEY, "payouts", "amount", "destination"),
+    _event("bond_payment_declined", Category.MONEY, "payouts", "amount", "destination"),
+    # Never the amount, as for a withdrawal that came back.
+    _event("bond_payment_returned", Category.MONEY, "payouts", "destination"),
     # Investments.
     _event("investment_started", Category.INVESTMENTS, "investments", "amount", "product"),
     # Two members of staff set up an investment the client asked for. It waits for payment.

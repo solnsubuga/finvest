@@ -314,6 +314,8 @@ A sweep runs every minute. It marks attempts that never got their answer saved a
 
 The client is told `payout_processing` when the payout is sent or uncertain, `payout_sent` when it is paid and `payout_failed` when it fails. A message names the network, such as "MTN Mobile Money", never the number.
 
+Every payout has a purpose, fixed when it is made (migration 0531): `withdrawal`, or the money from a Treasury bond, `bond_coupon`, `bond_sale` or `bond_repayment`. It changes only the words, never how the money moves. Money from a bond is not something the client asked to take out, so it is never called a withdrawal: the client is told `bond_coupon_paid`, `bond_sale_paid` or `bond_repayment_paid` when it is paid, `bond_payment_failed`, `bond_payment_declined` or `bond_payment_returned` when those happen, and nothing while it is being processed (`payouts/domain/telling.py`). A returned payout sent again keeps its purpose. The client's payout list carries `purpose`, so Activity names a coupon, a sale or a repayment.
+
 Bank payouts are not sent by the worker. They wait for staff to pay them from the trust account, in batches (below). The worker takes no step for a bank payout, and the database refuses one.
 
 What the database enforces:

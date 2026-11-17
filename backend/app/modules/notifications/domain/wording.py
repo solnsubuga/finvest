@@ -129,6 +129,44 @@ DEFAULTS: dict[str, Wording] = {
         "See the details in the app, or message us there if you have a question.",
         "Finvest: we did not send your withdrawal to {destination}. See the app for details.",
     ),
+    "bond_coupon_paid": Wording(
+        "Bond coupon paid",
+        "A coupon from your Treasury bond has been sent to {destination}.",
+        "Finvest: a coupon from your Treasury bond has been sent to {destination}.",
+    ),
+    "bond_sale_paid": Wording(
+        "Bond sale paid",
+        "The money from selling your Treasury bond has been sent to {destination}.",
+        "Finvest: the money from selling your Treasury bond has been sent to {destination}.",
+    ),
+    "bond_repayment_paid": Wording(
+        "Bond repaid",
+        "Your Treasury bond has matured. Its face value and last coupon have been sent to "
+        "{destination}.",
+        "Finvest: your Treasury bond has matured. Its face value and last coupon have been sent "
+        "to {destination}.",
+    ),
+    "bond_payment_failed": Wording(
+        "Bond payment could not be sent",
+        "We could not send the money from your Treasury bond to {destination}. Your money is "
+        "safe and our team is on it. You do not need to do anything.",
+        "Finvest: we could not send the money from your Treasury bond to {destination}. Your "
+        "money is safe and our team is on it.",
+    ),
+    "bond_payment_declined": Wording(
+        "Bond payment not sent",
+        "We did not send the money from your Treasury bond to {destination}. Our team declined "
+        "it after review. See the details in the app, or message us there if you have a question.",
+        "Finvest: we did not send the money from your Treasury bond to {destination}. See the "
+        "app for details.",
+    ),
+    "bond_payment_returned": Wording(
+        "Bond payment came back",
+        "The money from your Treasury bond sent to {destination} came back to us. Your money is "
+        "safe with us. Choose an account in the app to send it again.",
+        "Finvest: the money from your Treasury bond sent to {destination} came back to us. Your "
+        "money is safe. Open the app to send it again.",
+    ),
     "investment_started": Wording(
         "Investment started",
         "Your money is now in a {product}.",

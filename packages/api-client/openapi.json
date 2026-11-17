@@ -16921,6 +16921,17 @@
             "title": "Kind",
             "type": "string"
           },
+          "purpose": {
+            "default": "withdrawal",
+            "enum": [
+              "withdrawal",
+              "bond_coupon",
+              "bond_sale",
+              "bond_repayment"
+            ],
+            "title": "Purpose",
+            "type": "string"
+          },
           "resent_as": {
             "anyOf": [
               {

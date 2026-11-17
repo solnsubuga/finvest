@@ -183,6 +183,8 @@ class PayoutOut(Contract):
     returned_at: datetime | None = None
     # The payout it was sent again as, once the client sent it again. Null until then.
     resent_as: str | None = None
+    # What the money is: a withdrawal, or a Treasury bond's coupon, sale or repayment.
+    purpose: Literal["withdrawal", "bond_coupon", "bond_sale", "bond_repayment"] = "withdrawal"
 
 
 class ResendIn(Contract):
@@ -256,6 +258,7 @@ def _payout_out(
             "created_at": view.created_at,
             "returned_at": None if returned is None else returned.decided_at,
             "resent_as": resent_as,
+            "purpose": view.purpose.value,
         }
     )
 

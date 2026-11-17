@@ -34,7 +34,13 @@ from app.modules.payouts.domain.limits import (
     for_client,
     limits_in_force,
 )
-from app.modules.payouts.domain.payouts import FINAL, LedgerEffect, PayoutEvent, PayoutStatus
+from app.modules.payouts.domain.payouts import (
+    FINAL,
+    LedgerEffect,
+    PayoutEvent,
+    PayoutPurpose,
+    PayoutStatus,
+)
 from app.modules.payouts.domain.posting import PayoutTerms
 from app.modules.payouts.domain.sending import HELD_UP_AFTER, SEND_ATTEMPTS
 from app.modules.platform_settings import service as platform_settings
@@ -80,6 +86,7 @@ class PayoutView:
     source_account_id: str
     source_reference: str
     in_flight_account_id: str
+    purpose: PayoutPurpose = PayoutPurpose.WITHDRAWAL
 
     @property
     def terms(self) -> PayoutTerms:
@@ -91,7 +98,7 @@ class PayoutView:
 _COLUMNS = (
     "id, client_id, destination_id, kind, amount_minor, currency, status, business_date, "
     "provider_reference, failure_code, reviewed_by, created_at, source_account_id, "
-    "in_flight_account_id, request_key, source_reference"
+    "in_flight_account_id, request_key, source_reference, purpose"
 )
 _CLIENT_LIMITS = text(
     "SELECT currency, mobile_money_per_payout, mobile_money_per_day, bank_per_payout, "
@@ -113,9 +120,9 @@ _TODAY = text(
 _INSERT = text(
     "INSERT INTO payouts (id, client_id, destination_id, kind, amount_minor, currency, status, "
     "business_date, source_account_id, source_reference, in_flight_account_id, request_key, "
-    "created_at, updated_at) VALUES (:id, :client_id, :destination_id, :kind, :amount_minor, "
-    ":currency, :status, :day, :source_account_id, :source_reference, :in_flight_account_id, "
-    ":request_key, :now, :now)"
+    "created_at, updated_at, purpose) VALUES (:id, :client_id, :destination_id, :kind, "
+    ":amount_minor, :currency, :status, :day, :source_account_id, :source_reference, "
+    ":in_flight_account_id, :request_key, :now, :now, :purpose)"
 )
 _BY_KEY = text(
     f"SELECT {_COLUMNS} FROM payouts "  # noqa: S608 - constant column list
@@ -266,6 +273,7 @@ async def create_payout(
     request_key: str,
     clock: Clock,
     restricted_since: datetime | None = None,
+    purpose: PayoutPurpose = PayoutPurpose.WITHDRAWAL,
 ) -> PayoutView:
     """Create a payout and reserve its money, or raise `PayoutRefused`.
 
@@ -282,6 +290,9 @@ async def create_payout(
     The account is found from the client and the reference, never taken as an ID, so a payout
     cannot be funded from another payout's money in flight, from the failed-payout pot or from
     another client's account, whoever calls.
+
+    `purpose` says what the money is, a withdrawal or a bond's coupon, sale or repayment, so the
+    client is told in those words. It is fixed when the payout is made.
     """
     if actor.kind == "staff" or (actor.kind == "client" and actor.id != client_id):
         raise ApplicationError("forbidden")
@@ -364,6 +375,7 @@ async def create_payout(
                     "in_flight_account_id": in_flight.id,
                     "request_key": request_key,
                     "now": now,
+                    "purpose": purpose.value,
                 },
             )
             terms = PayoutTerms(payout_id, client_id, amount, source.id, in_flight.id)
@@ -812,6 +824,7 @@ def _view(row: Row[Any]) -> PayoutView:
         source_account_id=row.source_account_id,
         source_reference=row.source_reference,
         in_flight_account_id=row.in_flight_account_id,
+        purpose=PayoutPurpose(row.purpose),
     )
 
 
