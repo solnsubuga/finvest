@@ -28,7 +28,9 @@ export default {
     { caption: "Her bond paid its first coupon the same morning", does: "Portfolio, the bond: Coupons, 15 Feb 2027, UGX 57,000 paid to her account (zoom)" },
     { caption: "For the rest of the fees, she sells the bond early", does: "Sell early, read, her Airtel number, Ask to sell" },
     { caption: "Joel records the price the desk sold it at", does: "Joel: Dealing Desk, Bonds clients are selling, Record price: 101.5, today, the desk reference" },
+    { caption: "The desk's own bond paid its coupon to Finvest", does: "Joel: Coupons on the desk's bonds, Record what arrived: the coupon before tax, today, the bank reference" },
     { caption: "Ruth approves, and Esther is paid that day", does: "Ruth: Approve; Approved, being paid" },
+    { caption: "Ruth checks the coupon against the bank and posts it", does: "Ruth: the coupon, Approve as second person, Yes, approve and post" },
     { caption: "The money from the sale reaches her phone", does: "Esther: the payout SMS; the bond shows Sold for UGX 1,015,000 (zoom)" },
     { caption: "The team sees what every maturity became", does: "Ruth: Maturities, day by day; Money Movement, the payout paid" },
   ],
@@ -104,6 +106,23 @@ export default {
     await confirmIfAsked(t, page, "joel");
     await sec.getByText("Waiting for a second person").waitFor();
     await t.read(2200);
+    await t.step("The desk's own bond paid its coupon to Finvest", { hold: 400 });
+    const due = page.getByRole("list", { name: "Coupons due to record" }).getByRole("listitem").filter({ hasText: BOND.name }).first();
+    await due.scrollIntoViewIfNeeded();
+    await t.zoom(due, { hold: 1800 });
+    // What arrived is what the bonds earn before tax, as the trust account statement shows it.
+    const earns = (await due.getByText("Earns, before any tax").locator("xpath=following-sibling::*[1]").innerText()).replace(/[^0-9]/g, "");
+    await t.click(due.getByRole("button", { name: "Record what arrived" }));
+    const coupon = page.getByRole("form", { name: "Record the coupon" });
+    await t.type(coupon.getByLabel(/^What arrived/), earns);
+    await t.click(coupon.getByLabel("Arrived on"));
+    await coupon.getByLabel("Arrived on").fill("2027-02-15");
+    await t.type(coupon.getByLabel("Bank reference"), "KDB2702150052", { delay: 30 });
+    await t.read(1000);
+    await t.click(coupon.getByRole("button", { name: "Send for approval" }));
+    await confirmIfAsked(t, page, "joel");
+    await page.getByText("You recorded this, so someone else has to approve it.").first().waitFor();
+    await t.read(2000);
     await t.stop();
   },
   async approve(t, page) {
@@ -118,6 +137,16 @@ export default {
     await confirmIfAsked(t, page, "ruth");
     await sec.getByText(/Approved, being paid|Sold/).first().waitFor();
     await t.zoom(sec, { hold: 2400, scale: 1.15 });
+    await t.step("Ruth checks the coupon against the bank and posts it", { hold: 400 });
+    const coupon = page.getByRole("region", { name: "Coupons recorded" }).or(page.getByLabel("Coupons recorded")).first();
+    await coupon.scrollIntoViewIfNeeded();
+    await t.read(1200);
+    await t.click(coupon.getByRole("button", { name: "Approve as second person" }).first());
+    await t.zoom(page.getByRole("group", { name: "Confirm the approval" }), { hold: 2000 });
+    await t.click(page.getByRole("button", { name: "Yes, approve and post" }));
+    await confirmIfAsked(t, page, "ruth");
+    await coupon.getByText("Approved by").first().waitFor();
+    await t.zoom(coupon, { hold: 2200 });
     await t.stop();
   },
   async sold(t, page) {

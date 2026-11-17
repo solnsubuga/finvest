@@ -11,7 +11,7 @@ Every screen, figure, email, PDF and report in the video comes from the app runn
 | Service | In the video |
 | --- | --- |
 | ioTec and Pesapal | Their sandbox modes (`FINVEST_PAYMENTS_PROVIDER=sandbox`, `FINVEST_CARDS_PROVIDER=sandbox`). Pesapal's page is the app's own return page, which pays after a few seconds. A total ending 001 to 006 picks a failure |
-| The bond | Invented: "2 Year Treasury Bond 2028", ISIN UG12K1502281, 14.25% coupon (`chapters/06-bond.mjs`). Not a real Bank of Uganda issue |
+| The bond | Invented: "5 Year Treasury Bond 2031", ISIN UG12K1502311, 14.25% coupon, and "10 Year Treasury Bond 2036", ISIN UG12K1508361, 15.5% coupon (`chapters/06-bond.mjs`). Not a real Bank of Uganda issue |
 | Resend (email) | `resend.local.test` in `stack/front.mjs` keeps every email on disk |
 | Mailbox | `mail.local.test` shows those emails. It hides one-time links printed as text, and opens PDF attachments with poppler after the password is typed |
 | DigitalOcean Spaces | `storage.local.test`, a small S3 stand-in that keeps files on disk |
