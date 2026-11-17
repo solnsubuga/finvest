@@ -25,6 +25,7 @@ from app.modules.audit import service as audit
 from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.notifications import contract as notifications
 from app.modules.payouts import destinations, payouts
+from app.modules.payouts.domain import telling
 from app.modules.payouts.domain.destinations import DestinationKind
 from app.modules.payouts.domain.payouts import IllegalTransition, PayoutEvent, PayoutStatus
 from app.modules.payouts.domain.sending import destination_label
@@ -334,7 +335,7 @@ async def _tell_declined(session: AsyncSession, payout: PayoutView, clock: Clock
     destination = await destinations.get_destination(session, payout.destination_id)
     await notifications.notify(
         session,
-        event_name="payout_declined",
+        event_name=telling.declined_event(payout.purpose),
         client_id=payout.client_id,
         idempotency_key=payout.id,
         variables={

@@ -8,6 +8,7 @@ the maturity tests' are.
 
 import asyncio
 import secrets
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
@@ -19,6 +20,9 @@ from app.infrastructure.jobs import JobRequest, Worker, WorkerConfig, enqueue
 from app.modules.bonds import coupons, holdings
 from app.modules.bonds.domain.coupons import HoldReason
 from app.modules.bonds.jobs import PAY_COUPONS_KIND, BondJobs
+from app.modules.payouts import jobs as payout_jobs
+from app.modules.payouts import payouts
+from app.modules.payouts.domain.payouts import PayoutPurpose, PayoutStatus
 from app.modules.tax import withholding
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
@@ -157,11 +161,15 @@ async def test_the_run_pays_each_holding_its_coupon_after_tax_once(
         async with worker_database.actor_transaction(SYSTEM) as session:
             payout = (
                 await session.execute(
-                    text("SELECT amount_minor, client_id FROM payouts WHERE id = :id"),
+                    text("SELECT amount_minor, client_id, purpose FROM payouts WHERE id = :id"),
                     {"id": paid.payout_id},
                 )
             ).one()
-        assert (payout.amount_minor, payout.client_id) == (72_000, client.id)
+        assert (payout.amount_minor, payout.client_id, payout.purpose) == (
+            72_000,
+            client.id,
+            "bond_coupon",
+        )
         assert await coupon_rows(worker_database, unpaid.id) == []
 
         # The run again, as a retry or a catch-up would, pays nothing more.
@@ -362,3 +370,47 @@ async def test_a_later_run_pays_a_coupon_an_earlier_run_missed(
         )
         assert len(await coupon_rows(worker_database, holding.id)) == 1
         assert await coupon_entries(worker_database, holding.id) == 1
+
+
+async def test_a_paid_coupon_is_told_as_a_coupon_and_its_purpose_never_changes(
+    app_database: Database, worker_database: Database
+) -> None:
+    clock = now()
+    day = coupon_day()
+    client = await approved_client(app_database, clock)
+    destination_id = await approved_destination(app_database, client, clock)
+    async with live_issue(app_database, clock, **dates_for(day)) as code:
+        holding = await active(app_database, worker_database, client, code, clock)
+        async with app_database.actor_transaction(client) as session:
+            await coupons.choose_destination(
+                session, client, holding.id, destination_id=destination_id, clock=clock
+            )
+        assert await run_coupon_job(worker_database, day) == ("succeeded", None)
+        [paid] = await coupon_rows(worker_database, holding.id)
+        assert paid.payout_id is not None
+
+        async with worker_database.actor_transaction(SYSTEM) as session:
+            payout = await payouts.get_payout(session, paid.payout_id)
+            assert payout.purpose is PayoutPurpose.BOND_COUPON
+            # Being processed is not told for bond money; arriving is, as a coupon.
+            await payout_jobs.tell_client(
+                session, replace(payout, status=PayoutStatus.SENT), clock.now()
+            )
+            await payout_jobs.tell_client(
+                session, replace(payout, status=PayoutStatus.PAID), clock.now()
+            )
+            told = (
+                await session.execute(
+                    text("SELECT event FROM notifications WHERE link_id = :id"),
+                    {"id": payout.id},
+                )
+            ).scalars()
+            assert list(told) == ["bond_coupon_paid"]
+
+        for database, actor in ((app_database, client), (worker_database, SYSTEM)):
+            with pytest.raises(DBAPIError, match="purpose of a payout never changes"):
+                async with database.actor_transaction(actor) as session:
+                    await session.execute(
+                        text("UPDATE payouts SET purpose = 'withdrawal' WHERE id = :id"),
+                        {"id": payout.id},
+                    )

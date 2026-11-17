@@ -167,8 +167,8 @@ async def test_a_holding_sold_by_two_people_is_paid_the_price_and_interest_after
             payout = (
                 await session.execute(
                     text(
-                        "SELECT amount_minor, client_id, source_reference FROM payouts "
-                        "WHERE id = :id"
+                        "SELECT amount_minor, client_id, source_reference, purpose "
+                        "FROM payouts WHERE id = :id"
                     ),
                     {"id": sold.payout_id},
                 )
@@ -178,6 +178,7 @@ async def test_a_holding_sold_by_two_people_is_paid_the_price_and_interest_after
             client.id,
             asked.id,
         )
+        assert payout.purpose == "bond_sale"
         assert await status_of(worker_database, holding.id) is HoldingStatus.SOLD
         # A sold holding has no coupons or face value left to come.
         async with app_database.actor_transaction(client) as session:
@@ -405,10 +406,11 @@ async def test_proceeds_with_nowhere_to_go_wait_for_the_client(
         async with worker_database.actor_transaction(SYSTEM) as session:
             amount = (
                 await session.execute(
-                    text("SELECT amount_minor FROM payouts WHERE id = :id"), {"id": sent.payout_id}
+                    text("SELECT amount_minor, purpose FROM payouts WHERE id = :id"),
+                    {"id": sent.payout_id},
                 )
-            ).scalar_one()
-        assert amount == held.amount.minor
+            ).one()
+        assert tuple(amount) == (held.amount.minor, "bond_sale")
         with pytest.raises(ApplicationError) as again:
             async with app_database.actor_transaction(client) as session:
                 await sales.pay_out_held(

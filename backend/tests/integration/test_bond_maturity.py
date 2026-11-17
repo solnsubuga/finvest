@@ -171,11 +171,11 @@ async def test_a_matured_holding_is_repaid_its_face_and_last_coupon_once(
         async with worker_database.actor_transaction(SYSTEM) as session:
             payout = (
                 await session.execute(
-                    text("SELECT amount_minor, client_id FROM payouts WHERE id = :id"),
+                    text("SELECT amount_minor, client_id, purpose FROM payouts WHERE id = :id"),
                     {"id": repaid.payout_id},
                 )
             ).one()
-        assert (payout.amount_minor, payout.client_id) == (1_072_000, client.id)
+        assert tuple(payout) == (1_072_000, client.id, "bond_repayment")
         assert await status_of(worker_database, holding.id) is HoldingStatus.MATURED
         assert await status_of(worker_database, unpaid.id) is HoldingStatus.UNPAID
 
@@ -287,11 +287,11 @@ async def test_a_repayment_with_nowhere_to_go_waits_for_the_client(
         async with worker_database.actor_transaction(SYSTEM) as session:
             amount = (
                 await session.execute(
-                    text("SELECT amount_minor FROM payouts WHERE id = :id"),
+                    text("SELECT amount_minor, purpose FROM payouts WHERE id = :id"),
                     {"id": sent.payout_id},
                 )
-            ).scalar_one()
-        assert amount == 1_072_000
+            ).one()
+        assert tuple(amount) == (1_072_000, "bond_repayment")
         with pytest.raises(ApplicationError) as again:
             async with app_database.actor_transaction(client) as session:
                 await maturity.pay_out_held(

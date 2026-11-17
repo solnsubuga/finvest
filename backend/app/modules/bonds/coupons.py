@@ -44,6 +44,7 @@ from app.modules.ledger import service as ledger
 from app.modules.ledger.domain.entries import AccountKind, AccountSpec, EntryDraft, credit, debit
 from app.modules.payouts import destinations, payouts
 from app.modules.payouts.domain import posting as payout_posting
+from app.modules.payouts.domain.payouts import PayoutPurpose
 from app.modules.tax.domain.withholding import INTEREST_EXPENSE, TAX_PAYABLE
 from app.shared.actors import SYSTEM, Actor
 from app.shared.business_day import business_date
@@ -299,6 +300,15 @@ async def pay_coupon(
     return CouponStatus.HELD if payout_id is None else CouponStatus.PAID_OUT
 
 
+# What each kind of bond money is, so the client is told a coupon, a sale or a repayment, never
+# a withdrawal. The kinds are also the payouts' request keys, so they never change.
+PURPOSES = {
+    "bond-coupon": PayoutPurpose.BOND_COUPON,
+    "bond-matured": PayoutPurpose.BOND_REPAYMENT,
+    "bond-sold": PayoutPurpose.BOND_SALE,
+}
+
+
 async def pay_to_destination(
     session: AsyncSession,
     actor: Actor,
@@ -350,6 +360,7 @@ async def pay_to(
                 source_reference=reference_id,
                 request_key=f"{kind}:{reference_id}:{destination_id}",
                 clock=clock,
+                purpose=PURPOSES[kind],
             )
     except payouts.PayoutRefused as refused:
         return None, refused.code
@@ -430,6 +441,7 @@ async def pay_out_held(
         source_reference=view.id,
         request_key=f"bond-coupon:{view.id}:{destination_id}",
         clock=clock,
+        purpose=PayoutPurpose.BOND_COUPON,
     )
     await session.execute(_SEND_ON, {"id": view.id, "payout_id": payout.id, "now": clock.now()})
     return await get_coupon(session, view.id)

@@ -31,7 +31,7 @@ from app.modules.audit.domain.events import AuditActor, AuditEvent
 from app.modules.ledger import service as ledger
 from app.modules.notifications import contract as notifications
 from app.modules.payouts import destinations, payouts
-from app.modules.payouts.domain import posting
+from app.modules.payouts.domain import posting, telling
 from app.modules.payouts.domain.banks import find_bank
 from app.modules.payouts.domain.destinations import DestinationKind
 from app.modules.payouts.domain.payouts import PayoutStatus
@@ -346,6 +346,7 @@ async def resend(
         source_reference=payout.source_reference,
         request_key=returned.resend_key,
         clock=clock,
+        purpose=payout.purpose,
     )
 
 
@@ -516,7 +517,7 @@ async def _tell_client(session: AsyncSession, payout: PayoutView, clock: Clock) 
     destination = await destinations.get_destination(session, payout.destination_id)
     await notifications.notify(
         session,
-        event_name="payout_returned",
+        event_name=telling.returned_event(payout.purpose),
         client_id=payout.client_id,
         idempotency_key=f"{payout.id}:returned",
         variables={

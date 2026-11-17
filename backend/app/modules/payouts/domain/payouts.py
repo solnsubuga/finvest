@@ -29,6 +29,16 @@ class PayoutStatus(StrEnum):
     CANCELLED = "cancelled"  # stopped before anything was sent; the money went back
 
 
+class PayoutPurpose(StrEnum):
+    """What a payout pays the client, so they are told in the right words. It never changes
+    how the money moves."""
+
+    WITHDRAWAL = "withdrawal"  # the client took their money out, or an investment paid out
+    BOND_COUPON = "bond_coupon"  # a coupon of a Treasury bond the client holds
+    BOND_SALE = "bond_sale"  # the money from selling a bond early
+    BOND_REPAYMENT = "bond_repayment"  # the face value and last coupon, at maturity
+
+
 FINAL = frozenset({PayoutStatus.PAID, PayoutStatus.FAILED, PayoutStatus.CANCELLED})
 # Counted against the client's daily limit: everything that did or still may pay out.
 COUNTS_TOWARDS_LIMIT = frozenset(PayoutStatus) - {PayoutStatus.FAILED, PayoutStatus.CANCELLED}
