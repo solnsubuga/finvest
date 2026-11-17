@@ -17,7 +17,7 @@ from app.infrastructure.operations import operations_signals
 from app.modules.bonds import coupons, holdings, maturity, sales
 from app.modules.bonds.domain.coupons import HoldReason
 from app.modules.bonds.domain.holdings import HoldingStatus
-from app.modules.bonds.domain.issues import accrued_interest, coupon_dates, tax_on
+from app.modules.bonds.domain.issues import accrued_interest, coupon_dates, sale, tax_on
 from app.modules.bonds.domain.sales import PayoutStatus, SaleStatus
 from app.modules.ledger import service as ledger
 from app.modules.payouts import destinations
@@ -123,6 +123,10 @@ async def test_a_holding_sold_by_two_people_is_paid_the_price_and_interest_after
             today,
             maker.id,
         )
+        # The person approving sees what the client will be paid at that price and day.
+        expected = sale(holding.issue, holding.face, PRICE, today)
+        assert priced.quoted == expected
+        assert (priced.clean, priced.amount) == (None, None)
         approved = await approve(app_database, checker, asked.id, clock)
         assert (approved.status, approved.decided_by) == (SaleStatus.APPROVED, checker.id)
         async with worker_database.actor_transaction(SYSTEM) as session:
@@ -175,6 +179,15 @@ async def test_a_holding_sold_by_two_people_is_paid_the_price_and_interest_after
             asked.id,
         )
         assert await status_of(worker_database, holding.id) is HoldingStatus.SOLD
+        # A sold holding has no coupons or face value left to come.
+        async with app_database.actor_transaction(client) as session:
+            view = await holdings.client_holding(session, str(client.id), holding.id, clock)
+        assert (view.status, view.coupons_left, view.next_coupon_date, view.still_to_come) == (
+            HoldingStatus.SOLD,
+            0,
+            None,
+            ugx(0),
+        )
 
         # The holding is empty. Sold for less than the clean amount paid: Finvest's income.
         signed = await sold_lines(worker_database, holding.id)

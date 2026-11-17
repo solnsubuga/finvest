@@ -109,7 +109,7 @@ class BondQuoteOut(Contract):
     currency: Currency
     face_minor: int
     price: int
-    # Interest earned since the last coupon, paid on top and returned in the next coupon.
+    # Interest earned since the last coupon, paid on top and returned, less tax, in the next coupon.
     accrued_minor: int
     cost_minor: int
     coupon_minor: int
@@ -385,6 +385,9 @@ class StaffBondSaleOut(Contract):
     decided_at: datetime | None
     # Why it was last sent back.
     note: str | None
+    # What the buyer pays (the clean price and the accrued interest), the tax held back and what
+    # the client is paid. Once priced, at the price and day recorded, so the person approving
+    # sees what the client gets; final once sold. None until priced.
     clean_minor: int | None
     accrued_minor: int | None
     tax_minor: int | None
@@ -840,6 +843,7 @@ def _staff_sale_out(view: sales.SaleView, staff: StaffSession) -> StaffBondSaleO
         staff.staff_id,
         may_change="dealing_orders.change" in staff.permissions,
     )
+    quoted = view.quoted
     return StaffBondSaleOut(
         id=view.id,
         holding_id=view.holding_id,
@@ -860,10 +864,16 @@ def _staff_sale_out(view: sales.SaleView, staff: StaffSession) -> StaffBondSaleO
         decided_by=view.decided_by,
         decided_at=view.decided_at,
         note=view.note,
-        clean_minor=_money(view.clean),
-        accrued_minor=_money(view.accrued),
-        tax_minor=_money(view.tax),
-        amount_minor=_money(view.amount),
+        clean_minor=_money(
+            view.clean if view.clean is not None or quoted is None else quoted.clean
+        ),
+        accrued_minor=_money(
+            view.accrued if view.accrued is not None or quoted is None else quoted.accrued
+        ),
+        tax_minor=_money(view.tax if view.tax is not None or quoted is None else quoted.tax),
+        amount_minor=_money(
+            view.amount if view.amount is not None or quoted is None else quoted.proceeds
+        ),
         sold_at=view.settled_at,
         payout_status=view.payout_status,
         payout_id=view.payout_id,

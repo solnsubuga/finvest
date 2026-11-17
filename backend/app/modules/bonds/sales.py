@@ -39,7 +39,14 @@ from app.modules.bonds import coupons, holdings
 from app.modules.bonds.catalogue import invalid
 from app.modules.bonds.domain.coupons import due_dates, is_owed
 from app.modules.bonds.domain.holdings import HoldingStatus
-from app.modules.bonds.domain.issues import InvalidIssue, check_price
+from app.modules.bonds.domain.issues import (
+    BondIssue,
+    BondStatus,
+    InvalidIssue,
+    Sale,
+    check_price,
+    sale,
+)
 from app.modules.bonds.domain.sales import (
     OPEN,
     PayoutStatus,
@@ -102,6 +109,9 @@ class SaleView:
     payout_id: str | None
     payout_refusal: str | None
     closed_at: datetime | None
+    # While priced or approved: what the sale will pay at the recorded price and day, so the
+    # person approving sees what the client gets. The figures above are set once it is sold.
+    quoted: Sale | None = None
 
 
 _COLUMNS = (
@@ -109,7 +119,9 @@ _COLUMNS = (
     "s.destination_id, s.requested_at, s.status, s.price, s.sold_on, s.reason, s.priced_by, "
     "s.priced_at, s.decided_by, s.decided_at, s.note, s.clean_minor, s.accrued_minor, "
     "s.tax_minor, s.amount_minor, s.settled_at, s.payout_status, s.payout_id, "
-    "s.payout_refusal, s.closed_at, b.code, b.name"
+    "s.payout_refusal, s.closed_at, b.code, b.name, b.isin, b.coupon_bps, b.tax_bps, "
+    "b.issue_date, b.maturity_date, b.minimum_face_minor, b.face_step_minor, "
+    "b.status AS issue_status"
 )
 _FROM = (
     "FROM bond_sales s JOIN bond_holdings h ON h.id = s.holding_id "
@@ -629,17 +641,36 @@ def _view(row: Row[Any]) -> SaleView:
     def money(minor: int | None) -> Money | None:
         return None if minor is None else Money(minor, currency)
 
+    status = SaleStatus(row.status)
+    face = Money(row.face_minor, currency)
+    quoted = None
+    if status in (SaleStatus.PRICED, SaleStatus.APPROVED) and row.price and row.sold_on:
+        issue = BondIssue(
+            code=row.code,
+            isin=row.isin,
+            name=row.name,
+            currency=currency,
+            coupon_bps=row.coupon_bps,
+            tax_bps=row.tax_bps,
+            issue_date=row.issue_date,
+            maturity_date=row.maturity_date,
+            minimum_face=Money(row.minimum_face_minor, currency),
+            face_step=Money(row.face_step_minor, currency),
+            status=BondStatus(row.issue_status),
+        )
+        quoted = sale(issue, face, row.price, row.sold_on)
+
     return SaleView(
         id=row.id,
         holding_id=row.holding_id,
         client_id=row.client_id,
         code=row.code,
         name=row.name,
-        face=Money(row.face_minor, currency),
+        face=face,
         cost=Money(row.cost_minor, currency),
         destination_id=row.destination_id,
         requested_at=row.requested_at,
-        status=SaleStatus(row.status),
+        status=status,
         price=row.price,
         sold_on=row.sold_on,
         reason=row.reason,
@@ -657,4 +688,5 @@ def _view(row: Row[Any]) -> SaleView:
         payout_id=row.payout_id,
         payout_refusal=row.payout_refusal,
         closed_at=row.closed_at,
+        quoted=quoted,
     )
