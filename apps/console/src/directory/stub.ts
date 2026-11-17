@@ -15,6 +15,8 @@ const SAMPLE_STAFF: Record<string, string> = {
   "sample-staff-grace": "Grace Auma",
   "sample-staff-daniel": "Daniel Kato",
   "sample-staff-joel": "Joel Mukasa",
+  // The colleague who proposes the sample product, bond and type changes.
+  "-StaffSampleFinance01": "Ruth Namata",
 };
 
 export function createStubDirectory(me?: { id: string; name: string }): Directory {
