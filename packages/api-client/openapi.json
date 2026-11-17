@@ -13767,6 +13767,21 @@
         "title": "MessageItem",
         "type": "object"
       },
+      "MobileMoneyCollection": {
+        "additionalProperties": false,
+        "description": "How a mobile money payment would be collected if started now.",
+        "properties": {
+          "on_page": {
+            "title": "On Page",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "on_page"
+        ],
+        "title": "MobileMoneyCollection",
+        "type": "object"
+      },
       "MobileMoneyCollectorProposal": {
         "additionalProperties": false,
         "properties": {
@@ -43066,6 +43081,88 @@
         "summary": "Client Login Start",
         "tags": [
           "client sign-in"
+        ]
+      }
+    },
+    "/client/mobile-money": {
+      "get": {
+        "description": "How mobile money is collected now, so the pay screen can say what happens next\nbefore the client pays. It may change before the payment starts: the payment's own\n`on_page` is what counts.",
+        "operationId": "mobile_money_collection_client_mobile_money_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileMoneyCollection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Mobile Money Collection",
+        "tags": [
+          "client payments"
         ]
       }
     },
