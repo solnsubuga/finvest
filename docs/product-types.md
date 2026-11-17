@@ -21,7 +21,7 @@ There are three return models. A new way of earning, such as a daily unit price 
 | `fixed_income` | A rate before tax over a term, or an open term, paid at maturity or monthly. | Fixed income (`FIXED-INCOME`) |
 | `treasury_bond` | An issue with its own ISIN, coupon and dates, bought at a price, paying a coupon every six months and the face value at maturity. See [bonds.md](bonds.md). | Treasury bond (`TREASURY-BOND`) |
 
-The built-in types are seeded by the migration, and every product and bond issue that existed before it has the built-in type of its kind.
+The built-in types are seeded by the migration, and every product and bond issue that existed before it has the built-in type of its kind. Their usual tax follows Bank of Uganda's withholding: 20% on Treasury bills (migration 0530; 0493 seeded 15%) and Treasury bonds, 15% on fixed income.
 
 ## Changing types
 
@@ -54,6 +54,8 @@ One member of staff proposes, with a reason, and a different one approves or sen
 Audit events on resource `product_type_change`: `product_types.change.proposed`, `.approved`, `.sent_back` and `.withdrawn`, with the type's code, model, name and usual tax.
 
 ## In the console
+
+The request bodies take the return model as its value, such as `"fixed_income"`. A unit test checks that no request body anywhere asks for an enum or a date that JSON cannot send (`tests/unit/test_api_request_bodies.py`).
 
 Products lists the types under the bonds, with how each earns, its usual tax, how many products use it and whether it is in use or retired. Staff with `products.change` define a new type (`/products?new-type`), choosing the return model first, and change, retire or restore one (`/products?edit-type=CODE`). Each is a change a second person approves or sends back on the same screen.
 
