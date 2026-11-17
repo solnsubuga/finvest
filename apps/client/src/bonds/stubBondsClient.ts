@@ -161,6 +161,8 @@ type Stored = {
   destinationId: string | null;
   /** Coupons dated on or after this day go straight to the destination. */
   destinationFrom: string | null;
+  /** The day the desk sold it, for the sold sample. */
+  soldOn?: string;
 };
 
 /** The demo payout accounts (src/investing/stubInvestingClient.ts): only the MTN one can be paid now. */
@@ -179,7 +181,7 @@ export type StubBondsOptions = {
    * `default` starts with two holdings: one with a coupon waiting for an account, and one
    * paying its coupons to MTN. `empty`, the default here, starts with none.
    */
-  sample?: "default" | "empty";
+  sample?: "default" | "empty" | "sold";
 };
 
 export function createStubBondsClient(options: StubBondsOptions = {}): BondsClient {
@@ -271,8 +273,9 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
   function view(entry: Stored): BondHolding {
     const start = startOf(entry);
     const payByMs = entry.createdAtMs + PAY_WINDOW_MS;
-    const status = start ? "active" : now() > payByMs ? "cancelled" : "unpaid";
-    const period = periodOn(entry.issue, today());
+    const status = entry.soldOn ? "sold" : start ? "active" : now() > payByMs ? "cancelled" : "unpaid";
+    // A sold holding is paid nothing more.
+    const period = entry.soldOn ? { left: 0, next: null } : periodOn(entry.issue, today());
     const coupon = netCoupon(entry.issue, entry.face);
     return {
       id: entry.id,
@@ -326,6 +329,41 @@ export function createStubBondsClient(options: StubBondsOptions = {}): BondsClie
     };
     sample("BOND-2Y-2028", 1_000_000, "2026-04-01", null);
     sample("BOND-5Y-2031", 2_000_000, "2026-09-01", READY_ACCOUNT);
+  }
+  if (options.sample === "sold") {
+    // `?sample=sold`: one holding the desk sold early, paid to the client.
+    const issue = ISSUES.find((item) => item.code === "BOND-2Y-2028")!;
+    nextId += 1;
+    const entry: Stored = {
+      id: `demo-holding-${nextId}`,
+      issue,
+      face: 1_000_000,
+      price: issue.price ?? PAR,
+      accrued: 0,
+      cost: Math.ceil((1_000_000 * (issue.price ?? PAR)) / PAR),
+      createdAtMs: Date.parse("2026-04-01T06:00:00Z"),
+      startDate: "2026-04-01",
+      destinationId: READY_ACCOUNT,
+      destinationFrom: "2026-04-01",
+      soldOn: "2026-11-10",
+    };
+    stored.set(entry.id, entry);
+    nextId += 1;
+    sales.set(`demo-sale-${nextId}`, {
+      id: `demo-sale-${nextId}`,
+      holdingId: entry.id,
+      name: issue.name,
+      face: UGX(entry.face),
+      requestedAt: "2026-11-08T07:00:00Z",
+      status: "sold",
+      destinationId: READY_ACCOUNT,
+      price: 972_500,
+      soldOn: "2026-11-10",
+      amount: UGX(1_018_340),
+      payoutStatus: "paid_out",
+      payoutId: "demo-payout-sale",
+      heldBecause: null,
+    });
   }
 
   return {
