@@ -4,16 +4,23 @@ import Footer from "../components/Footer.astro";
 import Header from "../components/Header.astro";
 import { colors } from "@finvest/tokens";
 import { indexable } from "../config.ts";
+import { shareImageHeight, shareImages, shareImageWidth, type ShareImageKey } from "../data/share.ts";
 
 interface Props {
   title: string;
   description: string;
   headerTone?: "black" | "light";
+  /** The picture shown when a link to this page is shared (src/data/share.ts). */
+  share?: ShareImageKey;
 }
 
-const { title, description, headerTone = "black" } = Astro.props;
+const { title, description, headerTone = "black", share = "home" } = Astro.props;
 const fullTitle = title === "Finvest" ? "Finvest: treasury bills from your phone" : `${title} | Finvest`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
+// Apps that show a shared link read these tags from the HTML without running any script, and need
+// the picture's full address.
+const shareImage = shareImages[share];
+const shareImageUrl = new URL(`/share/${shareImage.name}.png`, Astro.site);
 ---
 
 <!doctype html>
@@ -32,6 +39,18 @@ const canonical = new URL(Astro.url.pathname, Astro.site);
     <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
+    <meta property="og:locale" content="en_UG" />
+    <meta property="og:image" content={shareImageUrl} />
+    <meta property="og:image:secure_url" content={shareImageUrl} />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content={String(shareImageWidth)} />
+    <meta property="og:image:height" content={String(shareImageHeight)} />
+    <meta property="og:image:alt" content={shareImage.alt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={shareImageUrl} />
+    <meta name="twitter:image:alt" content={shareImage.alt} />
   </head>
   <body>
     <a class="skip" href="#main">Skip to the page</a>

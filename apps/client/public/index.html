@@ -6,6 +6,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <meta name="theme-color" content="#0D0D0D" />
     <title>%WEB_TITLE%</title>
+    <!--
+      The link preview that WhatsApp, Slack, X, LinkedIn and the like draw when someone shares an
+      app address. They read these tags without running the app, so they sit in the page itself.
+      The picture is the website's home picture (apps/site/public/share/home.png, drawn by
+      `pnpm share-images` there), and the words are the website's home page's. Every app address
+      is this one page, so every address shows the same preview. The full addresses name the
+      production app, the only one shared outside the team.
+    -->
+    <meta
+      name="description"
+      content="Invest in Uganda government treasury bills from your phone. Pay with mobile money, see your interest grow daily, and get paid straight back to MoMo or your bank."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Finvest" />
+    <meta property="og:title" content="Finvest: treasury bills from your phone" />
+    <meta
+      property="og:description"
+      content="Invest in Uganda government treasury bills from your phone. Pay with mobile money, see your interest grow daily, and get paid straight back to MoMo or your bank."
+    />
+    <meta property="og:url" content="https://app.finvestug.com/" />
+    <meta property="og:locale" content="en_UG" />
+    <meta property="og:image" content="https://app.finvestug.com/share.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Finvest: your money, working every day. Invest in Uganda government treasury bills from your phone."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Finvest: treasury bills from your phone" />
+    <meta
+      name="twitter:description"
+      content="Invest in Uganda government treasury bills from your phone. Pay with mobile money, see your interest grow daily, and get paid straight back to MoMo or your bank."
+    />
+    <meta name="twitter:image" content="https://app.finvestug.com/share.png" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
       /* These styles make the body full-height */

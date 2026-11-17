@@ -34,6 +34,17 @@ All are public and read at build time. None is a secret.
 | `PUBLIC_API_URL` | `https://api.finvestug.com` | Where the browser reads rates and quotes |
 | `PUBLIC_INDEXABLE` | `false` | `true` lets search engines in. Leave it off until `pnpm placeholders --strict` passes. |
 
+## Link previews
+
+WhatsApp, Slack, X, LinkedIn and the like draw a card when someone shares a link to the site. They read the page's Open Graph and Twitter tags without running any script, so `src/layouts/Base.astro` writes them into every page: the title, the description, the page's address and a picture with its full https address, size and description. Each page names its picture with `share` (default `home`), from `src/data/share.ts`.
+
+- The pictures are 1200 by 630 PNGs in `public/share/`, drawn from the words in `src/data/share.ts` by `pnpm share-images` (Playwright's Chromium, the site's font and colours). They are committed, so the build needs no browser. Change the words, run it, commit the pictures.
+- No rate or other changing figure goes on a picture: the apps cache a preview for days or weeks.
+- `pnpm test:build` fails a page without the tags, or a picture that is missing, not 1200 by 630, or over 300 KB (WhatsApp leaves out a larger one).
+- Before launch `robots.txt` still turns search engines away, but lets the preview crawlers in (`linkPreviewAgents`), because X, LinkedIn and Slack obey it and would otherwise show a bare address. Pages still say noindex.
+- The client app's page (`apps/client/public/index.html`) carries the home picture and words too.
+- Check a live page with each app's own tool after a release: [Facebook's Sharing Debugger](https://developers.facebook.com/tools/debug/) (also refreshes WhatsApp's copy), [LinkedIn's Post Inspector](https://www.linkedin.com/post-inspector/). Screenshots: [docs/screenshots/link-previews](docs/screenshots/link-previews/README.md).
+
 ## Rates
 
 The pages are built with the rates in `src/data/fallback.ts`, so they show at once and still show if the API is down. When a page opens, the browser asks `GET {API}/public/products` and replaces the rates, minimums, the "last updated" date and whether each product is open, wherever an element carries `data-rate`, `data-minimum`, `data-updated`, `data-when-live` or `data-when-paused`. Every product grid (`data-product-grid`) is drawn again from the answer, one card per product in the API's order (`src/scripts/cards.ts`), and the calculator offers every fixed term open in shillings that day. So a product opened, paused or taken away after the build shows as it is now. An answer that is not exactly the expected shape is ignored (`src/lib/products.ts`).
