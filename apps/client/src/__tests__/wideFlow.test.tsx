@@ -139,18 +139,18 @@ describe("Activity on a wide screen", () => {
     expect(
       within(table).getByText("Payment for 182 Day Treasury Bill"),
     ).toBeTruthy();
-    expect(within(table).getByText("Payout")).toBeTruthy();
+    expect(within(table).getByText("Withdrawal")).toBeTruthy();
     // The newest row is shown beside the table to start with.
     expect(screen.getByTestId("activity-detail")).toBeTruthy();
 
-    await fireEvent.changeText(screen.getByTestId("activity-search"), "payout");
+    await fireEvent.changeText(screen.getByTestId("activity-search"), "withdrawal");
     expect(
       within(screen.getByTestId("activity-table")).queryByText(
         "Payment for 182 Day Treasury Bill",
       ),
     ).toBeNull();
     expect(
-      within(screen.getByTestId("activity-detail")).getByText("Payout"),
+      within(screen.getByTestId("activity-detail")).getByText("Withdrawal"),
     ).toBeTruthy();
 
     await fireEvent.press(screen.getByTestId("activity-csv"));
@@ -161,7 +161,7 @@ describe("Activity on a wide screen", () => {
     expect(lines[0]).toBe(
       "Date (Kampala),What,For,Direction,Amount,Currency,Status",
     );
-    expect(lines.slice(1).every((line) => line.includes(",Payout,"))).toBe(
+    expect(lines.slice(1).every((line) => line.includes(",Withdrawal,"))).toBe(
       true,
     );
 
@@ -180,7 +180,7 @@ describe("Activity on a wide screen", () => {
     await screen.findByTestId("activity-table");
     await fireEvent.press(screen.getByTestId("filter-payment"));
     expect(
-      within(screen.getByTestId("activity-table")).queryByText("Payout"),
+      within(screen.getByTestId("activity-table")).queryByText("Withdrawal"),
     ).toBeNull();
     expect(
       within(screen.getByTestId("activity-table")).getAllByText(/^Payment for/)

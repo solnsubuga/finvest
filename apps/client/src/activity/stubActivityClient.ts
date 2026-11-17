@@ -38,7 +38,8 @@ function history(now: number): [PaymentRow[], InvestmentRow[], PayoutRow[]] {
     { id: "demo-activity-pay-4", investment_id: "demo-activity-inv-3", method: "mtn", status: "confirmed", amount: ugx(1_000_000), created_at: ago(now, 110), confirmed_at: ago(now, 110) },
   ];
   const payouts: PayoutRow[] = [
-    { id: "demo-activity-payout-1", amount: ugx(1_015_400), kind: "mobile_money", status: "paid", created_at: ago(now, 17, 20) },
+    { id: "demo-activity-payout-1", amount: ugx(1_015_400), kind: "mobile_money", status: "paid", created_at: ago(now, 17, 20), purpose: "withdrawal" },
+    { id: "demo-activity-payout-2", amount: ugx(57_000), kind: "mobile_money", status: "paid", created_at: ago(now, 6, 9), purpose: "bond_coupon" },
   ];
   return [payments, investments, payouts];
 }

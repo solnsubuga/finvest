@@ -8,7 +8,7 @@ export type InvestmentRow = Pick<
   ClientInvestmentOut,
   "id" | "product_name" | "currency" | "status" | "maturity_date" | "interest_at_maturity_minor"
 >;
-export type PayoutRow = Pick<PayoutOut, "id" | "amount" | "kind" | "status" | "created_at">;
+export type PayoutRow = Pick<PayoutOut, "id" | "amount" | "kind" | "status" | "created_at" | "purpose">;
 
 const METHOD: Record<PaymentRow["method"], string> = {
   mtn: "MTN Mobile Money",
@@ -33,6 +33,18 @@ const PAYOUT_STATUS: Record<PayoutRow["status"], [ActivityStatus, string]> = {
   paid: ["done", "Paid to you"],
   failed: ["failed", "Did not go through"],
   cancelled: ["failed", "Cancelled"],
+};
+
+/**
+ * What the money paid out is. Money from a bond is the client's earnings, so it is named as a
+ * coupon, a sale or a repayment, never as a withdrawal. It is money arriving with the client, as
+ * every payout is, so it shows with a "+".
+ */
+const PAYOUT_TITLE: Record<NonNullable<PayoutRow["purpose"]>, string> = {
+  withdrawal: "Withdrawal",
+  bond_coupon: "Bond coupon",
+  bond_sale: "Bond sale",
+  bond_repayment: "Bond repaid",
 };
 
 /** Interest is paid at the end of the maturity day, Kampala time. */
@@ -94,7 +106,7 @@ export function buildActivity(
       key: `payout:${payout.id}`,
       kind: "payout",
       at: payout.created_at,
-      title: "Payout",
+      title: PAYOUT_TITLE[payout.purpose ?? "withdrawal"],
       detail: payout.kind === "bank" ? "To your bank account" : "To your mobile money",
       amount: payout.amount,
       direction: "in",

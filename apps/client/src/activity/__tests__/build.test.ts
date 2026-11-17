@@ -62,6 +62,19 @@ describe("the Activity list", () => {
     expect(buildActivity([], [], [payout({ kind: "bank" })])[0]?.detail).toBe("To your bank account");
   });
 
+  it("names bond money by what it is, never as a withdrawal, and shows it arriving", () => {
+    const titles = ([undefined, "withdrawal", "bond_coupon", "bond_sale", "bond_repayment"] as const).map(
+      (purpose) => buildActivity([], [], [payout({ purpose })])[0],
+    );
+    expect(titles.map((item) => [item?.title, item?.direction])).toEqual([
+      ["Withdrawal", "in"],
+      ["Withdrawal", "in"],
+      ["Bond coupon", "in"],
+      ["Bond sale", "in"],
+      ["Bond repaid", "in"],
+    ]);
+  });
+
   it("lists interest only for a matured investment that earned some, on its maturity day", () => {
     expect(buildActivity([], [investment()], [])).toEqual([]);
     expect(buildActivity([], [investment({ status: "matured", interest_at_maturity_minor: 0 })], [])).toEqual([]);
