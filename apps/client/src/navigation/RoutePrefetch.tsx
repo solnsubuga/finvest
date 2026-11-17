@@ -4,11 +4,11 @@ import { useDataSaving } from "@/dataSaving/DataSavingProvider";
 
 import { prefetchRoutes } from "@/navigation/prefetchRoutes";
 
-/** How long after the first screen shows before the other screens' code is fetched. */
+/** How long after the first screen shows before the other screens' code is loaded. */
 export const PREFETCH_DELAY_MS = 1500;
 
 /**
- * Fetches the other screens' code on the web once the first screen is up, unless the client
+ * Loads the other screens' code on the web once the first screen is up, unless the client
  * chose light mode (prefetchRoutes.web.ts). Renders nothing.
  */
 export function RoutePrefetch() {
@@ -18,7 +18,7 @@ export function RoutePrefetch() {
     if (!ready || light) {
       return;
     }
-    const timer = setTimeout(prefetchRoutes, PREFETCH_DELAY_MS);
+    const timer = setTimeout(() => void prefetchRoutes(), PREFETCH_DELAY_MS);
     return () => clearTimeout(timer);
   }, [ready, light]);
 
