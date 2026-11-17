@@ -15,7 +15,7 @@ from app.modules.bonds.domain.changes import BondChangeStatus
 from app.modules.bonds.domain.sales import SaleStatus
 from app.modules.closures import service as closures
 from app.modules.console import actions as client_actions
-from app.modules.dealing import auctions, buffer, capital
+from app.modules.dealing import auctions, bond_coupons, buffer, capital
 from app.modules.dealing import orders as dealing
 from app.modules.dealing.domain.capital import Direction
 from app.modules.dealing.domain.orders import OrderStatus
@@ -67,6 +67,8 @@ async def waiting_for(session: AsyncSession, staff: StaffSession, now: datetime)
         found += await _buffer_rules(session)
     if "buffer_capital" in kinds:
         found += await _buffer_capital(session)
+    if "bond_coupon" in kinds:
+        found += await _bond_coupons(session)
     if "auction_date" in kinds:
         found += await _auction_dates(session)
     if "rate_change" in kinds:
@@ -270,6 +272,20 @@ async def _buffer_capital(session: AsyncSession) -> list[Waiting]:
             m.proposed_at,
         )
         for m in await capital.waiting(session)
+    ]
+
+
+async def _bond_coupons(session: AsyncSession) -> list[Waiting]:
+    # "BOND-2037 coupon of 2026-11-14". The amount is on the dealing desk, not in the inbox.
+    return [
+        Waiting(
+            "bond_coupon",
+            c.id,
+            f"{c.issue_code} coupon of {c.coupon_date.isoformat()}",
+            c.recorded_by,
+            c.recorded_at,
+        )
+        for c in await bond_coupons.waiting(session)
     ]
 
 

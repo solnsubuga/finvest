@@ -149,7 +149,7 @@ The entry is dated on the maturity date even when the run is late, and points ba
 
 The database holds that only the worker records a maturity, that it is exactly what the lot still held on its maturity date with a matching ledger entry, that a sale never takes bills that have matured, and that a maturity is never changed or removed.
 
-`dealing.holdings` answers what is held: `lots_of` for one instrument, `face_held`, `holdings_on(session, on)` for each instrument at the end of a day, and `expected_bank_movements(session, date_from=, date_to=)` for the day close, which covers purchases, sales and maturities. A lot counts from its settlement date until the day before it matures. The worker can read all of these.
+`dealing.holdings` answers what is held: `lots_of` for one instrument, `face_held`, `holdings_on(session, on)` for each instrument at the end of a day, and `expected_bank_movements(session, date_from=, date_to=)` for the day close, which covers purchases, sales and maturities of bills and bonds, Finvest's money in the buffer, and coupons paid in on bonds. A lot counts from its settlement date until the day before it matures. The worker can read all of these.
 
 ## Bonds
 
@@ -179,7 +179,25 @@ Gains, losses and income at maturity share the bills' accounts. The settlement a
 | To sell | Face held beyond clients' face, less what is on sale: after a client sold or a holding was repaid |
 | To place | What clients paid for the face value with no bond behind it yet, in proportion and rounded up |
 
-To place counts in the buffer's money to place, so client money waiting for bonds is never lent out as buffer cash. The console's dealing desk shows this position under "Treasury bonds by issue", lets staff prepare a bond order by choosing Treasury bonds and the issue, and names what each open order deals in. A bond sale there is limited to the face value held beyond what clients hold (`to_sell`), and a bond result's maturity date is filled with the issue's. Coupons and face value Bank of Uganda pays in for bonds arrive in the next pull request; until then a bond lot is repaid by the hourly maturity run like a bill.
+To place counts in the buffer's money to place, so client money waiting for bonds is never lent out as buffer cash. At maturity Bank of Uganda repays the face value, and the hourly maturity run posts it like a bill's, into `dealing.bonds`.
+
+The console's dealing desk shows this position under "Treasury bonds by issue", lets staff prepare a bond order by choosing Treasury bonds and the issue, and names what each open order deals in. A bond sale there is limited to the face value held beyond what clients hold (`to_sell`), and a bond result's maturity date is filled with the issue's.
+
+### Coupons paid in
+
+Bank of Uganda pays every holder of an issue the same coupon on the issue's coupon dates, through the custodian into the trust bank account. The desk is paid on the face value it held the day before the coupon date (`dealing_bond_coupons`, migration 0533; rules in `domain/bond_coupons.py`). Clients' coupons are paid by the bonds module on the same dates from `interest.expense`, so the two meet in Finvest's earnings.
+
+1. **Due.** For each issue, every coupon date of the last year that has come, on which the desk held bonds and no coupon is recorded (or only declined ones), with the face value held and the coupon it earns before tax: half the yearly rate, rounded down.
+2. **Recorded.** One member of staff with `dealing_orders.change` records it from the custodian's note and the bank statement: what reached the trust account, the day it arrived (on or after the coupon date, not in the future, not in a closed day) and the bank's reference. The face value and what it earns are worked out from the desk's holdings, never typed. What arrived may differ, for instance if Bank of Uganda withholds tax (the open question in [decisions.md](decisions.md)), and then a note says why.
+3. **Approved or declined.** A different member of staff, having checked the statement and confirmed it is them, approves it, which posts what arrived, or declines it with a reason, after which it can be recorded again. A coupon of an issue on a date, and a bank reference, are recorded once unless declined.
+
+| Debit | Credit |
+| --- | --- |
+| `bank.trust`, what arrived | `dealing.bond_coupons` ("Coupons received on bonds held"), Finvest's income |
+
+The entry is dated the day the money arrived and points back at the coupon (`dealing.bond_coupon`). The day close expects it on that day's bank statement (`expected_bank_movements`). The database holds who records and decides, that nothing recorded changes, that an approval names exactly that entry, and that nothing is removed. Waiting coupons appear in the console's approvals inbox as `bond_coupon`, as "BOND-2037 coupon of 2026-11-14", without the amount.
+
+The desk's bonds bought between coupon dates cost the accrued interest too, which stays in their cost. The next coupon pays it back as income, and the bond's repayment at face value then books the same amount as a maturity loss, so over the bond's life the two cancel.
 
 ## The liquidity buffer
 
@@ -281,6 +299,10 @@ Agreed with the investing, and the payouts and reconciliation, threads on 13 Nov
 | `POST /staff/dealing/orders/{id}/result` | Record the custodian's note, or a fill of null for nothing dealt |
 | `POST /staff/dealing/orders/{id}/confirm-result` | Confirm, as a person other than the recorder, which settles the order |
 | `POST /staff/dealing/orders/{id}/reject-result` | Reject a recorded result with a note |
+| `GET /staff/dealing/bond-coupons?currency=UGX` | Coupons on the desk's bonds still to record (`due`), and those recorded, latest coupon date first, with the steps the reader may take on each (`allowed`) and whether they may record one (`may_change`) |
+| `POST /staff/dealing/bond-coupons` | Record a coupon from the custodian's note: 422 `coupon_date` / `not_a_coupon_date`, `coupon_date_in_future`, `nothing_held` or `already_recorded`; `value_date` / `value_date_before_coupon`, `value_date_in_future` or `value_date_in_a_closed_day`; `note` / `note_required`; `bank_reference` / `already_recorded` |
+| `POST /staff/dealing/bond-coupons/{id}/approve` | Approve it, as the second person, which posts it |
+| `POST /staff/dealing/bond-coupons/{id}/decline` | Decline it with a reason |
 | `GET /staff/dealing/buffer?currency=UGX` | The buffer today, the rules in force, every version, the rules changes, Finvest's money in the buffer and its movements, each with the steps the reader may take (`allowed`) |
 | `POST /staff/dealing/buffer/rules` | Propose a new version of the rules, from a later day |
 | `POST /staff/dealing/buffer/rules/{id}/approve` | Approve it, as the second person |

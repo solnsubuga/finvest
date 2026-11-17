@@ -102,6 +102,10 @@ _MOVEMENTS = text(
     "SELECT ledger_entry_id, currency, value_date, "
     "CASE WHEN direction = 'in' THEN amount_minor ELSE -amount_minor END, "
     "coalesce(bank_reference, id), decided_at FROM dealing_buffer_capital "
+    "WHERE status = 'approved' AND value_date BETWEEN :date_from AND :date_to "
+    "UNION ALL "
+    "SELECT ledger_entry_id, currency, value_date, amount_minor, bank_reference, decided_at "
+    "FROM dealing_bond_coupons "
     "WHERE status = 'approved' AND value_date BETWEEN :date_from AND :date_to"
     ") AS movement ORDER BY value_date, at, entry_id"
 )
@@ -231,8 +235,9 @@ async def holdings_on(session: AsyncSession, on: date) -> list[Holding]:
 async def expected_bank_movements(
     session: AsyncSession, *, date_from: date, date_to: date
 ) -> list[BankMovement]:
-    """What settled purchases, sales and maturities, and Finvest's own money paid into or taken
-    out of the buffer, did to the trust bank account between two value dates."""
+    """What settled purchases, sales and maturities, Finvest's own money paid into or taken
+    out of the buffer, and coupons paid in on bonds, did to the trust bank account between two
+    value dates."""
     rows = await session.execute(_MOVEMENTS, {"date_from": date_from, "date_to": date_to})
     return [
         BankMovement(

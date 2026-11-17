@@ -764,6 +764,7 @@
               "dealing_result",
               "buffer_rules",
               "buffer_capital",
+              "bond_coupon",
               "auction_date",
               "rate_change",
               "product_change",
@@ -8282,6 +8283,219 @@
         "title": "CouponDestinationIn",
         "type": "object"
       },
+      "CouponDueOut": {
+        "additionalProperties": false,
+        "properties": {
+          "coupon_date": {
+            "format": "date",
+            "title": "Coupon Date",
+            "type": "string"
+          },
+          "expected": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "face": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "issue_code": {
+            "title": "Issue Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_code",
+          "name",
+          "coupon_date",
+          "face",
+          "expected"
+        ],
+        "title": "CouponDueOut",
+        "type": "object"
+      },
+      "CouponIn": {
+        "additionalProperties": false,
+        "properties": {
+          "amount_minor": {
+            "maximum": 1000000000000000.0,
+            "minimum": 1.0,
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "bank_reference": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Bank Reference",
+            "type": "string"
+          },
+          "coupon_date": {
+            "format": "date",
+            "title": "Coupon Date",
+            "type": "string"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "issue_code": {
+            "maxLength": 24,
+            "minLength": 1,
+            "pattern": "^[A-Z0-9-]+$",
+            "title": "Issue Code",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue_code",
+          "coupon_date",
+          "currency",
+          "amount_minor",
+          "value_date",
+          "bank_reference"
+        ],
+        "title": "CouponIn",
+        "type": "object"
+      },
+      "CouponOut": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed": {
+            "items": {
+              "$ref": "#/components/schemas/app__modules__dealing__bond_coupons_api__Step"
+            },
+            "title": "Allowed",
+            "type": "array"
+          },
+          "amount": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "bank_reference": {
+            "title": "Bank Reference",
+            "type": "string"
+          },
+          "coupon_date": {
+            "format": "date",
+            "title": "Coupon Date",
+            "type": "string"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Reason"
+          },
+          "expected": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "face": {
+            "$ref": "#/components/schemas/AmountOut"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "issue_code": {
+            "title": "Issue Code",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "title": "Recorded By",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CouponStatus"
+          },
+          "value_date": {
+            "format": "date",
+            "title": "Value Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "issue_code",
+          "coupon_date",
+          "face",
+          "expected",
+          "amount",
+          "value_date",
+          "bank_reference",
+          "note",
+          "status",
+          "recorded_by",
+          "recorded_at",
+          "decided_by",
+          "decided_at",
+          "decision_reason",
+          "allowed"
+        ],
+        "title": "CouponOut",
+        "type": "object"
+      },
       "CouponPayOutIn": {
         "additionalProperties": false,
         "properties": {
@@ -8309,6 +8523,49 @@
           "destination_id"
         ],
         "title": "CouponPayOutIn",
+        "type": "object"
+      },
+      "CouponStatus": {
+        "enum": [
+          "recorded",
+          "approved",
+          "declined"
+        ],
+        "title": "CouponStatus",
+        "type": "string"
+      },
+      "CouponsOut": {
+        "additionalProperties": false,
+        "properties": {
+          "coupons": {
+            "items": {
+              "$ref": "#/components/schemas/CouponOut"
+            },
+            "title": "Coupons",
+            "type": "array"
+          },
+          "currency": {
+            "$ref": "#/components/schemas/Currency"
+          },
+          "due": {
+            "items": {
+              "$ref": "#/components/schemas/CouponDueOut"
+            },
+            "title": "Due",
+            "type": "array"
+          },
+          "may_change": {
+            "title": "May Change",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "currency",
+          "due",
+          "coupons",
+          "may_change"
+        ],
+        "title": "CouponsOut",
         "type": "object"
       },
       "Cover": {
@@ -32106,6 +32363,30 @@
         ],
         "title": "DeclineIn",
         "type": "object"
+      },
+      "app__modules__dealing__bond_coupons_api__DeclineIn": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "DeclineIn",
+        "type": "object"
+      },
+      "app__modules__dealing__bond_coupons_api__Step": {
+        "enum": [
+          "approve",
+          "decline"
+        ],
+        "title": "Step",
+        "type": "string"
       },
       "app__modules__dealing__buffer_api__DeclineIn": {
         "additionalProperties": false,
@@ -57552,6 +57833,398 @@
           }
         },
         "summary": "Propose Cancellation",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/bond-coupons": {
+      "get": {
+        "operationId": "get_bond_coupons_staff_dealing_bond_coupons_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "currency",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/Currency",
+              "default": "UGX"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Bond Coupons",
+        "tags": [
+          "dealing desk"
+        ]
+      },
+      "post": {
+        "description": "Record a coupon from the custodian's note and the bank statement, for a second person\nto approve. Nothing is posted yet.",
+        "operationId": "record_coupon_staff_dealing_bond_coupons_post",
+        "parameters": [
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CouponIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Record Coupon",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/bond-coupons/{coupon_id}/approve": {
+      "post": {
+        "operationId": "approve_coupon_staff_dealing_bond_coupons__coupon_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "coupon_id",
+            "required": true,
+            "schema": {
+              "title": "Coupon Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Approve a coupon as the second person, posting it",
+        "tags": [
+          "dealing desk"
+        ]
+      }
+    },
+    "/staff/dealing/bond-coupons/{coupon_id}/decline": {
+      "post": {
+        "operationId": "decline_coupon_staff_dealing_bond_coupons__coupon_id__decline_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "coupon_id",
+            "required": true,
+            "schema": {
+              "title": "Coupon Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A value the caller chooses once per intended action and sends again on every retry of it. Pattern: `[A-Za-z0-9._:-]{8,128}`.",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/app__modules__dealing__bond_coupons_api__DeclineIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CouponsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Decline a coupon with a reason",
         "tags": [
           "dealing desk"
         ]
