@@ -45,6 +45,18 @@ WhatsApp, Slack, X, LinkedIn and the like draw a card when someone shares a link
 - The client app's page (`apps/client/public/index.html`) carries the home picture and words too.
 - Check a live page with each app's own tool after a release: [Facebook's Sharing Debugger](https://developers.facebook.com/tools/debug/) (also refreshes WhatsApp's copy), [LinkedIn's Post Inspector](https://www.linkedin.com/post-inspector/). Screenshots: [docs/screenshots/link-previews](docs/screenshots/link-previews/README.md).
 
+## Search engines
+
+Search engines are kept out until launch (`PUBLIC_INDEXABLE`). Once let in, they get:
+
+- `lang="en-UG"`, an `hreflang` link and `geo.region` UG on every page, so results favour people in Uganda.
+- `sitemap.xml` with every page but the 404, named in `robots.txt` once indexable. A test fails if it misses a page or lists one that does not exist.
+- Structured data (`src/lib/structured-data.ts`): Finvest as a `FinancialService` serving Uganda in shillings, the `WebSite`, and the questions on Home and in the help centre as an `FAQPage`. It says only what the pages say, and leaves out facts Finvest has not supplied, as the pages do.
+- Titles and descriptions that use the words people in Uganda search with: Treasury bills and bonds, Uganda, MTN MoMo, Airtel Money.
+- `public/share/logo.png` (the logo search engines show) and `public/apple-touch-icon.png`, drawn by `pnpm share-images`.
+
+At launch, add finvestug.com to Google Search Console and Bing Webmaster Tools and submit the sitemap. Both need someone with access to the domain's DNS.
+
 ## Rates
 
 The pages are built with the rates in `src/data/fallback.ts`, so they show at once and still show if the API is down. When a page opens, the browser asks `GET {API}/public/products` and replaces the rates, minimums, the "last updated" date and whether each product is open, wherever an element carries `data-rate`, `data-minimum`, `data-updated`, `data-when-live` or `data-when-paused`. Every product grid (`data-product-grid`) is drawn again from the answer, one card per product in the API's order (`src/scripts/cards.ts`), and the calculator offers every fixed term open in shillings that day. So a product opened, paused or taken away after the build shows as it is now. An answer that is not exactly the expected shape is ignored (`src/lib/products.ts`).

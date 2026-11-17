@@ -78,6 +78,16 @@ export const helpTopics: HelpTopic[] = [
     summary: "Rates, tax, maturity, rolling over",
     questions: [
       {
+        question: "What can I invest in?",
+        answer:
+          "Government of Uganda Treasury bills for a fixed term, and Treasury bonds that pay interest every six months. Fixed income deposits, unit trusts and equity portfolios are being added, and each shows in the app when it opens.",
+      },
+      {
+        question: "How does a Treasury bond work?",
+        answer:
+          "You buy part of a bond the Bank of Uganda has issued, usually from UGX 100,000 of face value. It pays interest every six months, after tax, and the full face value at maturity. To get out sooner, ask in the app and Finvest sells it for you at the market price, which can be more or less than you paid.",
+      },
+      {
         question: "Why is the rate shown after tax?",
         answer:
           "Tax on interest is taken off before it reaches you, so we show the return you actually keep.",
@@ -126,7 +136,7 @@ export const helpTopics: HelpTopic[] = [
       {
         question: "How does a goal work?",
         answer:
-          "Set a target and a date. Finvest works out the monthly amount, reminds you, and puts every payment into treasury bills. Each payment must meet the smallest amount for the product.",
+          "Set a target and a date. Finvest works out the monthly amount, reminds you, and puts every payment into the investment you choose. Each payment must meet the smallest amount for the product.",
       },
       {
         question: "Who approves a withdrawal from a group account?",

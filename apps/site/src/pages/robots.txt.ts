@@ -10,7 +10,12 @@ import { linkPreviewAgents } from "../data/share.ts";
  */
 const previews = linkPreviewAgents.map((agent) => `User-agent: ${agent}\nAllow: /\n`).join("\n");
 
-export const GET: APIRoute = () =>
-  new Response(indexable ? "User-agent: *\nAllow: /\n" : `${previews}\nUser-agent: *\nDisallow: /\n`, {
-    headers: { "Content-Type": "text/plain; charset=utf-8" },
-  });
+export const GET: APIRoute = ({ site }) =>
+  new Response(
+    indexable
+      ? `User-agent: *\nAllow: /\n\nSitemap: ${new URL("/sitemap.xml", site ?? "https://finvestug.com").href}\n`
+      : `${previews}\nUser-agent: *\nDisallow: /\n`,
+    {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    },
+  );

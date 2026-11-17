@@ -6,6 +6,7 @@ import PageTitle from "../components/PageTitle.astro";
 import { supportEmail } from "../config.ts";
 import { company } from "../data/company.ts";
 import { helpTopics } from "../data/help.ts";
+import { faqPage } from "../lib/structured-data.ts";
 import Base from "../layouts/Base.astro";
 
 const complaintText =
@@ -18,7 +19,8 @@ const count = (n: number) => `${n} ${n === 1 ? "question" : "questions"}`;
 <Base
   share="help"
   title="Help centre"
-  description="Answers to the questions people ask Finvest most: opening an account, paying in, interest and tax, withdrawals, goals, and keeping your account safe."
+  description="Answers to the questions people ask Finvest most: opening an account, paying by mobile money, Treasury bills and bonds, tax, withdrawals, goals and security."
+  structuredData={[faqPage(helpTopics.flatMap((topic) => topic.questions))]}
 >
   <PageTitle
     eyebrow="Help centre"
