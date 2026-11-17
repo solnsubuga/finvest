@@ -145,6 +145,14 @@ class PaymentView(Contract):
     purpose: Literal["investment", "bond"] = "investment"
 
 
+class MobileMoneyCollection(Contract):
+    """How a mobile money payment would be collected if started now."""
+
+    # True when the client pays on the provider's hosted page, choosing the network and typing
+    # the number there. False when the network prompts the number given here.
+    on_page: bool
+
+
 class CardOffer(Contract):
     """What paying for an investment by card would cost, shown before the client goes on."""
 
@@ -457,6 +465,26 @@ def create_client_router(
             amount=MoneyView(minor=payable.amount.minor, currency=payable.amount.currency.value),
         )
 
+    async def _collected_on_page(session: AsyncSession, clock: Clock) -> bool:
+        """Whether mobile money is paid on the hosted page now rather than by a phone prompt:
+        Settings choose Pesapal, or ioTec is not running here. False with no hosted provider."""
+        if card_provider is None or card_provider.name not in HOSTED_PROVIDERS:
+            return False
+        if collections is None:
+            return True
+        chosen = await platform_settings.mobile_money_collector(session, clock.now())
+        return chosen.provider == "pesapal"
+
+    @router.get("/mobile-money")
+    async def mobile_money_collection(
+        client: CurrentClient, database: Db, clock: Time
+    ) -> MobileMoneyCollection:
+        """How mobile money is collected now, so the pay screen can say what happens next
+        before the client pays. It may change before the payment starts: the payment's own
+        `on_page` is what counts."""
+        async with database.actor_transaction(client.actor) as session:
+            return MobileMoneyCollection(on_page=await _collected_on_page(session, clock))
+
     async def _pay_by_mobile_money(
         body: MobileMoneyPayment,
         client: ClientSession,
@@ -478,8 +506,7 @@ def create_client_router(
                 amount=payable.amount,
                 phone=body.phone or client.phone,
             )
-            chosen = await platform_settings.mobile_money_collector(session, clock.now())
-            if hosted is not None and (chosen.provider == "pesapal" or collections is None):
+            if hosted is not None and await _collected_on_page(session, clock):
                 deposit = await cards.request_hosted_mobile_money(
                     session,
                     client.actor,

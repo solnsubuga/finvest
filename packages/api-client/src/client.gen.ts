@@ -1069,6 +1069,11 @@ export const MaturityChoice = z.object({
 });
 export type MaturityChoice = z.infer<typeof MaturityChoice>;
 
+export const MobileMoneyCollection = z.object({
+  on_page: z.boolean(),
+});
+export type MobileMoneyCollection = z.infer<typeof MobileMoneyCollection>;
+
 export const MobileMoneyPayment = z.object({
   network: z.enum(["mtn", "airtel"]),
   phone: z.string().nullable().optional(),
@@ -2937,6 +2942,17 @@ export const operations = {
     idempotent: false,
     status: 200,
     response: LoginStarted,
+  },
+  "GET /client/mobile-money": {
+    method: "GET",
+    path: "/client/mobile-money",
+    params: z.object({}),
+    query: z.object({}),
+    body: null,
+    bodyKind: null,
+    idempotent: false,
+    status: 200,
+    response: MobileMoneyCollection,
   },
   "GET /client/next-of-kin": {
     method: "GET",

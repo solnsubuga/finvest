@@ -255,6 +255,13 @@ describe("the payments client for the real API", () => {
     await expect(createApiPaymentsClient().getBankTransfer(PAYMENT)).rejects.toEqual(new PaymentError("not_found"));
   });
 
+  it("asks whether mobile money is paid on Pesapal's page before the client pays", async () => {
+    serve({ "GET /client/mobile-money": json({ on_page: true }) });
+    await expect(createApiPaymentsClient().mobileMoneyOnPage!(INVESTMENT)).resolves.toBe(true);
+    serve({ "GET /client/mobile-money": json({ on_page: false }) });
+    await expect(createApiPaymentsClient().mobileMoneyOnPage!(INVESTMENT)).resolves.toBe(false);
+  });
+
   it("shows where to send a bank transfer, from the API", async () => {
     serve({
       [`GET /client/investments/${INVESTMENT}/bank-transfer-details`]: json({

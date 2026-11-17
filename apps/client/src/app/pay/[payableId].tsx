@@ -43,7 +43,8 @@ function outcomeUnknown(error: unknown): boolean {
  * Pay for your investment. The amount comes from the investment and cannot be
  * changed. The prompt goes to the number on the client's account, or to another
  * number they give: any number may pay (the owner's decision, 2026-11-15), and
- * the payment still counts for this investment.
+ * the payment still counts for this investment. When Pesapal collects mobile money,
+ * the client types the number on Pesapal's page instead, and the wording says so.
  */
 export default function Pay() {
   const router = useRouter();
@@ -69,6 +70,9 @@ export default function Pay() {
   const [cardKey] = useState(newIdempotencyKey);
   const [method, setMethod] = useState<Method>(asked === "card" ? "card" : "mobile_money");
   const [cardOffer, setCardOffer] = useState<CardOffer | null>(null);
+  // Mobile money is paid on Pesapal's page when Settings choose Pesapal: the network does not
+  // prompt the number by itself, so the screen says what comes next instead.
+  const [onPage, setOnPage] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -85,6 +89,10 @@ export default function Pay() {
         // Card cannot stay chosen when it cannot be used now.
         if (offer.refused !== null) setMethod("mobile_money");
       },
+      () => undefined,
+    );
+    client.mobileMoneyOnPage?.(payableId).then(
+      (answer) => live && setOnPage(answer),
       () => undefined,
     );
     return () => {
@@ -206,7 +214,7 @@ export default function Pay() {
           {error ? <Notice tone="danger">{error}</Notice> : null}
           {locked ? (
             <Notice tone="warning">
-              {`Your first request may already be with ${networkName[network]}, so the network and number are fixed. Pressing Pay again repeats that same request. It does not ask for the money twice.`}
+              {`Your first request may already be with ${onPage ? "Pesapal" : networkName[network]}, so the network and number are fixed. Pressing Pay again repeats that same request. It does not ask for the money twice.`}
             </Notice>
           ) : null}
           {cardShown && cardOffer.refused ? <CardRefusedNotice offer={cardOffer} bank={bank} what={what} /> : null}
@@ -215,7 +223,7 @@ export default function Pay() {
               <Eyebrow>Pay with</Eyebrow>
               <MethodOption
                 label="Mobile money"
-                hint="MTN or Airtel, prompted on your phone"
+                hint={onPage ? "MTN or Airtel, on Pesapal's secure page" : "MTN or Airtel, prompted on your phone"}
                 badge="MTN Airtel"
                 selected={paying === "mobile_money"}
                 disabled={locked}
@@ -301,7 +309,9 @@ export default function Pay() {
                   </Txt>
                 </View>
                 <Txt size={fontSizes.xs} weight="medium" color={colors.muted}>
-                  {`${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
+                  {onPage
+                    ? `Pesapal's secure page opens next. Choose ${networkName[network]} there, enter this number and approve the prompt with your mobile money PIN.`
+                    : `${networkName[network]} sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN.`}
                 </Txt>
               </>
             ) : locked ? (
@@ -324,7 +334,11 @@ export default function Pay() {
                   // Guess the network again from the typed number. The client can still change it.
                   if (nationalDigits(text).length >= 2) setNetwork(likelyNetwork(nationalDigits(text)));
                 }}
-                hint={`${networkName[network]} sends the prompt to this number, and whoever has the phone approves it with their mobile money PIN. The payment counts for your ${what}.`}
+                hint={
+                  onPage
+                    ? `Pesapal's secure page opens next. Enter this number there, and whoever has the phone approves the ${networkName[network]} prompt with their mobile money PIN. The payment counts for your ${what}.`
+                    : `${networkName[network]} sends the prompt to this number, and whoever has the phone approves it with their mobile money PIN. The payment counts for your ${what}.`
+                }
                 error={numberError}
                 testID="pay-other-number"
               />

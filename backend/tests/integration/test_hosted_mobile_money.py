@@ -5,23 +5,30 @@ This app has Pesapal and no ioTec, so it also shows the fallback: with no ioTec 
 mobile money payment goes to Pesapal whatever Settings say.
 """
 
+from dataclasses import replace
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
+from app.api.app import create_app
+from app.infrastructure.database import Database
 from app.modules.payments import cards
 from app.modules.payments.domain.deposits import DepositStatus as S
 from app.shared.actors import SYSTEM
 from tests.integration.test_card_deposits import (
+    HASHER,
     Setup,
     as_deposit,
     entry_lines,
     key,
+    pesapal,
     until,
 )
 from tests.integration.test_card_deposits import setup as card_setup  # noqa: F401 - a fixture
+from tests.support.database import TestDatabase
 from tests.support.investments import request as request_investment
-from tests.support.payments import drain
+from tests.support.payments import FakeCollections, drain
 from tests.support.settings import set_setting
 
 pytestmark = pytest.mark.integration
@@ -200,3 +207,49 @@ async def test_coming_back_from_the_page_asks_for_a_read(setup: Setup) -> None:
         assert back.json()["on_page"] is True
     settled = await until(setup, deposit, S.CONFIRMED, S.FAILED, S.UNCERTAIN)
     assert settled.status is S.CONFIRMED
+
+
+async def collection(setup: Setup) -> object:
+    async with setup.http() as http:
+        await setup.client(http)
+        answer = await http.get("/client/mobile-money")
+    assert answer.status_code == 200, answer.text
+    return answer.json()["on_page"]
+
+
+async def test_the_pay_screen_is_told_mobile_money_is_paid_on_the_page(setup: Setup) -> None:
+    # With no ioTec running, the page is used whatever Settings say.
+    assert await collection(setup) is True
+    await set_setting(
+        setup.database, "mobile_money_collector", {"provider": "pesapal"}, setup.clock
+    )
+    assert await collection(setup) is True
+
+
+async def test_the_pay_screen_follows_settings_when_both_collectors_run(
+    setup: Setup,
+    test_database: TestDatabase,
+    app_database: Database,
+) -> None:
+    app = create_app(
+        test_database.settings("finvest_app"),
+        app_database,
+        setup.clock,
+        HASHER,
+        collections=FakeCollections(),
+        card_collections=pesapal(setup.fake, setup.clock),
+    )
+    both = replace(setup, app=app, identity=app.state.identity)
+    # ioTec by default: the network prompts the number given in the app.
+    assert await collection(both) is False
+    await set_setting(
+        setup.database, "mobile_money_collector", {"provider": "pesapal"}, setup.clock
+    )
+    assert await collection(both) is True
+
+
+async def test_a_signed_out_visitor_is_not_told_how_mobile_money_is_collected(
+    setup: Setup,
+) -> None:
+    async with setup.http() as http:
+        assert (await http.get("/client/mobile-money")).status_code == 401

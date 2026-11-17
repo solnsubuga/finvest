@@ -433,6 +433,11 @@ export function createStubPaymentsClient(options: StubOptions = {}): PaymentsCli
       return readTransfer(stored);
     },
 
+    async mobileMoneyOnPage(payableId) {
+      await pause();
+      return payableId === DEMO_MOBILE_MONEY_ON_PAGE_ID;
+    },
+
     async getCardOffer(payableId) {
       await pause();
       const payable = payableFor(payableId);
