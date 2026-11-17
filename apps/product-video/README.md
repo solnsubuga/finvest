@@ -27,7 +27,7 @@ The story clock moves with libfaketime (`stack/clock.sh`). It only goes forward,
 
 Run this only on a disposable machine or container, never on a laptop with a PostgreSQL you care about. `stack/up.sh` needs root: it appends the local addresses to `/etc/hosts`, runs commands as `su postgres`, and drops and recreates the `finvest_video` database.
 
-Everything lives in `$WORK` (`/tmp/finvest-product-video` by default, see `stack/env.sh`). The stack needs PostgreSQL 16, libfaketime, poppler-utils, ffmpeg, Python 3 with Pillow, and the Playwright Chromium.
+Everything lives in `$WORK` (`/tmp/finvest-product-video` by default, see `stack/env.sh`). The stack needs PostgreSQL 16, libfaketime, poppler-utils, ffmpeg, Python 3 with Pillow, numpy and mido, the Playwright Chromium, and for the music FluidSynth with the FluidR3 General MIDI sound font (`fluidsynth` and `fluid-soundfont-gm`). The music is written for this video by `edit/music.py`; without FluidSynth the edit falls back to a plain sine-tone pad.
 
 ```sh
 setup/seed.sh              # a fresh stack a week before the story: Ruth and Joel, the specimen
