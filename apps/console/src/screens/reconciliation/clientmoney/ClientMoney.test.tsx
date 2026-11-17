@@ -47,6 +47,7 @@ describe("the client money check", () => {
   it("says plainly when nothing is closed yet", async () => {
     render(<ClientMoney api={createStubClientMoneyApi(0, "empty")} />);
     expect(await screen.findByText(/No day has been closed yet/)).toBeInTheDocument();
+    expect(screen.getByText(/every pot has its statement for that day and two people sign it off, in Day close below/)).toBeInTheDocument();
   });
 
   it("offers another try when the check cannot be loaded", async () => {

@@ -19,6 +19,7 @@ import {
 } from "./actions.ts";
 import { formatAmount, formatDay, formatTime } from "./labels.ts";
 import { INPUT, ReasonForm } from "./Parts.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 interface Loaded {
   found: ClientActions;
@@ -628,9 +629,8 @@ function StatementForm({
       <div className="grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
         <label htmlFor={`${id}-from`} className="flex flex-col gap-1.5 text-sm font-bold">
           From
-          <input
+          <DateInput plain
             id={`${id}-from`}
-            type="date"
             value={from}
             max={today()}
             aria-invalid={wrong}
@@ -640,7 +640,7 @@ function StatementForm({
         </label>
         <label htmlFor={`${id}-to`} className="flex flex-col gap-1.5 text-sm font-bold">
           To
-          <input id={`${id}-to`} type="date" value={to} max={today()} aria-invalid={wrong} onChange={(event) => setTo(event.target.value)} className={INPUT} />
+          <DateInput plain id={`${id}-to`} value={to} max={today()} aria-invalid={wrong} onChange={(event) => setTo(event.target.value)} className={INPUT} />
         </label>
       </div>
       {wrong ? <span className="text-xs font-bold text-danger">Choose a start date, and an end date after it that is today or earlier.</span> : null}

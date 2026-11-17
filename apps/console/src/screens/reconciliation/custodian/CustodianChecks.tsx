@@ -19,6 +19,7 @@ import {
   type CustodianChecksApi,
   type StatementRow,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 interface CustodianChecksProps {
   api: CustodianChecksApi;
@@ -326,7 +327,7 @@ function Upload({
       <div className="flex flex-wrap gap-3">
         <div className="flex min-w-0 flex-[1_1_180px] flex-col gap-1.5">
           <Label htmlFor={`${id}-date`}>Holdings at</Label>
-          <Input id={`${id}-date`} type="date" max={today} value={statementDate} onChange={(event) => setStatementDate(event.target.value)} />
+          <DateInput id={`${id}-date`} max={today} value={statementDate} onChange={(event) => setStatementDate(event.target.value)} />
         </div>
         <div className="flex min-w-0 flex-[2_1_260px] flex-col gap-1.5">
           <Label htmlFor={`${id}-file`}>Statement file</Label>
@@ -607,7 +608,7 @@ function CorrectForm({ row, busy, onCancel, onSave }: { row: StatementRow; busy:
           </div>
           <div className="flex min-w-0 flex-[1_1_180px] flex-col gap-1.5">
             <Label htmlFor={`${id}-matures`}>Maturity date</Label>
-            <Input id={`${id}-matures`} type="date" value={maturesOn} onChange={(event) => setMaturesOn(event.target.value)} />
+            <DateInput id={`${id}-matures`} value={maturesOn} onChange={(event) => setMaturesOn(event.target.value)} />
           </div>
         </div>
       )}

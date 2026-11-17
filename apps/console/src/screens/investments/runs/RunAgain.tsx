@@ -13,6 +13,7 @@ import {
   type RunRequest,
   type RunRequestsApi,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink aria-invalid:border-danger";
 const REASON_LIMIT = 500;
@@ -261,8 +262,7 @@ function AskForm({ kind, today, busy, error, refused, onCancel, onSubmit }: AskF
         <label className="flex max-w-[260px] flex-col gap-1.5 text-sm font-bold">
           Day to run again
           <span className="text-xs font-medium text-muted">Today or any of the last 31 days.</span>
-          <input
-            type="date"
+          <DateInput plain
             value={runDate}
             min={daysBefore(today, 31)}
             max={today}

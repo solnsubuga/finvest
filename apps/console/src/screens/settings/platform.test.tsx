@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ApiError, type Http } from "@/api/http.ts";
 import { createStubDirectory } from "@/directory/stub.ts";
-import { basisPointsFrom, inNetwork, percentText, remindersText, SettingsError, shillings } from "./platform.ts";
+import { basisPointsFrom, inNetwork, percentText, remindersText, SettingsError, shillings, whereYouAre } from "./platform.ts";
 import { createHttpLimitsApi, createHttpPlatformSettingsApi, toSettingsError, valueIn, valueOut } from "./platformHttp.ts";
 import { PlatformSections } from "./PlatformSections.tsx";
 import { createStubLimitsApi, createStubPlatformSettingsApi, type PlatformSample } from "./platformStub.ts";
@@ -264,5 +264,25 @@ describe("card payment values", () => {
     const channels = { mtn_pay_in: true, airtel_pay_in: true, bank_pay_in: true, card_pay_in: false, mtn_payout: true, airtel_payout: true, bank_payout: true };
     expect(valueIn("payment_channels", channels).cardPayIn).toBe(false);
     expect(valueOut("payment_channels", valueIn("payment_channels", channels))).toEqual(channels);
+  });
+});
+
+describe("where you are", () => {
+  it("names a public address", () => {
+    expect(whereYouAre("196.43.130.27")).toBe("You are on 196.43.130.27. ");
+  });
+
+  it("says a loopback or private address is a test setup, not an office network", () => {
+    for (const address of ["127.0.0.1", "127.0.1.1", "::1"]) {
+      expect(whereYouAre(address)).toMatch(/^Finvest sees you on this computer's own address \(.+\), so this is a test setup/);
+    }
+    for (const address of ["10.1.2.3", "172.20.0.5", "192.168.1.10", "fd00::1"]) {
+      expect(whereYouAre(address)).toMatch(/^Finvest sees you on a private address \(.+\), so this is a test setup/);
+    }
+    expect(whereYouAre("172.32.0.1")).toBe("You are on 172.32.0.1. ");
+  });
+
+  it("says nothing when the address is not known", () => {
+    expect(whereYouAre(null)).toBe("");
   });
 });

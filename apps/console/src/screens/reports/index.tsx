@@ -39,6 +39,7 @@ import { notConnectedReportsApi, type ReportFile, type ReportsApi } from "./cata
 import { createHttpReportsApi } from "./catalogue-http.ts";
 import { createStubReportsApi } from "./catalogue-stub.ts";
 import { ReportsSection, type ReportLink } from "./Catalogue.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const SUMMARY = "Download any report for any period, or have it emailed on a schedule. Below them, the record of who did what and why.";
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink";
@@ -325,7 +326,11 @@ function Text({ label, value, placeholder, onChange, type = "text" }: { label: s
   return (
     <label className="flex min-w-0 flex-col gap-1.5 text-sm font-bold">
       {label}
-      <input type={type} value={value ?? ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className={INPUT} />
+      {type === "date" ? (
+        <DateInput plain value={value ?? ""} onChange={(event) => onChange(event.target.value)} className={INPUT} />
+      ) : (
+        <input type={type} value={value ?? ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className={INPUT} />
+      )}
     </label>
   );
 }

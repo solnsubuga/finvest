@@ -22,7 +22,8 @@ import {
  * `mine`: the same two changes, proposed by the signed-in person.
  * `empty`: every default in use and nothing waiting.
  */
-export type PlatformSample = "sample" | "mine" | "empty";
+/** "local" is the sample as a test setup on this computer sees it: you are on 127.0.0.1. */
+export type PlatformSample = "sample" | "mine" | "empty" | "local";
 
 const SECTIONS: Record<SettingKey, Section> = {
   payment_channels: "channels",
@@ -163,7 +164,7 @@ export function createStubPlatformSettingsApi(reader: Reader, now: () => number 
             return [key, setting];
           }),
         ) as SettingsMap;
-        return { settings, yourAddress: "196.43.130.27", dateFormats: ["YYYY-MM-DD", "DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YYYY", "MM/DD/YYYY", "DD MMM YYYY", "DD-MMM-YYYY"] };
+        return { settings, yourAddress: seed === "local" ? "127.0.0.1" : "196.43.130.27", dateFormats: ["YYYY-MM-DD", "DD/MM/YYYY", "DD-MM-YYYY", "DD.MM.YYYY", "MM/DD/YYYY", "DD MMM YYYY", "DD-MMM-YYYY"] };
       }),
     propose: (key, value, reason) =>
       settle(() => {
