@@ -466,7 +466,11 @@ def client_view(holding: Holding, today: date) -> ClientHolding:
     # A holding is paid every coupon dated after the day it started. Until it starts, the
     # coupons after the quote are what it would be paid.
     after = holding.start_date or holding.quoted_on
-    left = tuple(d for d in remaining_coupons(issue, max(after, today)) if d > after)
+    # A holding sold, repaid or cancelled is paid nothing more.
+    over = holding.status in (HoldingStatus.SOLD, HoldingStatus.MATURED, HoldingStatus.CANCELLED)
+    left = (
+        () if over else tuple(d for d in remaining_coupons(issue, max(after, today)) if d > after)
+    )
     still_to_come = Money(
         net.minor * len(left) + (holding.face.minor if left else 0), issue.currency
     )

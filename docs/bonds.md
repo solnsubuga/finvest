@@ -194,7 +194,7 @@ The database (migration 0495) lets only the client ask, for a whole active holdi
 | `GET /staff/bond-holdings?status=` | `investments.view` | Every client's holdings with what each paid. |
 | `GET /staff/bond-coupons?status=` | `investments.view` | Coupons paid, with the tax, and the held ones with why they wait. |
 | `GET /staff/bond-repayments?status=` | `investments.view` | Repayments at maturity, with what each holding cost and the tax on its last coupon, and the held ones with why they wait. |
-| `GET /staff/bond-sales?status=` | `dealing_desk.view` | Clients' asks to sell, newest first, with the price, who priced and decided it, and what it paid with the tax. |
+| `GET /staff/bond-sales?status=` | `dealing_desk.view` | Clients' asks to sell, newest first, with the price, who priced and decided it, and what it pays with the tax: from the moment it is priced, at the recorded price and day, so the person approving sees what the client gets. |
 | `POST /staff/bond-sales/{id}/price`, `/send-back`, `/withdraw`; `POST /staff/bond-sales/{id}/approve` | `dealing_orders.change` | Recording a sale and deciding it, with the second person enforced in the database. Approving asks the person to confirm it is them. 422 `sold_on` / `sold_on_in_future`, `sold_on_before_start`, `sold_on_at_maturity` or `coupon_since_sale`; 422 `price` / `price_out_of_range`. |
 | `GET /staff/bond-changes?status=` | `products.view` | New issues, prices, pauses and openings, newest first. |
 | `POST /staff/bond-changes/new-issue`, `/price`, `/status`, `POST /staff/bond-changes/{id}/approve`, `/send-back`, `/withdraw` | `products.change` | Proposing and deciding, with the second person enforced in the database. Approving asks the person to confirm it is them. |
