@@ -14,6 +14,7 @@ import {
   type ReissueProblem,
   type ReissuesApi,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink aria-invalid:border-danger";
 const REASON_LIMIT = 500;
@@ -386,12 +387,12 @@ function AskForm({ api, directory, today, busy, error, refused, onCancel, onSubm
       <div className="flex flex-wrap gap-3">
         <label className="flex min-w-[180px] flex-1 flex-col gap-1.5 text-sm font-bold sm:max-w-[240px]">
           Notes issued from
-          <input type="date" value={issuedFrom} max={today} aria-invalid={codes("issued_from").length > 0} onChange={(event) => setIssuedFrom(event.target.value)} className={INPUT} />
+          <DateInput plain value={issuedFrom} max={today} aria-invalid={codes("issued_from").length > 0} onChange={(event) => setIssuedFrom(event.target.value)} className={INPUT} />
           {errors("issued_from")}
         </label>
         <label className="flex min-w-[180px] flex-1 flex-col gap-1.5 text-sm font-bold sm:max-w-[240px]">
           to
-          <input type="date" value={issuedTo} max={today} aria-invalid={codes("issued_to").length > 0} onChange={(event) => setIssuedTo(event.target.value)} className={INPUT} />
+          <DateInput plain value={issuedTo} max={today} aria-invalid={codes("issued_to").length > 0} onChange={(event) => setIssuedTo(event.target.value)} className={INPUT} />
           {errors("issued_to")}
         </label>
       </div>

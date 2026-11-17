@@ -12,6 +12,7 @@ import {
 } from "./bondSales.ts";
 import { formatDay, formatExact, formatWhen } from "./format.ts";
 import { FIELD, Field, FormButtons } from "./Orders.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 type Load = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; sales: BondSale[] };
 
@@ -207,21 +208,34 @@ function Terms({ sale }: { sale: BondSale }) {
   );
 }
 
-function Paid({ sale }: { sale: BondSale }) {
-  const row = (label: string, value: string) => (
+function row(label: string, value: string) {
+  return (
     <>
       <dt className="text-muted">{label}</dt>
       <dd className="m-0 font-semibold tabular-nums">{value}</dd>
     </>
   );
+}
+
+/** What the client gets at this price, as the backend worked it out. Nothing shows until it has. */
+function Figures({ sale, paid }: { sale: BondSale; paid: boolean }) {
+  if (!sale.amount) return null;
+  return (
+    <>
+      {sale.clean ? row("Price paid", formatExact(sale.clean)) : null}
+      {sale.accrued ? row("Accrued interest", formatExact(sale.accrued)) : null}
+      {sale.tax ? row("Tax withheld", formatExact(sale.tax)) : null}
+      {row(paid ? "Client paid" : "Client will be paid", formatExact(sale.amount))}
+    </>
+  );
+}
+
+function Paid({ sale }: { sale: BondSale }) {
   return (
     <div className="mt-2 flex flex-col gap-2">
       <Terms sale={sale} />
       <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 text-sm">
-        {sale.clean ? row("Price paid", formatExact(sale.clean)) : null}
-        {sale.accrued ? row("Accrued interest", formatExact(sale.accrued)) : null}
-        {sale.tax ? row("Tax withheld", formatExact(sale.tax)) : null}
-        {sale.amount ? row("Client paid", formatExact(sale.amount)) : null}
+        <Figures sale={sale} paid />
         {row(
           "Payout",
           sale.payoutStatus === "held" ? "Waiting for the client to name where it goes" : "Sent to the client's payout account",
@@ -278,6 +292,11 @@ function SaleCard(props: SaleCardProps) {
         ) : null}
       </div>
       <Terms sale={sale} />
+      {(sale.status === "priced" || sale.status === "approved") && sale.amount ? (
+        <dl aria-label="What the client gets" className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 border-t border-divider pt-3 text-sm">
+          <Figures sale={sale} paid={false} />
+        </dl>
+      ) : null}
       {sale.status === "requested" && sale.note ? (
         <p className="m-0 rounded-md bg-surface-sunken px-3 py-2 text-sm">
           <span className="font-bold">Sent back: </span>
@@ -335,7 +354,7 @@ function PriceForm(props: {
         </Field>
         <Field id="sale-day" label="Day it settled" error={problems.soldOn}>
           {(control) => (
-            <Input {...control} className={FIELD} type="date" max={props.today} value={soldOn} onChange={(e) => setSoldOn(e.target.value)} />
+            <DateInput {...control} className={FIELD} max={props.today} value={soldOn} onChange={(e) => setSoldOn(e.target.value)} />
           )}
         </Field>
       </div>

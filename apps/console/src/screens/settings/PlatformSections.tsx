@@ -32,7 +32,9 @@ import {
   type SettingKey,
   type StatementLayout,
   type Values,
+  whereYouAre,
 } from "./platform.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3.5 py-3 text-md font-medium text-ink aria-invalid:border-danger";
 const SMALL_INPUT = "min-w-0 rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink aria-invalid:border-danger";
@@ -258,7 +260,7 @@ export function PlatformSections({ settings, limits, directory }: PlatformSectio
               {item("staff_idle_minutes", data, IDLE_VIEW)}
               {item("office_networks", data, networksView(data.yourAddress))}
               <p className="m-0 border-t border-divider pt-3 text-xs leading-normal text-muted">
-                {data.yourAddress ? `You are on ${data.yourAddress}. ` : ""}A list of networks that leaves out where you are, or where
+                {whereYouAre(data.yourAddress)}A list of networks that leaves out where you are, or where
                 the approver is, is refused so nobody locks themselves out.
               </p>
             </>
@@ -615,7 +617,7 @@ const LIMITS_VIEW: ItemView<Limits> = {
   editor: ({ draft, setDraft }) => (
     <>
       <Field label="Starts on" hint="A later day than today, Kampala time.">
-        <input type="date" min={tomorrow()} value={draft.effectiveFrom} onChange={(event) => setDraft({ ...draft, effectiveFrom: event.target.value })} className={INPUT} />
+        <DateInput plain min={tomorrow()} value={draft.effectiveFrom} onChange={(event) => setDraft({ ...draft, effectiveFrom: event.target.value })} className={INPUT} />
       </Field>
       {LIMIT_ROWS.map(({ key, label }) => (
         <Field key={key} label={`${label} (UGX)`} hint={key === "mobileMoneyPerPayout" ? "At most 5,000,000." : "Leave empty for no limit."}>
@@ -899,7 +901,7 @@ function HolidaysEditor({ draft, setDraft }: { draft: Holiday[]; setDraft: (valu
       </ul>
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Day">
-          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className={SMALL_INPUT} />
+          <DateInput plain value={date} onChange={(event) => setDate(event.target.value)} className={SMALL_INPUT} />
         </Field>
         <div className="min-w-[160px] flex-1">
           <Field label="Name">

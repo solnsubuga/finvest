@@ -6,33 +6,52 @@ import Icon from "./Icon.astro";
 interface Props {
   /** Where an open category's link goes. */
   openHref: string;
+  /** Where the Treasury bonds category links once a bond can be bought. */
+  bondsHref: string;
 }
 
-const { openHref } = Astro.props;
+const { openHref, bondsHref } = Astro.props;
 const open = (kind: string | null) =>
   kind !== null && fallback.products.some((p) => p.kind === kind && p.status === "live");
 ---
 
 <ul class="range">
   {
-    categories.map((category) => (
-      <li class="card range__item" id={category.id}>
-        <div class="range__top">
-          <span class="tile"><Icon name={category.icon} /></span>
-          {open(category.kind) ? (
-            <span class="tag tag--lime">Open now</span>
-          ) : (
-            <span class="tag tag--soon">Coming soon</span>
+    categories.map((category) => {
+      const isOpen = open(category.kind);
+      // Bonds open from the API when the page loads (src/scripts/bonds.ts), not at build time.
+      const live = category.live === true;
+      return (
+        <li class="card range__item" id={category.id}>
+          <div class="range__top">
+            <span class="tile">
+              <Icon name={category.icon} />
+            </span>
+            {(isOpen || live) && (
+              <span class="tag tag--lime" data-category-open={live ? category.id : undefined} hidden={!isOpen}>
+                Open now
+              </span>
+            )}
+            {!isOpen && (
+              <span class="tag tag--soon" data-category-soon={live ? category.id : undefined}>
+                Coming soon
+              </span>
+            )}
+          </div>
+          <h3 class="h3">{category.name}</h3>
+          <p>{category.text}</p>
+          {isOpen && (
+            <a class="range__link" href={openHref}>
+              See today's rates <Icon name="arrow" size={16} />
+            </a>
           )}
-        </div>
-        <h3 class="h3">{category.name}</h3>
-        <p>{category.text}</p>
-        {open(category.kind) && (
-          <a class="range__link" href={openHref}>
-            See today's rates <Icon name="arrow" size={16} />
-          </a>
-        )}
-      </li>
-    ))
+          {live && !isOpen && (
+            <a class="range__link" href={bondsHref} data-category-open={category.id} hidden>
+              See today's bonds <Icon name="arrow" size={16} />
+            </a>
+          )}
+        </li>
+      );
+    })
   }
 </ul>

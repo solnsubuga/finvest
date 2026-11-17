@@ -4,6 +4,7 @@ import Categories from "../components/Categories.astro";
 import Cta from "../components/Cta.astro";
 import Faq from "../components/Faq.astro";
 import Icon from "../components/Icon.astro";
+import LiveBonds from "../components/LiveBonds.astro";
 import LiveRates from "../components/LiveRates.astro";
 import PhoneMock from "../components/PhoneMock.astro";
 import ProductCard from "../components/ProductCard.astro";
@@ -192,7 +193,7 @@ const questions = [
           Latest government auctions <Icon name="arrow" size={18} />
         </a>
       </div>
-      <Categories openHref="/products#rates" />
+      <Categories openHref="/products#rates" bondsHref="/products#bonds" />
     </div>
   </section>
 
@@ -313,4 +314,5 @@ const questions = [
 
   <Cta />
   <LiveRates />
+  <LiveBonds />
 </Base>

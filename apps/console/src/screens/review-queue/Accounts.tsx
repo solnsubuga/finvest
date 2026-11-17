@@ -26,6 +26,7 @@ import {
 } from "./labels.ts";
 import { useNames } from "./names.ts";
 import { Empty, ErrorNote, Failure, FIELD, FieldNote, Loading, Notice, Panel, Pill, QueueButton, Row, Section, SELECT, type Load, type Tone } from "./Parts.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const MAX_REASON = 500;
 const MAX_NAME = 120;
@@ -511,9 +512,8 @@ function DecisionForm({
           {needsDate ? (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor={`${ids}-date`}>Date on the statement</Label>
-              <Input
+              <DateInput
                 id={`${ids}-date`}
-                type="date"
                 value={statementDate}
                 onChange={(event) => setStatementDate(event.target.value)}
                 aria-invalid={errors.statementDate ? true : undefined}

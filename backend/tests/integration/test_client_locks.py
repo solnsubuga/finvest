@@ -17,6 +17,7 @@ from app.shared.errors import ApplicationError
 from tests.support.database import TestDatabase
 from tests.support.http import Api, running_api
 from tests.support.kyc import verify
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -65,7 +66,9 @@ async def test_staff_find_a_client_by_id_or_mobile_number(api: Api) -> None:
     for query in (client.id, phone, "0" + phone[4:], phone[1:]):
         found = (await api.http.get("/staff/clients/search", params={"q": query})).json()
         assert [item["id"] for item in found["clients"]] == [client.id], query
-    nobody = (await api.http.get("/staff/clients/search", params={"q": "+256700000001"})).json()
+    # A number no test has been given, so no client can hold it.
+    absent = unique_phone()
+    nobody = (await api.http.get("/staff/clients/search", params={"q": absent})).json()
     assert nobody["clients"] == []
 
 

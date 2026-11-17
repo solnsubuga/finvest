@@ -22,6 +22,7 @@ import {
   type Schedules,
   type ScheduleStatus,
 } from "./catalogue.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink";
 const LABEL = "flex min-w-0 flex-col gap-1.5 text-sm font-bold";
@@ -328,7 +329,7 @@ function PeriodFields({ report, today, period, onChange }: { report: Report; tod
       return (
         <label className={LABEL}>
           Day
-          <input type="date" max={today} value={period.from} className={INPUT} onChange={(event) => onChange({ from: event.target.value, to: event.target.value })} />
+          <DateInput plain max={today} value={period.from} className={INPUT} onChange={(event) => onChange({ from: event.target.value, to: event.target.value })} />
         </label>
       );
     case "month":
@@ -355,11 +356,11 @@ function PeriodFields({ report, today, period, onChange }: { report: Report; tod
           <div className="grid grid-cols-2 gap-3">
             <label className={LABEL}>
               From
-              <input type="date" value={period.from} max={report.period === "days" ? today : undefined} className={INPUT} onChange={(event) => onChange({ from: event.target.value, to: period.to })} />
+              <DateInput plain value={period.from} max={report.period === "days" ? today : undefined} className={INPUT} onChange={(event) => onChange({ from: event.target.value, to: period.to })} />
             </label>
             <label className={LABEL}>
               To
-              <input type="date" value={period.to} className={INPUT} onChange={(event) => onChange({ from: period.from, to: event.target.value })} />
+              <DateInput plain value={period.to} className={INPUT} onChange={(event) => onChange({ from: period.from, to: event.target.value })} />
             </label>
           </div>
           <p className="m-0 text-xs text-muted">{report.period === "days" ? "Up to 31 days, in Kampala time." : "Up to 92 days. Days ahead are what is due so far."}</p>

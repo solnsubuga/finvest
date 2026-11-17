@@ -32,6 +32,7 @@ import { MonthCloseSection } from "./MonthClose.tsx";
 import { notConnectedMonthCloseApi, type MonthCloseApi } from "./monthClose.ts";
 import { createHttpMonthCloseApi } from "./monthCloseHttp.ts";
 import { createStubMonthCloseApi } from "./monthCloseStub.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const SUMMARY = "Finvest's income and costs, the books by account, the journal for the accounting system, and tax held for URA.";
 const INPUT = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 text-md font-medium text-ink";
@@ -608,7 +609,7 @@ function PaymentForm({ month, today, busy, error, onCancel, onSubmit }: PaymentF
         <input className={INPUT} value={bank} maxLength={100} onChange={(e) => setBank(e.target.value)} />
       </Field>
       <Field label="Day it was paid">
-        <input className={INPUT} type="date" value={paidOn} min={`${month.month}-01`} max={today} onChange={(e) => setPaidOn(e.target.value)} />
+        <DateInput plain className={INPUT} value={paidOn} min={`${month.month}-01`} max={today} onChange={(e) => setPaidOn(e.target.value)} />
       </Field>
       <Field label="Note for the second person">
         <input className={INPUT} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />

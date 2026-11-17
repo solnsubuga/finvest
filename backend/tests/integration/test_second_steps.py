@@ -27,6 +27,7 @@ from app.shared.actors import Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
 from tests.support.passkeys import Device
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -565,7 +566,7 @@ async def test_the_app_option_is_off_without_its_key(
 
 
 async def a_signed_in_client(api: Api) -> tuple[str, str, str]:
-    phone = f"+256{next(_numbers)}"
+    phone = unique_phone()
     client_id = await api.identity.create_client(phone=phone, email=None, password=PASSWORD)
     issued = await api.identity.issue_session(
         Actor("client", client_id), second_step="signup", transport="token"
@@ -689,7 +690,7 @@ async def test_passkeys_are_off_without_a_site(
     settings = settings_for(test_database, client_passkey_site=None)
     app = create_app(settings, app_database, FakeClock(), HASHER)
     client_id = await app.state.identity.create_client(
-        phone=f"+256{next(_numbers)}", email=None, password=PASSWORD
+        phone=unique_phone(), email=None, password=PASSWORD
     )
     issued = await app.state.identity.issue_session(
         Actor("client", client_id), second_step="signup", transport="token"

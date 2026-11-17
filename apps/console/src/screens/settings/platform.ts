@@ -316,3 +316,20 @@ export function inNetwork(address: string, network: string): boolean {
   const size = 2 ** (32 - prefix);
   return Math.floor(a / size) === Math.floor(b / size);
 }
+
+/**
+ * How Settings words the address Finvest sees you on. Behind the live site this is the public
+ * address your office reaches the internet from; a loopback or private address means the console
+ * is running on a test setup on this computer or a private network, so it says that instead of
+ * naming an address nobody would put on the list.
+ */
+export function whereYouAre(address: string | null): string {
+  if (!address) return "";
+  if (address === "::1" || inNetwork(address, "127.0.0.0/8")) {
+    return `Finvest sees you on this computer's own address (${address}), so this is a test setup, not the live console. `;
+  }
+  if (["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10"].some((network) => inNetwork(address, network)) || /^f[cd]/i.test(address)) {
+    return `Finvest sees you on a private address (${address}), so this is a test setup, not the live console. `;
+  }
+  return `You are on ${address}. `;
+}

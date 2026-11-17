@@ -21,6 +21,7 @@ from app.modules.identity.service import IdentityService
 from app.shared.actors import SYSTEM, Actor
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -65,7 +66,7 @@ async def api(
 
 
 def a_phone() -> str:
-    return f"+256{next(_numbers)}"
+    return unique_phone()
 
 
 def code(response: httpx.Response) -> str:

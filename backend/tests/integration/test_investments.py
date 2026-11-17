@@ -2,6 +2,7 @@
 fences and the races."""
 
 import asyncio
+import secrets
 from datetime import date, timedelta
 
 import pytest
@@ -458,7 +459,7 @@ async def run_start_job(
     clock: FakeClock = NOW,
 ) -> tuple[str, str | None]:
     """Queue the consumer job as the outbox would, run it, and return how it ended."""
-    queue = "inv" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"inv_{secrets.token_hex(8)}"
     idempotency_key = f"payments.deposit_confirmed:{push_id()}"
     async with worker_database.actor_transaction(SYSTEM) as session:
         job_id = await enqueue(

@@ -1,5 +1,6 @@
 """Staff find clients by name or email, and page through every client, newest first."""
 
+import secrets
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -8,7 +9,6 @@ import pytest
 from app.infrastructure.database import Database
 from app.modules.identity.service import create_unclaimed_client
 from app.shared.actors import Actor
-from app.shared.push_ids import push_id
 from app.shared.references import short_reference
 from tests.integration.test_documents import ask as ask_for_statement
 from tests.support.database import TestDatabase
@@ -63,7 +63,7 @@ async def test_staff_find_a_client_by_name_in_any_order_and_case(
 
 
 async def test_staff_find_a_client_by_part_of_their_email(api: Api) -> None:
-    tag = push_id().lower().replace("-", "x").replace("_", "y")[-10:]
+    tag = secrets.token_hex(5)
     client_id = await api.identity.create_client(
         phone=unique_phone(),
         email=f"sarah.{tag}@example.com",

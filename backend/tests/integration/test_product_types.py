@@ -119,6 +119,12 @@ async def test_the_three_types_the_system_started_with_are_built_in(
         "FIXED-INCOME": (ReturnModel.FIXED_INCOME, True),
         "TREASURY-BOND": (ReturnModel.TREASURY_BOND, True),
     }
+    # Bank of Uganda's withholding: 20% on bills and bonds. Fixed income keeps 15% (0530).
+    assert {code: t.terms.default_tax_bps for code, t in found.items() if t.built_in} == {
+        "TREASURY-BILL": 2000,
+        "FIXED-INCOME": 1500,
+        "TREASURY-BOND": 2000,
+    }
     # The seeded products have their kind's type.
     assert await type_of_product(app_database, "TREA-91") == "TREASURY-BILL"
 

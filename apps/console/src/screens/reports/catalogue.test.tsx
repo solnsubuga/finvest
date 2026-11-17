@@ -48,7 +48,7 @@ describe("reports", () => {
     const { save, user } = renderReports();
     const position = await card("Daily position");
     await user.click(within(position).getByRole("button", { name: "Download" }));
-    expect(within(position).getByLabelText("Day")).toHaveValue("2026-11-12");
+    expect(within(position).getByLabelText("Day")).toHaveValue("12/11/2026");
     await user.selectOptions(within(position).getByLabelText("Currency"), "USD");
     await user.click(within(position).getByRole("button", { name: "Download CSV" }));
     expect(save).toHaveBeenCalledTimes(1);
@@ -85,8 +85,8 @@ describe("reports", () => {
     renderReports({ link: { report: "deposits_and_withdrawals", from: "2026-11-02", to: "2026-11-08", currency: "USD" } });
     const deposits = await card("Deposits and withdrawals");
     expect(within(deposits).getByRole("button", { name: "Download" })).toHaveAttribute("aria-expanded", "true");
-    expect(within(deposits).getByLabelText("From")).toHaveValue("2026-11-02");
-    expect(within(deposits).getByLabelText("To")).toHaveValue("2026-11-08");
+    expect(within(deposits).getByLabelText("From")).toHaveValue("02/11/2026");
+    expect(within(deposits).getByLabelText("To")).toHaveValue("08/11/2026");
     expect(within(deposits).getByLabelText("Currency")).toHaveValue("USD");
   });
 

@@ -10,15 +10,34 @@ import { createStubCatalogueApi } from "../stub.ts";
 import type { ProductTypesApi } from "./api.ts";
 import { toProductTypeChange, toProductTypesError } from "./http.ts";
 import { createStubProductTypesApi } from "./stub.ts";
+import { createStubDirectory } from "@/directory/stub.ts";
 
 function renderTypes(
   typesApi: ProductTypesApi = createStubProductTypesApi({ me: "me" }),
-  { at = "/products", canChange = true, api = createStubCatalogueApi({ me: "me", today: "2026-11-15" }) }: { at?: string; canChange?: boolean; api?: CatalogueApi } = {},
+  {
+    at = "/products",
+    canChange = true,
+    api = createStubCatalogueApi({ me: "me", today: "2026-11-15" }),
+    named = false,
+  }: { at?: string; canChange?: boolean; api?: CatalogueApi; named?: boolean } = {},
 ) {
+  const directory = named ? createStubDirectory({ id: "me", name: "Esther Nabirye" }) : undefined;
   render(
     <MemoryRouter initialEntries={[at]}>
       <Routes>
-        <Route path="/products" element={<ProductsScreen api={api} bondsApi={createStubBondsApi({ me: "me" })} typesApi={typesApi} me="me" canChange={canChange} />} />
+        <Route
+          path="/products"
+          element={
+            <ProductsScreen
+              api={api}
+              bondsApi={createStubBondsApi({ me: "me" })}
+              typesApi={typesApi}
+              me="me"
+              canChange={canChange}
+              {...(directory ? { directory } : {})}
+            />
+          }
+        />
       </Routes>
     </MemoryRouter>,
   );
@@ -53,7 +72,7 @@ describe("product types", () => {
   it("lists each type with how it earns, its usual tax, its products and status", async () => {
     renderTypes();
     await screen.findByRole("table", { name: "Product types" });
-    expect(row("Treasury bill")).toEqual(["Term and rate, paid at maturity", "15%", "3", "In use", "Change Treasury bill"]);
+    expect(row("Treasury bill")).toEqual(["Term and rate, paid at maturity", "20%", "3", "In use", "Change Treasury bill"]);
     expect(row("Treasury bond")).toEqual(["Bank of Uganda bond with coupons", "20%", "3", "In use", "Change Treasury bond"]);
     expect(row("Holiday bill")).toEqual(["Term and rate, paid at maturity", "15%", "1", "Retired", "Change Holiday bill"]);
     expect(screen.getByRole("link", { name: "New product type" })).toHaveAttribute("href", "/products?new-type");
@@ -86,6 +105,30 @@ describe("product types", () => {
     await user.click(screen.getByRole("button", { name: "Send for approval" }));
     await screen.findByRole("region", { name: "Goal Saver" });
     expect(drafts[0]).toMatchObject({ typeCode: "SAVINGS-NOTE", kind: "fixed_income", termDays: null });
+  });
+
+  it("starts New product on Treasury bill, whatever order the types come in", async () => {
+    const stub = createStubProductTypesApi({ me: "me" });
+    // The API lists built-in types by name, so Fixed income comes first.
+    const byName: ProductTypesApi = {
+      ...stub,
+      listTypes: async () => {
+        const book = await stub.listTypes();
+        return { ...book, types: [...book.types].sort((a, b) => a.name.localeCompare(b.name)) };
+      },
+    };
+    renderTypes(byName, { at: "/products?new" });
+    expect(await screen.findByLabelText("Type")).toHaveValue("TREASURY-BILL");
+    expect(screen.getByLabelText("Tax on interest, %")).toHaveValue("20");
+  });
+
+  it("names the colleague who proposed each change", async () => {
+    renderTypes(undefined, { named: true });
+    const type = await screen.findByRole("region", { name: "Company note" });
+    expect(await within(type).findByText(/^By Ruth Namata, /)).toBeInTheDocument();
+    const bond = await screen.findByRole("region", { name: /^New price/ });
+    expect(await within(bond).findByText(/^By Ruth Namata, /)).toBeInTheDocument();
+    expect(screen.queryByText(/By a colleague/)).toBeNull();
   });
 
   it("opens an older link on the first type built on that model", async () => {

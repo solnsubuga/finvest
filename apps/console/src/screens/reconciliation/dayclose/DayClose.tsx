@@ -21,6 +21,7 @@ import {
   type Position,
   type StatementUpload,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 type Load<T> = { state: "loading" } | { state: "failed"; message: string } | { state: "ready"; value: T };
 
@@ -216,9 +217,8 @@ function DayPicker({ value, max, onChange }: { value: string; max: string; onCha
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={id}>Business day</Label>
-      <Input
+      <DateInput
         id={id}
-        type="date"
         value={value}
         max={max}
         onChange={(event) => {

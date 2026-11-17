@@ -6,6 +6,9 @@ import { Label } from "@/components/ui/label.tsx";
 import { cn } from "@/lib.ts";
 import { formatBps, formatDay, formatExact, formatStamp, parsePercent } from "../format.ts";
 import { Field } from "../ProductForm.tsx";
+import { proposedBy } from "../proposer.ts";
+import { emptyDirectory, type Directory } from "@/directory/api.ts";
+import { useNames } from "@/screens/review-queue/names.ts";
 import {
   BondsError,
   bondsErrorMessage,
@@ -19,6 +22,7 @@ import {
   type BondStatus,
   type NewBondDraft,
 } from "./api.ts";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const STATUS_LABELS: Record<BondStatus, string> = { draft: "Draft", live: "Live", paused: "Paused" };
 const STATUS_STYLES: Record<BondStatus, string> = {
@@ -44,16 +48,19 @@ type Load = { state: "loading" } | { state: "failed"; message: string } | { stat
 interface BondsSectionProps {
   api: BondsApi;
   me: string;
+  /** Names the colleague who proposed each change. */
+  directory?: Directory;
   canChange: boolean;
 }
 
 /** Bond issues on the Products screen: each one's ISIN, coupon, tax, dates and price. */
-export function BondsSection({ api, me, canChange }: BondsSectionProps) {
+export function BondsSection({ api, me, directory = emptyDirectory, canChange }: BondsSectionProps) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [failed, setFailed] = useState<{ on: string; message: string } | null>(null);
   const [round, setRound] = useState(0);
+  const { staff } = useNames(directory, [], load.state === "ready" ? load.book.waiting.map((change) => change.proposedBy) : []);
 
   const fetchBook = useCallback(async (): Promise<Load> => {
     try {
@@ -144,6 +151,7 @@ export function BondsSection({ api, me, canChange }: BondsSectionProps) {
                 change={change}
                 current={bonds.find((b) => b.code === change.code) ?? null}
                 mine={change.proposedBy === me}
+                proposerName={staff[change.proposedBy]}
                 canDecide={canChange}
                 busy={busy === change.id}
                 error={failed?.on === change.id ? failed.message : null}
@@ -326,6 +334,7 @@ interface BondChangeCardProps {
   change: BondChange;
   current: Bond | null;
   mine: boolean;
+  proposerName?: string | null | undefined;
   canDecide: boolean;
   busy: boolean;
   error: string | null;
@@ -334,7 +343,7 @@ interface BondChangeCardProps {
   onWithdraw(): void;
 }
 
-function BondChangeCard({ change, current, mine, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: BondChangeCardProps) {
+function BondChangeCard({ change, current, mine, proposerName, canDecide, busy, error, onApprove, onSendBack, onWithdraw }: BondChangeCardProps) {
   const [sendingBack, setSendingBack] = useState(false);
   const [note, setNote] = useState("");
   const noteId = useId();
@@ -371,7 +380,7 @@ function BondChangeCard({ change, current, mine, canDecide, busy, error, onAppro
         {rows.map(([name, value]) => (
           <Row key={name} name={name} value={value} />
         ))}
-        <Row name="Proposed" value={`${mine ? "By you" : "By a colleague"}, ${formatStamp(change.proposedAt)}`} />
+        <Row name="Proposed" value={`${proposedBy(mine, proposerName)}, ${formatStamp(change.proposedAt)}`} />
       </dl>
       <p className="m-0 rounded-lg bg-surface-sunken p-3 text-sm leading-[1.45]">{change.reason}</p>
       {error ? (
@@ -499,10 +508,10 @@ export function NewBondForm({ busy, error, onSubmit }: NewBondFormProps) {
       </Field>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-4">
         <Field id="bond-issued" label="Issue date" hint="YYYY-MM-DD" problem={shown("dates")}>
-          <Input id="bond-issued" type="date" value={values.issueDate} onChange={set("issueDate")} aria-invalid={shown("dates") !== null} />
+          <DateInput id="bond-issued" value={values.issueDate} onChange={set("issueDate")} aria-invalid={shown("dates") !== null} />
         </Field>
         <Field id="bond-matures" label="Maturity date" hint="Coupons fall every six months back from it." problem={null}>
-          <Input id="bond-matures" type="date" value={values.maturityDate} onChange={set("maturityDate")} aria-invalid={shown("dates") !== null} />
+          <DateInput id="bond-matures" value={values.maturityDate} onChange={set("maturityDate")} aria-invalid={shown("dates") !== null} />
         </Field>
         <Field id="bond-coupon" label="Coupon, % a year before tax" problem={shown("coupon")}>
           <Input id="bond-coupon" inputMode="decimal" value={values.coupon} onChange={set("coupon")} aria-invalid={shown("coupon") !== null} />

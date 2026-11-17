@@ -1,6 +1,7 @@
 """The ledger's rules, proved against real PostgreSQL as the roles the application runs under."""
 
 import asyncio
+import secrets
 
 import pytest
 from sqlalchemy import text
@@ -927,7 +928,7 @@ async def test_a_client_request_can_post_and_replay_its_own_entry(
 async def test_a_client_command_can_post_against_a_system_account_it_cannot_read(
     app_database: Database, fake_clock: FakeClock
 ) -> None:
-    code = f"test.payouts_in_transit_{push_id().lower().replace('-', 'x').replace('_', 'y')}"
+    code = f"test.payouts_in_transit_{secrets.token_hex(8)}"
     alice = client()
     async with app_database.actor_transaction(staff()) as session:
         system = await ledger.open_account(

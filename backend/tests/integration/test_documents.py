@@ -113,7 +113,7 @@ def before_label() -> str:
 
 @pytest.fixture(autouse=True)
 def own_queue(monkeypatch: pytest.MonkeyPatch) -> Iterator[str]:
-    queue = "doc" + "".join(c for c in push_id().lower() if c.isalnum())
+    queue = f"doc_{secrets.token_hex(8)}"
     monkeypatch.setattr(service, "QUEUE", queue)
     yield queue
 
@@ -981,7 +981,7 @@ async def client_with_email(
     proved: bool = True,
 ) -> Actor:
     """An approved client who can be reached at an email address, proved with a link unless not."""
-    address = f"amara.{push_id().lower().replace('_', '').replace('-', '')}@example.com"
+    address = f"amara.{secrets.token_hex(8)}@example.com"
     client_id = await identity.create_client(phone=unique_phone(), email=address, password=PASSWORD)
     if proved:
         checks = EmailCheckService(app_database, FakeClock(), "https://app.finvestug.com")

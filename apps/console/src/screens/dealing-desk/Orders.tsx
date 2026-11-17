@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label.tsx";
 import type { Desk, Fill, NewOrder, Order, OrderKind, ProductPosition } from "./api.ts";
 import { formatDay, formatExact, formatShort, formatTime, KIND_LABELS, parseAmount, STATUS_LABELS } from "./format.ts";
 import { Row } from "./Position.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const MAX_NOTE = 500;
 export const FIELD = "h-12 w-full rounded-lg border border-border-strong bg-surface px-3.5 text-md font-semibold text-ink";
@@ -271,10 +272,9 @@ function ResultForm({ order, discountOnly, today, busy, onCancel, onSubmit }: Re
           <div className="grid grid-cols-2 gap-3">
             <Field id={`${id}-settled`} label="Settled on" error={errors.settledOn}>
               {(control) => (
-                <Input
+                <DateInput
                   {...control}
                   className={FIELD}
-                  type="date"
                   max={today}
                   value={settledOn}
                   onChange={(event) => setSettledOn(event.target.value)}
@@ -283,10 +283,9 @@ function ResultForm({ order, discountOnly, today, busy, onCancel, onSubmit }: Re
             </Field>
             <Field id={`${id}-matures`} label="Matures on" error={errors.maturesOn}>
               {(control) => (
-                <Input
+                <DateInput
                   {...control}
                   className={FIELD}
-                  type="date"
                   value={maturesOn}
                   onChange={(event) => setMaturesOn(event.target.value)}
                 />

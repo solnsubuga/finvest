@@ -28,3 +28,6 @@ export { supportEmail } from "./data/company.ts";
 
 /** Where the statement check page asks whether a code is on a statement Finvest issued. */
 export const statementCheckEndpoint = `${apiUrl}/public/statement-checks`;
+
+/** Where the browser reads the bonds clients can buy today. */
+export const bondsEndpoint = `${apiUrl}/public/bonds`;

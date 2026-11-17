@@ -124,6 +124,10 @@ describe("paying for an investment by mobile money", () => {
     expect(screen.queryByTestId("pay-other-number")).toBeNull();
     expect(screen.getByTestId("network-mtn")).toBeChecked();
     expect(screen.getByTestId("network-airtel")).not.toBeChecked();
+    // ioTec collects here: MTN prompts the number itself.
+    expect(
+      screen.getByText("MTN sends a prompt to the number on your Finvest account. You approve it with your mobile money PIN."),
+    ).toBeTruthy();
   });
 
   it("pays from another number when the client gives one", async () => {
@@ -221,6 +225,18 @@ describe("paying for an investment by mobile money", () => {
     await openPayScreen();
     await act(async () => router.push(`/pay/${DEMO_MOBILE_MONEY_ON_PAGE_ID}`));
     await screen.findByText("Pay UGX 1,000,000");
+    // Pesapal's page asks for the number, so the screen does not say the network prompts it.
+    expect(
+      await screen.findByText(
+        "Pesapal's secure page opens next. Choose MTN there, enter this number and approve the prompt with your mobile money PIN.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/sends a prompt to the number/)).toBeNull();
+    await fireEvent.press(screen.getByTestId("pay-number-toggle"));
+    await fireEvent.changeText(screen.getByTestId("pay-other-number"), "701 999 999");
+    expect(screen.getByText(/Enter this number there, and whoever has the phone approves the Airtel prompt/)).toBeTruthy();
+    expect(screen.queryByText(/sends the prompt to this number/)).toBeNull();
+    await fireEvent.press(screen.getByTestId("pay-number-toggle"));
     await fireEvent.press(screen.getByTestId("pay-submit"));
 
     await screen.findByText("Pay on Pesapal's secure page");

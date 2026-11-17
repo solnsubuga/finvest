@@ -21,6 +21,7 @@ from app.shared.actors import Actor
 from app.shared.errors import ApplicationError
 from tests.support.clock import FakeClock
 from tests.support.database import TestDatabase
+from tests.support.phones import unique_phone
 
 pytestmark = pytest.mark.integration
 
@@ -57,7 +58,7 @@ async def api(
 async def a_phone(api: Api) -> tuple[str, dict[str, str]]:
     """A client signed in on the phone app, with a bearer token."""
     client_id = await api.identity.create_client(
-        phone=f"+256{next(_numbers)}", email=None, password=PASSWORD
+        phone=unique_phone(), email=None, password=PASSWORD
     )
     issued = await api.identity.issue_session(
         Actor("client", client_id), second_step="passkey", transport="token"
@@ -167,7 +168,7 @@ async def test_a_new_pin_needs_a_recent_log_in(api: Api) -> None:
 
 async def test_a_browser_has_no_pin(api: Api) -> None:
     client_id = await api.identity.create_client(
-        phone=f"+256{next(_numbers)}", email=None, password=PASSWORD
+        phone=unique_phone(), email=None, password=PASSWORD
     )
     issued = await api.identity.issue_session(
         Actor("client", client_id), second_step="passkey", transport="cookie"

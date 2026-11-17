@@ -78,6 +78,7 @@ export default function BondHoldingDetail() {
   const open = openSaleOf(sales, id);
   const sold = sales.find((sale) => sale.status === "sold");
   const active = holding.status === "active";
+  const finished = holding.status === "sold" || holding.status === "matured";
 
   const choose = async (destinationId: string) => {
     if (destinationId === holding.couponDestinationId) return;
@@ -134,7 +135,11 @@ export default function BondHoldingDetail() {
           <Txt size={fontSizes.sm} weight="semibold" color={colors.lime}>
             {active && holding.nextCouponDate
               ? `${formatAmount(holding.coupon)} coupon after tax on ${formatDay(holding.nextCouponDate)}`
-              : `Matures ${formatDay(holding.maturityDate)}`}
+              : holding.status === "sold"
+                ? `Sold${sold?.soldOn ? ` on ${formatDay(sold.soldOn)}` : ""}`
+                : holding.status === "matured"
+                  ? `Repaid on ${formatDay(holding.maturityDate)}`
+                  : `Matures ${formatDay(holding.maturityDate)}`}
           </Txt>
         </View>
         <DetailList
@@ -144,8 +149,13 @@ export default function BondHoldingDetail() {
             ...(holding.startDate ? [{ label: "Started", value: formatDay(holding.startDate) }] : []),
             { label: "Matures", value: formatDay(holding.maturityDate) },
             { label: "Each coupon after tax", value: formatAmount(holding.coupon) },
-            { label: "Coupons left", value: String(holding.couponsLeft) },
-            { label: "Still to come", value: formatAmount(holding.stillToCome) },
+            // A sold or repaid holding is paid nothing more.
+            ...(finished
+              ? []
+              : [
+                  { label: "Coupons left", value: String(holding.couponsLeft) },
+                  { label: "Still to come", value: formatAmount(holding.stillToCome) },
+                ]),
           ]}
         />
 

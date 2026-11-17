@@ -82,10 +82,14 @@ export function ClientMoney({ api }: { api: ClientMoneyApi }) {
           </Button>
         </div>
       ) : load.check === null ? (
-        <p role="status" className="m-0 text-md text-muted">
-          No day has been closed yet. The check reads the statements of the last day two people closed, so it appears once the first day is closed
-          below.
-        </p>
+        <div role="status" className="flex flex-col gap-1.5">
+          <p className="m-0 text-md font-bold">No day has been closed yet, so there is nothing to check against</p>
+          <p className="m-0 text-md text-muted">
+            The check compares what we owe clients with the bank, mobile money and custodian statements of a closed day, never with balances
+            that may still change. A day closes once every pot has its statement for that day and two people sign it off, in Day close below.
+            The check appears here after the first one.
+          </p>
+        </div>
       ) : (
         <Figures check={load.check} />
       )}

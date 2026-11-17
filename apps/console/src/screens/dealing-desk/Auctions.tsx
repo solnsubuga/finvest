@@ -17,6 +17,7 @@ import {
 } from "./auctions.ts";
 import { formatAuctionDay, formatDay, formatWhen } from "./format.ts";
 import { FIELD, Field } from "./Orders.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 type Load =
   | { state: "loading" }
@@ -652,9 +653,8 @@ function ProposeForm({
         hint="As the Bank of Uganda published it. A different person approves it."
       >
         {(control) => (
-          <Input
+          <DateInput
             {...control}
-            type="date"
             min={today}
             className={FIELD}
             value={auctionDate}

@@ -17,6 +17,7 @@ import {
 import { bufferNote, formatDay, formatExact, formatShort, formatWhen, majorText, parseAmount } from "./format.ts";
 import { FIELD, Field, FormButtons, NoteForm } from "./Orders.tsx";
 import { Row } from "./Position.tsx";
+import { DateInput } from "@/components/ui/date-input.tsx";
 
 const MAX_REASON = 500;
 
@@ -512,7 +513,7 @@ function MovementForm({ direction, currency, today, busy, error, onCancel, onSub
             {(control) => <Input {...control} maxLength={100} className={FIELD} value={reference} onChange={(e) => setReference(e.target.value)} />}
           </Field>
           <Field id={`${id}-date`} label="Arrived on" error={errors.valueDate}>
-            {(control) => <Input {...control} type="date" max={today} className={FIELD} value={valueDate} onChange={(e) => setValueDate(e.target.value)} />}
+            {(control) => <DateInput {...control} max={today} className={FIELD} value={valueDate} onChange={(e) => setValueDate(e.target.value)} />}
           </Field>
         </>
       ) : null}
@@ -588,7 +589,7 @@ function RulesForm({ current, today, busy, error, onCancel, onSubmit }: RulesFor
     <form noValidate onSubmit={submit} aria-label="Propose new rules" className="flex flex-col gap-3 rounded-lg bg-surface-sunken p-4">
       <p className="m-0 text-md font-bold leading-normal">New rules start on a later day, once a second person approves them.</p>
       <Field id={`${id}-from`} label="Starts on" error={errors.effectiveFrom}>
-        {(control) => <Input {...control} type="date" min={today} className={FIELD} value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />}
+        {(control) => <DateInput {...control} min={today} className={FIELD} value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} />}
       </Field>
       {amountField("target", `Target (${currency})`, target, setTarget)}
       {amountField("floor", `Floor (${currency})`, floor, setFloor)}

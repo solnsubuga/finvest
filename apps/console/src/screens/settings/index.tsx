@@ -292,7 +292,7 @@ export default function SettingsPage() {
         };
       }
       const reader = { id: session.staffId, permissions: session.permissions };
-      const platformSeed: PlatformSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : "sample";
+      const platformSeed: PlatformSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : sample === "local" ? "local" : "sample";
       const seed: BankAccountsSample = sample === "empty" ? "empty" : sample === "mine" ? "mine" : "sample";
       return {
         api: createStubWordingsApi(me),

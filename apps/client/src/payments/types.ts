@@ -274,6 +274,12 @@ export interface PaymentsClient {
 
   getPayable(payableId: string): Promise<Payable>;
   /**
+   * Whether mobile money for this payable would be paid on Pesapal's page rather than by a
+   * prompt the network sends, so the pay screen can say what comes next. Optional: without
+   * it the screen says the network prompts the number. The payment's own `onPage` is what counts.
+   */
+  mobileMoneyOnPage?(payableId: string): Promise<boolean>;
+  /**
    * Asks the network to send an approval prompt to the phone. It answers as
    * soon as the request is saved, before the network has been asked, so the
    * first status is `sending`.

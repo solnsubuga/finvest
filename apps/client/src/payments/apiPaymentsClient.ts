@@ -303,6 +303,14 @@ export function createApiPaymentsClient(): PaymentsClient {
       }
     },
 
+    async mobileMoneyOnPage() {
+      try {
+        return (await api("GET /client/mobile-money", {})).on_page;
+      } catch (error) {
+        throw toPaymentError(error, "pay");
+      }
+    },
+
     async payWithMobileMoney(request) {
       let view: PaymentView;
       const holdingId = holdingIdOf(request.payableId);
