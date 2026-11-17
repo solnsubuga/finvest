@@ -5,6 +5,7 @@ import Header from "../components/Header.astro";
 import { colors } from "@finvest/tokens";
 import { indexable } from "../config.ts";
 import { shareImageHeight, shareImages, shareImageWidth, type ShareImageKey } from "../data/share.ts";
+import { scriptJson, type StructuredData } from "../lib/structured-data.ts";
 
 interface Props {
   title: string;
@@ -12,10 +13,12 @@ interface Props {
   headerTone?: "black" | "light";
   /** The picture shown when a link to this page is shared (src/data/share.ts). */
   share?: ShareImageKey;
+  /** schema.org facts about the page for search engines (src/lib/structured-data.ts). */
+  structuredData?: StructuredData[];
 }
 
-const { title, description, headerTone = "black", share = "home" } = Astro.props;
-const fullTitle = title === "Finvest" ? "Finvest: treasury bills from your phone" : `${title} | Finvest`;
+const { title, description, headerTone = "black", share = "home", structuredData = [] } = Astro.props;
+const fullTitle = title === "Finvest" ? "Finvest: invest in Uganda Treasury bills and bonds" : `${title} | Finvest`;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 // Apps that show a shared link read these tags from the HTML without running any script, and need
 // the picture's full address.
@@ -24,14 +27,20 @@ const shareImageUrl = new URL(`/share/${shareImage.name}.png`, Astro.site);
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en-UG">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang="en-UG" href={canonical} />
+    <link rel="alternate" hreflang="x-default" href={canonical} />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+    <meta name="geo.region" content="UG" />
+    <meta name="geo.placename" content="Kampala" />
     <meta name="theme-color" content={colors.black} />
     {!indexable && <meta name="robots" content="noindex, nofollow" />}
     <meta property="og:type" content="website" />
@@ -51,6 +60,7 @@ const shareImageUrl = new URL(`/share/${shareImage.name}.png`, Astro.site);
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={shareImageUrl} />
     <meta name="twitter:image:alt" content={shareImage.alt} />
+    {structuredData.map((data) => <script type="application/ld+json" is:inline set:html={scriptJson(data)} />)}
   </head>
   <body>
     <a class="skip" href="#main">Skip to the page</a>
