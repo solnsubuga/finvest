@@ -21,6 +21,8 @@ export interface Amount {
 
 export type Cover = "covered" | "bid_needed" | "on_order" | "surplus";
 export type BufferLevel = "on_target" | "under_target" | "below_floor";
+/** What an order deals: bills of an investment product, or bonds of one issue. Fixed when it is prepared. */
+export type Instrument = "bill" | "bond";
 export type OrderKind = "auction_bid" | "secondary_purchase" | "secondary_sale";
 export type OrderStatus = "prepared" | "approved" | "sent_back" | "withdrawn" | "result_recorded" | "settled" | "unsuccessful";
 
@@ -45,6 +47,35 @@ export interface ProductPosition {
   nextAuction: string | null;
 }
 
+/**
+ * One Treasury bond issue: the face value clients hold against the face value the desk holds
+ * at the custodian. Every bond of an issue pays the same, so a holding is covered exactly when
+ * its face value is held.
+ */
+export interface BondPosition {
+  /** The issue's code in the bonds catalogue. Orders for it name this code. */
+  code: string;
+  isin: string;
+  name: string;
+  maturityDate: string;
+  /** Clients with an active holding of the issue. */
+  holders: number;
+  clientsFace: Amount;
+  clientsPaid: Amount;
+  /** Face value the desk holds of the issue, including any in an open sale. */
+  faceHeld: Amount;
+  costHeld: Amount;
+  toBuy: Amount;
+  onOrder: Amount;
+  /** Face value held beyond what clients hold, not already in an open sale. */
+  toSell: Amount;
+  onSale: Amount;
+  cover: Cover;
+  /** Client money for the issue with no bond behind it yet. */
+  toPlace: Amount;
+  lotSize: Amount;
+}
+
 export interface Fill {
   face: Amount;
   /** Paid for a purchase, received for a sale. */
@@ -57,6 +88,8 @@ export interface Fill {
 export interface Order {
   id: string;
   kind: OrderKind;
+  instrument: Instrument;
+  /** The product's code for bills, the issue's code for bonds. */
   productCode: string;
   productName: string;
   face: Amount;
@@ -89,12 +122,18 @@ export interface Desk {
   buffer: Buffer;
   earlyWithdrawals: { asked: Amount; clients: number };
   positions: readonly ProductPosition[];
+  /** What the desk paid for the bonds it holds. */
+  bondsHeld: Amount;
+  /** Each bond issue not yet matured, or still held by clients or the desk. */
+  bonds: readonly BondPosition[];
   /** Orders that are not finished, oldest first. */
   orders: readonly Order[];
 }
 
 export interface NewOrder {
   kind: OrderKind;
+  instrument: Instrument;
+  /** The product's code for bills, the issue's code for bonds. */
   productCode: string;
   face: Amount;
 }
@@ -125,6 +164,7 @@ export type DealingErrorCode =
   | "above_face"
   | "settles_in_the_future"
   | "longer_than_term"
+  | "wrong_maturity"
   | "not_enough_cash"
   | "day_closed"
   | "invalid"
@@ -147,11 +187,12 @@ const MESSAGES: Record<DealingErrorCode, string> = {
   conflict: "Someone else has already acted on this order. The desk has been reloaded.",
   same_person: "A second person has to do this. You prepared or recorded it yourself.",
   not_a_whole_lot: "The face value must be a whole number of lots.",
-  more_than_held: "That is more than the desk holds in this product.",
+  more_than_held: "That is more than the desk holds of this product or issue.",
   over_the_order: "The result is larger than the order that was approved.",
   above_face: "A Treasury bill never costs or fetches more than its face value. Check the cash amount.",
   settles_in_the_future: "A result is recorded on or after its settlement date.",
   longer_than_term: "A bill bought for this product cannot mature after the product's term. Check the maturity date.",
+  wrong_maturity: "Every bond of this issue matures on the issue's maturity date. A note with another date is for another bond. Check the maturity date.",
   not_enough_cash: "The trust account does not hold enough client money for this purchase yet. Move the collected money into it on Reconciliation, then confirm again.",
   day_closed: "That settlement date is in a day that is already closed. Reject the result and record it on an open day.",
   invalid: "Something in this order or result is not right. Check it and try again.",

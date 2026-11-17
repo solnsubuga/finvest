@@ -1,4 +1,4 @@
-import type { Amount, BufferLevel, Cover, Currency, OrderKind, OrderStatus } from "./api.ts";
+import type { Amount, BufferLevel, Cover, Currency, Instrument, OrderKind, OrderStatus } from "./api.ts";
 
 const MINOR_DIGITS: Record<Currency, number> = { UGX: 0, USD: 2 };
 const SYMBOL: Record<Currency, string> = { UGX: "UGX ", USD: "$" };
@@ -95,6 +95,11 @@ export const KIND_LABELS: Record<OrderKind, string> = {
   auction_bid: "Auction bid",
   secondary_purchase: "Secondary market purchase",
   secondary_sale: "Secondary market sale",
+};
+
+export const INSTRUMENT_LABELS: Record<Instrument, string> = {
+  bill: "Treasury bills",
+  bond: "Treasury bonds",
 };
 
 export const STATUS_LABELS: Record<OrderStatus, string> = {
