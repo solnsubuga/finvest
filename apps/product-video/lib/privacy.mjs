@@ -189,10 +189,14 @@ export const PRIVACY_SCRIPT = `
     // Mutation callbacks run before the browser paints, so a new screen is covered in the very
     // frame it first shows, and a scroll moves the patches in the frame it moves the page.
     new MutationObserver((records) => {
-      if (!records.some((r) => !(r.target.id === "__pv_privacy" || r.target.parentElement?.id === "__pv_privacy"))) return;
-      dirty = true;
+      const ours = (t) => t.id === "__pv_privacy" || t.id === "__pv_cursor" || t.parentElement?.id === "__pv_privacy" || t.className === "__pv_ring";
+      const theirs = records.filter((r) => !ours(r.target));
+      if (!theirs.length) return;
+      // A class or style change can move text without changing it: repaint, but only rescan text
+      // when text or elements changed.
+      if (theirs.some((r) => r.type !== "attributes" || r.attributeName === "value")) dirty = true;
       try { paint(); } catch (error) { window.__pvPrivacyError = String(error && error.stack || error); }
-    }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["value", "src", "placeholder"] });
+    }).observe(document, { subtree: true, childList: true, characterData: true, attributes: true });
     addEventListener("scroll", () => { try { paint(); } catch {} }, { capture: true, passive: true });
     addEventListener("input", () => { try { paint(); } catch {} }, { capture: true });
     requestAnimationFrame(draw);
