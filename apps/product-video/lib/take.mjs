@@ -5,6 +5,7 @@
 // In a dry run (PV_DRY=1) nothing is recorded: each step saves a screenshot instead, to check a
 // script quickly.
 import fs from "node:fs";
+import { PRIVACY_SCRIPT } from "./privacy.mjs";
 import path from "node:path";
 import { WORK } from "./browser.mjs";
 
@@ -94,6 +95,7 @@ export class Take {
 
   static async prepare(context) {
     await context.addInitScript(CURSOR_SCRIPT);
+    await context.addInitScript(PRIVACY_SCRIPT);
   }
 
   now() {
@@ -144,6 +146,9 @@ export class Take {
   async stop() {
     await this.wait(600);
     this.log("end");
+    // The blur must never stop quietly: say so, so the take can be recorded again.
+    const blurError = await this.page.evaluate(() => window.__pvPrivacyError).catch(() => null);
+    if (blurError) console.log(`  privacy blur error in ${this.chapter.id}: ${blurError.split("\n")[0]}`);
     if (this.cdp) {
       await this.cdp.send("Page.stopScreencast").catch(() => {});
       // Not detached: detaching a session switches off the page's virtual authenticator, and

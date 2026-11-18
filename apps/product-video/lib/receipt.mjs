@@ -3,6 +3,7 @@
 // the payment reference the app gave the client, read from the screen.
 import path from "node:path";
 import { chromium } from "playwright";
+import { PRIVACY_SCRIPT } from "./privacy.mjs";
 
 export async function drawReceipt(file, { bank, payer, toName, toNumber, amount, day, number, reference }) {
   const browser = await chromium.launch();
@@ -16,6 +17,9 @@ export async function drawReceipt(file, { bank, payer, toName, toNumber, amount,
       <div style="margin-top:34px;font-size:22px;color:#777">Invented for the Finvest product video. Not a real receipt.</div>
       <div style="position:absolute;right:-40px;top:420px;transform:rotate(-28deg);font-size:90px;font-weight:800;color:rgba(180,35,24,.22);letter-spacing:12px">SPECIMEN</div>
     </div></body>`);
+  // Blur the account numbers on the picture, as on every recorded screen.
+  await page.addScriptTag({ content: PRIVACY_SCRIPT });
+  await page.waitForTimeout(400);
   await page.screenshot({ path: file, type: "jpeg", quality: 90 });
   await browser.close();
   return path.resolve(file);

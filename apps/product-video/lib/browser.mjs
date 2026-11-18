@@ -20,6 +20,8 @@ export async function launch() {
       "--font-render-hinting=none",
       "--disable-features=Translate,MediaRouter",
       "--hide-scrollbars",
+      // Scroll on the main thread, so the privacy blur (lib/privacy.mjs) moves with the page.
+      "--disable-threaded-scrolling",
     ],
   });
 }
