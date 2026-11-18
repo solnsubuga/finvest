@@ -151,10 +151,11 @@ jobs:
           APP_IMAGE: ${{ steps.images.outputs.app }}@${{ steps.app.outputs.digest }}
           SITE_IMAGE: ${{ steps.images.outputs.site }}@${{ steps.site.outputs.digest }}
           EDGE_IMAGE: ${{ steps.images.outputs.edge }}@${{ steps.edge.outputs.digest }}
-          # Written by Provision once the back office's DNS record points at the tailnet. The
-          # token lets Caddy prove the name to the certificate authority through Cloudflare DNS.
+          # Written by Provision once the back office's DNS record points at the tailnet. Caddy
+          # proves the name to the certificate authority through Cloudflare DNS with Provision's
+          # own Cloudflare token (the owner's choice, 2026-11-18), which holds DNS Edit on the zone.
           ADMIN_ON_TAILNET: ${{ vars.ADMIN_ON_TAILNET }}
-          FINVEST_EDGE_DNS_TOKEN: ${{ secrets.FINVEST_EDGE_DNS_TOKEN }}
+          FINVEST_EDGE_DNS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SITE_PUBLISHED: ${{ vars.SITE_PUBLISHED }}
           SITE_DOMAINS: ${{ vars.SITE_DOMAINS }}
           APP_DOMAIN: ${{ vars.APP_DOMAIN }}
