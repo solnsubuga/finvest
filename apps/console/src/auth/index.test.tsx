@@ -40,7 +40,9 @@ describe("choosing the sign-in implementation", () => {
   it("finds the deployed API from the deploy's name", () => {
     vi.stubEnv("VITE_API_URL", "");
     vi.stubEnv("VITE_DEPLOY_ENV", "production");
-    expect(apiBaseUrl()).toBe("https://api.finvestug.com");
+    expect(apiBaseUrl()).toBe("https://admin.finvestug.com");
+    vi.stubEnv("VITE_DEPLOY_ENV", "staging");
+    expect(apiBaseUrl()).toBe("https://admin-staging.finvestug.com");
     vi.stubEnv("VITE_DEPLOY_ENV", "");
     expect(apiBaseUrl()).toBeNull();
   });

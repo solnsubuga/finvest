@@ -20,7 +20,10 @@ locals {
     FINVEST_OBJECT_STORAGE_BUCKET   = digitalocean_spaces_bucket.documents.name
     FINVEST_OBJECT_STORAGE_ENDPOINT = "https://${var.region}.digitaloceanspaces.com"
     FINVEST_OBJECT_STORAGE_REGION   = var.region
-    }, length(cloudflare_zero_trust_list.staff_emails) == 0 ? {} : {
+    }, local.admin_on_tailnet ? {
+    # The deploy serves the back office only to tailnet addresses, with a public certificate.
+    ADMIN_ON_TAILNET = "true"
+    } : {}, length(cloudflare_zero_trust_list.staff_emails) == 0 ? {} : {
     # The worker keeps this Cloudflare list in step with console Team changes.
     FINVEST_CLOUDFLARE_ACCOUNT_ID    = data.cloudflare_zone.this.account.id
     FINVEST_CLOUDFLARE_STAFF_LIST_ID = cloudflare_zero_trust_list.staff_emails[0].id

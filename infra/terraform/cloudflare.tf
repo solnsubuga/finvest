@@ -6,16 +6,24 @@ data "cloudflare_zone" "this" {
 
 data "cloudflare_ip_ranges" "this" {}
 
-# Every hostname is proxied through Cloudflare to the reserved IP.
+locals {
+  admin_on_tailnet = var.admin_tailnet_address != ""
+}
+
+# Every hostname is proxied through Cloudflare to the reserved IP, except the back office once it
+# is on the tailnet (owner, 2026-11-18). Its name then resolves to the server's Tailscale address,
+# which only devices on Finvest's tailnet can reach. Cloudflare does not proxy it, so the edge gets
+# a public certificate for it through a DNS challenge (FINVEST_EDGE_DNS_TOKEN). The address is no
+# secret: it is unreachable from the internet. The record changes in place either way.
 resource "cloudflare_dns_record" "hosts" {
   for_each = toset(local.hostnames)
 
   zone_id = data.cloudflare_zone.this.id
   name    = each.value
   type    = "A"
-  content = digitalocean_reserved_ip.app.ip_address
-  proxied = true
-  ttl     = 1
+  content = local.admin_on_tailnet && each.value == var.admin_domain ? var.admin_tailnet_address : digitalocean_reserved_ip.app.ip_address
+  proxied = !(local.admin_on_tailnet && each.value == var.admin_domain)
+  ttl     = local.admin_on_tailnet && each.value == var.admin_domain ? 300 : 1
   comment = "Managed by Terraform (${var.environment})"
 }
 
@@ -45,10 +53,10 @@ resource "cloudflare_origin_ca_certificate" "this" {
   requested_validity = 5475
 }
 
-# The back office is not behind Cloudflare Access (owner, 2026-11-17). The console's own sign-in
-# guards it: a password and then a passkey or authenticator code for every member of staff, with
-# wrong guesses throttled, and the office networks setting on every staff request. Access remains
-# only for the client app before launch, through the staff list and policy below.
+# Cloudflare Access guards the back office only until it moves onto the tailnet (owner,
+# 2026-11-18); a name Cloudflare does not proxy cannot be behind Access. On the tailnet, the
+# network and the console's own sign-in (a password and then a passkey or authenticator code for
+# every member of staff) guard it. Access also holds the client app back before launch.
 
 # Staff the console has invited. The worker adds an email when a team invite or reactivation is
 # approved and removes it on deactivation, so Terraform creates the list but never touches its
@@ -92,6 +100,21 @@ resource "cloudflare_zero_trust_access_application" "app" {
   zone_id          = data.cloudflare_zone.this.id
   name             = "${local.name} client app (staff only until launch)"
   domain           = var.app_domain
+  type             = "self_hosted"
+  session_duration = "12h"
+
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.admin_staff[0].id
+    precedence = 1
+  }]
+}
+
+resource "cloudflare_zero_trust_access_application" "admin" {
+  count = length(var.admin_access_emails) > 0 && !local.admin_on_tailnet ? 1 : 0
+
+  zone_id          = data.cloudflare_zone.this.id
+  name             = "${local.name} back office"
+  domain           = var.admin_domain
   type             = "self_hosted"
   session_duration = "12h"
 

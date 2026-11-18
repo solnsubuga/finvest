@@ -12,9 +12,9 @@ case $mode in
     if [[ $TARGET != shared ]]; then
       names+=(GITHUB_TOKEN DEPLOY_SSH_KEY)
     fi
-    # Break-glass emails for the client app while Access holds it back for staff before launch.
-    # The back office is never behind Access.
-    if [[ $TARGET == production && ${CLIENT_APP_PUBLIC:-} != true ]]; then
+    # Break-glass emails while Access guards the back office (until it is on the tailnet) or the
+    # client app (until launch).
+    if [[ $TARGET == production && ( ${CLIENT_APP_PUBLIC:-} != true || -z ${TAILNET_ADDRESS:-} ) ]]; then
       names+=(ADMIN_ACCESS_EMAILS)
     fi
     missing=()
@@ -51,6 +51,7 @@ json.dump({
     "ssh_source_addresses": items("SSH_SOURCE_ADDRESSES"),
     "admin_access_emails": items("ADMIN_ACCESS_EMAILS"),
     "alert_emails": items("ALERT_EMAILS"),
+    "admin_tailnet_address": os.environ.get("TAILNET_ADDRESS", "").strip(),
     "client_app_public": os.environ.get("CLIENT_APP_PUBLIC", "") == "true",
 }, __import__("sys").stdout)
 PY

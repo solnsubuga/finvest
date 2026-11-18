@@ -85,7 +85,7 @@ run "deploy_settings_reach_github" {
   }
 }
 
-run "production_requires_access_while_the_app_is_held_back" {
+run "production_requires_access" {
   command = plan
   variables {
     environment = "production"
@@ -93,16 +93,13 @@ run "production_requires_access_while_the_app_is_held_back" {
   expect_failures = [var.admin_access_emails]
 }
 
-run "production_without_access_once_the_app_is_public" {
+run "production_requires_access_until_the_back_office_is_on_the_tailnet" {
   command = plan
   variables {
     environment       = "production"
     client_app_public = true
   }
-  assert {
-    condition     = length(cloudflare_zero_trust_access_application.app) == 0 && length(cloudflare_zero_trust_list.staff_emails) == 0
-    error_message = "With the app public and no break-glass emails, nothing is behind Access."
-  }
+  expect_failures = [var.admin_access_emails]
 }
 
 run "production_with_access" {
@@ -112,12 +109,12 @@ run "production_with_access" {
     admin_access_emails = ["staff@example.com"]
   }
   assert {
-    condition     = length(cloudflare_zero_trust_access_application.app) == 1
-    error_message = "Before launch the client app is behind Access for staff."
+    condition     = length(cloudflare_zero_trust_access_application.admin) == 1 && length(cloudflare_zero_trust_access_application.app) == 1
+    error_message = "Before the tailnet and before launch, Access guards the back office and the client app."
   }
   assert {
-    condition     = alltrue([for a in cloudflare_zero_trust_access_application.app : a.domain != var.admin_domain])
-    error_message = "The back office is never behind Access; the console's own sign-in guards it."
+    condition     = cloudflare_dns_record.hosts[var.admin_domain].proxied && !contains(keys(github_actions_environment_variable.deploy), "ADMIN_ON_TAILNET")
+    error_message = "Off the tailnet, the back office is proxied through Cloudflare."
   }
   assert {
     condition     = length(cloudflare_zero_trust_list.staff_emails) == 1 && cloudflare_zero_trust_list.staff_emails[0].type == "EMAIL"
@@ -139,6 +136,41 @@ run "production_with_access" {
     condition     = alltrue([for s in github_actions_environment_secret.deploy : s.environment == "prod"])
     error_message = "Production settings go to the prod GitHub environment."
   }
+}
+
+run "back_office_on_the_tailnet" {
+  command = plan
+  variables {
+    environment           = "production"
+    client_app_public     = true
+    admin_tailnet_address = "100.101.102.103"
+  }
+  assert {
+    condition     = length(cloudflare_zero_trust_access_application.admin) == 0 && length(cloudflare_zero_trust_access_application.app) == 0
+    error_message = "On the tailnet and after launch, nothing is behind Access."
+  }
+  assert {
+    condition     = cloudflare_dns_record.hosts[var.admin_domain].content == "100.101.102.103" && !cloudflare_dns_record.hosts[var.admin_domain].proxied
+    error_message = "The back office name points at the tailnet address, outside Cloudflare."
+  }
+  assert {
+    condition     = cloudflare_dns_record.hosts[var.api_domain].proxied && cloudflare_dns_record.hosts[var.app_domain].proxied
+    error_message = "Every other name stays proxied through Cloudflare."
+  }
+  assert {
+    condition     = github_actions_environment_variable.deploy["ADMIN_ON_TAILNET"].value == "true"
+    error_message = "The deploy is told to serve the back office only to the tailnet."
+  }
+}
+
+run "tailnet_address_must_be_tailscale" {
+  command = plan
+  variables {
+    environment           = "production"
+    admin_access_emails   = ["staff@example.com"]
+    admin_tailnet_address = "10.0.0.5"
+  }
+  expect_failures = [var.admin_tailnet_address]
 }
 
 run "no_ssh_rule_without_ssh_addresses" {

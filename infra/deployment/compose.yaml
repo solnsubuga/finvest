@@ -113,9 +113,15 @@ services:
         aliases: ["site-${FINVEST_COLOUR:-blue}"]
 
   caddy:
-    image: caddy:2.11.4-alpine@sha256:6aeddd44c3078b0f9a35206472a11420648a79c184603ef95957d0a20044cb2b
+    # Caddy with the Cloudflare DNS module (edge.Dockerfile), pinned by digest.
+    image: ${EDGE_IMAGE:?Set the edge image}
     profiles: [edge]
     restart: unless-stopped
+    # The Cloudflare DNS token for the back office's certificate once it is on the tailnet
+    # (FINVEST_EDGE_DNS_TOKEN). Empty otherwise.
+    env_file:
+      - path: ./runtime/edge.env
+        format: raw
     environment:
       FINVEST_API_DOMAIN: ${FINVEST_API_DOMAIN:?Set the API domain}
       FINVEST_ADMIN_DOMAIN: ${FINVEST_ADMIN_DOMAIN:?Set the back office domain}
@@ -123,7 +129,8 @@ services:
       # The private bucket's address, where staff read links point. Empty when storage is off.
       FINVEST_STORAGE_ORIGIN: ${FINVEST_STORAGE_ORIGIN:-}
     ports:
-      # Only Cloudflare reaches these: the DigitalOcean firewall admits nothing else.
+      # Only Cloudflare reaches these from the internet: the DigitalOcean firewall admits nothing
+      # else. Tailnet traffic arrives on the host's tailscale0 interface, inside that firewall.
       - "${FINVEST_BIND_ADDRESS:-0.0.0.0}:${FINVEST_HTTP_PORT:-80}:80"
       - "${FINVEST_BIND_ADDRESS:-0.0.0.0}:${FINVEST_HTTPS_PORT:-443}:443"
     volumes:

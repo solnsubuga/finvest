@@ -5,8 +5,11 @@
 #
 #   infra/deployment/check-edge.sh [ZONE]        ZONE defaults to finvestug.com (production)
 #
-# Hosts behind Cloudflare Access (admin, and app until CLIENT_APP_PUBLIC) answer with Cloudflare's
-# login redirect, so only their TLS and the redirect can be read from outside. Session cookies are
+# The back office is served only on the tailnet once Provision has put it there, so from outside
+# its name resolves to a tailnet address and nothing more is read. Until then it, like the app
+# until CLIENT_APP_PUBLIC, is behind Cloudflare Access, which answers with its login redirect, so
+# only TLS and the redirect can be read from outside. Either way the API's own address refuses
+# staff routes. Session cookies are
 # set only by a finished sign-in; every cookie seen here (Cloudflare's own included) is checked
 # for Secure and HttpOnly.
 set -uo pipefail
@@ -109,14 +112,32 @@ if [ "$status" = 200 ]; then pass "GET /health/live answered 200"; else fail "GE
 check_shared_headers "$csp_api"
 expect_header X-Robots-Tag 'noindex'
 expect_header Permissions-Policy 'camera=\(\)'
+fetch "https://api.$zone/staff/session"
+if [ "$status" = 404 ]; then pass "GET /staff/session answered 404 (staff routes only on the back office)"; else fail "GET /staff/session answered $status, expected 404"; fi
+
+# Whether every address the back office's name resolves to is a Tailscale one (100.64.0.0/10).
+on_tailnet() {
+  local addresses
+  addresses="$(getent ahostsv4 "$1" 2>/dev/null | awk '{print $1}' | sort -u)"
+  [ -n "$addresses" ] || return 1
+  ! printf '%s\n' "$addresses" | grep -Evq '^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.'
+}
 
 for host in "app.$zone" "admin.$zone"; do
   echo "$host"
+  if [ "$host" = "admin.$zone" ] && on_tailnet "$host"; then
+    pass "resolves only to tailnet addresses: reachable on the tailnet only"
+    continue
+  fi
   check_tls "$host"
   fetch "https://$host/"
   if behind_access; then
     note "behind Cloudflare Access ($status to the login page): origin headers are read only after sign-in"
     check_cookies
+    continue
+  fi
+  if [ "$host" = "admin.$zone" ]; then
+    fail "the back office is neither on the tailnet nor behind Cloudflare Access"
     continue
   fi
   if [ "$status" = 200 ]; then pass "GET / answered 200"; else fail "GET / answered $status"; fi

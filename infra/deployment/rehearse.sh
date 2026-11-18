@@ -6,7 +6,8 @@
 #
 #   bash infra/deployment/rehearse.sh
 #
-# Set BACKEND_IMAGE, CONSOLE_IMAGE, APP_IMAGE and SITE_IMAGE (name@sha256:...) to reuse images already in a registry.
+# Set BACKEND_IMAGE, CONSOLE_IMAGE, APP_IMAGE, SITE_IMAGE and EDGE_IMAGE (name@sha256:...) to reuse images
+# already in a registry.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../.." && pwd)
@@ -32,7 +33,7 @@ gateway=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gatew
 docker run -d --name finvest-rehearsal-db -e POSTGRES_PASSWORD=admin -e POSTGRES_DB=finvest \
   -p 15432:5432 postgres:17.12@sha256:dbb9623d5121b5d2c2c9e2fba56e40193cbb3510d4af7f035b1ab1823aff3205 >/dev/null
 
-if [[ -z ${BACKEND_IMAGE:-} || -z ${CONSOLE_IMAGE:-} || -z ${APP_IMAGE:-} || -z ${SITE_IMAGE:-} ]]; then
+if [[ -z ${BACKEND_IMAGE:-} || -z ${CONSOLE_IMAGE:-} || -z ${APP_IMAGE:-} || -z ${SITE_IMAGE:-} || -z ${EDGE_IMAGE:-} ]]; then
   docker run -d --name finvest-rehearsal-registry -p 127.0.0.1:15000:5000 registry:2 >/dev/null
   docker build --quiet -t localhost:15000/finvest-backend:rehearsal "$repo/backend"
   docker build --quiet -t localhost:15000/finvest-console:rehearsal --build-arg VITE_DEPLOY_ENV=staging \
@@ -43,7 +44,8 @@ if [[ -z ${BACKEND_IMAGE:-} || -z ${CONSOLE_IMAGE:-} || -z ${APP_IMAGE:-} || -z 
     --build-arg PUBLIC_SITE_URL=https://staging.finvestug.com \
     --build-arg PUBLIC_APP_URL=https://app-staging.finvestug.com \
     --build-arg "PUBLIC_API_URL=https://$host" -f "$here/site.Dockerfile" "$repo"
-  for name in backend console app site; do
+  docker build --quiet -t localhost:15000/finvest-edge:rehearsal -f "$here/edge.Dockerfile" "$here"
+  for name in backend console app site edge; do
     docker push --quiet "localhost:15000/finvest-$name:rehearsal" >/dev/null
     digest=$(curl --silent --noproxy '*' --head \
       -H 'Accept: application/vnd.oci.image.index.v1+json' \
@@ -70,6 +72,7 @@ deploy() {
   DEPLOY_ENVIRONMENT=staging API_DOMAIN=$host ADMIN_DOMAIN=admin-staging.finvestug.com \
     APP_DOMAIN=app-staging.finvestug.com SITE_DOMAINS=staging.finvestug.com \
     BACKEND_IMAGE=$BACKEND_IMAGE CONSOLE_IMAGE=$CONSOLE_IMAGE APP_IMAGE=$APP_IMAGE SITE_IMAGE=$SITE_IMAGE \
+    EDGE_IMAGE=$EDGE_IMAGE \
     DATABASE_HOST=$gateway DATABASE_PORT=15432 DATABASE_NAME=finvest \
     DATABASE_MIGRATOR_PASSWORD='mig/p@ss' DATABASE_APP_PASSWORD=app-pass DATABASE_WORKER_PASSWORD=worker-pass \
     ORIGIN_TLS_CERT=$(cat "$work/cert.pem") ORIGIN_TLS_KEY=$(cat "$work/key.pem") \
@@ -139,15 +142,42 @@ post() {
 head -c 2000000 /dev/zero > "$work/large-body"
 head -c 13000000 /dev/zero > "$work/huge-body"
 [[ $(post "$work/large-body" /client/sign-in) == '413 ' ]]
-# An upload route takes that body through to the API, and stops one over 12 MiB at the edge.
-[[ $(post "$work/large-body" /staff/reconciliation/statements) == *application/json* ]]
-[[ $(post "$work/huge-body" /staff/reconciliation/statements) == '413 ' ]]
+# Staff routes answer only on the back office's address. There, an upload route takes that body
+# through to the API, and stops one over 12 MiB at the edge.
+[[ $(post "$work/large-body" /staff/reconciliation/statements) == '404 '* ]]
+[[ $(code "$host" /staff/session) == 404 ]]
+admin_post() {
+  "${curl_local[@]}" --resolve "admin-staging.finvestug.com:$port:127.0.0.1" --output /dev/null \
+    --write-out '%{http_code} %{content_type}' --data-binary "@$1" -H 'Content-Type: application/octet-stream' \
+    "https://admin-staging.finvestug.com:$port$2" || true
+}
+[[ $(admin_post "$work/large-body" /staff/reconciliation/statements) == *application/json* ]]
+[[ $(admin_post "$work/huge-body" /staff/reconciliation/statements) == '413 ' ]]
+[[ $(admin_post "$work/large-body" /staff/session) == '413 ' ]]
 [[ $(code unknown.example /) == 000 ]]
 # Staging asks search engines to leave every address out.
 for name in staging.finvestug.com admin-staging.finvestug.com app-staging.finvestug.com "$host"; do
   "${curl_local[@]}" --resolve "$name:$port:127.0.0.1" --output /dev/null --dump-header - \
     "https://$name:$port/" | grep -qi '^x-robots-tag: noindex'
 done
+
+echo '== The back office on the tailnet'
+# The configuration a release writes once the back office is on the tailnet loads in the edge
+# image: the Cloudflare DNS module and the tailnet-only rule. It is only validated here, since a
+# certificate needs Cloudflare. The token is shaped like one and is not one.
+tailnet="$work/tailnet-release"
+DEPLOY_ENVIRONMENT=staging API_DOMAIN=$host ADMIN_DOMAIN=admin-staging.finvestug.com \
+  APP_DOMAIN=app-staging.finvestug.com SITE_DOMAINS=staging.finvestug.com \
+  BACKEND_IMAGE=$BACKEND_IMAGE CONSOLE_IMAGE=$CONSOLE_IMAGE APP_IMAGE=$APP_IMAGE SITE_IMAGE=$SITE_IMAGE \
+  EDGE_IMAGE=$EDGE_IMAGE DATABASE_HOST=$gateway \
+  DATABASE_MIGRATOR_PASSWORD=x DATABASE_APP_PASSWORD=x DATABASE_WORKER_PASSWORD=x \
+  ORIGIN_TLS_CERT=$(cat "$work/cert.pem") ORIGIN_TLS_KEY=$(cat "$work/key.pem") FINVEST_REHEARSAL=true \
+  ADMIN_ON_TAILNET=true FINVEST_EDGE_DNS_TOKEN=rehearsal_not_a_real_token_0000000000 \
+  python3 "$here/prepare_release.py" "$tailnet" >/dev/null
+grep -q 'abort @outside_tailnet' "$tailnet/edge/admin-access.caddy"
+docker run --rm --env-file "$tailnet/runtime/edge.env" --env-file "$tailnet/release.env" \
+  -v "$tailnet/edge:/etc/caddy:ro" -v "$tailnet/tls:/etc/caddy-tls:ro" \
+  "$EDGE_IMAGE" caddy validate --config /etc/caddy/Caddyfile >/dev/null
 
 echo '== A release that does not name its environment is refused'
 bad="$work/opt-finvest/releases/unnamed"

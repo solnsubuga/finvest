@@ -5,10 +5,10 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Path | Contents |
 | --- | --- |
 | `terraform/shared/` | The `finvest` project, the Cloudflare zone settings and the zone's one rate limiting rule, which every environment shares. Provision it first. |
-| `terraform/` | One environment: host, network, database, buckets, DNS, Access on the client app before launch, alerts, and the settings it writes into GitHub. |
+| `terraform/` | One environment: host, network, database, buckets, DNS (with the back office on the tailnet once it is there), Access on the client app before launch, alerts, and the settings it writes into GitHub. |
 | `terraform/environments/*.tfvars` | What differs between `staging` and `production`. Each has its own state, so planning one never touches the other. |
 | `terraform/tests/` | `terraform test` with mock providers: the rules below that must not drift. |
-| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console, client app and website images, `prepare-host.sh`, `create-roles.sh`, and `rehearse.sh`. |
+| `deployment/` | The deployed stack and its scripts, ported from Fidiba: `compose.yaml`, `Caddyfile`, `deploy.sh`, `prepare_release.py`, `ship-release.sh`, the console, client app, website and edge images, `prepare-host.sh`, `join-tailnet.sh`, `create-roles.sh`, and `rehearse.sh`. |
 
 ## What an environment gets
 
@@ -21,7 +21,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery, rehearsed by the drill in [docs/backup-and-restore.md](../docs/backup-and-restore.md). Only the droplet may connect. |
 | Database roles | Same | Same | `finvest_migrator`, `finvest_app`, `finvest_worker`, created from the host with `backend/db/init-roles.sql` and generated passwords |
 | Spaces bucket and key | `finvest-staging-documents` | `finvest-production-documents` | Private, versioned, read by the console through short-lived links (no browser uploads), and a key limited to the bucket |
-| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the client app until switch day | Full (strict) TLS from the edge to the host |
+| Cloudflare | Proxied records, Origin CA certificate | Same, plus Access on the client app until switch day | Full (strict) TLS from the edge to the host. The back office on the tailnet is the exception (below). |
 | GitHub settings | Written into the `dev` environment | Written into `prod` | See below |
 | Alerts | When `ALERT_EMAILS` is set | Same | Uptime on `https://<api>/health/ready` and `/health/operations`, host CPU and disk, database CPU, memory and disk. What each alert means: [docs/observability.md](../docs/observability.md) |
 | Tag | `finvest-staging` | `finvest-production` | Tells the environments apart inside the one project |
@@ -32,7 +32,7 @@ The droplet, database cluster, bucket and project have `prevent_destroy`: Terraf
 | --- | --- | --- |
 | Public website | finvestug.com, www.finvestug.com | staging.finvestug.com |
 | Client app | app.finvestug.com | app-staging.finvestug.com |
-| Back office | admin.finvestug.com, behind the console's own sign-in (password, then passkey or authenticator) | admin-staging.finvestug.com |
+| Back office | admin.finvestug.com, only on Finvest's tailnet, behind the console's own sign-in (password, then passkey or authenticator) | admin-staging.finvestug.com |
 | API | api.finvestug.com | api-staging.finvestug.com |
 
 Staging names sit one level below the zone so Cloudflare's free certificate covers them. `api.finvestug.com` is still an open question for the owner in `docs/decisions.md`.
@@ -43,7 +43,7 @@ Terraform owns these names in the `dev` (staging) and `prod` (production) GitHub
 
 | Kind | Names |
 | --- | --- |
-| Variables | `SITE_DOMAINS`, `APP_DOMAIN`, `ADMIN_DOMAIN`, `API_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `FINVEST_OBJECT_STORAGE_BUCKET`, `FINVEST_OBJECT_STORAGE_ENDPOINT`, `FINVEST_OBJECT_STORAGE_REGION`, and where the staff Access list exists `FINVEST_CLOUDFLARE_ACCOUNT_ID` and `FINVEST_CLOUDFLARE_STAFF_LIST_ID` |
+| Variables | `SITE_DOMAINS`, `APP_DOMAIN`, `ADMIN_DOMAIN`, `API_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `FINVEST_OBJECT_STORAGE_BUCKET`, `FINVEST_OBJECT_STORAGE_ENDPOINT`, `FINVEST_OBJECT_STORAGE_REGION`, where the staff Access list exists `FINVEST_CLOUDFLARE_ACCOUNT_ID` and `FINVEST_CLOUDFLARE_STAFF_LIST_ID`, and `ADMIN_ON_TAILNET` once the back office's DNS record points at the tailnet |
 | Secrets | `DATABASE_CA_CERT`, `DATABASE_MIGRATOR_PASSWORD`, `DATABASE_APP_PASSWORD`, `DATABASE_WORKER_PASSWORD`, `FINVEST_OBJECT_STORAGE_ACCESS_KEY_ID`, `FINVEST_OBJECT_STORAGE_SECRET_ACCESS_KEY`, `ORIGIN_TLS_CERT`, `ORIGIN_TLS_KEY` |
 
 GitHub refuses to create a variable that already exists, so do not create these by hand.
@@ -123,7 +123,7 @@ Repository variables under **Settings → Secrets and variables → Actions → 
 | --- | --- |
 | `TERRAFORM_STATE_BUCKET` | The state bucket's name |
 | `SSH_SOURCE_ADDRESSES` | Optional. Your own addresses, comma separated, such as `203.0.113.10`. Unset, nobody can SSH to the host except a Provision or deploy run, which admits only its own address while it works. Set it and run Provision when you want to log in yourself. |
-| `ADMIN_ACCESS_EMAILS` | Break-glass staff emails that Cloudflare Access lets into the production client app while it is held back before launch, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production until `CLIENT_APP_PUBLIC` is `true`. The back office is not behind Access (owner, 2026-11-17). Invited staff are also kept on a Cloudflare list by the worker (`FINVEST_CLOUDFLARE_ACCESS_TOKEN` below). |
+| `ADMIN_ACCESS_EMAILS` | Break-glass staff emails that Cloudflare Access lets into the production client app while it is held back before launch, comma separated, such as `a@finvestug.com,b@finvestug.com`. Required for production until `CLIENT_APP_PUBLIC` is `true` and the back office is on the tailnet. Until the back office is on the tailnet they are its Access list too (owner, 2026-11-17/18). Invited staff are also kept on a Cloudflare list by the worker (`FINVEST_CLOUDFLARE_ACCESS_TOKEN` below). |
 | `ALERT_EMAILS` | Who gets alerts, comma separated like `ADMIN_ACCESS_EMAILS`. Optional, but set two people before launch. |
 | `CLIENT_APP_PUBLIC` | Leave unset until switch day. Until then the production client app host lets in only `ADMIN_ACCESS_EMAILS`, through Cloudflare Access, while the API stays public. On switch day ([docs/launch.md](../docs/launch.md)) set it to `true` and run Provision `production` (plan, then apply) to lift Access from the app host. |
 
@@ -243,17 +243,31 @@ Every process also gets `FINVEST_ENVIRONMENT` (`staging` or `production`), taken
 | Address | Serves |
 | --- | --- |
 | API | The backend |
-| Back office | The console. It is not behind Cloudflare Access: the console's own sign-in, with a second step for every member of staff, guards it |
+| Back office | The console, and the staff and public API routes it calls, on its own address. Only on the tailnet once it is there (below), behind Cloudflare Access until then, and always behind the console's own sign-in with a second step for every member of staff. The API's own address refuses staff routes (404). |
 | Public website | The website from `apps/site`, built for the environment's own addresses. Staging always serves it. Production answers "on its way" until `SITE_PUBLISHED` is `true`. |
 | Client app | The web version of `apps/client` (`app.Dockerfile`). Its policy (`app-csp.mjs`) lets the guided selfie run its WebAssembly face detector and Regula's liveness check, and the edge allows the camera for this address only. In production it stays behind Cloudflare Access until `CLIENT_APP_PUBLIC` is `true` and Provision has run. |
 
 ### Edge check
 
-`infra/deployment/check-edge.sh` reads production from outside the way a browser meets it: HSTS, nosniff, frame and referrer rules, the opener policy, each host's content security policy and camera rule, cookie flags, TLS 1.2 and 1.3 with a valid certificate, TLS 1.1 refused, and plain HTTP sent to HTTPS. It sends only GET and HEAD requests. The Edge Check workflow runs it after every production deploy and on demand. Hosts behind Cloudflare Access show only their TLS and the login redirect from outside.
+`infra/deployment/check-edge.sh` reads production from outside the way a browser meets it: HSTS, nosniff, frame and referrer rules, the opener policy, each host's content security policy and camera rule, cookie flags, TLS 1.2 and 1.3 with a valid certificate, TLS 1.1 refused, and plain HTTP sent to HTTPS. It sends only GET and HEAD requests. The Edge Check workflow runs it after every production deploy and on demand. Hosts behind Cloudflare Access show only their TLS and the login redirect from outside. The back office on the tailnet must resolve only to tailnet addresses, and the API must answer 404 to a staff route.
 
 ### Rehearsal
 
 `bash infra/deployment/rehearse.sh` runs the whole deployment on one machine with Docker: real images, roles, migrations, two switches while polling the API, and a failed check that must switch back. CI runs it on every infrastructure pull request.
+
+## The back office on the tailnet
+
+Owner's decision, 2026-11-18: the back office is reached only over Finvest's tailnet (Tailscale), with the console's own sign-in behind it. Nothing in front of it is public. Its DNS record is the server's tailnet address, unproxied, so a browser connects straight to Caddy on the server through Tailscale. Caddy gets a public certificate for the name by a DNS challenge on Cloudflare (`edge.Dockerfile` adds the Cloudflare DNS module), and drops every connection that does not come from a tailnet address (`100.64.0.0/10`, `fd7a:115c:a1e0::/48`), whatever its name says. That check reads the connection's own address, not a header, so nothing relayed through Cloudflare gets in. The console calls the staff API on its own address, and `api.finvestug.com` answers 404 to every `/staff` route.
+
+Set up once, in this order:
+
+1. **Tailscale.** In the admin console's access controls, add a tag owner for `tag:finvest-server`, and a grant that lets staff (a group, or each person's account) reach `tag:finvest-server` on port 443 and nothing else. Then make an auth key under Settings → Keys: reusable off, ephemeral off, pre-approved, with the tag `tag:finvest-server`. A tagged device's key does not expire.
+2. **GitHub, `prod` environment.** Secret `TAILSCALE_AUTH_KEY`: the auth key. Secret `FINVEST_EDGE_DNS_TOKEN`: a Cloudflare API token with **Zone → DNS → Edit** on finvestug.com only. Caddy uses it to write and remove the `_acme-challenge` record. It reaches Caddy only (`runtime/edge.env`).
+3. **Provision `production`, apply.** The host step puts the server on the tailnet (`join-tailnet.sh`, no Tailscale SSH, no tailnet DNS) and records its address as the environment variable `TAILNET_ADDRESS`. Nothing else changes yet: the back office stays behind Access.
+4. **Provision `production` again, plan then apply.** The plan shows the admin record moving to the tailnet address and the back office's Access application going. Terraform writes `ADMIN_ON_TAILNET=true`.
+5. **Release.** Push `main` to `release`. The deploy writes the tailnet configuration and waits for the certificate (deploy.sh cannot reach the back office itself, since the host's own connections are not tailnet ones). Staff sign in again, at the same address, with Tailscale on.
+
+Once it is on the tailnet, the office networks setting (Settings, Staff security) sees each person's tailnet address (`100.x.y.z`), not the office's. Leave it empty, or list tailnet addresses or `100.64.0.0/10`. If the server is rebuilt, make a new auth key, set it, and run Provision twice again. To leave the tailnet, delete the `TAILSCALE_AUTH_KEY` secret and the `TAILNET_ADDRESS` variable and run Provision, which puts the record back behind Cloudflare and Access (it needs `ADMIN_ACCESS_EMAILS`), then release. The server stays on the tailnet until someone runs `sudo tailscale logout` on it.
 
 ## Host access
 

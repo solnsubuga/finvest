@@ -114,18 +114,18 @@ variable "documents_bucket" {
 }
 
 variable "admin_access_emails" {
-  description = "Break-glass staff emails that Cloudflare Access lets into the production client app before launch. Required in production until client_app_public is true. The back office is not behind Access."
+  description = "Break-glass staff emails that Cloudflare Access always lets in, to the back office until it is on the tailnet and to the production client app before launch. Required in production while either is behind Access."
   type        = list(string)
   default     = []
 
   validation {
-    condition     = var.environment != "production" || var.client_app_public || length(var.admin_access_emails) > 0
-    error_message = "Production needs at least one admin_access_emails entry while the client app is held back for staff."
+    condition     = var.environment != "production" || (var.client_app_public && var.admin_tailnet_address != "") || length(var.admin_access_emails) > 0
+    error_message = "Production needs at least one admin_access_emails entry while the back office or the client app is behind Access."
   }
 }
 
 variable "client_app_public" {
-  description = "Production only. false keeps the client app host behind Cloudflare Access for staff (admin_access_emails) until switch day (docs/launch.md). The API host and the back office are never behind Access."
+  description = "Production only. false keeps the client app host behind Cloudflare Access for staff (admin_access_emails) until switch day (docs/launch.md). The API host is never behind Access."
   type        = bool
   default     = false
 }
@@ -144,4 +144,15 @@ variable "github_owner" {
 variable "github_repository" {
   description = "Name of the GitHub repository whose environment receives the deployment settings."
   type        = string
+}
+
+variable "admin_tailnet_address" {
+  description = "The server's Tailscale IPv4 address, recorded by the Provision host step as the TAILNET_ADDRESS variable. When set, the back office moves onto the tailnet: its DNS name points at this address outside Cloudflare, Access comes off it, and the deploy serves it only to tailnet addresses. Empty: the back office stays behind Cloudflare and Access."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.admin_tailnet_address == "" || can(regex("^100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.([0-9]{1,3})\\.([0-9]{1,3})$", var.admin_tailnet_address))
+    error_message = "admin_tailnet_address must be a Tailscale address in 100.64.0.0/10."
+  }
 }
