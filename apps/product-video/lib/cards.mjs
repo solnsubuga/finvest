@@ -122,7 +122,20 @@ function outro(site) {
 }
 
 let browser;
-async function render(html, file, { height = H, transparent = true } = {}) {
+// Headless Chromium sometimes stops capturing after a few large pages ("Unable to capture
+// screenshot"); a fresh browser draws the card fine, so retry once with one.
+async function render(html, file, options = {}) {
+  try {
+    return await draw(html, file, options);
+  } catch (error) {
+    if (!/Unable to capture screenshot/.test(String(error))) throw error;
+    await browser?.close().catch(() => {});
+    browser = undefined;
+    return await draw(html, file, options);
+  }
+}
+
+async function draw(html, file, { height = H, transparent = true } = {}) {
   browser ??= await chromium.launch();
   const page = await browser.newPage({ viewport: { width: W, height } });
   await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${base} html,body{height:${height}px}</style></head><body>${html}</body></html>`);

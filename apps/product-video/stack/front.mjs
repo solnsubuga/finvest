@@ -18,6 +18,7 @@
 //   node front.mjs <work dir> <repo root>
 
 import { createServer } from "node:https";
+import { PATTERN } from "../lib/privacy.mjs";
 import { request as httpRequest } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -295,6 +296,7 @@ async function viewPdf(req, res, all, id, index) {
   for await (const chunk of req) body += chunk;
   const password = req.method === "POST" ? (new URLSearchParams(body).get("password") ?? "") : null;
   let pages = null;
+  let patches = [];
   let problem = "";
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "pv-pdf-"));
   try {
@@ -312,6 +314,8 @@ async function viewPdf(req, res, all, id, index) {
       try {
         execFileSync("pdftoppm", [...(locked ? ["-upw", password] : []), "-r", "110", "-png", file, path.join(tmp, "p")], { stdio: "pipe" });
         pages = fs.readdirSync(tmp).filter((f) => f.endsWith(".png")).sort().map((f) => fs.readFileSync(path.join(tmp, f)).toString("base64"));
+        const layout = execFileSync("pdftotext", [...(locked ? ["-upw", password] : []), "-bbox-layout", file, "-"], { encoding: "utf8" });
+        patches = personalPatches(layout);
       } catch {
         problem = "That password did not open it.";
       }
@@ -320,14 +324,20 @@ async function viewPdf(req, res, all, id, index) {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
   const content = pages
-    ? pages.map((b64) => `<img class="page" alt="Page" src="data:image/png;base64,${b64}">`).join("")
+    ? pages
+        .map((b64, i) => `<div class="sheet"><img class="page" alt="Page" src="data:image/png;base64,${b64}">${(patches[i] ?? [])
+          .map(([l, t, w, h]) => `<i class="blur" style="left:${l}%;top:${t}%;width:${w}%;height:${h}%"></i>`)
+          .join("")}</div>`)
+        .join("")
     : `<form method="post" class="lock"><h2>This PDF is locked</h2><p>Enter its password to open it.</p>
          <input name="password" type="password" aria-label="Password" autofocus>
          <button type="submit">Open</button><p class="bad">${escape(problem)}</p></form>`;
   res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
   res.end(`<!doctype html><html><head><meta charset="utf-8"><title>${escape(a.filename)}</title><style>${inboxStyle}
     body { display: block; } .doc { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 16px; overflow: auto; height: calc(100vh - 60px); }
-    .page { width: min(900px, 100%); box-shadow: 0 2px 16px rgba(0,0,0,.12); background: #fff; }
+    .sheet { position: relative; width: min(900px, 100%); line-height: 0; }
+    .page { width: 100%; box-shadow: 0 2px 16px rgba(0,0,0,.12); background: #fff; }
+    .blur { position: absolute; border-radius: 4px; backdrop-filter: blur(7px); background: rgba(170,170,165,.45); }
     .lock { background: #fff; border: 1px solid #e2e2dc; border-radius: 16px; padding: 28px 32px; width: 380px; margin-top: 80px; }
     .lock input { width: 100%; box-sizing: border-box; font-size: 18px; padding: 12px 14px; border-radius: 10px; border: 1px solid #c9c9c0; margin: 8px 0 14px; }
     .lock button { font-size: 16px; font-weight: 700; padding: 12px 22px; border-radius: 999px; border: 0; background: #0e0e0e; color: #fff; }
@@ -359,3 +369,34 @@ const server = createServer(
   },
 );
 server.listen(443, "127.0.0.1", () => console.log("front door on https://127.0.0.1:443"));
+
+// Where the personal details sit on each PDF page, as percentages of the page, so the inbox can
+// blur them the way the recorder blurs them on screen (lib/privacy.mjs). Reads the word boxes
+// of \`pdftotext -bbox-layout\`, line by line.
+function personalPatches(xml) {
+  const unescape = (t) => t.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&");
+  return [...xml.matchAll(/<page width="([\d.]+)" height="([\d.]+)">([\s\S]*?)<\/page>/g)].map(([, pw, ph, body]) => {
+    const out = [];
+    for (const [, line] of body.matchAll(/<line[^>]*>([\s\S]*?)<\/line>/g)) {
+      const words = [...line.matchAll(/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([^<]*)<\/word>/g)].map(
+        ([, x0, y0, x1, y1, w]) => ({ box: [+x0, +y0, +x1, +y1], text: unescape(w) }),
+      );
+      let text = "";
+      const at = words.map((w) => {
+        const start = text.length ? text.length + 1 : 0;
+        text += (text.length ? " " : "") + w.text;
+        return [start, start + w.text.length];
+      });
+      for (const m of text.matchAll(new RegExp(PATTERN, "g"))) {
+        const hit = words.filter((_, k) => at[k][1] > m.index && at[k][0] < m.index + m[0].length);
+        if (!hit.length) continue;
+        const x0 = Math.min(...hit.map((w) => w.box[0])) - 2;
+        const y0 = Math.min(...hit.map((w) => w.box[1])) - 2;
+        const x1 = Math.max(...hit.map((w) => w.box[2])) + 2;
+        const y1 = Math.max(...hit.map((w) => w.box[3])) + 2;
+        out.push([(100 * x0) / pw, (100 * y0) / ph, (100 * (x1 - x0)) / pw, (100 * (y1 - y0)) / ph]);
+      }
+    }
+    return out;
+  });
+}
