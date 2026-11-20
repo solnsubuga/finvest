@@ -15,7 +15,7 @@ Infrastructure as code for Finvest, modelled on Fidiba's provisioning. Terraform
 | Resource | Staging | Production | Why |
 | --- | --- | --- | --- |
 | VPC | `10.20.0.0/20` | `10.10.0.0/20` | Keeps database traffic private |
-| Droplet | Ubuntu 24.04, `s-1vcpu-2gb` | `s-2vcpu-4gb`, weekly backups | Runs the Compose stack: Caddy, API, worker, scheduler, frontends. 2 GB swap. |
+| Droplet | Ubuntu 24.04, `s-1vcpu-2gb` | `s-2vcpu-4gb`, no droplet backups (`droplet_backups`, off by default) | Runs the Compose stack: Caddy, API, worker, scheduler, frontends. 2 GB swap. |
 | Reserved IP | Assigned to the droplet | Same | Stable address for DNS and `DEPLOY_HOST`, kept if the droplet is rebuilt |
 | Cloud firewall | Same rules | Same rules | 80 and 443 only from Cloudflare's ranges, so nobody can skip the edge. SSH only from `SSH_SOURCE_ADDRESSES`, plus the Provision run while it prepares the host. |
 | Managed PostgreSQL 17 | `db-s-1vcpu-1gb` | `db-s-1vcpu-2gb` | One node, database `finvest`, daily backups and point in time recovery, rehearsed by the drill in [docs/backup-and-restore.md](../docs/backup-and-restore.md). Only the droplet may connect. |
@@ -62,12 +62,12 @@ DigitalOcean list prices at the time of writing. Check the pricing page before a
 
 | Item | Staging | Production |
 | --- | --- | --- |
-| Droplet | about $12 | about $24, plus about $5 for backups |
+| Droplet | about $12 | about $24 |
 | PostgreSQL | about $15 | about $30 |
 | Spaces | $5 a month for the account, shared by every bucket including Terraform state | Same |
 | Cloudflare | Free plan. Access is free for up to 50 users. | Same |
 
-That is roughly $27 for staging, $59 for production and $5 for Spaces. **Staging is on hold to save cost**, so today it is about $64 a month for production alone, and $91 once staging is switched on.
+That is roughly $27 for staging, $54 for production and $5 for Spaces. **Staging is on hold to save cost**, so today it is about $59 a month for production alone, and $86 once staging is switched on.
 
 ## How changes are made
 

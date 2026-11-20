@@ -8,7 +8,7 @@ A backup counts only once it has been restored and checked. This page says what 
 | --- | --- | --- | --- |
 | PostgreSQL (every client, investment, ledger entry and audit event) | DigitalOcean managed database: daily backups and point in time recovery from the write-ahead log | 7 days (DigitalOcean's standard retention; confirm on the cluster's Backups tab) | A fork of the cluster to a chosen minute |
 | Identity documents and other files | Spaces bucket with versioning on | Every version, until deleted by a lifecycle rule | Restoring an earlier object version |
-| The host | Weekly droplet backups (production) | 4 weeks | Not needed: the host is rebuilt by Provision and a deploy |
+| The host | None: droplet backups are off by default (owner, 2026-11-20; `droplet_backups` turns them on) | None | Not needed: the host is rebuilt by Provision and a deploy |
 | Configuration and secrets | Terraform state and the GitHub environments | In the state bucket | A Provision run |
 
 The database is the only thing whose loss loses money records, so it is the one the drill rehearses.

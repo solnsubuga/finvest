@@ -57,7 +57,7 @@ variable "droplet_size" {
 }
 
 variable "droplet_backups" {
-  description = "Weekly droplet backups. The host is rebuildable; the database has its own backups."
+  description = "Weekly droplet backups. Off by default (owner, 2026-11-20): the host is rebuilt by Provision and a deploy, and the database has its own backups. Set true in an environment's tfvars to turn them on."
   type        = bool
   default     = false
 }
