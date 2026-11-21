@@ -40,7 +40,7 @@ The stub is not security. It runs only under `pnpm dev`, or in a build made with
 
 ### Against the real backend
 
-Set `VITE_API_URL` in `.env.local` (for example `http://localhost:8000` with `make dev` running) and leave `VITE_STUB_API` unset. The console then calls the staff sign-in routes with the session cookie. Deployed builds need no URL: `VITE_DEPLOY_ENV=production` uses https://api.finvestug.com and `staging` uses https://api-staging.finvestug.com. A build with neither says at sign-in that it is not connected, rather than guessing.
+Set `VITE_API_URL` in `.env.local` (for example `http://localhost:8000` with `make dev` running) and leave `VITE_STUB_API` unset. The console then calls the staff sign-in routes with the session cookie. Deployed builds need no URL: they call their own address, https://admin.finvestug.com for `VITE_DEPLOY_ENV=production` and https://admin-staging.finvestug.com for `staging`, where the edge sends `/staff` and `/public` on to the API. The API's own address refuses staff routes. A build with neither says at sign-in that it is not connected, rather than guessing.
 
 Whenever the stub is active, a banner reading "Sample sign-in. Not connected to Finvest." stays on screen. A build fails if `VITE_STUB_API=true` is combined with `VITE_DEPLOY_ENV=production`, so the deploy must set `VITE_DEPLOY_ENV` for the production console.
 

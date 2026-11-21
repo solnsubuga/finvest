@@ -1,6 +1,6 @@
 name: Reusable Deploy
 
-# Ported from Fidiba's deploy.yml. Builds the backend, console, client app and website images, pushes them to GHCR and
+# Ported from Fidiba's deploy.yml. Builds the backend, console, client app, website and edge images, pushes them to GHCR and
 # deploys their immutable digests to one environment's host with infra/deployment/deploy.sh.
 # Called by Deploy Staging (main) and Deploy Production (release). Every setting it reads was
 # written into the GitHub environment by the Provision workflow, apart from the app's own
@@ -75,6 +75,7 @@ jobs:
             echo "console=ghcr.io/${REPOSITORY,,}-console"
             echo "app=ghcr.io/${REPOSITORY,,}-app"
             echo "site=ghcr.io/${REPOSITORY,,}-site"
+            echo "edge=ghcr.io/${REPOSITORY,,}-edge"
             echo "site_url=https://${domains[0]:-}"
             echo "app_url=https://$APP_DOMAIN"
             echo "api_url=https://$API_DOMAIN"
@@ -132,12 +133,29 @@ jobs:
           tags: ${{ steps.images.outputs.site }}:${{ inputs.environment }}-${{ inputs.revision }}
           cache-from: type=gha,scope=site-${{ inputs.environment }}
           cache-to: type=gha,scope=site-${{ inputs.environment }},mode=max
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: edge
+        with:
+          # Caddy with the Cloudflare DNS module, for the back office's certificate on the tailnet.
+          context: infra/deployment
+          file: infra/deployment/edge.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.images.outputs.edge }}:${{ inputs.revision }}
+          cache-from: type=gha,scope=edge
+          cache-to: type=gha,scope=edge,mode=max
       - name: Prepare private release files
         env:
           BACKEND_IMAGE: ${{ steps.images.outputs.backend }}@${{ steps.backend.outputs.digest }}
           CONSOLE_IMAGE: ${{ steps.images.outputs.console }}@${{ steps.console.outputs.digest }}
           APP_IMAGE: ${{ steps.images.outputs.app }}@${{ steps.app.outputs.digest }}
           SITE_IMAGE: ${{ steps.images.outputs.site }}@${{ steps.site.outputs.digest }}
+          EDGE_IMAGE: ${{ steps.images.outputs.edge }}@${{ steps.edge.outputs.digest }}
+          # Written by Provision once the back office's DNS record points at the tailnet. Caddy
+          # proves the name to the certificate authority through Cloudflare DNS with Provision's
+          # own Cloudflare token (the owner's choice, 2026-11-18), which holds DNS Edit on the zone.
+          ADMIN_ON_TAILNET: ${{ vars.ADMIN_ON_TAILNET }}
+          FINVEST_EDGE_DNS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           SITE_PUBLISHED: ${{ vars.SITE_PUBLISHED }}
           SITE_DOMAINS: ${{ vars.SITE_DOMAINS }}
           APP_DOMAIN: ${{ vars.APP_DOMAIN }}

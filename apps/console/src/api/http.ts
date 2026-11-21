@@ -62,7 +62,7 @@ export interface DownloadOptions {
 type Fetch = typeof fetch;
 
 /**
- * `baseUrl` is the API's origin, such as https://api.finvestug.com, with no trailing slash.
+ * `baseUrl` is the API's origin, such as https://admin.finvestug.com, with no trailing slash.
  *
  * `confirm` is asked when the API answers `confirm_it_is_you`. If the person
  * confirms, the request is sent once more, with the same idempotency key: the
@@ -140,10 +140,14 @@ async function toError(response: Response): Promise<ApiError> {
   return new ApiError(response.status >= 500 ? "unavailable" : "internal_error", response.status, [], retryAfter);
 }
 
-/** Where each deployed console finds its API, when the build does not say otherwise. */
+/**
+ * Where each deployed console finds its API, when the build does not say otherwise: its own
+ * address. The back office's edge sends the staff and public routes on to the API, and the API's
+ * own address refuses staff routes, so staff are reached only where the back office is.
+ */
 export const DEPLOYED_API: Record<string, string> = {
-  production: "https://api.finvestug.com",
-  staging: "https://api-staging.finvestug.com",
+  production: "https://admin.finvestug.com",
+  staging: "https://admin-staging.finvestug.com",
 };
 
 /** The API's address for this build: VITE_API_URL, else the deploy's own, else null. */

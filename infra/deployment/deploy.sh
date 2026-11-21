@@ -36,6 +36,9 @@ edge_subnet=$(value FINVEST_EDGE_SUBNET)
 stop_before_migrate=$(value FINVEST_STOP_BEFORE_MIGRATE)
 # A rehearsal on a machine without Cloudflare in front checks the local Caddy directly.
 check_local=$(value FINVEST_CHECK_LOCAL)
+# The back office is served only on the tailnet (prepare_release.py, admin-access.caddy).
+admin_on_tailnet=$(value FINVEST_ADMIN_ON_TAILNET)
+[[ -z $admin_on_tailnet || $admin_on_tailnet == true || $admin_on_tailnet == false ]] || exit 1
 [[ $project =~ ^[a-z][a-z0-9-]*$ ]] || exit 1
 [[ $api_domain =~ ^[a-z0-9][a-z0-9.-]*$ && $admin_domain =~ ^[a-z0-9][a-z0-9.-]*$ && $app_domain =~ ^[a-z0-9][a-z0-9.-]*$ ]] || exit 1
 [[ -z $site_domain || $site_domain =~ ^[a-z0-9][a-z0-9.-]*$ ]] || exit 1
@@ -153,7 +156,23 @@ check() {
     "https://$host:${FINVEST_CHECK_PORT:-443}$path" >/dev/null
 }
 check "$api_domain" /health/ready
-check "$admin_domain" /
+if [[ $admin_on_tailnet == true ]]; then
+  # Caddy answers the back office only to tailnet addresses, which this host's own connections
+  # do not come from, so wait instead for the certificate Caddy gets by its DNS challenge. Edge
+  # Check confirms from outside that the address is a tailnet one, and staff sign in over it.
+  certificate=false
+  for _ in {1..36}; do
+    # shellcheck disable=SC2016 # expanded by the container's shell
+    if edge "$root/edge" exec -T caddy sh -c 'ls /data/caddy/certificates/*/"$1"/"$1".crt' sh "$admin_domain" >/dev/null 2>&1; then
+      certificate=true
+      break
+    fi
+    sleep 5
+  done
+  [[ $certificate == true ]] || { echo "Caddy has no certificate for $admin_domain" >&2; exit 1; }
+else
+  check "$admin_domain" /
+fi
 check "$app_domain" /
 if [[ -n $site_domain ]]; then
   check "$site_domain" /

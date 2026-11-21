@@ -41,7 +41,7 @@ Operations holds `settings.view` so it can pause a channel during an outage and 
 
 A list of office networks that leaves out where the proposer is sitting is refused (409, field code `leaves_you_out`), and so is approving one that leaves out the approver. The console shows each member of staff the address their request came from (`your_address`), as the trusted proxy reports it (`FINVEST_TRUSTED_PROXIES`). If the office's own address changes and nobody can reach the console, the infrastructure owner, connected as the table owner `finvest_migrator`, inserts an approved row with an empty list for `office_networks`, with the guard trigger disabled for that one statement, and writes up why in the incident log. That is a break-glass step outside the application, never a route.
 
-The edge can hold a second list, `ADMIN_OFFICE_NETWORKS`, which gates loading the console at admin.finvestug.com ([infra/README.md](../infra/README.md)). It must be the same as the Settings list or wider, so when the office moves, or in a break-glass, widen it too. The check here is the real one: the console calls api.finvestug.com, which the edge list does not cover.
+This is the only office networks check. The edge list `ADMIN_OFFICE_NETWORKS` went with Cloudflare Access on the back office (2026-11-17). Once the back office is on the tailnet (2026-11-18), each request comes from the person's tailnet address (`100.x.y.z`), so list those, or `100.64.0.0/10`, or leave the setting empty.
 
 ## Routes
 

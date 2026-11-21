@@ -93,6 +93,15 @@ run "production_requires_access" {
   expect_failures = [var.admin_access_emails]
 }
 
+run "production_requires_access_until_the_back_office_is_on_the_tailnet" {
+  command = plan
+  variables {
+    environment       = "production"
+    client_app_public = true
+  }
+  expect_failures = [var.admin_access_emails]
+}
+
 run "production_with_access" {
   command = plan
   variables {
@@ -100,8 +109,12 @@ run "production_with_access" {
     admin_access_emails = ["staff@example.com"]
   }
   assert {
-    condition     = length(cloudflare_zero_trust_access_application.admin) == 1
-    error_message = "Production puts the back office behind Cloudflare Access."
+    condition     = length(cloudflare_zero_trust_access_application.admin) == 1 && length(cloudflare_zero_trust_access_application.app) == 1
+    error_message = "Before the tailnet and before launch, Access guards the back office and the client app."
+  }
+  assert {
+    condition     = cloudflare_dns_record.hosts[var.admin_domain].proxied && !contains(keys(github_actions_environment_variable.deploy), "ADMIN_ON_TAILNET")
+    error_message = "Off the tailnet, the back office is proxied through Cloudflare."
   }
   assert {
     condition     = length(cloudflare_zero_trust_list.staff_emails) == 1 && cloudflare_zero_trust_list.staff_emails[0].type == "EMAIL"
@@ -125,47 +138,39 @@ run "production_with_access" {
   }
 }
 
-run "back_office_open_from_anywhere_without_office_networks" {
+run "back_office_on_the_tailnet" {
   command = plan
   variables {
-    environment         = "production"
-    admin_access_emails = ["staff@example.com"]
+    environment           = "production"
+    client_app_public     = true
+    admin_tailnet_address = "100.101.102.103"
   }
   assert {
-    condition     = length(cloudflare_zero_trust_list.office_networks) == 0 && length(cloudflare_zero_trust_access_policy.admin_office) == 0
-    error_message = "With no office networks the back office keeps the email-only policy."
+    condition     = length(cloudflare_zero_trust_access_application.admin) == 0 && length(cloudflare_zero_trust_access_application.app) == 0
+    error_message = "On the tailnet and after launch, nothing is behind Access."
+  }
+  assert {
+    condition     = cloudflare_dns_record.hosts[var.admin_domain].content == "100.101.102.103" && !cloudflare_dns_record.hosts[var.admin_domain].proxied
+    error_message = "The back office name points at the tailnet address, outside Cloudflare."
+  }
+  assert {
+    condition     = cloudflare_dns_record.hosts[var.api_domain].proxied && cloudflare_dns_record.hosts[var.app_domain].proxied
+    error_message = "Every other name stays proxied through Cloudflare."
+  }
+  assert {
+    condition     = github_actions_environment_variable.deploy["ADMIN_ON_TAILNET"].value == "true"
+    error_message = "The deploy is told to serve the back office only to the tailnet."
   }
 }
 
-run "back_office_only_from_office_networks" {
+run "tailnet_address_must_be_tailscale" {
   command = plan
   variables {
     environment           = "production"
     admin_access_emails   = ["staff@example.com"]
-    admin_office_networks = ["203.0.113.0/24", "198.51.100.7/32"]
+    admin_tailnet_address = "10.0.0.5"
   }
-  assert {
-    condition     = toset([for i in cloudflare_zero_trust_list.office_networks[0].items : i.value]) == toset(["203.0.113.0/24", "198.51.100.7/32"])
-    error_message = "The office list holds exactly the configured networks."
-  }
-  assert {
-    condition     = length(cloudflare_zero_trust_access_policy.admin_office[0].require) == 1
-    error_message = "The office policy requires the office list."
-  }
-  assert {
-    condition     = length(cloudflare_zero_trust_access_application.app) == 1
-    error_message = "The client app keeps the email-only staff policy before launch."
-  }
-}
-
-run "office_networks_must_be_cidr" {
-  command = plan
-  variables {
-    environment           = "production"
-    admin_access_emails   = ["staff@example.com"]
-    admin_office_networks = ["office"]
-  }
-  expect_failures = [var.admin_office_networks]
+  expect_failures = [var.admin_tailnet_address]
 }
 
 run "no_ssh_rule_without_ssh_addresses" {

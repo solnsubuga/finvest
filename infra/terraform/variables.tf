@@ -57,7 +57,7 @@ variable "droplet_size" {
 }
 
 variable "droplet_backups" {
-  description = "Weekly droplet backups. The host is rebuildable; the database has its own backups."
+  description = "Weekly droplet backups. Off by default (owner, 2026-11-20): the host is rebuilt by Provision and a deploy, and the database has its own backups. Set true in an environment's tfvars to turn them on."
   type        = bool
   default     = false
 }
@@ -114,13 +114,13 @@ variable "documents_bucket" {
 }
 
 variable "admin_access_emails" {
-  description = "Staff emails allowed through Cloudflare Access to the back office. Required in production."
+  description = "Break-glass staff emails that Cloudflare Access always lets in, to the back office until it is on the tailnet and to the production client app before launch. Required in production while either is behind Access."
   type        = list(string)
   default     = []
 
   validation {
-    condition     = var.environment != "production" || length(var.admin_access_emails) > 0
-    error_message = "Production needs at least one admin_access_emails entry, so the back office is never public."
+    condition     = var.environment != "production" || (var.client_app_public && var.admin_tailnet_address != "") || length(var.admin_access_emails) > 0
+    error_message = "Production needs at least one admin_access_emails entry while the back office or the client app is behind Access."
   }
 }
 
@@ -146,13 +146,13 @@ variable "github_repository" {
   type        = string
 }
 
-variable "admin_office_networks" {
-  description = "Office addresses (CIDR) allowed into the back office through Cloudflare Access. Empty: any address, with a staff email."
-  type        = list(string)
-  default     = []
+variable "admin_tailnet_address" {
+  description = "The server's Tailscale IPv4 address, recorded by the Provision host step as the TAILNET_ADDRESS variable. When set, the back office moves onto the tailnet: its DNS name points at this address outside Cloudflare, Access comes off it, and the deploy serves it only to tailnet addresses. Empty: the back office stays behind Cloudflare and Access."
+  type        = string
+  default     = ""
 
   validation {
-    condition     = alltrue([for n in var.admin_office_networks : can(cidrhost(n, 0))])
-    error_message = "admin_office_networks entries must be CIDR ranges, such as 203.0.113.10/32."
+    condition     = var.admin_tailnet_address == "" || can(regex("^100\\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\\.([0-9]{1,3})\\.([0-9]{1,3})$", var.admin_tailnet_address))
+    error_message = "admin_tailnet_address must be a Tailscale address in 100.64.0.0/10."
   }
 }

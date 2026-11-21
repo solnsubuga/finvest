@@ -2,8 +2,10 @@
 # Cloudflare's proxy (the DigitalOcean firewall admits nothing else on 80 and 443), and Cloudflare
 # connects with Full (strict) TLS against the Origin CA certificate that Terraform made.
 {
-	# The certificate comes from Cloudflare, not from ACME.
-	auto_https disable_certs
+	# Every host loads Cloudflare's Origin CA certificate (origin_tls), so Caddy manages no
+	# certificate for it. The one exception is the back office once it is on the tailnet
+	# (admin-access.caddy): browsers reach it directly, so it gets a public certificate through
+	# Cloudflare DNS.
 	# Believe Cloudflare's visitor address header only from Cloudflare's own ranges
 	# (https://www.cloudflare.com/ips/, checked 2026-11-13).
 	servers {
@@ -68,18 +70,14 @@ import /etc/caddy/upstreams.caddy
 	respond @private 404
 }
 
-{$FINVEST_API_DOMAIN} {
-	import origin_tls
-	import updating
-	import common_headers
-	import unlisted
-	encode zstd gzip
+(api_body_limits) {
 	# The API refuses bodies over 256 KiB itself, and over the limits in BODY_LIMITS
 	# (backend/app/api/hardening.py) on the routes that take a file. Caddy stops anything far
 	# larger before it reaches a container, with 413: by its declared length before anything is
 	# forwarded, and by counting a body sent without one. Upload routes get 12 MiB here, above
 	# every file route's own limit (10 MiB files plus the form around them); everything else
-	# gets a million bytes. A new upload route is added to all four lists below.
+	# gets a million bytes. A new upload route is added to all four lists below. The API host and the back office (for
+	# its staff routes) both use these limits.
 	@upload path_regexp upload ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/identity-check/poses|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 	@other not path_regexp other ^/(client/investments/[^/]+/payments/bank-transfer|client/payout-destinations/[^/]+/proof|client/identity-check/photos|client/identity-check/poses|client/claim-check/photos|staff/reconciliation/statements)(/|$)
 	@oversize {
@@ -96,29 +94,56 @@ import /etc/caddy/upstreams.caddy
 	request_body @other {
 		max_size 1MB
 	}
-	# The API answers JSON only, so nothing it returns may run script or be framed.
-	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
-	route {
-		respond @oversize 413
-		respond @upload_oversize 413
-		import private_paths
-		import api_upstream
-	}
 }
 
-{$FINVEST_ADMIN_DOMAIN} {
+(api_oversize) {
+	respond @oversize 413
+	respond @upload_oversize 413
+}
+
+{$FINVEST_API_DOMAIN} {
 	import origin_tls
 	import updating
 	import common_headers
 	import unlisted
 	encode zstd gzip
+	import api_body_limits
+	# The API answers JSON only, so nothing it returns may run script or be framed.
+	header ?Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+	route {
+		import api_oversize
+		# Staff routes answer only on the back office's own address (below), which is reachable
+		# only over the tailnet once it is moved there.
+		respond /staff 404
+		respond /staff/* 404
+		import private_paths
+		import api_upstream
+	}
+}
+
+# The back office. It serves the console and, on the same address, the staff and public API
+# routes the console calls, so staff never reach api.finvestug.com/staff. admin-access.caddy is
+# written per release (prepare_release.py): Cloudflare in front with the origin certificate, or,
+# once ADMIN_TAILNET_ADDRESS is set, only tailnet addresses with a public certificate.
+{$FINVEST_ADMIN_DOMAIN} {
+	import /etc/caddy/admin-access.caddy
+	import updating
+	import common_headers
+	import unlisted
+	encode zstd gzip
+	import api_body_limits
 	# Scripts and styles come from this origin; Cloudflare Web Analytics, which Cloudflare may add
-	# to the pages it serves, reports to cloudflareinsights.com. Data comes only from the API.
+	# to the pages it serves, reports to cloudflareinsights.com. Data comes from this origin.
 	# Uploaded files (receipts, identity photos) open from the private bucket through short-lived
 	# read links, as images or in a frame.
-	header ?Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: {$FINVEST_STORAGE_ORIGIN}; frame-src {$FINVEST_STORAGE_ORIGIN}; object-src 'none'; font-src 'self' data:; connect-src 'self' https://{$FINVEST_API_DOMAIN} https://cloudflareinsights.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	header ?Content-Security-Policy "default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: {$FINVEST_STORAGE_ORIGIN}; frame-src {$FINVEST_STORAGE_ORIGIN}; object-src 'none'; font-src 'self' data:; connect-src 'self' https://cloudflareinsights.com; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	@api path /staff /staff/* /public/*
 	route {
+		import api_oversize
 		import private_paths
+		handle @api {
+			import api_upstream
+		}
 		import console_upstream
 	}
 }

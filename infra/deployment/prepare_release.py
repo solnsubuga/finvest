@@ -34,6 +34,31 @@ ANDROID_CERT_SHA256 = r"[0-9A-F]{2}(:[0-9A-F]{2}){31}"
 HOSTNAME = r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+"
 IMAGE = r"[a-z0-9.:/_-]+@sha256:[a-f0-9]{64}"
 ROLES = {"migrate": "migrator", "api": "app", "worker": "worker", "scheduler": "worker"}
+# Tailscale's address ranges (https://tailscale.com/kb/1015/100.x-addresses). Once the back office
+# is on the tailnet, Caddy answers it only to a connection from one of these.
+TAILNET_RANGES = "100.64.0.0/10 fd7a:115c:a1e0::/48"
+# A Cloudflare API token: letters, digits, underscores and hyphens.
+DNS_TOKEN = r"[A-Za-z0-9_-]{20,100}"
+
+
+def admin_access(on_tailnet: bool) -> str:
+    """How the back office is reached (admin-access.caddy, imported by its site block).
+
+    Normally Cloudflare sits in front, like every other host, with the Origin CA certificate.
+    On the tailnet nothing does: its DNS record is the server's tailnet address, so browsers
+    connect straight to Caddy, which gets a public certificate by a DNS challenge on Cloudflare and
+    drops any connection that does not come from the tailnet. remote_ip is the connection's own
+    address, never a forwarded header, so a request relayed through Cloudflare is dropped too.
+    """
+    if not on_tailnet:
+        return "import origin_tls\n"
+    return (
+        "tls {\n"
+        "\tdns cloudflare {env.FINVEST_EDGE_DNS_TOKEN}\n"
+        "}\n"
+        f"@outside_tailnet not remote_ip {TAILNET_RANGES}\n"
+        "abort @outside_tailnet\n"
+    )
 
 
 class SettingError(ValueError):
@@ -203,6 +228,15 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     console_image = setting(env, "CONSOLE_IMAGE", pattern=IMAGE)
     app_image = setting(env, "APP_IMAGE", pattern=IMAGE)
     site_image = setting(env, "SITE_IMAGE", pattern=IMAGE)
+    edge_image = setting(env, "EDGE_IMAGE", pattern=IMAGE)
+    # The back office is served only on the tailnet once Provision has put it there
+    # (ADMIN_ON_TAILNET, written by Terraform with the DNS record that points at the tailnet).
+    admin_on_tailnet = optional(env, "ADMIN_ON_TAILNET") == "true"
+    edge_dns_token = optional(env, "FINVEST_EDGE_DNS_TOKEN")
+    if admin_on_tailnet and not edge_dns_token:
+        raise SettingError("FINVEST_EDGE_DNS_TOKEN is not set, and the back office is on the tailnet")
+    if edge_dns_token and not re.fullmatch(DNS_TOKEN, edge_dns_token):
+        raise SettingError("FINVEST_EDGE_DNS_TOKEN is not valid")
     # Staging always serves the website. Production serves it only once the owner launches it
     # (SITE_PUBLISHED=true).
     site_published = environment != "production" or optional(env, "SITE_PUBLISHED") == "true"
@@ -210,7 +244,8 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     # A rehearsal turns database TLS off, so it is accepted only with images from the throwaway
     # registry on the same machine, which a real deployment never uses.
     if rehearsal and not all(
-        image.startswith("localhost:") for image in (backend_image, console_image, app_image, site_image)
+        image.startswith("localhost:")
+        for image in (backend_image, console_image, app_image, site_image, edge_image)
     ):
         raise SettingError("FINVEST_REHEARSAL is for a local rehearsal only")
 
@@ -421,12 +456,15 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
         "CONSOLE_IMAGE": console_image,
         "APP_IMAGE": app_image,
         "SITE_IMAGE": site_image,
+        "EDGE_IMAGE": edge_image,
         "FINVEST_API_DOMAIN": api_domain,
         "FINVEST_ADMIN_DOMAIN": admin_domain,
         "FINVEST_APP_DOMAIN": app_domain,
         "FINVEST_EDGE_SUBNET": EDGE_SUBNET,
         "FINVEST_STORAGE_ORIGIN": storage_origin,
         "FINVEST_STOP_BEFORE_MIGRATE": "true" if optional(env, "STOP_BEFORE_MIGRATE") == "true" else "false",
+        # deploy.sh gives the back office's check longer while its first certificate is issued.
+        "FINVEST_ADMIN_ON_TAILNET": "true" if admin_on_tailnet else "false",
     }
     if site_published:
         # deploy.sh checks the website through its public address only when it is served.
@@ -447,9 +485,13 @@ def prepare(output: Path, env: Mapping[str, str]) -> None:
     for name in ("Caddyfile", "upstreams.caddy"):
         shutil.copy(HERE / name, output / "edge" / name)
     (output / "edge" / "site.caddy").write_text(site_caddy(site_domains, site_published, listed=environment == "production"), encoding="utf-8")
+    (output / "edge" / "admin-access.caddy").write_text(admin_access(admin_on_tailnet), encoding="utf-8")
     private_write(output / "release.env", env_file(release))
     for service, values in runtime.items():
         private_write(output / "runtime" / f"{service}.env", env_file(values))
+    # Only Caddy gets the DNS token, and only while the back office needs it.
+    edge_env = {"FINVEST_EDGE_DNS_TOKEN": edge_dns_token} if admin_on_tailnet else {}
+    private_write(output / "runtime" / "edge.env", env_file(edge_env))
     (output / "database-ca").mkdir(mode=0o755)
     if ca_cert:
         # Read by the image's unprivileged user; a CA certificate is public.

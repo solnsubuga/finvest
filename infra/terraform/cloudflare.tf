@@ -6,16 +6,24 @@ data "cloudflare_zone" "this" {
 
 data "cloudflare_ip_ranges" "this" {}
 
-# Every hostname is proxied through Cloudflare to the reserved IP.
+locals {
+  admin_on_tailnet = var.admin_tailnet_address != ""
+}
+
+# Every hostname is proxied through Cloudflare to the reserved IP, except the back office once it
+# is on the tailnet (owner, 2026-11-18). Its name then resolves to the server's Tailscale address,
+# which only devices on Finvest's tailnet can reach. Cloudflare does not proxy it, so the edge gets
+# a public certificate for it through a DNS challenge (FINVEST_EDGE_DNS_TOKEN). The address is no
+# secret: it is unreachable from the internet. The record changes in place either way.
 resource "cloudflare_dns_record" "hosts" {
   for_each = toset(local.hostnames)
 
   zone_id = data.cloudflare_zone.this.id
   name    = each.value
   type    = "A"
-  content = digitalocean_reserved_ip.app.ip_address
-  proxied = true
-  ttl     = 1
+  content = local.admin_on_tailnet && each.value == var.admin_domain ? var.admin_tailnet_address : digitalocean_reserved_ip.app.ip_address
+  proxied = !(local.admin_on_tailnet && each.value == var.admin_domain)
+  ttl     = local.admin_on_tailnet && each.value == var.admin_domain ? 300 : 1
   comment = "Managed by Terraform (${var.environment})"
 }
 
@@ -45,7 +53,10 @@ resource "cloudflare_origin_ca_certificate" "this" {
   requested_validity = 5475
 }
 
-# Back office behind Cloudflare Access, on top of the console's own password and passkey sign in.
+# Cloudflare Access guards the back office only until it moves onto the tailnet (owner,
+# 2026-11-18); a name Cloudflare does not proxy cannot be behind Access. On the tailnet, the
+# network and the console's own sign-in (a password and then a passkey or authenticator code for
+# every member of staff) guard it. Access also holds the client app back before launch.
 
 # Staff the console has invited. The worker adds an email when a team invite or reactivation is
 # approved and removes it on deactivation, so Terraform creates the list but never touches its
@@ -80,34 +91,7 @@ resource "cloudflare_zero_trust_access_policy" "admin_staff" {
   include    = local.staff_include
 }
 
-# Office networks for the back office (ADMIN_OFFICE_NETWORKS). When set, Access lets a staff
-# email in only from these addresses. The console's own office networks check on staff routes
-# stays the real control: it also covers the staff API, which this does not.
-resource "cloudflare_zero_trust_list" "office_networks" {
-  count = length(var.admin_access_emails) > 0 && length(var.admin_office_networks) > 0 ? 1 : 0
-
-  account_id = data.cloudflare_zone.this.account.id
-  name       = "${local.name} office networks"
-  type       = "IP"
-  items      = [for n in var.admin_office_networks : { value = n }]
-}
-
-resource "cloudflare_zero_trust_access_policy" "admin_office" {
-  count = length(cloudflare_zero_trust_list.office_networks)
-
-  account_id = data.cloudflare_zone.this.account.id
-  name       = "${local.name} staff in the office"
-  decision   = "allow"
-
-  include = local.staff_include
-  require = [{
-    ip_list = {
-      id = cloudflare_zero_trust_list.office_networks[0].id
-    }
-  }]
-}
-
-# Until switch day the production client app is for staff only, like the back office. The API
+# Until switch day the production client app is for staff only. The API
 # stays public: provider callbacks, Resend webhooks and the phone apps call it directly. The
 # phone apps are held back from the stores until this is lifted (docs/launch.md).
 resource "cloudflare_zero_trust_access_application" "app" {
@@ -126,7 +110,7 @@ resource "cloudflare_zero_trust_access_application" "app" {
 }
 
 resource "cloudflare_zero_trust_access_application" "admin" {
-  count = length(var.admin_access_emails) > 0 ? 1 : 0
+  count = length(var.admin_access_emails) > 0 && !local.admin_on_tailnet ? 1 : 0
 
   zone_id          = data.cloudflare_zone.this.id
   name             = "${local.name} back office"
@@ -135,10 +119,7 @@ resource "cloudflare_zero_trust_access_application" "admin" {
   session_duration = "12h"
 
   policies = [{
-    id = (length(cloudflare_zero_trust_access_policy.admin_office) > 0
-      ? cloudflare_zero_trust_access_policy.admin_office[0].id
-      : cloudflare_zero_trust_access_policy.admin_staff[0].id
-    )
+    id         = cloudflare_zero_trust_access_policy.admin_staff[0].id
     precedence = 1
   }]
 }

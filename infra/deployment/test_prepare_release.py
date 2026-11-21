@@ -12,6 +12,8 @@ import prepare_release as pr
 
 DIGEST = "sha256:" + "a" * 64
 CERT = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----"
+# Shaped like a Cloudflare API token, and not one.
+TOKEN = "test_" + "x" * 35
 KEY = "-----BEGIN EC PRIVATE KEY-----\nMHc\n-----END EC PRIVATE KEY-----"
 
 
@@ -26,6 +28,7 @@ def settings(**overrides):
         "CONSOLE_IMAGE": f"ghcr.io/solnsubuga/finvest-console@{DIGEST}",
         "APP_IMAGE": f"ghcr.io/solnsubuga/finvest-app@{DIGEST}",
         "SITE_IMAGE": f"ghcr.io/solnsubuga/finvest-site@{DIGEST}",
+        "EDGE_IMAGE": f"ghcr.io/solnsubuga/finvest-edge@{DIGEST}",
         "DATABASE_HOST": "private-finvest-production.db.ondigitalocean.com",
         "DATABASE_PORT": "25060",
         "DATABASE_NAME": "finvest",
@@ -129,7 +132,7 @@ class PrepareRelease(unittest.TestCase):
             pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None))
 
     def test_rehearsal_with_local_images_turns_database_tls_off(self):
-        local = {name: f"localhost:15000/finvest-x@{DIGEST}" for name in ("BACKEND_IMAGE", "CONSOLE_IMAGE", "APP_IMAGE", "SITE_IMAGE")}
+        local = {name: f"localhost:15000/finvest-x@{DIGEST}" for name in ("BACKEND_IMAGE", "CONSOLE_IMAGE", "APP_IMAGE", "SITE_IMAGE", "EDGE_IMAGE")}
         pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None, **local))
         self.assertEqual(read_env(self.out / "runtime" / "api.env")["FINVEST_DATABASE_SSL_MODE"], "disable")
 
@@ -440,6 +443,53 @@ class PrepareRelease(unittest.TestCase):
         # The redirect carries HSTS too, so a visitor who types www is held to HTTPS from then on.
         redirect = site[site.index("www.finvestug.com {"):]
         self.assertIn("import common_headers", redirect)
+
+    def test_rehearsal_is_refused_with_a_real_edge_image(self):
+        local = {name: f"localhost:15000/finvest-x@{DIGEST}" for name in ("BACKEND_IMAGE", "CONSOLE_IMAGE", "APP_IMAGE", "SITE_IMAGE")}
+        with self.assertRaises(pr.SettingError):
+            pr.prepare(self.out, settings(FINVEST_REHEARSAL="true", DATABASE_CA_CERT=None, **local))
+
+    def test_edge_image_is_pinned_and_passed_to_compose(self):
+        with self.assertRaises(pr.SettingError):
+            pr.prepare(self.out, settings(EDGE_IMAGE="ghcr.io/solnsubuga/finvest-edge:latest"))
+        pr.prepare(self.out, settings())
+        self.assertEqual(read_env(self.out / "release.env")["EDGE_IMAGE"], f"ghcr.io/solnsubuga/finvest-edge@{DIGEST}")
+
+    def test_back_office_is_behind_cloudflare_until_it_is_on_the_tailnet(self):
+        pr.prepare(self.out, settings(FINVEST_EDGE_DNS_TOKEN=TOKEN))
+        self.assertEqual((self.out / "edge" / "admin-access.caddy").read_text(), "import origin_tls\n")
+        self.assertEqual(read_env(self.out / "release.env")["FINVEST_ADMIN_ON_TAILNET"], "false")
+        # The token is not handed to Caddy while nothing needs it.
+        self.assertEqual((self.out / "runtime" / "edge.env").read_text(), "")
+
+    def test_back_office_on_the_tailnet_answers_only_tailnet_addresses(self):
+        pr.prepare(self.out, settings(ADMIN_ON_TAILNET="true", FINVEST_EDGE_DNS_TOKEN=TOKEN))
+        access = (self.out / "edge" / "admin-access.caddy").read_text()
+        self.assertNotIn("origin_tls", access)
+        self.assertIn("dns cloudflare {env.FINVEST_EDGE_DNS_TOKEN}", access)
+        self.assertIn("@outside_tailnet not remote_ip 100.64.0.0/10 fd7a:115c:a1e0::/48\n", access)
+        self.assertIn("abort @outside_tailnet\n", access)
+        # The token reaches Caddy only, from its own private file, never the Caddyfile.
+        self.assertEqual(read_env(self.out / "runtime" / "edge.env"), {"FINVEST_EDGE_DNS_TOKEN": TOKEN})
+        self.assertEqual(stat.S_IMODE(os.stat(self.out / "runtime" / "edge.env").st_mode), 0o600)
+        for path in self.out.rglob("*"):
+            if path.is_file() and path.name != "edge.env":
+                self.assertNotIn(TOKEN, path.read_text(), path)
+        self.assertEqual(read_env(self.out / "release.env")["FINVEST_ADMIN_ON_TAILNET"], "true")
+
+    def test_back_office_on_the_tailnet_needs_the_dns_token(self):
+        with self.assertRaises(pr.SettingError):
+            pr.prepare(self.out, settings(ADMIN_ON_TAILNET="true"))
+        with self.assertRaises(pr.SettingError):
+            pr.prepare(self.out, settings(ADMIN_ON_TAILNET="true", FINVEST_EDGE_DNS_TOKEN="not valid } here"))
+        self.assertFalse(self.out.exists())
+
+    def test_every_edge_file_the_caddyfile_imports_is_written(self):
+        pr.prepare(self.out, settings())
+        caddyfile = (self.out / "edge" / "Caddyfile").read_text()
+        for name in ("upstreams.caddy", "admin-access.caddy", "site.caddy"):
+            self.assertIn(f"import /etc/caddy/{name}", caddyfile)
+            self.assertTrue((self.out / "edge" / name).is_file(), name)
 
 
 if __name__ == "__main__":
