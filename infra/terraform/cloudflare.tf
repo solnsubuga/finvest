@@ -47,8 +47,10 @@ resource "tls_cert_request" "origin" {
 }
 
 resource "cloudflare_origin_ca_certificate" "this" {
-  csr                = tls_cert_request.origin.cert_request_pem
-  hostnames          = local.hostnames
+  csr = tls_cert_request.origin.cert_request_pem
+  # Sorted, because Cloudflare returns the names sorted and any other order reads as a change of
+  # names, which replaces (and revokes) the certificate the edge is serving.
+  hostnames          = sort(local.hostnames)
   request_type       = "origin-ecc"
   requested_validity = 5475
 }

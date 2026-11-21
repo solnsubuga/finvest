@@ -203,3 +203,16 @@ run "roles_are_set_up_in_the_app_database" {
     error_message = "Provision must create the roles and hand over schema public in the finvest database, not defaultdb."
   }
 }
+
+# Cloudflare returns the origin certificate's names sorted. Any other order plans a replacement,
+# which revokes the certificate the edge is serving.
+run "origin_certificate_names_are_sorted" {
+  command = plan
+  variables {
+    environment = "staging"
+  }
+  assert {
+    condition     = cloudflare_origin_ca_certificate.this.hostnames == sort(cloudflare_origin_ca_certificate.this.hostnames)
+    error_message = "The origin certificate's hostnames must be sorted."
+  }
+}
